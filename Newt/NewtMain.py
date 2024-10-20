@@ -1,5 +1,5 @@
 import pygame
-import player.py
+import tile
 
 pygame.init()
 
@@ -15,12 +15,21 @@ g = 50
 b = 200
 color = (r,g,b)
 
+sand = tile.tile(10,(100,200,30),10,10)
+
 running = True
 while(running):
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running  = False
 
+    sand.posx = sand.posx + 0.1
+
+    if sand.posx > 1:
+        sand.posy =sand.posy + .01
+
+
     screen.fill(color)
+    pygame.draw.rect(screen,(sand.color),(sand.size,sand.size,sand.posx,sand.posy))
     pygame.display.flip()
     
