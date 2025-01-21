@@ -53,23 +53,23 @@ while running:
 
         if (alive):
             direction = random.randint(0,3)
-            print("a key pressed")
-            if direction == 0:
+            print(moverX, moverY)
+            if direction == 0: #North
                 Board[moverX][moverY] = 'G'
                 moverY = moverY + 1
                 Board[moverX][moverY] = mover_char
             
-            if direction == 1:
+            if direction == 1: #East
                 Board[moverX][moverY] = 'G'
                 moverX = moverX + 1
                 Board[moverX][moverY] = mover_char
 
-            if direction == 2:
+            if direction == 2: #South
                 Board[moverX][moverY] = 'G'
                 moverY = moverY - 1
                 Board[moverX][moverY] = mover_char
 
-            if direction == 3:
+            if direction == 3: #West
                 Board[moverX][moverY] = 'G'
                 moverX = moverX - 1
                 Board[moverX][moverY] = mover_char
