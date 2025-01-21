@@ -1,5 +1,6 @@
 print("working")
 import pygame
+import random
 import board
 import tiles
 import sys
@@ -10,7 +11,7 @@ pygame.init()
 #Set up the display
 window_width = 800
 window_height = 800
-window_title = "My Pygame Window"
+window_title = "Pygame Window"
 window_color = (0, 0, 0)
 
 #Game board
@@ -21,7 +22,13 @@ board.print_board(Board)
 
 #Generate terrain
 
-#Thingies
+#Mover prototype
+moverX = random.randint(0, rows)
+moverY = random.randint(0, cols)
+alive = True
+mover_char = 'p'
+
+
 
 
 #Create the display window
@@ -44,6 +51,32 @@ while running:
             Board[q][p] = 'X'
             board.print_board(Board)
 
+        if (alive):
+            direction = random.randint(0,3)
+            print("a key pressed")
+            if direction == 0:
+                Board[moverX][moverY] = 'G'
+                moverY = moverY + 1
+                Board[moverX][moverY] = mover_char
+            
+            if direction == 1:
+                Board[moverX][moverY] = 'G'
+                moverX = moverX + 1
+                Board[moverX][moverY] = mover_char
+
+            if direction == 2:
+                Board[moverX][moverY] = 'G'
+                moverY = moverY - 1
+                Board[moverX][moverY] = mover_char
+
+            if direction == 3:
+                Board[moverX][moverY] = 'G'
+                moverX = moverX - 1
+                Board[moverX][moverY] = mover_char
+
+           
+    #update mover
+    Board[moverX][moverY] = mover_char
 
     #Fill the screen with the background color
     screen.fill(window_color)
