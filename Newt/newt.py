@@ -1,8 +1,8 @@
 print("working")
 import pygame
-import random
 import board
 import tiles
+import mover
 import sys
 
 #Initialize Pygame
@@ -20,16 +20,9 @@ cols = 80
 Board = board.create_board(rows, cols)
 board.print_board(Board)
 
-#Generate terrain
-
-#Mover prototype
-moverX = random.randint(0, rows)
-moverY = random.randint(0, cols)
-alive = True
-mover_char = 'p'
-
-
-
+#Movers
+critter = mover.mover(10,10,'p','g')
+player = mover.mover(40,40, 'X','l')
 
 #Create the display window
 screen = pygame.display.set_mode((window_width, window_height))
@@ -46,37 +39,22 @@ while running:
         if event.type == pygame.MOUSEBUTTONDOWN:
             mouse_pos = pygame.mouse.get_pos()
             p, q = board.get_clicked_tile(mouse_pos[0] , mouse_pos[1])
-            print(mouse_pos[0], mouse_pos[1])
-            print(p,q)
+            #print(mouse_pos[0], mouse_pos[1])
+            #print(p,q)
             Board[q][p] = 'X'
-            board.print_board(Board)
+            #board.print_board(Board)
 
-        if (alive):
-            direction = random.randint(0,3)
-            print(moverX, moverY)
-            if direction == 0: #North
-                Board[moverX][moverY] = 'G'
-                moverY = moverY + 1
-                Board[moverX][moverY] = mover_char
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_w:
+                 player.move(Board, cols, rows, 3)
+            elif event.key == pygame.K_s:
+                 player.move(Board, cols, rows, 1)
+            elif event.key == pygame.K_a:
+                 player.move(Board, cols, rows, 0)
+            elif event.key == pygame.K_d:
+                 player.move(Board, cols, rows, 2)
             
-            if direction == 1: #East
-                Board[moverX][moverY] = 'G'
-                moverX = moverX + 1
-                Board[moverX][moverY] = mover_char
-
-            if direction == 2: #South
-                Board[moverX][moverY] = 'G'
-                moverY = moverY - 1
-                Board[moverX][moverY] = mover_char
-
-            if direction == 3: #West
-                Board[moverX][moverY] = 'G'
-                moverX = moverX - 1
-                Board[moverX][moverY] = mover_char
-
-           
-    #update mover
-    Board[moverX][moverY] = mover_char
+    critter.wander(Board, cols, rows)
 
     #Fill the screen with the background color
     screen.fill(window_color)
