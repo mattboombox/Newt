@@ -21,8 +21,8 @@ Board = board.create_board(rows, cols)
 board.print_board(Board)
 
 #Movers
-critter = mover.mover(10,10,'p','g')
-player = mover.mover(40,40, 'X','l')
+player = mover.mover(Board, 50,50,'p','X')
+critter0 = mover.mover(Board, 10,10,'p','X')
 
 #Create the display window
 screen = pygame.display.set_mode((window_width, window_height))
@@ -54,7 +54,7 @@ while running:
             elif event.key == pygame.K_d:
                  player.move(Board, cols, rows, 2)
             
-    critter.wander(Board, cols, rows)
+    critter0.wander(Board, cols, rows)
 
     #Fill the screen with the background color
     screen.fill(window_color)
