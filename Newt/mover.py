@@ -7,46 +7,31 @@ class mover:
         self.icon = icon
         self.under = board[self.posX][self.posY]
 
+    def isOccupied(self, board, x, y):
+        return board[x][y].isupper()
+
+    def canMove(self, board, order, cols, rows):
+        directions = [(-1, 0), (0, 1), (1, 0), (0, -1)]  # N, E, S, W
+        dx, dy = directions[order]
+        newX, newY = self.posX + dx, self.posY + dy
+        
+        return (0 <= newX < cols and 0 <= newY < rows) and not self.isOccupied(board, newX, newY)
+
     def scoot(self, board, cols, rows, order):
-        if(order == 0):
-            if(self.posY > 0):
-                board[self.posX][self.posY] = self.under
-                self.under = board[self.posX][self.posY - 1]
-                self.posY -= 1
-                board[self.posX][self.posY] = self.icon
-            else:
-                print("Bump West!")
+        directions = [(-1, 0), (0, 1), (1, 0), (0, -1)]  # N, E, S, W
+        dx, dy = directions[order]
+        newX, newY = self.posX + dx, self.posY + dy
 
-        if(order == 1):
-            if(self.posX < cols - 1):
-                board[self.posX][self.posY] = self.under
-                self.under = board[self.posX + 1][self.posY]
-                self.posX += 1
-                board[self.posX][self.posY] = self.icon
-            else:
-                print("Bump South!")
-
-        if(order == 2):
-            if(self.posY != rows - 1):
-                board[self.posX][self.posY] = self.under
-                self.under = board[self.posX][self.posY + 1]
-                self.posY += 1
-                board[self.posX][self.posY] = self.icon
-            else:
-                print("Bump East!")
-
-        if(order == 3):
-            if(self.posX != 0):
-                board[self.posX][self.posY] = self.under
-                self.under = board[self.posX - 1][self.posY]
-                self.posX -= 1
-                board[self.posX][self.posY] = self.icon
-            else:
-                print("Bump North!")
+        if self.canMove(board, order, cols, rows):
+            board[self.posX][self.posY] = self.under  # Restore previous tile
+            self.under = board[newX][newY]  # Save new under tile
+            self.posX, self.posY = newX, newY  # Update position
+            board[self.posX][self.posY] = self.icon  # Place mover
+        else:
+            print(f"Bump {['North', 'East', 'South', 'West'][order]}!")
 
     def wander(self, board, cols, rows):
-        order = random.randint(0,3)
-        self.scoot(board, cols, rows, order)
+        self.scoot(board, cols, rows, random.randint(0, 3))
 
     def move(self, board, cols, rows, order):
         self.scoot(board, cols, rows, order)

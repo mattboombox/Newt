@@ -1,4 +1,4 @@
-def create_board(cols, rows, default = 'o'):
+def create_board(cols, rows, default = 'g'):
     #Creates a board of certain size and fills with default char
     return [[default for _ in range(cols)] for _ in range(rows)]
 

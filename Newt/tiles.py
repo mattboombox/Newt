@@ -1,8 +1,11 @@
 def get_color(tile):
     switch = {
-        'o': (23, 65, 138),#Ocean
-        'l': (108, 195, 230),#Lake
-        'g': (44, 201, 86),#Grassland
-        'p': (250, 250, 95)#Mover
+        'O': (93, 171, 223),   # Ocean
+        'L': (108, 195, 230),  # Lake
+        'g': (144, 203, 129),  # Grassland
+        'P': (240, 108, 135),  # Mover
+        'B': (152, 135, 113),  # Building
+        'M': (122, 117, 116)   # Mountain
     }
-    return switch.get(tile.lower(), (255, 79, 252)) #Missing Magenta
+    
+    return switch.get(tile, (255, 79, 252))  # Missing Magenta

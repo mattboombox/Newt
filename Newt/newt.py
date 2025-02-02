@@ -21,8 +21,9 @@ Board = board.create_board(rows, cols)
 board.print_board(Board)
 
 #Movers
-player = mover.mover(Board, 50,50,'p','X')
-critter0 = mover.mover(Board, 10,10,'p','X')
+hand = 'O'
+player = mover.mover(Board, 50,50,'P','X')
+critter0 = mover.mover(Board, 10,10,'P','X')
 
 #Create the display window
 screen = pygame.display.set_mode((window_width, window_height))
@@ -41,18 +42,19 @@ while running:
             p, q = board.get_clicked_tile(mouse_pos[0] , mouse_pos[1])
             #print(mouse_pos[0], mouse_pos[1])
             #print(p,q)
-            Board[q][p] = 'X'
+            Board[q][p] = hand
             #board.print_board(Board)
 
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_w:
-                 player.move(Board, cols, rows, 3)
-            elif event.key == pygame.K_s:
-                 player.move(Board, cols, rows, 1)
-            elif event.key == pygame.K_a:
                  player.move(Board, cols, rows, 0)
-            elif event.key == pygame.K_d:
+            elif event.key == pygame.K_s:
                  player.move(Board, cols, rows, 2)
+            elif event.key == pygame.K_a:
+                 player.move(Board, cols, rows, 3)
+            elif event.key == pygame.K_d:
+                 player.move(Board, cols, rows, 1)
+
             
     critter0.wander(Board, cols, rows)
 
