@@ -23,7 +23,16 @@ board.print_board(Board)
 #Movers
 hand = 'O'
 player = mover.mover(Board, 50,50,'P','X')
-critter0 = mover.mover(Board, 10,10,'P','X')
+critters = [
+    mover.mover(Board, 10, 10, 'P', 'X'),
+    mover.mover(Board, 20, 15, 'P', 'X'),
+    mover.mover(Board, 30, 5, 'P', 'X'),
+    mover.mover(Board, 40, 25, 'P', 'X'),
+    mover.mover(Board, 41, 25, 'P', 'X'),
+    mover.mover(Board, 42, 25, 'P', 'X'),
+    mover.mover(Board, 43, 25, 'P', 'X'),
+    mover.mover(Board, 40, 5, 'P', 'X'),
+]
 
 #Create the display window
 screen = pygame.display.set_mode((window_width, window_height))
@@ -56,7 +65,8 @@ while running:
                  player.move(Board, cols, rows, 1)
 
             
-    critter0.wander(Board, cols, rows)
+    for critter in critters:
+        critter.wander(Board, cols, rows)
 
     #Fill the screen with the background color
     screen.fill(window_color)
