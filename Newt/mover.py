@@ -6,6 +6,7 @@ class mover:
         self.posY = posY
         self.icon = icon
         self.under = board[self.posX][self.posY]
+        board[self.posX][self.posY] = self.icon
 
     def isOccupied(self, board, x, y):
         return board[x][y].isupper()

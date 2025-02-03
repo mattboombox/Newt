@@ -9,34 +9,25 @@ import sys
 pygame.init()
 
 #Set up the display
-window_width = 800
-window_height = 800
-window_title = "Pygame Window"
-window_color = (0, 0, 0)
+windowWidth, windowHeight = board.ensureDisplaySize(800, 800)
+print(windowWidth, windowHeight)
+windowTitle = "Pygame Window"
+windowColor = (0, 0, 0)
 
 #Game board
-rows = 80
-cols = 80
-Board = board.create_board(rows, cols)
-board.print_board(Board)
+rows = windowWidth // 10
+cols = windowHeight // 10
+print("Number of rows and cols", rows, cols)
+Board = board.createBoard(rows, cols)
+board.printBoard(Board)
 
 #Movers
 hand = 'O'
-player = mover.mover(Board, 50,50,'P','X')
-critters = [
-    mover.mover(Board, 10, 10, 'P', 'X'),
-    mover.mover(Board, 20, 15, 'P', 'X'),
-    mover.mover(Board, 30, 5, 'P', 'X'),
-    mover.mover(Board, 40, 25, 'P', 'X'),
-    mover.mover(Board, 41, 25, 'P', 'X'),
-    mover.mover(Board, 42, 25, 'P', 'X'),
-    mover.mover(Board, 43, 25, 'P', 'X'),
-    mover.mover(Board, 40, 5, 'P', 'X'),
-]
+player = mover.mover(Board, 3,3,'P','X')
 
 #Create the display window
-screen = pygame.display.set_mode((window_width, window_height))
-pygame.display.set_caption(window_title)
+screen = pygame.display.set_mode((windowWidth, windowHeight))
+pygame.display.set_caption(windowTitle)
 
 # Main game loop
 running = True
@@ -47,12 +38,12 @@ while running:
             running = False
 
         if event.type == pygame.MOUSEBUTTONDOWN:
-            mouse_pos = pygame.mouse.get_pos()
-            p, q = board.get_clicked_tile(mouse_pos[0] , mouse_pos[1])
-            #print(mouse_pos[0], mouse_pos[1])
+            mousePos = pygame.mouse.get_pos()
+            p, q = board.getClickedTile(mousePos[0] , mousePos[1])
+            #print(mousePos[0], mousePos[1])
             #print(p,q)
             Board[q][p] = hand
-            #board.print_board(Board)
+            #board.printBoard(Board)
 
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_w:
@@ -64,19 +55,14 @@ while running:
             elif event.key == pygame.K_d:
                  player.move(Board, cols, rows, 1)
 
-            
-    for critter in critters:
-        critter.wander(Board, cols, rows)
-
     #Fill the screen with the background color
-    screen.fill(window_color)
+    screen.fill(windowColor)
 
     #Draw baord
     for i in range (rows):
         for j in range(cols):
-            pygame.draw.rect(screen, tiles.get_color(Board[i][j]), (j * 10, i * 10, 10, 10))
+            pygame.draw.rect(screen, tiles.getColor(Board[i][j]), (j * 10, i * 10, 10, 10))
     
-
     #Update the display
     pygame.display.flip()
 

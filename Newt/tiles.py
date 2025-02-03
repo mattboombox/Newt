@@ -1,4 +1,4 @@
-def get_color(tile):
+def getColor(tile):
     switch = {
         'O': (93, 171, 223),   # Ocean
         'L': (108, 195, 230),  # Lake
@@ -9,3 +9,6 @@ def get_color(tile):
     }
     
     return switch.get(tile, (255, 79, 252))  # Missing Magenta
+
+def getNumTiles():
+    return False
