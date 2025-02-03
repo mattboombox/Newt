@@ -21,8 +21,9 @@ Board = board.createBoard(rows, cols)
 board.printBoard(Board)
 
 #Movers
-hand = 'O'
 player = mover.mover(Board, 0,0,'P','X')
+handIndex = 0
+hand = tiles.tiles[0]["char"]
 
 #Create the display window
 screen = pygame.display.set_mode((windowWidth, windowHeight))
@@ -42,7 +43,7 @@ while running:
             #print(mousePos[0], mousePos[1])
             #print(p,q)
             Board[row][col] = hand
-            board.printBoard(Board)
+            #board.printBoard(Board)
 
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_w:
@@ -53,6 +54,12 @@ while running:
                  player.move(Board, rows, cols, 3)
             elif event.key == pygame.K_d:
                  player.move(Board, rows, cols, 1)
+            elif event.key == pygame.K_r:
+                handIndex = (handIndex + 1) % len(tiles.tiles)
+                hand = tiles.tiles[handIndex]["char"]
+                print("Hand:", tiles.tiles[handIndex]["name"])
+                 
+
 
     #Fill the screen with the background color
     screen.fill(windowColor)
