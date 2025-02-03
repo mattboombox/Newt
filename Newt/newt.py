@@ -15,15 +15,14 @@ windowTitle = "Pygame Window"
 windowColor = (0, 0, 0)
 
 #Game board
-rows = windowWidth // 10
-cols = windowHeight // 10
-print("Number of rows and cols", rows, cols)
+cols = windowWidth // 10
+rows = windowHeight // 10
 Board = board.createBoard(rows, cols)
 board.printBoard(Board)
 
 #Movers
 hand = 'O'
-player = mover.mover(Board, 3,3,'P','X')
+player = mover.mover(Board, 0,0,'P','X')
 
 #Create the display window
 screen = pygame.display.set_mode((windowWidth, windowHeight))
@@ -39,29 +38,29 @@ while running:
 
         if event.type == pygame.MOUSEBUTTONDOWN:
             mousePos = pygame.mouse.get_pos()
-            p, q = board.getClickedTile(mousePos[0] , mousePos[1])
+            row, col = board.getClickedTile(mousePos[0] , mousePos[1])
             #print(mousePos[0], mousePos[1])
             #print(p,q)
-            Board[q][p] = hand
-            #board.printBoard(Board)
+            Board[row][col] = hand
+            board.printBoard(Board)
 
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_w:
-                 player.move(Board, cols, rows, 0)
+                 player.move(Board, rows, cols, 0)
             elif event.key == pygame.K_s:
-                 player.move(Board, cols, rows, 2)
+                 player.move(Board, rows, cols, 2)
             elif event.key == pygame.K_a:
-                 player.move(Board, cols, rows, 3)
+                 player.move(Board, rows, cols, 3)
             elif event.key == pygame.K_d:
-                 player.move(Board, cols, rows, 1)
+                 player.move(Board, rows, cols, 1)
 
     #Fill the screen with the background color
     screen.fill(windowColor)
 
     #Draw baord
-    for i in range (rows):
-        for j in range(cols):
-            pygame.draw.rect(screen, tiles.getColor(Board[i][j]), (j * 10, i * 10, 10, 10))
+    for row in range (rows):
+        for col in range(cols):
+            pygame.draw.rect(screen, tiles.getColor(Board[row][col]), (col * 10, row * 10, 10, 10))
     
     #Update the display
     pygame.display.flip()
