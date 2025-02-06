@@ -1,5 +1,6 @@
 print("working")
 import pygame
+import random
 import board
 import tiles
 import mover
@@ -21,9 +22,11 @@ Board = board.createBoard(rows, cols)
 board.printBoard(Board)
 
 #Movers
-player = mover.mover(Board, 0,0,'P','X')
+player = mover.mover(Board, 0, 0,'Q','X')
 handIndex = 0
 hand = tiles.tiles[0]["char"]
+
+critter = mover.mover(Board, random.randint(0, rows - 1), random.randint(0, cols - 1), 'P', 'X')
 
 #Create the display window
 screen = pygame.display.set_mode((windowWidth, windowHeight))
@@ -59,7 +62,8 @@ while running:
                 hand = tiles.tiles[handIndex]["char"]
                 print("Hand:", tiles.tiles[handIndex]["name"])
                  
-
+    #Movers
+    critter.wander(Board, cols, rows)
 
     #Fill the screen with the background color
     screen.fill(windowColor)
@@ -67,6 +71,7 @@ while running:
     #Draw baord
     for row in range (rows):
         for col in range(cols):
+            
             pygame.draw.rect(screen, tiles.getColor(Board[row][col]), (col * 10, row * 10, 10, 10))
     
     #Update the display
