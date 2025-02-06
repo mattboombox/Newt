@@ -20,6 +20,7 @@ cols = windowWidth // 10
 rows = windowHeight // 10
 Board = board.createBoard(rows, cols)
 board.printBoard(Board)
+phase = 1
 
 #Movers
 player = mover.mover(Board, 0, 0,'Q','X')
@@ -61,6 +62,11 @@ while running:
                 handIndex = (handIndex + 1) % len(tiles.tiles)
                 hand = tiles.tiles[handIndex]["char"]
                 print("Hand:", tiles.tiles[handIndex]["name"])
+
+    #Terrain generation
+    if phase <= 3:
+       board.generateTerrain(Board, rows, cols, phase)
+       phase = phase + 1
                  
     #Movers
     critter.wander(Board, cols, rows)

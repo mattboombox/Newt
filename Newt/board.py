@@ -1,3 +1,5 @@
+import random
+
 def createBoard(rows, cols, default = 'g'):
     #Creates a board with 'rows' (height) and 'cols' (width)
     return [[default for _ in range(cols)] for _ in range(rows)]
@@ -20,5 +22,27 @@ def ensureDisplaySize(windowWidth, windowHeight):
     
     return roundTen(windowWidth), roundTen(windowHeight)
 
-
+def generateTerrain(board, rows, cols, phase):
+    match phase:
+        case 1:
+            print("Phase 1")
+            for col in range (cols):
+                for row in range(rows):
+                    board[row][col] = 's'
+        case 2:
+            print("Phase 2")
+            for col in range (cols):
+                for row in range(rows):
+                    i = random.randint(0,100)
+                    if (i == 1):
+                        board[row][col] = 'L'
+        case 3:
+            print("Phase 3")
+            for col in range (cols):
+                for row in range(rows):
+                    if (board[row][col] == 'L'):
+                        board[row][col - 1] = 'g'
+                        if col < cols - 1:
+                            board[row][col + 1] = 'g'
+                            
         
