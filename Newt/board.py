@@ -22,25 +22,38 @@ def ensureDisplaySize(windowWidth, windowHeight):
     
     return roundTen(windowWidth), roundTen(windowHeight)
 
+def placeStamp(board, rows, cols, stamp, row, col):
+    stampRow = len(stamp)
+    print("stampRow =", stampRow)
+    stampCol = len(stamp[0])
+    print("stampCol =", stampCol)
+    print("stamp = ", stamp)
+
+    for i in range(stampRow):
+        for j in range(stampCol):
+            if (row + i < rows) and (col + j < cols):
+                if stamp[i][j] != ' ':
+                    board[row + i][col + j] = stamp[i][j]
+    
 def generateTerrain(board, rows, cols, phase):
     match phase:
         case 1:
             print("Phase 1")
             for col in range (cols):
                 for row in range(rows):
-                    board[row][col] = 's'
+                    board[row][col] = 'O'
         case 2:
             print("Phase 2")
             for col in range (cols):
                 for row in range(rows):
-                    i = random.randint(0,100)
+                    i = random.randint(0,700)
                     if (i == 1):
-                        board[row][col] = 'L'
+                        board[row][col] = 's'
         case 3:
             print("Phase 3")
             for col in range (cols):
                 for row in range(rows):
-                    if (board[row][col] == 'L'):
+                    if (board[row][col] == 's'):
                         board[row][col - 1] = 'g'
                         if col < cols - 1:
                             board[row][col + 1] = 'g'

@@ -26,8 +26,11 @@ phase = 1
 player = mover.mover(Board, 0, 0,'Q','X')
 handIndex = 0
 hand = tiles.tiles[0]["char"]
+stampIndex = 0
+stamp = tiles.stamps[0]["stamp"]
+clickMode = 0
 
-critter = mover.mover(Board, random.randint(0, rows - 1), random.randint(0, cols - 1), 'P', 'X')
+#critter = mover.mover(Board, random.randint(0, rows - 1), random.randint(0, cols - 1), 'P', 'X')
 
 #Create the display window
 screen = pygame.display.set_mode((windowWidth, windowHeight))
@@ -43,11 +46,15 @@ while running:
 
         if event.type == pygame.MOUSEBUTTONDOWN:
             mousePos = pygame.mouse.get_pos()
-            row, col = board.getClickedTile(mousePos[0] , mousePos[1])
-            #print(mousePos[0], mousePos[1])
-            #print(p,q)
-            Board[row][col] = hand
-            #board.printBoard(Board)
+            row, col = board.getClickedTile(mousePos[0], mousePos[1])
+            if(clickMode == 0):
+                #print(mousePos[0], mousePos[1])
+                #print(p,q)
+                Board[row][col] = hand
+                #board.printBoard(Board)
+            elif(clickMode == 1):
+                board.placeStamp(Board, rows, cols, stamp, row, col)
+                print(board.printBoard(Board))
 
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_w:
@@ -59,9 +66,18 @@ while running:
             elif event.key == pygame.K_d:
                  player.move(Board, rows, cols, 1)
             elif event.key == pygame.K_r:
+                clickMode = 0
                 handIndex = (handIndex + 1) % len(tiles.tiles)
                 hand = tiles.tiles[handIndex]["char"]
                 print("Hand:", tiles.tiles[handIndex]["name"])
+            elif event.key == pygame.K_t:
+                clickMode = 1
+                stampIndex = (stampIndex + 1) % len(tiles.stamps)
+                stamp = tiles.stamps[stampIndex]["stamp"]
+                print("Stamp:", tiles.stamps[stampIndex]["name"])
+            elif event.key == pygame.K_f:
+                stamp = tiles.flipStamp(stamp)
+                print("Rotated stamp")
 
     #Terrain generation
     if phase <= 3:
@@ -69,7 +85,7 @@ while running:
        phase = phase + 1
                  
     #Movers
-    critter.wander(Board, cols, rows)
+    #critter.wander(Board, cols, rows)
 
     #Fill the screen with the background color
     screen.fill(windowColor)
