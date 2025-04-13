@@ -10,7 +10,7 @@ import sys
 pygame.init()
 
 #Set up the display
-windowWidth, windowHeight = board.ensureDisplaySize(800, 800)
+windowWidth, windowHeight = board.ensureDisplaySize(1200, 800)
 print(windowWidth, windowHeight)
 windowTitle = "Pygame Window"
 windowColor = (0, 0, 0)
@@ -34,8 +34,9 @@ stamp = tiles.stamps[0]["stamp"]
 clickMode = 0
 
 #Critters
+numCritters = 25
 critters = []
-for _ in range(10):
+for _ in range(numCritters):
     x = random.randint(0, cols - 1)
     y = random.randint(0, rows - 1)
     critters.append(mover.mover(Board, x, y, 'P', 'X'))

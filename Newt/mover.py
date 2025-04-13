@@ -35,7 +35,8 @@ class mover:
             self.posX, self.posY = newX, newY  #Update position
             board[self.posY][self.posX] = self.icon  #Place mover in new location
         else:
-            print(f"Bump {['North', 'East', 'South', 'West'][order]}!")
+            #print(f"Bump {['North', 'East', 'South', 'West'][order]}!")
+            pass
 
     def wander(self, board, cols, rows):
         #Randomly moves a mover
