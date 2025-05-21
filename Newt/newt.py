@@ -19,6 +19,10 @@ windowColor = (25, 25, 25)
 rows = windowHeight // 10
 cols = windowWidth // 10
 
+#Tile objects
+
+
+
 board = [[None for _ in range(cols)] for _ in range(rows)]
 
 for row in range (rows):
@@ -43,7 +47,7 @@ while running:
     #Draw board
     for row in range (rows):
         for col in range(cols):
-            pygame.draw.rect(screen, board[row][col].color, (col * 10, row * 10, 10, 10))
+            pygame.draw.rect(screen, board[row][col].terrain.color, (col * 10, row * 10, 10, 10))
 
     #Update the display
     pygame.display.flip()
