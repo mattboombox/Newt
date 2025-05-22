@@ -5,7 +5,7 @@ class tile:
     def __init__ (self, posX, posY):
         self.posX = posX
         self.posY = posY
-        self.terrain = terrain.terrainLib["lake"]
+        self.terrain = terrain.terrainLib["ocean"]
         self.structureID = None
         self.critterID = None
         print("Tile init", self.terrain.name, self.posX, self.posY)
@@ -16,5 +16,5 @@ class tile:
             #get unit color
         #elif(self.structureID):
             #get structure color
-        #elif(self.terrainID):
+       #elif(self.terrainID):
             #get terrain color

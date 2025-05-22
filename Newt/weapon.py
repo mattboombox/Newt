@@ -5,8 +5,8 @@ class weapon:
         self.name = name
         self.damage = damage
         self.damageType = damageType
-        #self.cost = cost
         self.consumption = consumption
+        #self.cost = cost
 
 class damageTypes(Enum):
     BLUNT = 0
