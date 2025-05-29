@@ -1,6 +1,7 @@
 print("working")
 import pygame
 import random
+import math
 import sys
 
 import tile
@@ -18,13 +19,13 @@ windowColor = (25, 25, 25)
 #Game board
 rows = windowHeight // 10
 cols = windowWidth // 10
+boardCenter = windowWidth // 2, windowHeight // 2
+print (boardCenter)
 
-#Tile objects
-
-
-
+#Create board
 board = [[None for _ in range(cols)] for _ in range(rows)]
 
+#Fill board with default tile
 for row in range (rows):
     for col in range (cols):
         board[row][col] = tile.tile(row, col)

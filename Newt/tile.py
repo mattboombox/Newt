@@ -8,7 +8,7 @@ class tile:
         self.terrain = terrain.terrainLib["ocean"]
         self.structureID = None
         self.critterID = None
-        print("Tile init", self.terrain.name, self.posX, self.posY)
+        #print("Tile init", self.terrain.name, self.posX, self.posY)
 
     #def getcolor():
         #critter > structure > terrain
