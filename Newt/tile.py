@@ -1,20 +1,18 @@
-import random
-import terrain
+from terrain import terrainLib
 
-class tile:
-    def __init__ (self, posX, posY):
-        self.posX = posX
-        self.posY = posY
-        self.terrain = terrain.terrainLib["ocean"]
-        self.structureID = None
-        self.critterID = None
-        #print("Tile init", self.terrain.name, self.posX, self.posY)
+class Tile:
+    def __init__ (self, x: int, y: int):
+        self.x = x
+        self.y = y
+        self.terrain = terrainLib["ocean"]
+        self.critter = None
+        self.structure = None
 
-    #def getcolor():
+    def getColor(self):
         #critter > structure > terrain
-        #if(self.critterID):
-            #get unit color
-        #elif(self.structureID):
-            #get structure color
-       #elif(self.terrainID):
-            #get terrain color
+        if(self.critter is not None):
+            return self.critter.color
+        elif(self.structure is not None):
+            return self.structure.color
+        else:
+            return self.terrain.color
