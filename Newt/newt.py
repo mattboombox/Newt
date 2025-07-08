@@ -1,8 +1,8 @@
 import pygame, sys
-import random
 import math
+import random
 from tile import Tile
-from critter import Critter
+import critter
 
 #Initialize Pygame
 pygame.init()
@@ -26,31 +26,26 @@ for x in range (cols):
     for y in range (rows):
         board[x][y] = Tile(x, y)
 
-#Critter testing
+#Critter spawn testing
 spawnX, spawnY, = 0, 0
-newCritter = Critter(spawnX, spawnY)
-board[spawnX][spawnY].critter = newCritter
+numCritters = 100
+critterList = [None for _ in range(numCritters)]
 
-#Critter functions
-def moveCritter(critter, newX, newY, board, cols, rows):
-    if not (0 <= newX < cols and 0 <= newY < rows):
-        print("Destination out of bounds")
-        return
-    
-    if board[newX][newY].critter is not None:
-        print("Tile already occupied by another critter")
-        return
-    
-    board[critter.x][critter.y].critter = None
-    critter.x, critter.y = newX, newY
-    board[newX][newY].critter = critter
+for n in range (numCritters):
+    while board[spawnX][spawnY].critter != None:
+        spawnX = random.randint(0, cols - 1)
+        spawnY = random.randint(0, rows - 1)
+
+    critterList[n] = critter.Critter(spawnX, spawnY)
+    critterList[n].color = (random.randint(0, 255),random.randint(0, 255),random.randint(0, 255))
+    board[spawnX][spawnY].critter = critterList[n]
+
 
 #Create the display window
 screen = pygame.display.set_mode((windowWidth, windowHeight))
 pygame.display.set_caption(windowTitle)
 
 tic = 0
-newX = 1
 
 #Main loop
 running = True
@@ -74,10 +69,8 @@ while running:
 
     tic = tic + 1
     if tic % 100 == 0:
-        tic = 0
-        newX = newX + 1
-        moveCritter(newCritter, newX, 0, board, cols, rows)        
-
+        for c in critterList:
+            critter.wander(c, board, cols, rows)      
 
 #Quit Pygame
 pygame.quit()
