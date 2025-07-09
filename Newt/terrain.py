@@ -12,11 +12,11 @@ LIQUID = 2
 IMPASSIBLE = 3
 
 terrainLib = {
-    "grass": Terrain("grass", moveCost=1, fertility=2, color=(34, 139, 34), type=SOLID),
-    "desert": Terrain("desert", moveCost=1, fertility=0, color=(196, 175, 141), type=SOLID),
-    "lake": Terrain("lake", moveCost=1, fertility=2, color=(34, 20, 200), type=LIQUID),
-    "ocean": Terrain("ocean", moveCost=2, fertility=1, color=(34, 20, 150), type=LIQUID),
-    "mountain": Terrain("mountain", moveCost=0, fertility=1, color=(64, 63, 61), type=IMPASSIBLE),
-    "void": Terrain("void", moveCost=1, fertility=0, color=(0, 0, 0), type=LIQUID),
+    "grass":   lambda: Terrain("grass",   1, 2, (34,  90, 34),  SOLID),
+    "desert":  lambda: Terrain("desert",  1, 0, (196, 175, 141), SOLID),
+    "lake":    lambda: Terrain("lake",    1, 2, (34,  20, 200), LIQUID),
+    "ocean":   lambda: Terrain("ocean",   2, 1, (34,  20, 150), LIQUID),
+    "mountain":lambda: Terrain("mountain",0, 1, (64,  63, 61),  IMPASSIBLE),
+    "void":    lambda: Terrain("void",    1, 0, (0,   0,  0),   LIQUID),
 }
 

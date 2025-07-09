@@ -4,15 +4,13 @@ class Tile:
     def __init__ (self, x: int, y: int):
         self.x = x
         self.y = y
-        self.terrain = terrainLib["void"]
+        self.terrain = terrainLib["grass"]()
         self.critter = None
         self.structure = None
 
-    def getColor(self):
-        #critter > structure > terrain
+    def getThingColor(self):
         if(self.critter is not None):
             return self.critter.color
-        elif(self.structure is not None):
-            return self.structure.color
-        else:
-            return self.terrain.color
+        
+    def getTerrainColor(self):
+        return self.terrain.color

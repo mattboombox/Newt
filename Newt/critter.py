@@ -14,12 +14,14 @@ def move(critter, newX, newY, board, cols, rows):
     
     if board[newX][newY].critter is not None:
         #print("Tile already occupied by another critter")
+        #Change color
         critter.color = board[newX][newY].critter.color
         return
     
     board[critter.x][critter.y].critter = None
     critter.x, critter.y = newX, newY
     board[newX][newY].critter = critter
+    board[newX][newY].terrain.color = critter.color
 
 def wander(critter, board, cols, rows):
     direction = random.randint(0, 8)
