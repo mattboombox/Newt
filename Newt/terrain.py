@@ -17,5 +17,6 @@ terrainLib = {
     "lake": Terrain("lake", moveCost=1, fertility=2, color=(34, 20, 200), type=LIQUID),
     "ocean": Terrain("ocean", moveCost=2, fertility=1, color=(34, 20, 150), type=LIQUID),
     "mountain": Terrain("mountain", moveCost=0, fertility=1, color=(64, 63, 61), type=IMPASSIBLE),
+    "void": Terrain("void", moveCost=1, fertility=0, color=(0, 0, 0), type=LIQUID),
 }
 

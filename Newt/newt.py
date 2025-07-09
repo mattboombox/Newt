@@ -8,8 +8,8 @@ import critter
 pygame.init()
 
 #Set up the display
-windowWidth = 900
-windowHeight = 400
+windowWidth = 1000
+windowHeight = 700
 print(windowWidth, windowHeight)
 windowTitle = "Pygame Window"
 windowColor = (25, 25, 25)
@@ -59,6 +59,11 @@ while running:
     #Fill the screen with the background color
     screen.fill(windowColor)
 
+    #Mutation
+    if(random.randint(0, 1000) == 0):
+        print("Mutation!")
+        critterList[random.randint(0, numCritters - 1)].color = (random.randint(0, 255),random.randint(0, 255),random.randint(0, 255))
+
     #Draw board
     for x in range (cols):
         for y in range(rows):
@@ -67,8 +72,9 @@ while running:
     #Update the display
     pygame.display.flip()
 
+    #Move critters
     tic = tic + 1
-    if tic % 100 == 0:
+    if tic % 1 == 0:
         for c in critterList:
             critter.wander(c, board, cols, rows)      
 

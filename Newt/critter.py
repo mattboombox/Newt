@@ -9,11 +9,12 @@ class Critter:
 
 def move(critter, newX, newY, board, cols, rows):
     if not (0 <= newX < cols and 0 <= newY < rows):
-        print("Destination out of bounds")
+        #print("Destination out of bounds")
         return
     
     if board[newX][newY].critter is not None:
-        print("Tile already occupied by another critter")
+        #print("Tile already occupied by another critter")
+        critter.color = board[newX][newY].critter.color
         return
     
     board[critter.x][critter.y].critter = None
