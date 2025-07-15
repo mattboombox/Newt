@@ -59,7 +59,7 @@ while running:
     screen.fill(windowColor)
 
     #Mutation
-    if(random.randint(0, 1000) == 0):
+    if(random.randint(0, 100) == 0):
         print("Mutation!")
         critterList[random.randint(0, numCritters - 1)].color = (random.randint(0, 255),random.randint(0, 255),random.randint(0, 255))
 
