@@ -14,3 +14,10 @@ class Tile:
         
     def getTerrainColor(self):
         return self.terrain.color
+    
+    def describe(self):
+        print("Position:", self.x, self.y)
+        print("Terrain:", self.terrain.name)
+        if(self.critter is not None):
+            print("Critter:", self.critter.name, self.critter.color)
+        print()

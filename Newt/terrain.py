@@ -12,7 +12,7 @@ LIQUID = 2
 IMPASSIBLE = 3
 
 terrainLib = {
-    "grass":   lambda: Terrain("grass",   1, 2, (34,  90, 34),  SOLID),
+    "grass":   lambda: Terrain("grass",   1, 2, (62,92,32),  SOLID),
     "desert":  lambda: Terrain("desert",  1, 0, (196, 175, 141), SOLID),
     "lake":    lambda: Terrain("lake",    1, 2, (34,  20, 200), LIQUID),
     "ocean":   lambda: Terrain("ocean",   2, 1, (34,  20, 150), LIQUID),
