@@ -1,8 +1,9 @@
 import pygame, sys
 import math
 import random
-from tile import Tile
 import critter
+from tile import Tile
+from printControls import printControls
 
 #Initialize Pygame
 pygame.init()
@@ -34,25 +35,27 @@ for x in range (cols):
         board[x][y] = Tile(x, y)
 
 #Critters
-spawnX, spawnY, = 0, 0
-numCritters = 200
-print("Number of critters:", numCritters)
-critterList = [None for _ in range(numCritters)]
+initialCritters = 10
+maxCritters = 1000
+critterList = []
 
-for n in range (numCritters):
-    while board[spawnX][spawnY].critter != None:
-        spawnX = random.randint(0, cols - 1)
-        spawnY = random.randint(0, rows - 1)
+#Spawn initial critters
+from critterSpawner import spawnCritter
+for n in range(initialCritters):
+    if len(critterList) < maxCritters:
+        newCritter = spawnCritter(board)
+        newCritter.name = n
+        critterList.append(newCritter)
+    else:
+        print("Critter limit reached!", len(critterList))
+        break
 
-    critterList[n] = critter.Critter(spawnX, spawnY, n)
-    critterList[n].color = (random.randint(0, 255),random.randint(0, 255),random.randint(0, 255))
-    board[spawnX][spawnY].critter = critterList[n]
-
+print("Number of critters:", len(critterList))
 
 #Create the display window
 screen = pygame.display.set_mode((windowWidth, windowHeight))
 pygame.display.set_caption(windowTitle)
-print("Controls:"), print("p: pause/unpause"), print("-: slow down"), print("=: speed up"), print("x: exit"), print("h: show controls"), print("mouse click: describe tile"), print()
+printControls()
 
 tic = 0
 
@@ -101,7 +104,16 @@ while running:
                 print("Goodbye!")
                 running = False
             if event.key == pygame.K_h:
-                print("Controls:"), print("p: pause/unpause"), print("-: slow down"), print("=: speed up"), print("x: exit"), print("h: show controls"), print("mouse click: describe tile"), print()
+                printControls()
+            if event.key == pygame.K_m:
+                if len(critterList) < maxCritters:
+                    newCritter = spawnCritter(board)
+                    newCritter.name = (len(critterList) - 1)
+                    critterList.append(newCritter)
+                    print("Number of critters:", len(critterList))
+                else:
+                    print("Critter limit reached!", len(critterList))
+                break
                 
 
     #Fill the screen with the background color

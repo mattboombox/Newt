@@ -1,0 +1,10 @@
+def printControls():
+    print("Controls:") 
+    print("p: pause/unpause")
+    print("-: slow down")
+    print("=: speed up")
+    print("x: exit")
+    print("h: show controls")
+    print("mouse click: describe tile")
+    print("m: spawnCritter")
+    print()
