@@ -16,13 +16,13 @@ def move(critter, newX, newY, board, cols, rows):
     if board[newX][newY].critter is not None:
         #Tile already occupied by another critter
         #Change color of the critter being moved onto, creates a war like visual
-        #critter.color = board[newX][newY].critter.color
+        critter.color = board[newX][newY].critter.color
         return
     
     board[critter.x][critter.y].critter = None #Remove critter from current pos
     critter.x, critter.y = newX, newY #Update critter's pos
     board[newX][newY].critter = critter #Put the critter on the board in its new pos
-    #board[newX][newY].terrain.color = critter.color #Critter spreads its color onto the board
+    board[newX][newY].terrain.color = critter.color #Critter spreads its color onto the board
 
 def wander(critter, board, cols, rows):
     direction = random.randint(0, 8)

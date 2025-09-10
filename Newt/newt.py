@@ -120,9 +120,9 @@ while running:
     screen.fill(windowColor)
 
     #Change the color of a critter randomly
-    #if(random.randint(0, 100) == 0):
-        #print("Mutation!")
-        #critterList[random.randint(0, numCritters - 1)].color = (random.randint(0, 255),random.randint(0, 255),random.randint(0, 255))
+    if(random.randint(0, 100) == 0):
+        print("Mutation!")
+        critterList[random.randint(0, len(critterList) - 1)].color = (random.randint(0, 255),random.randint(0, 255),random.randint(0, 255))
 
     #Draw board
     for x in range (cols):
