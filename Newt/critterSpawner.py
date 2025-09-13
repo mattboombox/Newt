@@ -5,18 +5,26 @@ def spawnCritter(board):
     cols = len(board)
     rows = len(board[0])
 
-    #Find random critterless tile
-    while True:
-        spawnX = random.randint(0, cols - 1)
-        spawnY = random.randint(0, rows - 1)
-        if board[spawnX][spawnY].critter is None:
-            break
+    # Collect all tiles without a critter
+    critterless = [(x, y) for x in range(cols) for y in range(rows)
+                   if board[x][y].critter is None]
 
-    #Birth the critter
+    if not critterless:
+        print("Could not find any critterless tiles!")
+        return None  # No space to spawn
+
+    # Pick a random critterless tile
+    spawnX, spawnY = random.choice(critterless)
+
+    # Birth the critter
     newCritter = Critter(spawnX, spawnY, 0)
-    newCritter.color = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
+    newCritter.color = (
+        random.randint(0, 255),
+        random.randint(0, 255),
+        random.randint(0, 255)
+    )
 
-    #Place the critter
+    # Place the critter
     board[spawnX][spawnY].critter = newCritter
 
     return newCritter

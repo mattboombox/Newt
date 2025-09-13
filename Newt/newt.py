@@ -4,6 +4,7 @@ import random
 import critter
 from tile import Tile
 from printControls import printControls
+import terrainGenerator
 
 #Initialize Pygame
 pygame.init()
@@ -34,8 +35,13 @@ for x in range (cols):
     for y in range (rows):
         board[x][y] = Tile(x, y)
 
+#Initial terrain gen
+numIslands = 5
+for _ in range(numIslands):
+    terrainGenerator.getIslandSeed(board)
+
 #Critters
-initialCritters = 10
+initialCritters = 0
 maxCritters = 1000
 critterList = []
 
@@ -62,6 +68,7 @@ tic = 0
 #Main loop
 running = True
 while running:
+
     #Handle events
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -115,14 +122,16 @@ while running:
                     print("Critter limit reached!", len(critterList))
                 break
                 
+    #Terrain testing
+    terrainGenerator.eruptVolcano(board)
 
     #Fill the screen with the background color
     screen.fill(windowColor)
 
     #Change the color of a critter randomly
-    if(random.randint(0, 100) == 0):
-        print("Mutation!")
-        critterList[random.randint(0, len(critterList) - 1)].color = (random.randint(0, 255),random.randint(0, 255),random.randint(0, 255))
+    #if(random.randint(0, 100) == 0):
+        #print("Mutation!")
+        #critterList[random.randint(0, len(critterList) - 1)].color = (random.randint(0, 255),random.randint(0, 255),random.randint(0, 255))
 
     #Draw board
     for x in range (cols):

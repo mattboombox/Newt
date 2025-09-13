@@ -4,7 +4,7 @@ class Tile:
     def __init__ (self, x: int, y: int):
         self.x = x
         self.y = y
-        self.terrain = terrainLib["grass"]()
+        self.terrain = terrainLib["ocean"]()
         self.critter = None
         self.structure = None
 

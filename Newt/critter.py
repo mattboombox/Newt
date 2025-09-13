@@ -22,7 +22,7 @@ def move(critter, newX, newY, board, cols, rows):
     board[critter.x][critter.y].critter = None #Remove critter from current pos
     critter.x, critter.y = newX, newY #Update critter's pos
     board[newX][newY].critter = critter #Put the critter on the board in its new pos
-    board[newX][newY].terrain.color = critter.color #Critter spreads its color onto the board
+    #board[newX][newY].terrain.color = critter.color #Critter spreads its color onto the board
 
 def wander(critter, board, cols, rows):
     direction = random.randint(0, 8)
