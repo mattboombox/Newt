@@ -22,4 +22,5 @@ terrainLib = {
     "dormantVolcano": lambda: Terrain("dormantVolcano", 1, 0, (64,  63, 61), IMPASSIBLE),
     "lava": lambda: Terrain("lava", 1, 0, (200,  63, 61), LIQUID),
     "stone": lambda: Terrain("stone", 1, 0, (87, 85, 81), SOLID),
+    "beach": lambda: Terrain("beach", 1, 0, (196, 175, 141), SOLID),
 }

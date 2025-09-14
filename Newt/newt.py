@@ -1,4 +1,4 @@
-import pygame, sys, random, critter, volcano
+import pygame, sys, random, critter, volcano, erosion
 from tile import Tile
 from printControls import printControls
 
@@ -10,9 +10,6 @@ fast = 10
 fastest = 1
 gameSpeed = slow
 paused = False
-
-#Odds
-
 
 #Set up the display
 windowWidth = 1200
@@ -133,6 +130,9 @@ while running:
 
     if (random.randint(0, 1500) == 1):   
         volcano.killVolcano(board)
+
+    if (random.randint(0, 2000) == 1):   
+        erosion.erodeStone(board)
 
     #Fill the screen with the background color
     screen.fill(windowColor)
