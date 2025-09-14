@@ -11,7 +11,7 @@ def getIslandSeed(board):
 
     #If no ocean tiles
     if not oceanTiles:
-        print("Could not find any ocean tiles to make island seed!")
+        #print("Could not find any ocean tiles to make island seed!")
         return None
 
     #Get random ocean tile
@@ -30,7 +30,7 @@ def getRandomRadiusPoint(cx, cy, radius):
 def eruptVolcano(board):
     cols = len(board)
     rows = len(board[0])
-    radius = 3
+    radius = 5
 
     #Get all volcano tiles
     volcanoTiles = [(x, y) for x in range(cols) for y in range(rows)
@@ -63,7 +63,7 @@ def coolLava(board):
 
     #If no lava tiles
     if not lavaTiles:
-        print("Could not find any lava tiles to cool!")
+        #print("Could not find any lava tiles to cool!")
         return None
 
     #Get random lava tile
@@ -86,7 +86,7 @@ def toggleVolcano(board):
 
     #If no volcano tiles
     if not volcanoTiles:
-        print("Could not find any volcano tiles to toggle!")
+        #print("Could not find any volcano tiles to toggle!")
         return None
 
     #Get random activeVolcano tile
@@ -114,7 +114,7 @@ def killVolcano(board):
 
     #If no volcano tiles
     if not volcanoTiles:
-        print("Could not find any volcano tiles to kill!")
+        #print("Could not find any volcano tiles to kill!")
         return None
 
     #Get random activeVolcano tile

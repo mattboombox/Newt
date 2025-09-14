@@ -11,6 +11,13 @@ fastest = 1
 gameSpeed = slow
 paused = False
 
+#Odds
+common = 10
+uncommon = 50
+rare = 1000
+unique = 10000
+astronomical = 100000
+
 #Set up the display
 windowWidth = 1200
 windowHeight = 800
@@ -119,20 +126,32 @@ while running:
                 break
                 
     #Terrain testing
-    if (random.randint(0, 10) == 1):
+    if (random.randint(0, common) == 1):
         volcano.eruptVolcano(board)
        
-    if (random.randint(0, 100) == 1):   
+    if (random.randint(0, uncommon) == 1):   
         volcano.coolLava(board)
 
-    if (random.randint(0, 1000) == 1):   
+    if (random.randint(0, rare) == 1):   
         volcano.toggleVolcano(board)
 
-    if (random.randint(0, 1500) == 1):   
+    if (random.randint(0, unique) == 1):   
         volcano.killVolcano(board)
 
-    if (random.randint(0, 2000) == 1):   
+    if (random.randint(0, uncommon) == 1):   
         erosion.erodeStone(board)
+
+    if (random.randint(0, astronomical) == 1):   
+        volcano.getIslandSeed(board)
+
+    if (random.randint(0, rare) == 1):   
+        erosion.turnToSoil(board)
+
+    if (random.randint(0, rare) == 1):   
+        erosion.spawnLake(board)
+
+    if (random.randint(0, rare) == 1):   
+        erosion.spawnGrass(board)
 
     #Fill the screen with the background color
     screen.fill(windowColor)

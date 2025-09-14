@@ -14,7 +14,7 @@ IMPASSIBLE = 3
 terrainLib = {
     "grass": lambda: Terrain("grass", 1, 2, (62,92,32), SOLID),
     "desert": lambda: Terrain("desert", 1, 0, (196, 175, 141), SOLID),
-    "lake": lambda: Terrain("lake", 1, 2, (34,  20, 200), LIQUID),
+    "lake": lambda: Terrain("lake", 1, 2, (122, 171, 250), LIQUID),
     "ocean": lambda: Terrain("ocean", 2, 1, (34,  20, 150), LIQUID),
     "mountain":lambda: Terrain("mountain",0, 1, (64,  63, 61), IMPASSIBLE),
     "void": lambda: Terrain("void", 1, 0, (0,   0,  0), LIQUID),
@@ -23,4 +23,5 @@ terrainLib = {
     "lava": lambda: Terrain("lava", 1, 0, (200,  63, 61), LIQUID),
     "stone": lambda: Terrain("stone", 1, 0, (87, 85, 81), SOLID),
     "beach": lambda: Terrain("beach", 1, 0, (196, 175, 141), SOLID),
+    "soil": lambda: Terrain("soil", 1, 0, (97, 78, 52), SOLID),
 }
