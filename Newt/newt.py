@@ -1,10 +1,6 @@
-import pygame, sys
-import math
-import random
-import critter
+import pygame, sys, random, critter, volcano
 from tile import Tile
 from printControls import printControls
-import terrainGenerator
 
 #Initialize Pygame
 pygame.init()
@@ -14,6 +10,9 @@ fast = 10
 fastest = 1
 gameSpeed = slow
 paused = False
+
+#Odds
+
 
 #Set up the display
 windowWidth = 1200
@@ -38,7 +37,7 @@ for x in range (cols):
 #Initial terrain gen
 numIslands = 5
 for _ in range(numIslands):
-    terrainGenerator.getIslandSeed(board)
+    volcano.getIslandSeed(board)
 
 #Critters
 initialCritters = 0
@@ -123,7 +122,17 @@ while running:
                 break
                 
     #Terrain testing
-    terrainGenerator.eruptVolcano(board)
+    if (random.randint(0, 10) == 1):
+        volcano.eruptVolcano(board)
+       
+    if (random.randint(0, 100) == 1):   
+        volcano.coolLava(board)
+
+    if (random.randint(0, 1000) == 1):   
+        volcano.toggleVolcano(board)
+
+    if (random.randint(0, 1500) == 1):   
+        volcano.killVolcano(board)
 
     #Fill the screen with the background color
     screen.fill(windowColor)
