@@ -32,7 +32,7 @@ def erodeStone(board):
     #Pick one random tile and erode it
     spawnX, spawnY = random.choice(stoneTiles)
     board[spawnX][spawnY].terrain = terrainLib["beach"]()
-    print("Stone tile", spawnX, spawnY, "eroded into a beach!")
+    #print("Stone tile", spawnX, spawnY, "eroded into a beach!")
 
 def turnToSoil(board):
     cols = len(board)
@@ -57,7 +57,7 @@ def turnToSoil(board):
                     nx, ny = x + dx, y + dy
                     if 0 <= nx < cols and 0 <= ny < rows:
                         neighbor = board[nx][ny].terrain.name
-                        if neighbor in ("beach", "soil"):
+                        if neighbor in ("beach", "soil", "grass"):
                             hasSoilOrBeach = True
                         if neighbor == "ocean":
                             touchesOcean = True

@@ -1,9 +1,12 @@
-import pygame, sys, random, critter, volcano, erosion
+import pygame, sys, random, critter, volcano, erosion, brush
 from tile import Tile
 from printControls import printControls
+from terrain import terrainLib
 
 #Initialize Pygame
 pygame.init()
+
+#Tik speed variables
 slowest = 200
 slow = 100
 fast = 10
@@ -36,7 +39,11 @@ print("Number of tiles:", cols, "x", rows, "=", rows*cols)
 #Fill board with default tile
 for x in range (cols):
     for y in range (rows):
-        board[x][y] = Tile(x, y)
+        board[x][y] = Tile(x, y)       
+
+#Set brush
+paintBrush = brush.Brush()
+paintBrush.setBrush("stone")
 
 #Initial terrain gen
 numIslands = 5
@@ -76,13 +83,35 @@ while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
+
         elif event.type == pygame.MOUSEBUTTONDOWN:
-            mouseX, mouseY = event.pos
-            clickedTile[0] = mouseX // 10
-            clickedTile[1] = mouseY // 10
-            #print("Tile clicked:" clickedTile[0], clickedTile[1])
-            board[clickedTile[0]][clickedTile[1]].describe()
+            if event.button == 2:  # middle: describe
+                mouseX, mouseY = event.pos
+                clickedTile[0] = mouseX // 10
+                clickedTile[1] = mouseY // 10
+                board[clickedTile[0]][clickedTile[1]].describe()
+
+            elif event.button == 1:  # left: paint
+                mouseX, mouseY = event.pos
+                clickedTile[0] = mouseX // 10
+                clickedTile[1] = mouseY // 10
+                paintBrush.paint(board, clickedTile[0], clickedTile[1])
+
+            elif event.button == 3:  # right: pick terrain into brush (eyedropper)
+                mouseX, mouseY = event.pos
+                tx, ty = mouseX // 10, mouseY // 10
+                picked = board[tx][ty].terrain.name
+                paintBrush.setBrush(picked)
+                print(f"Picked brush: {picked}")
+
+        elif event.type == pygame.MOUSEMOTION:
+            if pygame.mouse.get_pressed(num_buttons=3)[0]:  # right button held
+                mx, my = event.pos
+                tx, ty = mx // 10, my // 10
+                paintBrush.paint(board, tx, ty)
+
         elif event.type == pygame.KEYDOWN:
+
             if event.key == pygame.K_EQUALS:
                 if(gameSpeed == slowest):
                     print("Slow")
@@ -93,6 +122,7 @@ while running:
                 elif(gameSpeed == fast):
                     gameSpeed = fastest
                     print("Fastest")
+
             if event.key == pygame.K_MINUS:
                     if(gameSpeed == fastest):
                         print("Fast")
@@ -103,6 +133,7 @@ while running:
                     elif(gameSpeed == slow):
                         gameSpeed = slowest
                         print("Slowest")
+
             if event.key == pygame.K_p:
                     if(not paused):
                         paused = True
@@ -110,11 +141,14 @@ while running:
                     else:
                         paused = False
                         print("Unpaused")
+
             if event.key == pygame.K_x:
                 print("Goodbye!")
                 running = False
+
             if event.key == pygame.K_h:
                 printControls()
+
             if event.key == pygame.K_m:
                 if len(critterList) < maxCritters:
                     newCritter = spawnCritter(board)
@@ -124,6 +158,13 @@ while running:
                 else:
                     print("Critter limit reached!", len(critterList))
                 break
+
+            if event.key == pygame.K_o: #cycle forward
+                paintBrush.cycleBrush(forward=True)
+
+            if event.key == pygame.K_i: #cycle backward
+                paintBrush.cycleBrush(forward=False)
+
                 
     #Terrain testing
     if (random.randint(0, common) == 1):
