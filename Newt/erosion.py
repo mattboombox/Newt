@@ -126,10 +126,10 @@ def spawnGrass(board):
     cols = len(board)
     rows = len(board[0])
 
-    def lakeWithinRadius2(x, y):
+    def lakeWithinRadius3(x, y):
         #Check all neighbors with Chebyshev distance <= 2 (skip self)
-        for dx in range(-2, 3):
-            for dy in range(-2, 3):
+        for dx in range(-3, 4):
+            for dy in range(-3, 4):
                 if dx == 0 and dy == 0:
                     continue
                 nx, ny = x + dx, y + dy
@@ -143,7 +143,7 @@ def spawnGrass(board):
         (x, y)
         for x in range(cols)
         for y in range(rows)
-        if board[x][y].terrain.name == "soil" and lakeWithinRadius2(x, y)
+        if board[x][y].terrain.name == "soil" and lakeWithinRadius3(x, y)
     ]
 
     if not candidateSoil:

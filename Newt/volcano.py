@@ -51,7 +51,8 @@ def eruptVolcano(board):
     while not (0 <= EX < cols and 0 <= EY < rows) or (EX,EY) == (VX,VY):
         EX, EY = getRandomRadiusPoint(VX, VY, radius)
 
-    board[EX][EY].terrain = terrainLib["lava"]()
+    if board[EX][EY].terrain.name not in ("activeVolcano", "dormantVolcano", "mountain"):
+        board[EX][EY].terrain = terrainLib["lava"]()
 
 def coolLava(board):
     cols = len(board)

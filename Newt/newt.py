@@ -16,8 +16,8 @@ paused = False
 
 #Odds
 common = 10
-uncommon = 50
-rare = 1000
+uncommon = 100
+rare = 500
 unique = 10000
 astronomical = 100000
 
@@ -179,7 +179,7 @@ while running:
     if (random.randint(0, unique) == 1):   
         volcano.killVolcano(board)
 
-    if (random.randint(0, uncommon) == 1):   
+    if (random.randint(0, rare) == 1):   
         erosion.erodeStone(board)
 
     if (random.randint(0, astronomical) == 1):   
