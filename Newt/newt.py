@@ -18,6 +18,7 @@ paused = False
 common = 10
 uncommon = 100
 rare = 500
+rarer = 1000
 unique = 10000
 astronomical = 100000
 
@@ -170,7 +171,7 @@ while running:
     if (random.randint(0, common) == 1):
         volcano.eruptVolcano(board)
        
-    if (random.randint(0, uncommon) == 1):   
+    if (random.randint(0, common) == 1):   
         volcano.coolLava(board)
 
     if (random.randint(0, rare) == 1):   
@@ -179,7 +180,7 @@ while running:
     if (random.randint(0, unique) == 1):   
         volcano.killVolcano(board)
 
-    if (random.randint(0, rare) == 1):   
+    if (random.randint(0, rarer) == 1):   
         erosion.erodeStone(board)
 
     if (random.randint(0, astronomical) == 1):   
