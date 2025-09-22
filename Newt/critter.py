@@ -1,28 +1,46 @@
 import random
+from terrain import LIQUID, IMPASSIBLE
 
 class Critter:
-    def __init__(self, x: int, y: int, name: str, color=(255,0,255)):
+    def __init__(self, x: int, y: int, name: str, fish: bool, color=(255,0,255)):
         self.x = x
         self.y = y
         self.color = color
-        self.hp = 5
+        self.fish = fish
         self.name = name
 
 def move(critter, newX, newY, board, cols, rows):
+    # bounds
     if not (0 <= newX < cols and 0 <= newY < rows):
-        #print("Destination out of bounds")
         return
-    
-    if board[newX][newY].critter is not None:
-        #Tile already occupied by another critter
-        #Change color of the critter being moved onto, creates a war like visual
-        critter.color = board[newX][newY].critter.color
+
+    dest_tile = board[newX][newY]
+    dest_type = dest_tile.terrain.type  # SOLID/LIQUID/IMPASSIBLE as ints
+
+    # block impassible for all critters
+    if dest_type == IMPASSIBLE:
         return
-    
-    board[critter.x][critter.y].critter = None #Remove critter from current pos
-    critter.x, critter.y = newX, newY #Update critter's pos
-    board[newX][newY].critter = critter #Put the critter on the board in its new pos
-    #board[newX][newY].terrain.color = critter.color #Critter spreads its color onto the board
+
+    # fish can ONLY move on liquid
+    if critter.fish:
+        if dest_type != LIQUID:
+            return
+    else:
+        # non-fish cannot move on liquid
+        if dest_type == LIQUID:
+            return
+
+    # occupied?
+    if dest_tile.critter is not None:
+        # visual “battle” effect
+        #critter.color = dest_tile.critter.color
+        return
+
+    # perform move
+    board[critter.x][critter.y].critter = None
+    critter.x, critter.y = newX, newY
+    dest_tile.critter = critter
+    # Optionally: dest_tile.terrain.color = critter.color
 
 def wander(critter, board, cols, rows):
     direction = random.randint(0, 8)

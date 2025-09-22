@@ -1,7 +1,6 @@
-import pygame, sys, random, critter, volcano, erosion, brush
+import pygame, sys, random, critter, volcano, erosion, brush, critterSpawner
 from tile import Tile
 from printControls import printControls
-from terrain import terrainLib
 
 #Initialize Pygame
 pygame.init()
@@ -52,22 +51,8 @@ for _ in range(numIslands):
     volcano.getIslandSeed(board)
 
 #Critters
-initialCritters = 0
 maxCritters = 1000
 critterList = []
-
-#Spawn initial critters
-from critterSpawner import spawnCritter
-for n in range(initialCritters):
-    if len(critterList) < maxCritters:
-        newCritter = spawnCritter(board)
-        newCritter.name = n
-        critterList.append(newCritter)
-    else:
-        print("Critter limit reached!", len(critterList))
-        break
-
-print("Number of critters:", len(critterList))
 
 #Create the display window
 screen = pygame.display.set_mode((windowWidth, windowHeight))
@@ -152,8 +137,24 @@ while running:
 
             if event.key == pygame.K_m:
                 if len(critterList) < maxCritters:
-                    newCritter = spawnCritter(board)
-                    newCritter.name = (len(critterList) - 1)
+                    # 50/50: pick which to try first
+                    if random.random() < 0.5:
+                        order = (critterSpawner.spawnFishCritter, critterSpawner.spawnLandCritter)
+                    else:
+                        order = (critterSpawner.spawnLandCritter, critterSpawner.spawnFishCritter)
+
+                    newCritter = None
+                    for fn in order:
+                        newCritter = fn(board)
+                        if newCritter is not None:
+                            break
+
+                    if newCritter is None:
+                        print("No valid tiles to spawn a fish or land critter.")
+                        break
+
+                    # Give it an ID/name before appending (0-based)
+                    newCritter.name = str(len(critterList))
                     critterList.append(newCritter)
                     print("Number of critters:", len(critterList))
                 else:
@@ -169,7 +170,7 @@ while running:
                 
     #Terrain testing
     if (random.randint(0, common) == 1):
-        volcano.eruptVolcano(board)
+        volcano.eruptVolcano(board, critterList)
        
     if (random.randint(0, common) == 1):   
         volcano.coolLava(board)
@@ -180,14 +181,14 @@ while running:
     if (random.randint(0, unique) == 1):   
         volcano.killVolcano(board)
 
-    if (random.randint(0, rarer) == 1):   
-        erosion.erodeStone(board)
+    if (random.randint(0, uncommon) == 1):   
+        erosion.spawnDesert(board)
+
+    if (random.randint(0, uncommon) == 1):   
+        erosion.erodeCoast(board)
 
     if (random.randint(0, astronomical) == 1):   
         volcano.getIslandSeed(board)
-
-    if (random.randint(0, rare) == 1):   
-        erosion.turnToSoil(board)
 
     if (random.randint(0, rare) == 1):   
         erosion.spawnLake(board)
@@ -195,6 +196,40 @@ while running:
     if (random.randint(0, rare) == 1):   
         erosion.spawnGrass(board)
 
+    if (random.randint(0, rare) == 1):   
+        erosion.spawnReef(board)
+
+    if (random.randint(0, astronomical) == 1):   
+        erosion.meteorStrike(board, critterList)
+
+    if random.randint(0, unique) == 1:
+        if len(critterList) < maxCritters:
+            # 50/50: pick which to try first
+            if random.random() < 0.5:
+                order = (critterSpawner.spawnFishCritter, critterSpawner.spawnLandCritter)
+            else:
+                order = (critterSpawner.spawnLandCritter, critterSpawner.spawnFishCritter)
+
+            newCritter = None
+            for fn in order:
+                newCritter = fn(board)
+                if newCritter is not None:
+                    break
+
+            if newCritter is None:
+                print("No valid tiles to spawn a fish or land critter.")
+            else:
+                # Give it an ID/name before appending (0-based)
+                newCritter.name = str(len(critterList))
+                critterList.append(newCritter)
+                if newCritter.fish:
+                    print("A fish has spawned at", newCritter.x, newCritter.y, "!")
+                else:
+                    print("A land dweller has spawned at", newCritter.x, newCritter.y, "!")
+                print("Number of critters:", len(critterList))
+        else:
+            print("Critter limit reached!", len(critterList))
+        
     #Fill the screen with the background color
     screen.fill(windowColor)
 
