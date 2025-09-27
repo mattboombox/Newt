@@ -59,6 +59,10 @@ screen = pygame.display.set_mode((windowWidth, windowHeight))
 pygame.display.set_caption(windowTitle)
 printControls()
 
+#load sprites
+deerSprite = pygame.image.load("Newt/sprites/deer.png").convert_alpha()
+fishSprite = pygame.image.load("Newt/sprites/fish.png").convert_alpha()
+
 tic = 0
 
 #Main loop
@@ -242,8 +246,11 @@ while running:
     for x in range (cols):
         for y in range(rows):
             pygame.draw.rect(screen, board[x][y].getTerrainColor(), (x * 10, y * 10, 10, 10))
-            if(board[x][y].critter is not None):
-                pygame.draw.circle(screen, board[x][y].getThingColor(), (x * 10 + 5, y * 10 + 5), 5)
+            if board[x][y].critter is not None:
+                if(board[x][y].critter.fish):
+                    screen.blit(fishSprite, (x * 10, y * 10))
+                else:
+                    screen.blit(deerSprite, (x * 10, y * 10))
                 
 
     #Update the display
