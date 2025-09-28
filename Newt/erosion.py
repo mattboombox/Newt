@@ -48,14 +48,13 @@ def spawnLake(board):
     ]
     water_edge = {"ocean", "reef"}
 
-    candidate_tiles = set()
-
+    # Mode A: (west of mountains)
+    a_candidates = set()
     for x in range(cols):
         for y in range(rows):
             if board[x][y].terrain.name in ("mountain", "dormantVolcano"):
-                # directly west by 2 and 3 tiles
-                for dist in (2, 3):
-                    nx, ny = x - dist, y  # west = negative x
+                for dist in (2, 3):  # directly west by 2 and 3 tiles
+                    nx, ny = x - dist, y
                     if 0 <= nx < cols and 0 <= ny < rows:
                         tname = board[nx][ny].terrain.name
                         if tname in allowed:
@@ -68,15 +67,47 @@ def spawnLake(board):
                                         touches_water = True
                                         break
                             if not touches_water:
-                                candidate_tiles.add((nx, ny))
+                                a_candidates.add((nx, ny))
 
-    if not candidate_tiles:
-        # print("No valid tiles to spawn a lake!")
-        return None
+    # Mode B: flip an isolated ocean/reef tile to lake
+    # "completely surrounded" = all 8 neighbors exist and are NOT ocean/reef
+    b_candidates = []
+    for x in range(1, cols - 1):
+        for y in range(1, rows - 1):
+            if board[x][y].terrain.name in water_edge:
+                isolated = True
+                for dx, dy in directions:
+                    nx, ny = x + dx, y + dy
+                    # neighbors are in-bounds due to range above
+                    if board[nx][ny].terrain.name in water_edge:
+                        isolated = False
+                        break
+                if isolated:
+                    b_candidates.append((x, y))
 
-    lx, ly = random.choice(list(candidate_tiles))
-    board[lx][ly].terrain = terrainLib["lake"]()
-    #print(f"Lake spawned at {lx}, {ly}")
+    # 50/50 pick between modes, with graceful fallback if empty
+    use_mode_b = (random.random() < 0.5)
+    if use_mode_b and b_candidates:
+        lx, ly = random.choice(b_candidates)
+        board[lx][ly].terrain = terrainLib["lake"]()
+        return (lx, ly)
+    elif (not use_mode_b) and a_candidates:
+        lx, ly = random.choice(list(a_candidates))
+        board[lx][ly].terrain = terrainLib["lake"]()
+        return (lx, ly)
+    else:
+        # Fallback to the other mode if the chosen one had no candidates
+        if b_candidates:
+            lx, ly = random.choice(b_candidates)
+            board[lx][ly].terrain = terrainLib["lake"]()
+            return (lx, ly)
+        if a_candidates:
+            lx, ly = random.choice(list(a_candidates))
+            board[lx][ly].terrain = terrainLib["lake"]()
+            return (lx, ly)
+
+    # No valid tiles
+    return None
 
 def spawnGrass(board):
     cols = len(board)
@@ -128,22 +159,23 @@ def spawnDesert(board):
                     return True
         return False
 
-    # Any stone tile not adjacent to ocean
-    candidateStone = [
+    # Any stone OR beach tile not adjacent to ocean
+    candidateTiles = [
         (x, y)
         for x in range(cols)
         for y in range(rows)
-        if board[x][y].terrain.name == "stone"
+        if board[x][y].terrain.name in ("stone", "beach")
            and not touchesOcean(x, y)
     ]
 
-    if not candidateStone:
-        # print("No valid stone tiles to spawn a desert!")
+    if not candidateTiles:
+        # print("No valid tiles to spawn a desert!")
         return None
 
-    gx, gy = random.choice(candidateStone)
+    gx, gy = random.choice(candidateTiles)
     board[gx][gy].terrain = terrainLib["desert"]()
-    #print(f"Desert spawned at {gx}, {gy}!")
+    #print(f"Desert spawned at ({gx}, {gy})")
+
 
 def spawnReef(board):
     cols = len(board)

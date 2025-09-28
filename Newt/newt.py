@@ -29,17 +29,26 @@ windowTitle = "Pygame Window"
 windowColor = (25, 25, 25)
 
 #Board
-cols = windowWidth // 10
-rows = windowHeight // 10
+TILE = 10
+cols = windowWidth // TILE
+rows = windowHeight // TILE
 boardCenter = windowWidth // 2, windowHeight // 2
 clickedTile = [0,0]
 board = [[None for _ in range(rows)] for _ in range(cols)]
 print("Number of tiles:", cols, "x", rows, "=", rows*cols)
 
+# ---- Helper: safe mouse->tile with bounds check ----
+def pos_to_tile(mx, my):
+    tx = mx // TILE
+    ty = my // TILE
+    if 0 <= tx < cols and 0 <= ty < rows:
+        return tx, ty
+    return None
+
 #Fill board with default tile
 for x in range (cols):
     for y in range (rows):
-        board[x][y] = Tile(x, y)       
+        board[x][y] = Tile(x, y)
 
 #Set brush
 paintBrush = brush.Brush()
@@ -76,29 +85,34 @@ while running:
 
         elif event.type == pygame.MOUSEBUTTONDOWN:
             if event.button == 2:  # middle: describe
-                mouseX, mouseY = event.pos
-                clickedTile[0] = mouseX // 10
-                clickedTile[1] = mouseY // 10
-                board[clickedTile[0]][clickedTile[1]].describe()
+                pos = pos_to_tile(*event.pos)
+                if pos:
+                    tx, ty = pos
+                    clickedTile[0], clickedTile[1] = tx, ty
+                    board[tx][ty].describe()
 
             elif event.button == 1:  # left: paint
-                mouseX, mouseY = event.pos
-                clickedTile[0] = mouseX // 10
-                clickedTile[1] = mouseY // 10
-                paintBrush.paint(board, clickedTile[0], clickedTile[1])
+                pos = pos_to_tile(*event.pos)
+                if pos:
+                    tx, ty = pos
+                    clickedTile[0], clickedTile[1] = tx, ty
+                    paintBrush.paint(board, tx, ty)
 
             elif event.button == 3:  # right: pick terrain into brush (eyedropper)
-                mouseX, mouseY = event.pos
-                tx, ty = mouseX // 10, mouseY // 10
-                picked = board[tx][ty].terrain.name
-                paintBrush.setBrush(picked)
-                print(f"Picked brush: {picked}")
+                pos = pos_to_tile(*event.pos)
+                if pos:
+                    tx, ty = pos
+                    picked = board[tx][ty].terrain.name
+                    paintBrush.setBrush(picked)
+                    print(f"Picked brush: {picked}")
 
         elif event.type == pygame.MOUSEMOTION:
-            if pygame.mouse.get_pressed(num_buttons=3)[0]:  # right button held
-                mx, my = event.pos
-                tx, ty = mx // 10, my // 10
-                paintBrush.paint(board, tx, ty)
+            # left button held (comment fixed)
+            if pygame.mouse.get_pressed(num_buttons=3)[0]:
+                pos = pos_to_tile(*event.pos)
+                if pos:
+                    tx, ty = pos
+                    paintBrush.paint(board, tx, ty)
 
         elif event.type == pygame.KEYDOWN:
 
@@ -114,23 +128,23 @@ while running:
                     print("Fastest")
 
             if event.key == pygame.K_MINUS:
-                    if(gameSpeed == fastest):
-                        print("Fast")
-                        gameSpeed = fast
-                    elif(gameSpeed == fast):
-                        print("Slow")
-                        gameSpeed = slow
-                    elif(gameSpeed == slow):
-                        gameSpeed = slowest
-                        print("Slowest")
+                if(gameSpeed == fastest):
+                    print("Fast")
+                    gameSpeed = fast
+                elif(gameSpeed == fast):
+                    print("Slow")
+                    gameSpeed = slow
+                elif(gameSpeed == slow):
+                    gameSpeed = slowest
+                    print("Slowest")
 
             if event.key == pygame.K_p:
-                    if(not paused):
-                        paused = True
-                        print("Paused")
-                    else:
-                        paused = False
-                        print("Unpaused")
+                if(not paused):
+                    paused = True
+                    print("Paused")
+                else:
+                    paused = False
+                    print("Unpaused")
 
             if event.key == pygame.K_x:
                 print("Goodbye!")
@@ -171,39 +185,38 @@ while running:
             if event.key == pygame.K_i: #cycle backward
                 paintBrush.cycleBrush(forward=False)
 
-                
     #Terrain testing
     if (random.randint(0, common) == 1):
         volcano.eruptVolcano(board, critterList)
-       
-    if (random.randint(0, common) == 1):   
+
+    if (random.randint(0, common) == 1):
         volcano.coolLava(board)
 
-    if (random.randint(0, rare) == 1):   
+    if (random.randint(0, rare) == 1):
         volcano.toggleVolcano(board)
 
-    if (random.randint(0, unique) == 1):   
+    if (random.randint(0, unique) == 1):
         volcano.killVolcano(board)
 
-    if (random.randint(0, uncommon) == 1):   
+    if (random.randint(0, uncommon) == 1):
         erosion.spawnDesert(board)
 
-    if (random.randint(0, uncommon) == 1):   
+    if (random.randint(0, uncommon) == 1):
         erosion.erodeCoast(board)
 
-    if (random.randint(0, astronomical) == 1):   
+    if (random.randint(0, astronomical) == 1):
         volcano.getIslandSeed(board)
 
-    if (random.randint(0, rare) == 1):   
+    if (random.randint(0, rare) == 1):
         erosion.spawnLake(board)
 
-    if (random.randint(0, rare) == 1):   
+    if (random.randint(0, rare) == 1):
         erosion.spawnGrass(board)
 
-    if (random.randint(0, rare) == 1):   
+    if (random.randint(0, rare) == 1):
         erosion.spawnReef(board)
 
-    if (random.randint(0, astronomical) == 1):   
+    if (random.randint(0, astronomical) == 1):
         erosion.meteorStrike(board, critterList)
 
     if random.randint(0, unique) == 1:
@@ -233,25 +246,19 @@ while running:
                 print("Number of critters:", len(critterList))
         else:
             print("Critter limit reached!", len(critterList))
-        
+
     #Fill the screen with the background color
     screen.fill(windowColor)
-
-    #Change the color of a critter randomly
-    #if(random.randint(0, 100) == 0):
-        #print("Mutation!")
-        #critterList[random.randint(0, len(critterList) - 1)].color = (random.randint(0, 255),random.randint(0, 255),random.randint(0, 255))
 
     #Draw board
     for x in range (cols):
         for y in range(rows):
-            pygame.draw.rect(screen, board[x][y].getTerrainColor(), (x * 10, y * 10, 10, 10))
+            pygame.draw.rect(screen, board[x][y].getTerrainColor(), (x * TILE, y * TILE, TILE, TILE))
             if board[x][y].critter is not None:
-                if(board[x][y].critter.fish):
-                    screen.blit(fishSprite, (x * 10, y * 10))
+                if board[x][y].critter.fish:
+                    screen.blit(fishSprite, (x * TILE, y * TILE))
                 else:
-                    screen.blit(deerSprite, (x * 10, y * 10))
-                
+                    screen.blit(deerSprite, (x * TILE, y * TILE))
 
     #Update the display
     pygame.display.flip()
@@ -262,7 +269,7 @@ while running:
         if tic % gameSpeed == 0:
             tic = 0
             for c in critterList:
-                critter.wander(c, board, cols, rows)      
+                critter.wander(c, board, cols, rows)
 
 #Quit Pygame
 pygame.quit()

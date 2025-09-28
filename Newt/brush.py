@@ -23,8 +23,15 @@ class Brush:
         print(f"Hand cycled to: {self.current.name}")
 
     def paint(self, board, x, y):
+        # Hard OOB guard to prevent IndexError from any caller
+        cols, rows = len(board), len(board[0])
+        if not (0 <= x < cols and 0 <= y < rows):
+            return
+
         if self.current is None:
             print("No terrain selected to paint with!")
             return
-        board[x][y].terrain = terrainLib[self.current.name]()  # Fresh instance
-        print(f"Painted {self.current.name} at ({x}, {y})")
+
+        # Use a fresh instance each time to avoid shared state
+        board[x][y].terrain = terrainLib[self.current.name]()
+        #print(f"Painted {self.current.name} at ({x}, {y})")
