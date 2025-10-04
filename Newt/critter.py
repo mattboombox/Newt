@@ -2,12 +2,13 @@ import random
 from terrain import LIQUID, IMPASSIBLE
 
 class Critter:
-    def __init__(self, x: int, y: int, name: str, fish: bool, color=(255,0,255)):
+    def __init__(self, x: int, y: int, name: str, fish: bool, species: str, color=(255,0,255)):
         self.x = x
         self.y = y
         self.color = color
         self.fish = fish
         self.name = name
+        self.species = species
 
 def move(critter, newX, newY, board, cols, rows):
     # bounds

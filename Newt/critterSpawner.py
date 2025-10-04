@@ -20,7 +20,7 @@ def spawnFishCritter(board):
     spawnX, spawnY = random.choice(reef_spots)
 
     # Create a fish critter (name as string; fish=True)
-    newCritter = Critter(spawnX, spawnY, name="fish", fish=True)
+    newCritter = Critter(spawnX, spawnY, name="fish", species = "fish", fish=True)
     newCritter.color = (
         random.randint(0, 80),    # R: low
         random.randint(0, 140),   # G: mid-low
@@ -49,7 +49,7 @@ def spawnLandCritter(board):
     spawnX, spawnY = random.choice(grass_spots)
 
     # Create a land critter (fish=False)
-    newCritter = Critter(spawnX, spawnY, name="landCritter", fish=False)
+    newCritter = Critter(spawnX, spawnY, name="landCritter", species = "deer", fish=False)
     newCritter.color = (
         random.randint(80, 180),   # earthy-ish tones
         random.randint(90, 170),

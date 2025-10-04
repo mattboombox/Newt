@@ -69,8 +69,10 @@ pygame.display.set_caption(windowTitle)
 printControls()
 
 #load sprites
-deerSprite = pygame.image.load("Newt/sprites/deer.png").convert_alpha()
-fishSprite = pygame.image.load("Newt/sprites/fish.png").convert_alpha()
+sprites = {
+    "deer": pygame.image.load("Newt/sprites/deer.png").convert_alpha(),
+    "fish": pygame.image.load("Newt/sprites/fish.png").convert_alpha(),
+}
 
 tic = 0
 
@@ -255,10 +257,7 @@ while running:
         for y in range(rows):
             pygame.draw.rect(screen, board[x][y].getTerrainColor(), (x * TILE, y * TILE, TILE, TILE))
             if board[x][y].critter is not None:
-                if board[x][y].critter.fish:
-                    screen.blit(fishSprite, (x * TILE, y * TILE))
-                else:
-                    screen.blit(deerSprite, (x * TILE, y * TILE))
+                screen.blit(sprites[board[x][y].critter.species], (x * TILE, y * TILE))
 
     #Update the display
     pygame.display.flip()
