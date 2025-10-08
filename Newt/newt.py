@@ -55,7 +55,7 @@ paintBrush = brush.Brush()
 paintBrush.setBrush("stone")
 
 #Initial terrain gen
-numIslands = 5
+numIslands = random.randint(1,4)
 for _ in range(numIslands):
     volcano.getIslandSeed(board)
 
@@ -79,6 +79,8 @@ tic = 0
 #Main loop
 running = True
 while running:
+
+    livePlanet = False
 
     #Handle events
     for event in pygame.event.get():
@@ -187,43 +189,27 @@ while running:
             if event.key == pygame.K_i: #cycle backward
                 paintBrush.cycleBrush(forward=False)
 
-    #Terrain testing
-    if (random.randint(0, common) == 1):
-        volcano.eruptVolcano(board, critterList)
+    # Seed life
+    if (not livePlanet) and random.randrange(astronomical) == 0:
+        livePlanet = True
+        print("The planet is now alive!")
 
-    if (random.randint(0, common) == 1):
-        volcano.coolLava(board)
+    # Terrain events
+    if random.randrange(common) == 0:    volcano.eruptVolcano(board, critterList)
+    if random.randrange(common) == 0:    volcano.coolLava(board)
+    if random.randrange(uncommon) == 0:  volcano.toggleVolcano(board)
+    if random.randrange(rarer) == 0:     volcano.killVolcano(board)
+    if random.randrange(uncommon) == 0:  erosion.spawnDesert(board)
+    if random.randrange(uncommon) == 0:  erosion.erodeCoast(board)
+    if random.randrange(astronomical) == 0: volcano.getIslandSeed(board)
+    if random.randrange(rare) == 0:      erosion.spawnLake(board)
+    if random.randrange(uncommon) == 0: erosion.spawnShallows(board)
+    if random.randrange(astronomical) == 0: erosion.meteorStrike(board, critterList)
+    if livePlanet and random.randrange(rare) == 0: erosion.spawnGrass(board)
 
-    if (random.randint(0, rare) == 1):
-        volcano.toggleVolcano(board)
-
-    if (random.randint(0, unique) == 1):
-        volcano.killVolcano(board)
-
-    if (random.randint(0, uncommon) == 1):
-        erosion.spawnDesert(board)
-
-    if (random.randint(0, uncommon) == 1):
-        erosion.erodeCoast(board)
-
-    if (random.randint(0, astronomical) == 1):
-        volcano.getIslandSeed(board)
-
-    if (random.randint(0, rare) == 1):
-        erosion.spawnLake(board)
-
-    if (random.randint(0, rare) == 1):
-        erosion.spawnGrass(board)
-
-    if (random.randint(0, rare) == 1):
-        erosion.spawnReef(board)
-
-    if (random.randint(0, astronomical) == 1):
-        erosion.meteorStrike(board, critterList)
-
-    if random.randint(0, unique) == 1:
+    # Critters only when alive
+    if livePlanet and random.randrange(unique) == 0:
         if len(critterList) < maxCritters:
-            # 50/50: pick which to try first
             if random.random() < 0.5:
                 order = (critterSpawner.spawnFishCritter, critterSpawner.spawnLandCritter)
             else:
@@ -238,14 +224,13 @@ while running:
             if newCritter is None:
                 print("No valid tiles to spawn a fish or land critter.")
             else:
-                # Give it an ID/name before appending (0-based)
                 newCritter.name = str(len(critterList))
                 critterList.append(newCritter)
                 if newCritter.fish:
                     print("A fish has spawned at", newCritter.x, newCritter.y, "!")
                 else:
                     print("A land dweller has spawned at", newCritter.x, newCritter.y, "!")
-                print("Number of critters:", len(critterList))
+                    print("Number of critters:", len(critterList))
         else:
             print("Critter limit reached!", len(critterList))
 

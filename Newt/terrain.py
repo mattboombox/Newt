@@ -22,5 +22,5 @@ terrainLib = {
     "stone": lambda: Terrain("stone", 1, 0, (87, 85, 81), SOLID),
     "desert": lambda: Terrain("desert", 1, 0, (184, 165, 105), SOLID),
     "beach": lambda: Terrain("beach", 1, 0, (196, 175, 141), SOLID),
-    "reef": lambda: Terrain("reef", 1, 0, (20, 85, 150), LIQUID),
+    "shallows": lambda: Terrain("shallows", 1, 0, (20, 85, 150), LIQUID),
 }

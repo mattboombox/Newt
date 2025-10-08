@@ -141,7 +141,7 @@ def killVolcano(board):
     #print(f"Volcano at {VX}, {VY} has gone extinct!")
 
     # 3/4 chance to spawn a new activeVolcano in any adjacent 8-direction
-    if random.random() < 0.75:
+    if random.random() < 0.90:
         directions = [
             (-1, -1), (0, -1), (1, -1),
             (-1,  0),          (1,  0),

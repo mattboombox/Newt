@@ -13,7 +13,7 @@ def erodeCoast(board):
     ]
 
     source_types = {"stone", "desert", "grass"}
-    water_edge = {"ocean", "reef"}
+    water_edge = {"ocean", "shallows"}
 
     # Collect tiles that should erode to beach
     candidates = []
@@ -28,7 +28,7 @@ def erodeCoast(board):
                             break  # one neighbor is enough
 
     if not candidates:
-        # print("No coast-adjacent tiles (stone/desert next to ocean/reef).")
+        # print("No coast-adjacent tiles (stone/desert next to ocean/shallows).")
         return None
 
     # Pick one random coastal tile to erode
@@ -46,7 +46,7 @@ def spawnLake(board):
         (-1,  0),          (1,  0),
         (-1,  1), (0,  1), (1,  1)
     ]
-    water_edge = {"ocean", "reef"}
+    water_edge = {"ocean", "shallows"}
 
     # Mode A: (west of mountains)
     a_candidates = set()
@@ -58,7 +58,7 @@ def spawnLake(board):
                     if 0 <= nx < cols and 0 <= ny < rows:
                         tname = board[nx][ny].terrain.name
                         if tname in allowed:
-                            # reject if adjacent to ocean or reef
+                            # reject if adjacent to ocean or shallows
                             touches_water = False
                             for dx, dy in directions:
                                 ax, ay = nx + dx, ny + dy
@@ -69,8 +69,8 @@ def spawnLake(board):
                             if not touches_water:
                                 a_candidates.add((nx, ny))
 
-    # Mode B: flip an isolated ocean/reef tile to lake
-    # "completely surrounded" = all 8 neighbors exist and are NOT ocean/reef
+    # Mode B: flip an isolated ocean/shallows tile to lake
+    # "completely surrounded" = all 8 neighbors exist and are NOT ocean/shallows
     b_candidates = []
     for x in range(1, cols - 1):
         for y in range(1, rows - 1):
@@ -145,7 +145,7 @@ def spawnDesert(board):
     cols = len(board)
     rows = len(board[0])
 
-    def touchesOcean(x, y):
+    def touchesWater(x, y):
         # 8-way adjacency
         directions = [
             (-1, -1), (0, -1), (1, -1),
@@ -155,17 +155,17 @@ def spawnDesert(board):
         for dx, dy in directions:
             nx, ny = x + dx, y + dy
             if 0 <= nx < cols and 0 <= ny < rows:
-                if board[nx][ny].terrain.name == "ocean":
+                if board[nx][ny].terrain.name in ("ocean", "shallows"):
                     return True
         return False
 
-    # Any stone OR beach tile not adjacent to ocean
+    # Any stone OR beach tile not adjacent to ocean or shallows
     candidateTiles = [
         (x, y)
         for x in range(cols)
         for y in range(rows)
         if board[x][y].terrain.name in ("stone", "beach")
-           and not touchesOcean(x, y)
+           and not touchesWater(x, y)
     ]
 
     if not candidateTiles:
@@ -174,40 +174,39 @@ def spawnDesert(board):
 
     gx, gy = random.choice(candidateTiles)
     board[gx][gy].terrain = terrainLib["desert"]()
-    #print(f"Desert spawned at ({gx}, {gy})")
+    # print(f"Desert spawned at ({gx}, {gy})")
 
-
-def spawnReef(board):
+def spawnShallows(board):
     cols = len(board)
     rows = len(board[0])
 
-    # 8-way adjacency directions
+    # 8-way adjacency
     directions = [
         (-1, -1), (0, -1), (1, -1),
         (-1,  0),          (1,  0),
         (-1,  1), (0,  1), (1,  1)
     ]
 
-    candidateOcean = []
+    candidate_ocean = []
 
     for x in range(cols):
         for y in range(rows):
             if board[x][y].terrain.name == "ocean":
-                # check all neighbors
+                # qualifies only if ANY neighbor is NOT ocean AND NOT shallows
                 for dx, dy in directions:
                     nx, ny = x + dx, y + dy
                     if 0 <= nx < cols and 0 <= ny < rows:
-                        if board[nx][ny].terrain.name == "beach":
-                            candidateOcean.append((x, y))
-                            break  # only need one beach neighbor to qualify
+                        neigh = board[nx][ny].terrain.name
+                        if neigh not in ("ocean", "shallows"):
+                            candidate_ocean.append((x, y))
+                            break  # one qualifying neighbor is enough
 
-    if not candidateOcean:
-        # print("No ocean tiles adjacent to beaches.")
+    if not candidate_ocean:
         return None
 
-    rx, ry = random.choice(candidateOcean)
-    board[rx][ry].terrain = terrainLib["reef"]()
-    #print(f"Reef spawned at {rx}, {ry}!")
+    rx, ry = random.choice(candidate_ocean)
+    if board[rx][ry].terrain.name == "ocean":
+        board[rx][ry].terrain = terrainLib["shallows"]()
 
 def meteorStrike(board, critter_list=None):
     cols = len(board)

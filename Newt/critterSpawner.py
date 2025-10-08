@@ -5,19 +5,19 @@ def spawnFishCritter(board):
     cols = len(board)
     rows = len(board[0])
 
-    # Empty reef tiles only
-    reef_spots = [
+    # Empty shallows tiles only
+    shallows_spots = [
         (x, y)
         for x in range(cols)
         for y in range(rows)
-        if board[x][y].critter is None and board[x][y].terrain.name == "reef"
+        if board[x][y].critter is None and board[x][y].terrain.name == "shallows"
     ]
 
-    if not reef_spots:
-        print("No empty reef tiles available for fish spawn.")
+    if not shallows_spots:
+        print("No empty shallows tiles available for fish spawn.")
         return None
 
-    spawnX, spawnY = random.choice(reef_spots)
+    spawnX, spawnY = random.choice(shallows_spots)
 
     # Create a fish critter (name as string; fish=True)
     newCritter = Critter(spawnX, spawnY, name="fish", species = "fish", fish=True)
