@@ -134,7 +134,7 @@ def spawnGrass(board):
     ]
 
     if not candidateDesert:
-        # print("No desert tiles near lakes (radius 3) found.")
+        print("No desert tiles near lakes (radius 3) found.")
         return None
 
     gx, gy = random.choice(candidateDesert)

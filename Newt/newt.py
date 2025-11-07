@@ -189,11 +189,6 @@ while running:
             if event.key == pygame.K_i: #cycle backward
                 paintBrush.cycleBrush(forward=False)
 
-    # Seed life
-    if (not livePlanet) and random.randrange(astronomical) == 0:
-        livePlanet = True
-        print("The planet is now alive!")
-
     # Terrain events
     if random.randrange(common) == 0:    volcano.eruptVolcano(board, critterList)
     if random.randrange(common) == 0:    volcano.coolLava(board)
@@ -205,10 +200,10 @@ while running:
     if random.randrange(rare) == 0:      erosion.spawnLake(board)
     if random.randrange(uncommon) == 0: erosion.spawnShallows(board)
     if random.randrange(astronomical) == 0: erosion.meteorStrike(board, critterList)
-    if livePlanet and random.randrange(rare) == 0: erosion.spawnGrass(board)
+    if random.randrange(rare) == 0: erosion.spawnGrass(board)
 
     # Critters only when alive
-    if livePlanet and random.randrange(unique) == 0:
+    if random.randrange(unique) == 0:
         if len(critterList) < maxCritters:
             if random.random() < 0.5:
                 order = (critterSpawner.spawnFishCritter, critterSpawner.spawnLandCritter)
