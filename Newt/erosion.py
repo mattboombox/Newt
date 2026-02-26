@@ -1,11 +1,20 @@
 import random
 from terrain import terrainLib
 
+
+def _set_terrain(board, x, y, new_name: str):
+    """Terrain setter compatible with cached Tile + old Tile."""
+    tile = board[x][y]
+    if hasattr(tile, "setTerrainByName"):
+        tile.setTerrainByName(new_name)
+    else:
+        tile.terrain = terrainLib[new_name]()
+
+
 def erodeCoast(board):
     cols = len(board)
     rows = len(board[0])
 
-    # 8-way adjacency (orthogonal + diagonals)
     directions = [
         (-1, -1), (0, -1), (1, -1),
         (-1,  0),          (1,  0),
@@ -15,7 +24,6 @@ def erodeCoast(board):
     source_types = {"stone", "desert", "grass"}
     water_edge = {"ocean", "shallows"}
 
-    # Collect tiles that should erode to beach
     candidates = []
     for x in range(cols):
         for y in range(rows):
@@ -25,16 +33,15 @@ def erodeCoast(board):
                     if 0 <= nx < cols and 0 <= ny < rows:
                         if board[nx][ny].terrain.name in water_edge:
                             candidates.append((x, y))
-                            break  # one neighbor is enough
+                            break
 
     if not candidates:
-        # print("No coast-adjacent tiles (stone/desert next to ocean/shallows).")
-        return None
+        return set()
 
-    # Pick one random coastal tile to erode
     ex, ey = random.choice(candidates)
-    board[ex][ey].terrain = terrainLib["beach"]()
-    # print(f"Tile {ex}, {ey} eroded into a beach!")
+    _set_terrain(board, ex, ey, "beach")
+    return {(ex, ey)}
+
 
 def spawnLake(board):
     cols = len(board)
@@ -48,17 +55,16 @@ def spawnLake(board):
     ]
     water_edge = {"ocean", "shallows"}
 
-    # Mode A: (west of mountains)
+    # Mode A: west of mountains/dormantVolcano by 2 or 3 tiles, not touching ocean/shallows
     a_candidates = set()
     for x in range(cols):
         for y in range(rows):
             if board[x][y].terrain.name in ("mountain", "dormantVolcano"):
-                for dist in (2, 3):  # directly west by 2 and 3 tiles
+                for dist in (2, 3):
                     nx, ny = x - dist, y
                     if 0 <= nx < cols and 0 <= ny < rows:
                         tname = board[nx][ny].terrain.name
                         if tname in allowed:
-                            # reject if adjacent to ocean or shallows
                             touches_water = False
                             for dx, dy in directions:
                                 ax, ay = nx + dx, ny + dy
@@ -69,8 +75,7 @@ def spawnLake(board):
                             if not touches_water:
                                 a_candidates.add((nx, ny))
 
-    # Mode B: flip an isolated ocean/shallows tile to lake
-    # "completely surrounded" = all 8 neighbors exist and are NOT ocean/shallows
+    # Mode B: isolated ocean/shallows tile becomes lake
     b_candidates = []
     for x in range(1, cols - 1):
         for y in range(1, rows - 1):
@@ -78,43 +83,41 @@ def spawnLake(board):
                 isolated = True
                 for dx, dy in directions:
                     nx, ny = x + dx, y + dy
-                    # neighbors are in-bounds due to range above
                     if board[nx][ny].terrain.name in water_edge:
                         isolated = False
                         break
                 if isolated:
                     b_candidates.append((x, y))
 
-    # 50/50 pick between modes, with graceful fallback if empty
     use_mode_b = (random.random() < 0.5)
+
     if use_mode_b and b_candidates:
         lx, ly = random.choice(b_candidates)
-        board[lx][ly].terrain = terrainLib["lake"]()
-        return (lx, ly)
+        _set_terrain(board, lx, ly, "lake")
+        return {(lx, ly)}
     elif (not use_mode_b) and a_candidates:
         lx, ly = random.choice(list(a_candidates))
-        board[lx][ly].terrain = terrainLib["lake"]()
-        return (lx, ly)
+        _set_terrain(board, lx, ly, "lake")
+        return {(lx, ly)}
     else:
-        # Fallback to the other mode if the chosen one had no candidates
+        # fallback to other mode
         if b_candidates:
             lx, ly = random.choice(b_candidates)
-            board[lx][ly].terrain = terrainLib["lake"]()
-            return (lx, ly)
+            _set_terrain(board, lx, ly, "lake")
+            return {(lx, ly)}
         if a_candidates:
             lx, ly = random.choice(list(a_candidates))
-            board[lx][ly].terrain = terrainLib["lake"]()
-            return (lx, ly)
+            _set_terrain(board, lx, ly, "lake")
+            return {(lx, ly)}
 
-    # No valid tiles
-    return None
+    return set()
+
 
 def spawnGrass(board):
     cols = len(board)
     rows = len(board[0])
 
-    def lakeWithinRadius3(x, y):
-        # Check all neighbors with Chebyshev distance <= 3 (skip self)
+    def lake_within_radius3(x, y):
         for dx in range(-3, 4):
             for dy in range(-3, 4):
                 if dx == 0 and dy == 0:
@@ -125,33 +128,34 @@ def spawnGrass(board):
                         return True
         return False
 
-    # Desert tiles that have a lake within radius 3
-    candidateDesert = [
+    candidate_desert = [
         (x, y)
         for x in range(cols)
         for y in range(rows)
-        if board[x][y].terrain.name == "desert" and lakeWithinRadius3(x, y)
+        if board[x][y].terrain.name == "desert" and lake_within_radius3(x, y)
     ]
 
-    if not candidateDesert:
+    if not candidate_desert:
+        # keep your original print (but you can remove later)
         print("No desert tiles near lakes (radius 3) found.")
-        return None
+        return set()
 
-    gx, gy = random.choice(candidateDesert)
-    board[gx][gy].terrain = terrainLib["grass"]()
-    #print(f"Grass spawned at {gx}, {gy}!")
+    gx, gy = random.choice(candidate_desert)
+    _set_terrain(board, gx, gy, "grass")
+    return {(gx, gy)}
+
 
 def spawnDesert(board):
     cols = len(board)
     rows = len(board[0])
 
-    def touchesWater(x, y):
-        # 8-way adjacency
-        directions = [
-            (-1, -1), (0, -1), (1, -1),
-            (-1,  0),          (1,  0),
-            (-1,  1), (0,  1), (1,  1)
-        ]
+    directions = [
+        (-1, -1), (0, -1), (1, -1),
+        (-1,  0),          (1,  0),
+        (-1,  1), (0,  1), (1,  1)
+    ]
+
+    def touches_water(x, y):
         for dx, dy in directions:
             nx, ny = x + dx, y + dy
             if 0 <= nx < cols and 0 <= ny < rows:
@@ -159,28 +163,26 @@ def spawnDesert(board):
                     return True
         return False
 
-    # Any stone OR beach tile not adjacent to ocean or shallows
-    candidateTiles = [
+    candidate_tiles = [
         (x, y)
         for x in range(cols)
         for y in range(rows)
         if board[x][y].terrain.name in ("stone", "beach")
-           and not touchesWater(x, y)
+        and not touches_water(x, y)
     ]
 
-    if not candidateTiles:
-        # print("No valid tiles to spawn a desert!")
-        return None
+    if not candidate_tiles:
+        return set()
 
-    gx, gy = random.choice(candidateTiles)
-    board[gx][gy].terrain = terrainLib["desert"]()
-    # print(f"Desert spawned at ({gx}, {gy})")
+    gx, gy = random.choice(candidate_tiles)
+    _set_terrain(board, gx, gy, "desert")
+    return {(gx, gy)}
+
 
 def spawnShallows(board):
     cols = len(board)
     rows = len(board[0])
 
-    # 8-way adjacency
     directions = [
         (-1, -1), (0, -1), (1, -1),
         (-1,  0),          (1,  0),
@@ -199,24 +201,26 @@ def spawnShallows(board):
                         neigh = board[nx][ny].terrain.name
                         if neigh not in ("ocean", "shallows"):
                             candidate_ocean.append((x, y))
-                            break  # one qualifying neighbor is enough
+                            break
 
     if not candidate_ocean:
-        return None
+        return set()
 
     rx, ry = random.choice(candidate_ocean)
     if board[rx][ry].terrain.name == "ocean":
-        board[rx][ry].terrain = terrainLib["shallows"]()
+        _set_terrain(board, rx, ry, "shallows")
+        return {(rx, ry)}
+
+    return set()
+
 
 def meteorStrike(board, critter_list=None):
     cols = len(board)
     rows = len(board[0])
 
-    # Pick a random strike center
     cx = random.randrange(cols)
     cy = random.randrange(rows)
 
-    # Build the 5x5 area centered on (cx, cy)
     area = [
         (x, y)
         for x in range(cx - 2, cx + 3)
@@ -224,13 +228,12 @@ def meteorStrike(board, critter_list=None):
         if 0 <= x < cols and 0 <= y < rows
     ]
     if not area:
-        return None
+        return set()
 
-    # Pick a random number of tiles from that area
     num_strikes = random.randint(1, len(area))
     strike_tiles = random.sample(area, num_strikes)
 
-    # Convert them to lava (kill critters first)
+    dirty = set()
     kills = 0
     for x, y in strike_tiles:
         tile = board[x][y]
@@ -242,10 +245,13 @@ def meteorStrike(board, critter_list=None):
                 try:
                     critter_list.remove(victim)
                 except ValueError:
-                    pass  # not tracked; ignore
-        tile.terrain = terrainLib["lava"]()
+                    pass
+
+        _set_terrain(board, x, y, "lava")
+        dirty.add((x, y))
 
     print(f"Meteor strike at {cx}, {cy}! Spawned {num_strikes} lava tiles.")
     if kills != 0:
-        print("Critters lost: {kills}.")
+        print(f"Critters lost: {kills}.")
 
+    return dirty

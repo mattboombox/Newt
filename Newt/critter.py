@@ -1,8 +1,11 @@
 import random
 from terrain import LIQUID, IMPASSIBLE
 
+
 class Critter:
-    def __init__(self, x: int, y: int, name: str, fish: bool, species: str, color=(255,0,255)):
+    __slots__ = ("x", "y", "color", "fish", "name", "species")
+
+    def __init__(self, x: int, y: int, name: str, fish: bool, species: str, color=(255, 0, 255)):
         self.x = x
         self.y = y
         self.color = color
@@ -10,59 +13,57 @@ class Critter:
         self.name = name
         self.species = species
 
-def move(critter, newX, newY, board, cols, rows):
+
+# 9 directions (0 = stay)
+_DIRS = (
+    (0, 0),   # stay
+    (0, 1),   # N
+    (1, 1),   # NE
+    (1, 0),   # E
+    (1, -1),  # SE
+    (0, -1),  # S
+    (-1, -1), # SW
+    (-1, 0),  # W
+    (-1, 1),  # NW
+)
+
+
+def move(c, new_x: int, new_y: int, board, cols: int, rows: int) -> bool:
+    """Attempt move. Returns True if moved."""
     # bounds
-    if not (0 <= newX < cols and 0 <= newY < rows):
-        return
+    if new_x < 0 or new_x >= cols or new_y < 0 or new_y >= rows:
+        return False
 
-    dest_tile = board[newX][newY]
-    dest_type = dest_tile.terrain.type  # SOLID/LIQUID/IMPASSIBLE as ints
+    dest_tile = board[new_x][new_y]
+    dest_type = dest_tile.terrain.type  # int enum
 
-    # block impassible for all critters
+    # impassible blocks all
     if dest_type == IMPASSIBLE:
-        return
+        return False
 
-    # fish can ONLY move on liquid
-    if critter.fish:
+    # fish must stay in liquid; non-fish must stay out of liquid
+    if c.fish:
         if dest_type != LIQUID:
-            return
+            return False
     else:
-        # non-fish cannot move on liquid
         if dest_type == LIQUID:
-            return
+            return False
 
-    # occupied?
+    # occupied
     if dest_tile.critter is not None:
-        # visual “battle” effect
-        #critter.color = dest_tile.critter.color
-        return
+        return False
 
     # perform move
-    board[critter.x][critter.y].critter = None
-    critter.x, critter.y = newX, newY
-    dest_tile.critter = critter
-    # Optionally: dest_tile.terrain.color = critter.color
+    board[c.x][c.y].critter = None
+    c.x, c.y = new_x, new_y
+    dest_tile.critter = c
+    return True
 
-def wander(critter, board, cols, rows):
-    direction = random.randint(0, 8)
 
-    if direction == 0:#stay
-        #move(critter, critter.x,     critter.y,     board, cols, rows)
-        return
-    elif direction == 1:#N
-        move(critter, critter.x,     critter.y + 1, board, cols, rows)
-    elif direction == 2:#NE
-        move(critter, critter.x + 1, critter.y + 1, board, cols, rows)
-    elif direction == 3:#E
-        move(critter, critter.x + 1, critter.y,     board, cols, rows)
-    elif direction == 4:#SE
-        move(critter, critter.x + 1, critter.y - 1, board, cols, rows)
-    elif direction == 5:#S
-        move(critter, critter.x,     critter.y - 1, board, cols, rows)
-    elif direction == 6:#SW
-        move(critter, critter.x - 1, critter.y - 1, board, cols, rows)
-    elif direction == 7:#W
-        move(critter, critter.x - 1, critter.y,     board, cols, rows)
-    elif direction == 8:#NW
-        move(critter, critter.x - 1, critter.y + 1, board, cols, rows)
+def wander(c, board, cols: int, rows: int) -> bool:
+    """Random step (including stay). Returns True if moved."""
+    dx, dy = _DIRS[random.randrange(9)]
+    if dx == 0 and dy == 0:
+        return False
+    return move(c, c.x + dx, c.y + dy, board, cols, rows)
 

@@ -1,162 +1,188 @@
-import random, math
+import random
+import math
 from terrain import terrainLib
 
+# Cached sets so we don't scan the whole board every time
+ACTIVE = set()   # (x,y) where terrain == activeVolcano
+DORMANT = set()  # (x,y) where terrain == dormantVolcano
+LAVA = set()     # (x,y) where terrain == lava
+
+
+def init_caches(board):
+    """Scan board once to build caches. Call after initial terrain generation."""
+    ACTIVE.clear()
+    DORMANT.clear()
+    LAVA.clear()
+
+    cols = len(board)
+    rows = len(board[0])
+    for x in range(cols):
+        for y in range(rows):
+            name = board[x][y].terrain.name
+            if name == "activeVolcano":
+                ACTIVE.add((x, y))
+            elif name == "dormantVolcano":
+                DORMANT.add((x, y))
+            elif name == "lava":
+                LAVA.add((x, y))
+
+
+def _set_terrain(board, x, y, new_name: str):
+    """
+    Central terrain setter:
+    - uses Tile.setTerrainByName if present (keeps cached color correct)
+    - updates volcano module caches
+    """
+    tile = board[x][y]
+    old_name = tile.terrain.name
+
+    # Write terrain (supports your new Tile class and old one)
+    if hasattr(tile, "setTerrainByName"):
+        tile.setTerrainByName(new_name)
+    else:
+        tile.terrain = terrainLib[new_name]()
+
+    # Remove from old cache
+    if old_name == "activeVolcano":
+        ACTIVE.discard((x, y))
+    elif old_name == "dormantVolcano":
+        DORMANT.discard((x, y))
+    elif old_name == "lava":
+        LAVA.discard((x, y))
+
+    # Add to new cache
+    if new_name == "activeVolcano":
+        ACTIVE.add((x, y))
+    elif new_name == "dormantVolcano":
+        DORMANT.add((x, y))
+    elif new_name == "lava":
+        LAVA.add((x, y))
+
+
 def getIslandSeed(board):
+    """Pick a random ocean tile and turn it into an active volcano. Returns dirty tiles."""
     cols = len(board)
     rows = len(board[0])
 
-    #Get all ocean tiles
-    oceanTiles = [(x, y) for x in range(cols) for y in range(rows)
-                   if board[x][y].terrain.name == "ocean"]
+    # Try random sampling first to avoid a full scan most of the time
+    for _ in range(500):
+        x = random.randrange(cols)
+        y = random.randrange(rows)
+        if board[x][y].terrain.name == "ocean":
+            _set_terrain(board, x, y, "activeVolcano")
+            return {(x, y)}
 
-    #If no ocean tiles
-    if not oceanTiles:
-        #print("Could not find any ocean tiles to make island seed!")
-        return None
+    # Fallback scan (rare)
+    ocean_tiles = [(x, y) for x in range(cols) for y in range(rows) if board[x][y].terrain.name == "ocean"]
+    if not ocean_tiles:
+        return set()
 
-    #Get random ocean tile
-    spawnX, spawnY = random.choice(oceanTiles)
+    x, y = random.choice(ocean_tiles)
+    _set_terrain(board, x, y, "activeVolcano")
+    return {(x, y)}
 
-    #Spawn volcano
-    board[spawnX][spawnY].terrain = terrainLib["activeVolcano"]()
 
-def getRandomRadiusPoint(cx, cy, radius):
-    theta = random.uniform(0, 2*math.pi)
+def _random_point_in_radius(cx, cy, radius):
+    theta = random.uniform(0, 2 * math.pi)
     r = radius * math.sqrt(random.random())
     x = cx + int(round(r * math.cos(theta)))
     y = cy + int(round(r * math.sin(theta)))
     return x, y
 
+
 def eruptVolcano(board, critter_list=None):
+    """Random active volcano erupts: turns a random tile in radius into lava. Returns dirty tiles."""
+    if not ACTIVE:
+        return set()
+
     cols = len(board)
     rows = len(board[0])
     radius = 5
 
-    # Get all active volcano tiles
-    volcanoTiles = [
-        (x, y) for x in range(cols) for y in range(rows)
-        if board[x][y].terrain.name == "activeVolcano"
-    ]
-    if not volcanoTiles:
-        return None
+    vx, vy = random.choice(tuple(ACTIVE))
 
-    # Randomly pick volcano to erupt
-    VX, VY = random.choice(volcanoTiles)
+    ex, ey = _random_point_in_radius(vx, vy, radius)
 
-    # Get random point in radius of volcano
-    EX, EY = getRandomRadiusPoint(VX, VY, radius)
+    tries = 0
+    while tries < 50 and (not (0 <= ex < cols and 0 <= ey < rows) or (ex, ey) == (vx, vy)):
+        ex, ey = _random_point_in_radius(vx, vy, radius)
+        tries += 1
 
-    # Reroll if OOB or center tile
-    while not (0 <= EX < cols and 0 <= EY < rows) or (EX, EY) == (VX, VY):
-        EX, EY = getRandomRadiusPoint(VX, VY, radius)
+    if not (0 <= ex < cols and 0 <= ey < rows) or (ex, ey) == (vx, vy):
+        return set()
 
-    target = board[EX][EY]
+    target = board[ex][ey]
+    if target.terrain.name in ("activeVolcano", "dormantVolcano", "mountain"):
+        return set()
 
-    # Only overwrite if not volcano/mountain
-    if target.terrain.name not in ("activeVolcano", "dormantVolcano", "mountain"):
-        # If a critter is on the target tile, remove it from the board
-        if target.critter is not None:
-            victim = target.critter
-            print("Critter ", target.critter.name, " has been killed by an eruption")
-            target.critter = None
-            # And remove it from the critter list if provided
-            if critter_list is not None:
-                try:
-                    critter_list.remove(victim)
-                except ValueError:
-                    # Already removed or not tracked—ignore
-                    pass
+    # Kill critter if present
+    if target.critter is not None:
+        victim = target.critter
+        print("Critter", victim.name, "has been killed by an eruption")
+        target.critter = None
+        if critter_list is not None:
+            try:
+                critter_list.remove(victim)
+            except ValueError:
+                pass
 
-        # Turn the tile to lava
-        target.terrain = terrainLib["lava"]()
+    _set_terrain(board, ex, ey, "lava")
+    return {(ex, ey)}
+
 
 def coolLava(board):
-    cols = len(board)
-    rows = len(board[0])
+    """Turn a random lava tile into stone. Returns dirty tiles."""
+    if not LAVA:
+        return set()
 
-    #Get all lava tiles
-    lavaTiles = [(x, y) for x in range(cols) for y in range(rows)
-                   if board[x][y].terrain.name == "lava"]
+    x, y = random.choice(tuple(LAVA))
+    _set_terrain(board, x, y, "stone")
+    return {(x, y)}
 
-    #If no lava tiles
-    if not lavaTiles:
-        #print("Could not find any lava tiles to cool!")
-        return None
-
-    #Get random lava tile
-    coolX, coolY = random.choice(lavaTiles)
-
-    #Cool lava into stone
-    board[coolX][coolY].terrain = terrainLib["stone"]()
 
 def toggleVolcano(board):
-    cols = len(board)
-    rows = len(board[0])
+    """Toggle a random volcano between active/dormant. Returns dirty tiles."""
+    if not ACTIVE and not DORMANT:
+        return set()
 
-    #Get all volcano tiles
-    volcanoTiles = [
-    (x, y)
-    for x in range(cols)
-    for y in range(rows)
-    if board[x][y].terrain.name in ("activeVolcano", "dormantVolcano")
-    ]
+    pool = tuple(ACTIVE | DORMANT)
+    x, y = random.choice(pool)
 
-    #If no volcano tiles
-    if not volcanoTiles:
-        #print("Could not find any volcano tiles to toggle!")
-        return None
-
-    #Get random activeVolcano tile
-    VX, VY = random.choice(volcanoTiles)
-
-    #Toggle
-    if board[VX][VY].terrain.name == "activeVolcano":
-        board[VX][VY].terrain = terrainLib["dormantVolcano"]()
-        #print("Volcano at", VX, VY, "has gone dormant!")
+    if (x, y) in ACTIVE:
+        _set_terrain(board, x, y, "dormantVolcano")
     else:
-        board[VX][VY].terrain = terrainLib["activeVolcano"]()
-        #print("Volcano at", VX, VY, "has awoken!")
+        _set_terrain(board, x, y, "activeVolcano")
+
+    return {(x, y)}
+
 
 def killVolcano(board):
+    """
+    Turn a random volcano into mountain.
+    90% chance spawn a new active volcano adjacent.
+    Returns dirty tiles.
+    """
+    if not ACTIVE and not DORMANT:
+        return set()
+
     cols = len(board)
     rows = len(board[0])
 
-    # Get all volcano tiles (active or dormant)
-    volcanoTiles = [
-        (x, y)
-        for x in range(cols)
-        for y in range(rows)
-        if board[x][y].terrain.name in ("activeVolcano", "dormantVolcano")
-    ]
+    vx, vy = random.choice(tuple(ACTIVE | DORMANT))
+    dirty = {(vx, vy)}
 
-    if not volcanoTiles:
-        # print("Could not find any volcano tiles to kill!")
-        return None
+    _set_terrain(board, vx, vy, "mountain")
 
-    # Pick a random volcano to go extinct
-    VX, VY = random.choice(volcanoTiles)
-
-    # Turn it into a mountain
-    board[VX][VY].terrain = terrainLib["mountain"]()
-    #print(f"Volcano at {VX}, {VY} has gone extinct!")
-
-    # 3/4 chance to spawn a new activeVolcano in any adjacent 8-direction
     if random.random() < 0.90:
         directions = [
             (-1, -1), (0, -1), (1, -1),
             (-1,  0),          (1,  0),
-            (-1,  1), (0,  1), (1,  1)
+            (-1,  1), (0,  1), (1,  1),
         ]
-
-        # In-bounds neighbors only
-        neighbors = [
-            (VX + dx, VY + dy)
-            for dx, dy in directions
-            if 0 <= VX + dx < cols and 0 <= VY + dy < rows
-        ]
-
+        neighbors = [(vx + dx, vy + dy) for dx, dy in directions if 0 <= vx + dx < cols and 0 <= vy + dy < rows]
         if neighbors:
             nx, ny = random.choice(neighbors)
-            # No restrictions on what it can spawn onto — overwrite whatever is there
-            board[nx][ny].terrain = terrainLib["activeVolcano"]()
-            #print(f"Volcano has shifted to {nx}, {ny}")
+            _set_terrain(board, nx, ny, "activeVolcano")
+            dirty.add((nx, ny))
+
+    return dirty
