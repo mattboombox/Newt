@@ -132,11 +132,22 @@ def eruptVolcano(board, critter_list=None):
 
 def coolLava(board):
     """Turn a random lava tile into stone. Returns dirty tiles."""
-    if not LAVA:
+    cols = len(board)
+    rows = len(board[0])
+
+    lava_tiles = []
+
+    for x in range(cols):
+        for y in range(rows):
+            if board[x][y].terrain.name == "lava":
+                lava_tiles.append((x, y))
+
+    if not lava_tiles:
         return set()
 
-    x, y = random.choice(tuple(LAVA))
+    x, y = random.choice(lava_tiles)
     _set_terrain(board, x, y, "stone")
+
     return {(x, y)}
 
 

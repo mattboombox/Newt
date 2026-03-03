@@ -68,9 +68,10 @@ TARGET_FPS = 60
 
 SPEED_SLOWEST = 2     # steps/sec
 SPEED_SLOW = 6
-SPEED_FAST = 20
-SPEED_FASTEST = 60
-speed_levels = [SPEED_SLOWEST, SPEED_SLOW, SPEED_FAST, SPEED_FASTEST]
+SPEED_MEDIUM = 20
+SPEED_FAST = 60
+SPEED_FASTEST = 600
+speed_levels = [SPEED_SLOWEST, SPEED_SLOW, SPEED_MEDIUM, SPEED_FAST, SPEED_FASTEST]
 speed_index = 1  # start at SLOW
 paused = False
 
@@ -209,7 +210,7 @@ while running:
         elif event.type == pygame.KEYDOWN:
             if event.key == pygame.K_EQUALS:
                 speed_index = min(speed_index + 1, len(speed_levels) - 1)
-                labels = ["Slowest", "Slow", "Fast", "Fastest"]
+                labels = ["Slowest", "Slow", "Medium", "Fast", "Fastest"]
                 print(labels[speed_index])
 
             elif event.key == pygame.K_MINUS:
@@ -240,7 +241,7 @@ while running:
                 paint_brush.cycleBrush(forward=False)
 
     # -----------------------------
-    # Simulation (fixed timestep)
+    # Simulation
     # -----------------------------
     steps_per_sec = speed_levels[speed_index]
     step_dt = 1.0 / steps_per_sec if steps_per_sec > 0 else 0.1
@@ -265,7 +266,7 @@ while running:
                 if new_c is not None:
                     dirty_tiles.add((new_c.x, new_c.y))
 
-            # Environment events (volcano + erosion now both return dirty sets)
+            # Environment events
             if sim_step_counter % EVENT_CHECK_EVERY_STEPS == 0:
                 # Volcano
                 if random.randrange(COMMON) == 0:
