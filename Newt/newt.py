@@ -21,13 +21,16 @@ class Game:
         self.running = True
         self.paused = False
 
-        # later these move to world.py / game.py
         self.tile_size = 16
         self.cols = WINDOW_WIDTH // self.tile_size
         self.rows = WINDOW_HEIGHT // self.tile_size
 
         self.board = self.make_board()
         self.selected_tile = None
+        self.hovered_tile = None
+
+        self.current_terrain = "grass"
+        self.left_mouse_held = False
 
     def make_board(self):
         return [
@@ -47,21 +50,48 @@ def handle_input(game):
         elif event.type == pygame.KEYDOWN:
             if event.key == pygame.K_x:
                 game.running = False
-
             elif event.key == pygame.K_p:
                 game.paused = not game.paused
                 print("Paused" if game.paused else "Unpaused")
+            elif event.key == pygame.K_1:
+                game.current_terrain = "ocean"
+            elif event.key == pygame.K_2:
+                game.current_terrain = "grass"
+            elif event.key == pygame.K_3:
+                game.current_terrain = "stone"
+
+        elif event.type == pygame.MOUSEBUTTONDOWN:
+            if event.button == 1:
+                game.left_mouse_held = True
+                mx, my = pygame.mouse.get_pos()
+                tile = get_tile_at_pixel(game, mx, my)
+                if tile is not None:
+                    tile.set_terrain(game.current_terrain)
+
+        elif event.type == pygame.MOUSEBUTTONUP:
+            if event.button == 1:
+                game.left_mouse_held = False
+
+
+def get_tile_at_pixel(game, mx, my):
+    x = mx // game.tile_size
+    y = my // game.tile_size
+
+    if 0 <= x < game.cols and 0 <= y < game.rows:
+        return game.board[x][y]
+
+    return None
 
 
 def update(game, dt):
+    mx, my = pygame.mouse.get_pos()
+    game.hovered_tile = get_tile_at_pixel(game, mx, my)
+
     if game.paused:
         return
 
-    # later:
-    # update critters
-    # update random events
-    # update simulation ticks
-    pass
+    if game.left_mouse_held and game.hovered_tile is not None:
+        game.hovered_tile.set_terrain(game.current_terrain)
 
 
 def draw_tile(screen, tile, tile_size):
@@ -75,6 +105,15 @@ def render(screen, game):
     for x in range(game.cols):
         for y in range(game.rows):
             draw_tile(screen, game.board[x][y], game.tile_size)
+
+    if game.hovered_tile is not None:
+        rect = pygame.Rect(
+            game.hovered_tile.x * game.tile_size,
+            game.hovered_tile.y * game.tile_size,
+            game.tile_size,
+            game.tile_size
+        )
+        pygame.draw.rect(screen, (255, 255, 255), rect, 1)
 
     pygame.display.flip()
 
