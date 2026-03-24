@@ -4,6 +4,7 @@ from world import World
 from brush import paint_radius
 from render import render
 from input import handle_input
+from critter import Critter
 
 
 # -----------------------------
@@ -14,7 +15,7 @@ WINDOW_HEIGHT = 800
 WINDOW_TITLE = "Newt"
 HUD_HEIGHT = 18
 TARGET_FPS = 60
-BACKGROUND_COLOR = (20, 20, 20)
+BACKGROUND_COLOR = (0, 0, 0)
 
 
 # -----------------------------
@@ -38,6 +39,15 @@ class Game:
         self.left_mouse_held = False
         self.brush_size = 0
 
+        self.critters = []
+
+        starter = self.world.get_tile(5, 5)
+        if starter is not None:
+            starter.set_terrain("grass")
+            critter = Critter(5, 5)
+            starter.critter = critter
+            self.critters.append(critter)
+
 
 # -----------------------------
 # Systems
@@ -51,6 +61,9 @@ def update(game, dt):
 
     if game.left_mouse_held and game.hovered_tile is not None:
         paint_radius(game, game.hovered_tile, game.current_terrain, game.brush_size)
+
+    for critter in game.critters:
+        critter.update(game.world, dt)
 
 
 # -----------------------------

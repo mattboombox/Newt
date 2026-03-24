@@ -1,5 +1,6 @@
 import pygame
 from brush import paint_radius
+from critter import Critter
 
 
 def handle_input(game):
@@ -25,6 +26,15 @@ def handle_input(game):
             elif event.key == pygame.K_e:
                 game.brush_size += 1
                 print("Brush size:", game.brush_size)
+            elif event.key == pygame.K_c:
+                mx, my = pygame.mouse.get_pos()
+                tile = game.world.get_tile_at_pixel(mx, my, game.tile_size)
+
+                if tile is not None and tile.is_walkable() and tile.critter is None:
+                    critter = Critter(tile.x, tile.y)
+                    tile.critter = critter
+                    game.critters.append(critter)
+                    print(f"Spawned critter {critter.id} at ({tile.x}, {tile.y})")
 
         elif event.type == pygame.MOUSEBUTTONDOWN:
             if event.button == 1:
