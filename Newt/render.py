@@ -9,24 +9,25 @@ def draw_tile(screen, tile, tile_size):
 def draw_hud(screen, game, background_color):
     font = pygame.font.SysFont(None, 18)
 
-    status_text = "Paused" if game.paused else "Running"
+    status = "Paused" if game.paused else "Running"
+
+    fields = [
+        f"Critters: {len(game.critters)}",
+        f"Brush: {game.current_terrain}",
+        f"Size: {game.brush_size}",
+        f"Status: {status}",
+    ]
 
     if game.hovered_tile is not None:
         tile = game.hovered_tile
-        hover_text = f"Tile: ({tile.x}, {tile.y}) {tile.terrain}"
+        fields.append(f"Tile: ({tile.x}, {tile.y}) {tile.terrain}")
 
         if tile.critter is not None:
-            critter = tile.critter
-            hover_text += f" | Critter ID: {critter.id}"
+            fields.append(f"Critter: ID {tile.critter.id}")
     else:
-        hover_text = "Tile: none"
+        fields.append("Tile: none")
 
-    hud_text = (
-        f"Brush: {game.current_terrain}   "
-        f"Size: {game.brush_size}   "
-        f"Status: {status_text}   "
-        f"{hover_text}"
-    )
+    hud_text = " | ".join(fields)
 
     hud_height = 20
     hud_rect = pygame.Rect(0, screen.get_height() - hud_height, screen.get_width(), hud_height)

@@ -5,6 +5,7 @@ from brush import paint_radius
 from render import render
 from input import handle_input
 from critter import Critter
+from events import update_events
 
 
 # -----------------------------
@@ -35,18 +36,14 @@ class Game:
         self.selected_tile = None
         self.hovered_tile = None
 
-        self.current_terrain = "grass"
+        self.current_terrain = "stone"
         self.left_mouse_held = False
         self.brush_size = 0
 
         self.critters = []
 
-        starter = self.world.get_tile(5, 5)
-        if starter is not None:
-            starter.set_terrain("grass")
-            critter = Critter(5, 5)
-            starter.critter = critter
-            self.critters.append(critter)
+        self.erosion_timer = 0.0
+        self.erosion_interval = 0.25
 
 
 # -----------------------------
@@ -61,6 +58,8 @@ def update(game, dt):
 
     if game.left_mouse_held and game.hovered_tile is not None:
         paint_radius(game, game.hovered_tile, game.current_terrain, game.brush_size)
+
+    update_events(game, dt)
 
     for critter in game.critters:
         critter.update(game.world, dt)

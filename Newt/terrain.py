@@ -8,7 +8,15 @@ TERRAIN_DATA = {
         "walkable": True,
     },
     "stone": {
-        "color": (100, 100, 100),
+        "color": (110, 110, 110),
+        "walkable": True,
+    },
+    "sand": {
+        "color": (194, 178, 128),
+        "walkable": True,
+    },
+    "beach": {
+        "color": (214, 198, 140),
         "walkable": True,
     },
 }

@@ -22,3 +22,23 @@ class World:
         x = mx // tile_size
         y = my // tile_size
         return self.get_tile(x, y)
+    
+    def get_neighbors_cardinal(self, x, y):
+        neighbors = []
+        for dx, dy in [(1,0), (-1,0), (0,1), (0,-1)]:
+            tile = self.get_tile(x + dx, y + dy)
+            if tile is not None:
+                neighbors.append(tile)
+        return neighbors
+
+
+    def get_neighbors_all(self, x, y):
+        neighbors = []
+        for dx in [-1, 0, 1]:
+            for dy in [-1, 0, 1]:
+                if dx == 0 and dy == 0:
+                    continue
+                tile = self.get_tile(x + dx, y + dy)
+                if tile is not None:
+                    neighbors.append(tile)
+        return neighbors
