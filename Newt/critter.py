@@ -1,6 +1,5 @@
 import random
 
-
 class Critter:
     _next_id = 1
 

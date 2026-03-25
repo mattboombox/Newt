@@ -31,7 +31,6 @@ class World:
                 neighbors.append(tile)
         return neighbors
 
-
     def get_neighbors_all(self, x, y):
         neighbors = []
         for dx in [-1, 0, 1]:

@@ -39,6 +39,14 @@ def handle_input(game):
                 game.brush_size += 1
                 print("Brush size:", game.brush_size)
 
+            elif event.key == pygame.K_PERIOD:   # >
+                game.speed = min(16, game.speed * 2)
+                print("Speed:", game.speed)
+
+            elif event.key == pygame.K_COMMA:    # <
+                game.speed = max(0.25, game.speed / 2)
+                print("Speed:", game.speed)
+
             elif event.key == pygame.K_c:
                 mx, my = pygame.mouse.get_pos()
                 tile = game.world.get_tile_at_pixel(mx, my, game.tile_size)

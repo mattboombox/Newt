@@ -6,7 +6,7 @@ from render import render
 from input import handle_input
 from critter import Critter
 from events import update_events
-
+from volcano import Volcano
 
 # -----------------------------
 # Config
@@ -17,7 +17,6 @@ WINDOW_TITLE = "Newt"
 HUD_HEIGHT = 18
 TARGET_FPS = 60
 BACKGROUND_COLOR = (0, 0, 0)
-
 
 # -----------------------------
 # Temporary game state
@@ -44,6 +43,17 @@ class Game:
 
         self.erosion_timer = 0.0
         self.erosion_interval = 0.25
+
+        self.volcanoes = []
+
+        self.life_timer = 0.0
+        self.life_interval = 0.35
+
+        self.meteor_timer = 0.0
+        self.meteor_interval = 2.0
+        self.meteor_chance = 0.002
+
+        self.speed = 1.0
 
 
 # -----------------------------
@@ -79,6 +89,7 @@ def main():
 
     while game.running:
         dt = clock.tick(TARGET_FPS) / 1000.0
+        dt *= game.speed
 
         handle_input(game)
         update(game, dt)
