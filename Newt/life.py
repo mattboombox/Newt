@@ -18,11 +18,21 @@ def grow_tile(world, tile):
     if tile is None:
         return False
 
+    near_lake = is_lake_nearby(world, tile, radius=2)
+
     # Sand near lakes can become grass
     if tile.terrain == "sand":
-        if is_lake_nearby(world, tile, radius=2):
+        if near_lake:
             tile.set_terrain("grass")
             return True
+        return False
+
+    # Grass away from lakes becomes sand
+    if tile.terrain == "grass":
+        if not near_lake:
+            tile.set_terrain("sand")
+            return True
+        return False
 
     return False
 
@@ -33,7 +43,7 @@ def get_growable_tiles(world):
     for x in range(world.cols):
         for y in range(world.rows):
             tile = world.board[x][y]
-            if tile.terrain == "sand":
+            if tile.terrain in ("sand", "grass"):
                 growable.append(tile)
 
     return growable

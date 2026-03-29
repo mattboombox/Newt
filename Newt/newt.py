@@ -48,8 +48,8 @@ class Game:
         self.life_interval = 0.35
 
         self.impact_timer = 0.0
-        self.impact_interval = 2.0
-        self.impact_chance = 0.01
+        self.impact_interval = 5.0
+        self.impact_chance = 0.001
 
         self.tectonic_timer = 0.0
         self.tectonic_interval = 5.0

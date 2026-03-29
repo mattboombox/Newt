@@ -6,14 +6,16 @@ def erode_tile(world, tile):
     if tile is None:
         return False
 
+    near_ocean = world.is_adjacent_to_terrain(tile.x, tile.y, {"ocean", "shallows"})
+
     # Lava cools into stone
     if tile.terrain == "lava":
         tile.set_terrain("stone")
         return True
 
-    # Lake touching ocean becomes ocean
+    # Lake touching ocean/shallows becomes ocean
     if tile.terrain == "lake":
-        if world.is_adjacent_to_terrain(tile.x, tile.y, {"ocean"}):
+        if near_ocean:
             tile.set_terrain("ocean")
             return True
         return False
@@ -22,18 +24,13 @@ def erode_tile(world, tile):
     if tile.terrain == "mountain":
         if random.random() < 0.01:
             return try_spawn_lake_from_mountain(world, tile)
-    
+
     if random.random() < 0.01:
         trigger_random_lake_growth(world)
 
-    near_ocean = world.is_adjacent_to_terrain(tile.x, tile.y, {"ocean"})
-
-    # Stone erodes into beach or sand
+    # Stone near ocean becomes beach, otherwise sand
     if tile.terrain == "stone":
-        if near_ocean:
-            tile.set_terrain("beach")
-        else:
-            tile.set_terrain("sand")
+        tile.set_terrain("beach" if near_ocean else "sand")
         return True
 
     # Beach should only stay beach if still coastal
@@ -41,19 +38,32 @@ def erode_tile(world, tile):
         if not near_ocean:
             tile.set_terrain("sand")
             return True
+
+        # Chance to create shallows in adjacent ocean
+        ocean_neighbors = []
+        for neighbor in world.get_neighbors_all(tile.x, tile.y):
+            if neighbor.terrain == "ocean":
+                ocean_neighbors.append(neighbor)
+
+        if ocean_neighbors and random.random() < 0.25:
+            chosen_ocean = random.choice(ocean_neighbors)
+            chosen_ocean.set_terrain("shallows")
+            return True
+
         return False
 
-    # Sand touching ocean should become beach
-    if tile.terrain == "sand":
+    # Sand and grass can erode into beach if near ocean
+    if tile.terrain in ("sand", "grass"):
         if near_ocean:
             tile.set_terrain("beach")
             return True
         return False
 
-    # Grass touching ocean should become beach
-    if tile.terrain == "grass":
-        if near_ocean:
-            tile.set_terrain("beach")
+
+    # shallows away from beach become ocean again
+    if tile.terrain == "shallows":
+        if not world.is_adjacent_to_terrain(tile.x, tile.y, {"beach"}):
+            tile.set_terrain("ocean")
             return True
         return False
 
@@ -66,7 +76,7 @@ def get_erodible_tiles(world):
     for x in range(world.cols):
         for y in range(world.rows):
             tile = world.board[x][y]
-            if tile.terrain in ("lava", "lake", "stone", "beach", "sand", "grass", "mountain"):
+            if tile.terrain in ("lava", "lake", "stone", "beach", "sand", "grass", "mountain", "shallows"):
                 erodible.append(tile)
 
     return erodible

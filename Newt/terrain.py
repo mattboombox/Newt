@@ -59,4 +59,8 @@ TERRAIN_DATA = {
         "color": (237, 252, 255),
         "walkable": True,
     },
+    "shallows": {
+        "color": (32, 67, 186),
+        "walkable": True,
+    },
 }
