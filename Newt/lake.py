@@ -51,26 +51,28 @@ def convert_landlocked_ocean_to_lake(world):
     visited = set()
     queue = deque()
 
-    # Start flood fill from edge ocean tiles
+    water_terrain = {"ocean", "shallows"}
+
+    # Start flood fill from edge water tiles
     for tile in world.get_edge_tiles():
-        if tile.terrain == "ocean":
+        if tile.terrain in water_terrain:
             pos = (tile.x, tile.y)
             if pos not in visited:
                 visited.add(pos)
                 queue.append(pos)
 
-    # Mark all ocean connected to the map edge
+    # Mark all water connected to the map edge
     while queue:
         x, y = queue.popleft()
 
         for neighbor in world.get_neighbors_all(x, y):
-            if neighbor.terrain == "ocean":
+            if neighbor.terrain in water_terrain:
                 pos = (neighbor.x, neighbor.y)
                 if pos not in visited:
                     visited.add(pos)
                     queue.append(pos)
 
-    # Any ocean not connected to edge becomes lake
+    # Any ocean not connected to edge water becomes lake
     changed = False
     for x in range(world.cols):
         for y in range(world.rows):

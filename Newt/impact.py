@@ -53,9 +53,9 @@ def trigger_impact_event(world, x=None, y=None, min_radius=2, max_radius=4, impa
                     tile.set_terrain("stone")
 
     if impact_type == "comet":
-        center_tile.set_terrain("lake")
+        center_tile.set_terrain("mountain")
     else:
-        center_tile.set_terrain("lava")
+        center_tile.set_terrain("mountain")
 
     print(f"{impact_type.capitalize()} impact! Magnitude {magnitude} at ({x}, {y}) with radius {radius}")
     return True
