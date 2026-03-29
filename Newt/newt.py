@@ -49,10 +49,13 @@ class Game:
 
         self.impact_timer = 0.0
         self.impact_interval = 2.0
-        self.impact_chance = 0.002
+        self.impact_chance = 0.01
 
         self.tectonic_timer = 0.0
         self.tectonic_interval = 5.0
+
+        self.polar_timer = 10.0
+        self.polar_interval = 10.0
 
         self.speed = 1.0
 

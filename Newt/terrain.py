@@ -51,4 +51,12 @@ TERRAIN_DATA = {
         "color": (255, 0, 255),
         "walkable": False,
     },
+    "ice_sheet": {
+        "color": (199, 236, 240),
+        "walkable": True,
+    },
+    "snow": {
+        "color": (237, 252, 255),
+        "walkable": True,
+    },
 }

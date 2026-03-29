@@ -55,12 +55,16 @@ class Volcano:
         if center_tile is not None:
             center_tile.set_terrain("active_volcano")
 
-        for dx in range(-self.lava_radius, self.lava_radius + 1):
-            for dy in range(-self.lava_radius, self.lava_radius + 1):
+        effective_radius = self.lava_radius + 1  # ← bump it up
+
+        for dx in range(-effective_radius, effective_radius + 1):
+            for dy in range(-effective_radius, effective_radius + 1):
                 if dx == 0 and dy == 0:
                     continue
 
-                if dx * dx + dy * dy > self.lava_radius * self.lava_radius:
+                distance_sq = dx * dx + dy * dy
+
+                if distance_sq > effective_radius * effective_radius:
                     continue
 
                 tile = world.get_tile(self.x + dx, self.y + dy)
@@ -169,7 +173,7 @@ def spawn_dormant_volcano(game, x, y):
     if tile is None:
         return False
 
-    if tile.terrain in ("active_volcano", "dormant_volcano", "lava", "lake", "ocean"):
+    if tile.terrain in ("active_volcano", "dormant_volcano", "lava", "lake"):
         return False
 
     existing = get_volcano_at(game, x, y)

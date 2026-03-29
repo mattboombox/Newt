@@ -72,6 +72,48 @@ def get_erodible_tiles(world):
     return erodible
 
 
+def apply_polar_climate(world):
+    changed = False
+
+    for x in range(world.cols):
+        polar_depth = 3
+
+        if (x % 6 == 0) or (x % 11 == 0):
+            polar_depth += 1
+        if x % 8 == 0:
+            polar_depth -= 1
+
+        polar_depth = max(2, min(4, polar_depth))
+
+        # Top pole
+        for y in range(polar_depth):
+            tile = world.get_tile(x, y)
+            if tile is None:
+                continue
+
+            if tile.terrain == "ocean":
+                tile.set_terrain("ice_sheet")
+                changed = True
+            elif tile.terrain not in ("ice_sheet","mountain", "active_volcano", "dormant_volcano", "lava"):
+                tile.set_terrain("snow")
+                changed = True
+
+        # Bottom pole
+        for y in range(world.rows - polar_depth, world.rows):
+            tile = world.get_tile(x, y)
+            if tile is None:
+                continue
+
+            if tile.terrain == "ocean":
+                tile.set_terrain("ice_sheet")
+                changed = True
+            elif tile.terrain not in ("ice_sheet", "mountain", "active_volcano", "dormant_volcano", "lava"):
+                tile.set_terrain("snow")
+                changed = True
+
+    return changed
+
+
 def trigger_random_erosion(world):
     erodible_tiles = get_erodible_tiles(world)
 
