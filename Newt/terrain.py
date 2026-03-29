@@ -43,4 +43,8 @@ TERRAIN_DATA = {
         "color": (255, 0, 255),
         "walkable": False,
     },
+    "tectonic_uplift": {
+        "color": (255, 0, 255),
+        "walkable": False,
+    },
 }

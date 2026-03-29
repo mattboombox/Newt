@@ -1,7 +1,7 @@
 import random
 
 
-def trigger_meteor_strike(world, x=None, y=None, min_radius=2, max_radius=5):
+def trigger_meteor_strike(world, x=None, y=None, min_radius=2, max_radius=4):
     if world.cols <= 0 or world.rows <= 0:
         return False
 
@@ -17,24 +17,28 @@ def trigger_meteor_strike(world, x=None, y=None, min_radius=2, max_radius=5):
     if center_tile is None:
         return False
 
-    for dx in range(-radius, radius + 1):
-        for dy in range(-radius, radius + 1):
+    outer_radius = radius + 1
+
+    for dx in range(-outer_radius, outer_radius + 1):
+        for dy in range(-outer_radius, outer_radius + 1):
             tile = world.get_tile(x + dx, y + dy)
             if tile is None:
                 continue
 
             distance_sq = dx * dx + dy * dy
 
-            # Core impact zone: always lava
+            # Core impact zone: lava
             if distance_sq <= radius * radius:
                 tile.set_terrain("lava")
                 continue
 
-            # Outer splatter ring: noisy/random
-            outer_radius = radius + 2
+            # Smaller outer splatter ring
             if distance_sq <= outer_radius * outer_radius:
-                if random.random() < 0.35:
+                if random.random() < 0.18:
                     tile.set_terrain("lava")
+
+    # Make the center tile a mountain after the impact
+    center_tile.set_terrain("mountain")
 
     print(f"Meteor strike! Magnitude {magnitude} at ({x}, {y}) with radius {radius}")
     return True

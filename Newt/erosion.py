@@ -1,43 +1,5 @@
 import random
-
-
-def is_ocean_adjacent(world, tile):
-    neighbors = world.get_neighbors_all(tile.x, tile.y)
-    return any(neighbor.terrain == "ocean" for neighbor in neighbors)
-
-
-def try_spawn_lake_from_mountain(world, mountain_tile):
-    candidate_positions = [
-        (mountain_tile.x - 1, mountain_tile.y),      # west
-        (mountain_tile.x - 1, mountain_tile.y - 1),  # northwest
-        (mountain_tile.x,     mountain_tile.y - 1),  # north
-    ]
-
-    valid_tiles = []
-
-    for x, y in candidate_positions:
-        tile = world.get_tile(x, y)
-
-        if tile is None:
-            continue
-
-        if tile.terrain != "sand" and tile.terrain != "grass":
-            continue
-
-        if is_ocean_adjacent(world, tile):
-            continue
-
-        valid_tiles.append(tile)
-
-    if not valid_tiles:
-        return False
-
-    if random.random() < 0.35:
-        chosen_tile = random.choice(valid_tiles)
-        chosen_tile.set_terrain("lake")
-        return True
-
-    return False
+from lake import try_spawn_lake_from_mountain
 
 
 def erode_tile(world, tile):
@@ -51,16 +13,17 @@ def erode_tile(world, tile):
 
     # Lake touching ocean becomes ocean
     if tile.terrain == "lake":
-        if is_ocean_adjacent(world, tile):
+        if world.is_adjacent_to_terrain(tile.x, tile.y, {"ocean"}):
             tile.set_terrain("ocean")
             return True
         return False
 
-    # Mountains can create lakes to their west
+    # Mountains can rarely create lakes
     if tile.terrain == "mountain":
-        return try_spawn_lake_from_mountain(world, tile)
+        if random.random() < 0.08:
+            return try_spawn_lake_from_mountain(world, tile)
 
-    near_ocean = is_ocean_adjacent(world, tile)
+    near_ocean = world.is_adjacent_to_terrain(tile.x, tile.y, {"ocean"})
 
     # Stone erodes into beach or sand
     if tile.terrain == "stone":

@@ -4,9 +4,7 @@ from world import World
 from brush import paint_radius
 from render import render
 from input import handle_input
-from critter import Critter
 from events import update_events
-from volcano import Volcano
 
 # -----------------------------
 # Config
@@ -52,6 +50,9 @@ class Game:
         self.meteor_timer = 0.0
         self.meteor_interval = 2.0
         self.meteor_chance = 0.002
+
+        self.tectonic_timer = 0.0
+        self.tectonic_interval = 5.0
 
         self.speed = 1.0
 
