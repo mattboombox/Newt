@@ -1,6 +1,6 @@
 from erosion import trigger_random_erosion
 from life import trigger_random_growth
-from meteor import trigger_meteor_strike
+from Newt.impact import trigger_impact_event
 from lake import convert_landlocked_ocean_to_lake, trigger_random_lake_growth
 #from tectonics import generate_uplift_chain
 import random
@@ -26,9 +26,6 @@ def update_events(game, dt):
 
     for volcano in game.volcanoes[:]:
         volcano.update(game, dt)
-
-    if random.random() < 0.08:
-        trigger_random_lake_growth(game.world)
 
     #game.tectonic_timer += dt
     #if game.tectonic_timer >= game.tectonic_interval:

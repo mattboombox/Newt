@@ -1,5 +1,5 @@
 import random
-from lake import try_spawn_lake_from_mountain
+from lake import try_spawn_lake_from_mountain, trigger_random_lake_growth
 
 
 def erode_tile(world, tile):
@@ -20,8 +20,11 @@ def erode_tile(world, tile):
 
     # Mountains can rarely create lakes
     if tile.terrain == "mountain":
-        if random.random() < 0.08:
+        if random.random() < 0.01:
             return try_spawn_lake_from_mountain(world, tile)
+    
+    if random.random() < 0.01:
+        trigger_random_lake_growth(world)
 
     near_ocean = world.is_adjacent_to_terrain(tile.x, tile.y, {"ocean"})
 

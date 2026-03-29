@@ -1,5 +1,5 @@
 from tectonics import remove_volcano_at, sync_volcano_at_tile, generate_uplift_chain
-from meteor import trigger_meteor_strike
+from Newt.impact import trigger_impact_event
 from lake import convert_landlocked_ocean_to_lake
 
 
@@ -7,9 +7,10 @@ def paint_radius(game, center_tile, terrain_name, radius=0):
     if center_tile is None:
         return
 
-    if terrain_name == "meteor":
+    if terrain_name == "impact_event":
         remove_volcano_at(game, center_tile.x, center_tile.y)
-        trigger_meteor_strike(game.world, center_tile.x, center_tile.y)
+        trigger_impact_event(game.world, center_tile.x, center_tile.y)
+        convert_landlocked_ocean_to_lake(game.world)
         return
 
     if terrain_name == "tectonic_uplift":
@@ -27,3 +28,5 @@ def paint_radius(game, center_tile, terrain_name, radius=0):
             if tile is not None:
                 sync_volcano_at_tile(game, tile, terrain_name)
                 tile.set_terrain(terrain_name)
+
+    convert_landlocked_ocean_to_lake(game.world)

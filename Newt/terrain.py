@@ -39,7 +39,7 @@ TERRAIN_DATA = {
         "color": (60, 120, 200),
         "walkable": False,
     },
-    "meteor": {
+    "impact_event": {
         "color": (255, 0, 255),
         "walkable": False,
     },

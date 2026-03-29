@@ -32,7 +32,7 @@ def try_spawn_lake_from_mountain(world, mountain_tile):
                 continue
 
             open_count = world.count_terrain_in_radius(
-                tile.x, tile.y, {"grass", "sand", "stone"}, radius=1
+                tile.x, tile.y, {"sand"}, radius=1
             )
             if open_count < 5:
                 continue
@@ -42,12 +42,9 @@ def try_spawn_lake_from_mountain(world, mountain_tile):
     if not valid_tiles:
         return False
 
-    if random.random() < 0.18:
-        chosen_tile = random.choice(valid_tiles)
-        chosen_tile.set_terrain("lake")
-        return True
-
-    return False
+    chosen_tile = random.choice(valid_tiles)
+    chosen_tile.set_terrain("lake")
+    return True
 
 
 def convert_landlocked_ocean_to_lake(world):
@@ -66,7 +63,7 @@ def convert_landlocked_ocean_to_lake(world):
     while queue:
         x, y = queue.popleft()
 
-        for neighbor in world.get_neighbors_cardinal(x, y):
+        for neighbor in world.get_neighbors_all(x, y):
             if neighbor.terrain == "ocean":
                 pos = (neighbor.x, neighbor.y)
                 if pos not in visited:
@@ -90,10 +87,6 @@ def convert_landlocked_ocean_to_lake(world):
 
 def grow_lake(world, tile):
     if tile is None or tile.terrain != "lake":
-        return False
-
-    # Lake behavior randomness belongs here
-    if random.random() > 0.15:
         return False
 
     valid_neighbors = []
