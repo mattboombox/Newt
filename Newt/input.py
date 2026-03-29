@@ -66,7 +66,7 @@ def handle_input(game):
                     paint_radius(game, tile, game.current_terrain, game.brush_size)
 
         # Only hold for drag-paint tools
-            if game.current_terrain not in ("meteor", "tectonic_uplift"):
+            if game.current_terrain not in ("meteor", "comet", "tectonic_uplift"):
                 game.left_mouse_held = True
 
             elif event.button == 3:

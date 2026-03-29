@@ -39,8 +39,12 @@ TERRAIN_DATA = {
         "color": (60, 120, 200),
         "walkable": False,
     },
-    "impact_event": {
+    "meteor": {
         "color": (255, 0, 255),
+        "walkable": False,
+    },
+    "comet": {
+        "color": (0, 0, 255),
         "walkable": False,
     },
     "tectonic_uplift": {

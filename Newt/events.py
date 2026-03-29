@@ -17,11 +17,11 @@ def update_events(game, dt):
         game.life_timer = 0.0
         trigger_random_growth(game.world)
 
-    game.meteor_timer += dt
-    if game.meteor_timer >= game.meteor_interval:
-        game.meteor_timer = 0.0
-        if random.random() < game.meteor_chance:
-            trigger_meteor_strike(game.world)
+    game.impact_timer += dt
+    if game.impact_timer >= game.impact_interval:
+        game.impact_timer = 0.0
+        if random.random() < game.impact_chance:
+            trigger_impact_event(game.world)
             convert_landlocked_ocean_to_lake(game.world)
 
     for volcano in game.volcanoes[:]:

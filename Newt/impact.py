@@ -1,6 +1,8 @@
 import random
 
-def trigger_impact_event(world, x=None, y=None, min_radius=2, max_radius=4):
+import random
+
+def trigger_impact_event(world, x=None, y=None, min_radius=2, max_radius=4, impact_type=None):
     if world.cols <= 0 or world.rows <= 0:
         return False
 
@@ -18,8 +20,8 @@ def trigger_impact_event(world, x=None, y=None, min_radius=2, max_radius=4):
 
     outer_radius = radius + 1
 
-    is_comet = random.random() < 0.5
-    impact_name = "Comet" if is_comet else "Meteor"
+    if impact_type is None:
+        impact_type = random.choice(["meteor", "comet"])
 
     for dx in range(-outer_radius, outer_radius + 1):
         for dy in range(-outer_radius, outer_radius + 1):
@@ -29,23 +31,23 @@ def trigger_impact_event(world, x=None, y=None, min_radius=2, max_radius=4):
 
             distance_sq = dx * dx + dy * dy
 
-            if is_comet:
-                # COMET (water-based)
+            if impact_type == "comet":
+                # comet = water-based
                 if distance_sq <= radius * radius:
                     tile.set_terrain("ocean")
                 elif distance_sq <= outer_radius * outer_radius:
                     if random.random() < 0.10:
                         tile.set_terrain("lake")
+
             else:
-                # METEOR (lava-based)
+                # meteor = lava-based
                 if distance_sq <= radius * radius:
                     tile.set_terrain("lava")
                 elif distance_sq <= outer_radius * outer_radius:
                     if random.random() < 0.18:
                         tile.set_terrain("lava")
 
-    # Always leave a mountain at the center
     center_tile.set_terrain("mountain")
 
-    print(f"{impact_name} impact! Magnitude {magnitude} at ({x}, {y}) with radius {radius}")
+    print(f"{impact_type.capitalize()} impact! Magnitude {magnitude} at ({x}, {y}) with radius {radius}")
     return True

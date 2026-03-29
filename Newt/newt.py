@@ -47,9 +47,9 @@ class Game:
         self.life_timer = 0.0
         self.life_interval = 0.35
 
-        self.meteor_timer = 0.0
-        self.meteor_interval = 2.0
-        self.meteor_chance = 0.002
+        self.impact_timer = 0.0
+        self.impact_interval = 2.0
+        self.impact_chance = 0.002
 
         self.tectonic_timer = 0.0
         self.tectonic_interval = 5.0
