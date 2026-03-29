@@ -1,6 +1,6 @@
 from erosion import trigger_random_erosion
 from life import trigger_random_growth
-from Newt.impact import trigger_impact_event
+from impact import trigger_impact_event
 from lake import convert_landlocked_ocean_to_lake, trigger_random_lake_growth
 #from tectonics import generate_uplift_chain
 import random

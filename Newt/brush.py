@@ -1,5 +1,5 @@
 from tectonics import remove_volcano_at, sync_volcano_at_tile, generate_uplift_chain
-from Newt.impact import trigger_impact_event
+from impact import trigger_impact_event
 from lake import convert_landlocked_ocean_to_lake
 
 
