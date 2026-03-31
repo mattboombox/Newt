@@ -3,47 +3,32 @@ from collections import deque
 
 
 def try_spawn_lake_from_mountain(world, mountain_tile):
+    # Define the range once. Range(2, 5) covers distances 2, 3, and 4.
+    # We use a set for faster lookup of blocked terrains.
+    BLOCKED_TERRAINS = {"mountain", "active_volcano", "dormant_volcano"}
+    
+    # Generate coordinates in the valid ring (Chebyshev distance 2 to 4)
+    offsets = [(dx, dy) for dx in range(-4, 5) for dy in range(-4, 5) 
+               if 2 <= max(abs(dx), abs(dy)) <= 4]
+
     valid_tiles = []
-
-    for dx in range(-4, 5):
-        for dy in range(-4, 5):
-            if dx == 0 and dy == 0:
-                continue
-
-            distance = max(abs(dx), abs(dy))
-
-            # Keep lake candidates a little away from mountains
-            if distance < 2 or distance > 4:
-                continue
-
-            tile = world.get_tile(mountain_tile.x + dx, mountain_tile.y + dy)
-            if tile is None:
-                continue
-
-            if tile.terrain not in ("sand", "grass"):
-                continue
-
-            if world.is_adjacent_to_terrain(tile.x, tile.y, {"ocean"}):
-                continue
-
-            if world.is_adjacent_to_terrain(
-                tile.x, tile.y, {"mountain", "active_volcano", "dormant_volcano"}
-            ):
-                continue
-
-            open_count = world.count_terrain_in_radius(
-                tile.x, tile.y, {"sand"}, radius=1
-            )
-            if open_count < 5:
-                continue
-
-            valid_tiles.append(tile)
+    for dx, dy in offsets:
+        tile = world.get_tile(mountain_tile.x + dx, mountain_tile.y + dy)
+        
+        # Combined Validation: 
+        # 1. Must exist 2. Must be sand 3. No oceans nearby 4. No mountains nearby
+        if (tile and tile.terrain == "sand" and 
+            not world.is_adjacent_to_terrain(tile.x, tile.y, {"ocean"}) and
+            not world.is_adjacent_to_terrain(tile.x, tile.y, BLOCKED_TERRAINS)):
+            
+            # Final check: ensure the area is clear enough
+            if world.count_terrain_in_radius(tile.x, tile.y, {"sand", "grass"}, radius=1) >= 5:
+                valid_tiles.append(tile)
 
     if not valid_tiles:
         return False
 
-    chosen_tile = random.choice(valid_tiles)
-    chosen_tile.set_terrain("lake")
+    random.choice(valid_tiles).set_terrain("lake")
     return True
 
 

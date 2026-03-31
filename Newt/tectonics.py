@@ -207,8 +207,8 @@ def generate_uplift_chain(game, start_x, start_y, length=None):
         if tile.terrain not in ("active_volcano", "dormant_volcano", "lava", "lake"):
             tile.set_terrain("mountain")
 
-            # Low chance to seed stone as a mountain pass
-            if random.random() < 0.06:
+            # chance to seed stone as a mountain pass
+            if random.random() < 0.15:
                 tile.set_terrain("stone")
 
             # Low chance to seed a dormant volcano inside the chain
