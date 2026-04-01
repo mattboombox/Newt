@@ -18,5 +18,11 @@ class Tile:
     def is_walkable(self):
         return TERRAIN_DATA[self.terrain]["walkable"]
 
+    def has_tag(self, tag):
+        return tag in TERRAIN_DATA[self.terrain].get("tags", set())
+
+    def get_tags(self):
+        return TERRAIN_DATA[self.terrain].get("tags", set())
+
     def describe(self):
         print(f"Tile ({self.x}, {self.y}) - terrain: {self.terrain}")

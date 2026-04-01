@@ -22,12 +22,12 @@ class Volcano:
         self.eruption_interval = 1.0
 
         self.dormancy_timer = 0.0
-        self.dormancy_interval = 8.0
+        self.dormancy_interval = 36.0
 
         self.reawaken_chance = 0.02
         self.extinction_chance = 0.08
         self.chain_chance = 0.75
-        self.lava_radius = 2
+        self.lava_radius = 3
 
     def update(self, game, dt):
         if self.state == "active":
@@ -55,7 +55,8 @@ class Volcano:
         if center_tile is not None:
             center_tile.set_terrain("active_volcano")
 
-        effective_radius = self.lava_radius + 1  # ← bump it up
+        effective_radius = self.lava_radius + 1
+        valid_tiles = []
 
         for dx in range(-effective_radius, effective_radius + 1):
             for dy in range(-effective_radius, effective_radius + 1):
@@ -63,7 +64,6 @@ class Volcano:
                     continue
 
                 distance_sq = dx * dx + dy * dy
-
                 if distance_sq > effective_radius * effective_radius:
                     continue
 
@@ -74,7 +74,14 @@ class Volcano:
                 if tile.terrain in ("mountain", "active_volcano", "dormant_volcano"):
                     continue
 
-                tile.set_terrain("lava")
+                valid_tiles.append(tile)
+
+        if not valid_tiles:
+            return
+
+        shots = min(len(valid_tiles), random.randint(1, 3))
+        for tile in random.sample(valid_tiles, shots):
+            tile.set_terrain("lava")
 
     def go_dormant(self, game):
         self.state = "dormant"
@@ -208,7 +215,7 @@ def generate_uplift_chain(game, start_x, start_y, length=None):
             tile.set_terrain("mountain")
 
             # chance to seed stone as a mountain pass
-            if random.random() < 0.15:
+            if random.random() < 0.05:
                 tile.set_terrain("stone")
 
             # Low chance to seed a dormant volcano inside the chain
@@ -235,8 +242,8 @@ def generate_uplift_chain(game, start_x, start_y, length=None):
 
 
 def scatter_stone_around_tile(world, x, y):
-    # Weighted so radius 3 is the most common
-    scatter_radius = random.choices([2, 3, 4], weights=[2, 5, 2])[0]
+    # Weighted so radius 4 and 5 are the most common
+    scatter_radius = random.choices([2, 3, 4, 5, 6], weights=[1, 2, 3, 3, 1])[0]
 
     for dx in range(-scatter_radius, scatter_radius + 1):
         for dy in range(-scatter_radius, scatter_radius + 1):

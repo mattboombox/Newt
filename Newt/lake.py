@@ -17,7 +17,7 @@ def try_spawn_lake_from_mountain(world, mountain_tile):
         
         # Combined Validation: 
         # 1. Must exist 2. Must be sand 3. No oceans nearby 4. No mountains nearby
-        if (tile and tile.terrain == "sand" and 
+        if (tile and tile.terrain == "sand" and
             not world.is_adjacent_to_terrain(tile.x, tile.y, {"ocean"}) and
             not world.is_adjacent_to_terrain(tile.x, tile.y, BLOCKED_TERRAINS)):
             
@@ -57,7 +57,7 @@ def convert_landlocked_ocean_to_lake(world):
                     visited.add(pos)
                     queue.append(pos)
 
-    # Any ocean not connected to edge water becomes lake
+    # Any water not connected to edge water becomes lake
     changed = False
     for x in range(world.cols):
         for y in range(world.rows):
@@ -65,7 +65,7 @@ def convert_landlocked_ocean_to_lake(world):
             if tile is None:
                 continue
 
-            if tile.terrain == "ocean" and (x, y) not in visited:
+            if tile.terrain in water_terrain and (x, y) not in visited:
                 tile.set_terrain("lake")
                 changed = True
 
@@ -83,7 +83,7 @@ def grow_lake(world, tile):
             continue
 
         # Don't grow into coastline
-        if world.is_adjacent_to_terrain(neighbor.x, neighbor.y, {"ocean"}):
+        if world.is_adjacent_to_terrain(neighbor.x, neighbor.y, {"ocean", "shallows"}):
             continue
 
         valid_neighbors.append(neighbor)
