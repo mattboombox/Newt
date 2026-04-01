@@ -1,5 +1,5 @@
 import random
-from lake import try_spawn_lake_from_mountain, trigger_random_lake_growth
+from lake import try_spawn_lake_from_mountain, trigger_random_lake_growth, convert_landlocked_shallows_to_lake
 
 
 def erode_tile(world, tile):
@@ -45,7 +45,7 @@ def erode_tile(world, tile):
             if neighbor.terrain == "ocean":
                 ocean_neighbors.append(neighbor)
 
-        if ocean_neighbors and random.random() < 0.25:
+        if ocean_neighbors:
             chosen_ocean = random.choice(ocean_neighbors)
             chosen_ocean.set_terrain("shallows")
             return True
@@ -59,7 +59,7 @@ def erode_tile(world, tile):
             if neighbor.terrain == "ocean":
                 ocean_neighbors.append(neighbor)
 
-        if ocean_neighbors and random.random() < 0.25:
+        if ocean_neighbors:
             chosen_ocean = random.choice(ocean_neighbors)
             chosen_ocean.set_terrain("shallows")
             return True
@@ -75,12 +75,7 @@ def erode_tile(world, tile):
 
     # Shallows surrounded by land become lake
     if tile.terrain == "shallows":
-        if not world.is_adjacent_to_terrain(tile.x, tile.y, {"ocean", "shallows"}):
-            tile.set_terrain("lake")
-            return True
-        return False
-
-    return False
+        convert_landlocked_shallows_to_lake(world)
 
 
 def get_erodible_tiles(world):

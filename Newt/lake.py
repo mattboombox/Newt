@@ -72,6 +72,19 @@ def convert_landlocked_ocean_to_lake(world):
     return changed
 
 
+def convert_landlocked_shallows_to_lake(world):
+
+    for x in range(world.cols):
+        for y in range(world.rows):
+            tile = world.get_tile(x, y)
+            if tile is None:
+                continue
+
+            if tile.terrain == "shallows":
+                if not world.is_adjacent_to_terrain(tile.x, tile.y, {"ocean", "shallows"}):
+                    tile.set_terrain("lake")
+
+
 def grow_lake(world, tile):
     if tile is None or tile.terrain != "lake":
         return False
