@@ -57,6 +57,8 @@ class Game:
         self.polar_timer = 10.0
         self.polar_interval = 10.0
 
+        self.tsunamis = []
+
         self.speed = 1.0
 
 

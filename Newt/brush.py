@@ -1,6 +1,7 @@
 from impact import trigger_impact_event
 from tectonics import remove_volcano_at, sync_volcano_at_tile, generate_uplift_chain
 from lake import convert_landlocked_ocean_to_lake
+from tsunami import Tsunami
 
 
 def paint_radius(game, center_tile, terrain_name, radius=0):
@@ -23,6 +24,12 @@ def paint_radius(game, center_tile, terrain_name, radius=0):
         remove_volcano_at(game, center_tile.x, center_tile.y)
         generate_uplift_chain(game, center_tile.x, center_tile.y)
         convert_landlocked_ocean_to_lake(game.world)
+        return
+
+    if terrain_name == "tsunami":
+        if center_tile.terrain in ("ocean", "shallows", "lake"):
+            game.tsunamis.append(Tsunami(center_tile.x, center_tile.y))
+            print(f"Spawned tsunami at ({center_tile.x}, {center_tile.y})")
         return
 
     for dx in range(-radius, radius + 1):

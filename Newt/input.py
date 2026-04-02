@@ -65,9 +65,9 @@ def handle_input(game):
                 if tile is not None:
                     paint_radius(game, tile, game.current_terrain, game.brush_size)
 
-        # Only hold for drag-paint tools
-            if game.current_terrain not in ("meteor", "comet", "tectonic_uplift"):
-                game.left_mouse_held = True
+                # Only hold for drag-paint tools
+                if game.current_terrain not in ("meteor", "comet", "tectonic_uplift", "tsunami"):
+                    game.left_mouse_held = True
 
             elif event.button == 3:
                 if tile is not None and tile.critter is not None:

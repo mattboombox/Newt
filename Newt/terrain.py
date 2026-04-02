@@ -85,4 +85,9 @@ TERRAIN_DATA = {
         "walkable": False,
         "tags": set(),
     },
+    "tsunami": {
+        "color": (0, 0, 255),
+        "walkable": False,
+        "tags": set()
+    },
 }

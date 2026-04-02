@@ -1,12 +1,14 @@
 from erosion import trigger_random_erosion, apply_polar_climate
 from life import trigger_random_growth
 from impact import trigger_impact_event
-from lake import convert_landlocked_ocean_to_lake, trigger_random_lake_growth
+from lake import convert_landlocked_ocean_to_lake
 from tectonics import generate_uplift_chain, spawn_dormant_volcano
+from tsunami import Tsunami
+
 import random
 
-def update_events(game, dt):
 
+def update_events(game, dt):
     game.erosion_timer += dt
     if game.erosion_timer >= game.erosion_interval:
         game.erosion_timer = 0.0
@@ -30,7 +32,7 @@ def update_events(game, dt):
     game.tectonic_timer += dt
     if game.tectonic_timer >= game.tectonic_interval:
         game.tectonic_timer = 0.0
-        # Random chance to trigger tectonic event each interval
+
         if random.random() < 0.001:
             start_x = random.randint(0, game.world.cols - 1)
             start_y = random.randint(0, game.world.rows - 1)
@@ -43,8 +45,20 @@ def update_events(game, dt):
             print(f"Spawning dormant volcano at ({x}, {y})")
             spawn_dormant_volcano(game, x, y)
 
+    # Example random tsunami chance
+    if random.random() < 0.0005:
+        x = random.randint(0, game.world.cols - 1)
+        y = random.randint(0, game.world.rows - 1)
+
+        tile = game.world.get_tile(x, y)
+        if tile is not None and tile.terrain in ("ocean", "shallows"):
+            print(f"Spawning tsunami at ({x}, {y})")
+            game.tsunamis.append(Tsunami(x, y, max_radius=12, interval=0.2))
+
+    for tsunami in game.tsunamis[:]:
+        tsunami.update(game, dt)
+
     game.polar_timer += dt
     if game.polar_timer >= game.polar_interval:
         game.polar_timer = 0.0
         apply_polar_climate(game.world)
-        
