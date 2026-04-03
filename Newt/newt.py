@@ -38,11 +38,11 @@ class Game:
         self.brush_size = 0
 
         self.critters = []
+        self.tsunamis = []
+        self.volcanoes = []
 
         self.erosion_timer = 0.0
         self.erosion_interval = 0.25
-
-        self.volcanoes = []
 
         self.life_timer = 0.0
         self.life_interval = 0.35
@@ -56,8 +56,6 @@ class Game:
 
         self.polar_timer = 10.0
         self.polar_interval = 10.0
-
-        self.tsunamis = []
 
         self.speed = 1.0
 

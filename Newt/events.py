@@ -28,6 +28,9 @@ def update_events(game, dt):
     for volcano in game.volcanoes[:]:
         volcano.update(game, dt)
 
+    for tsunami in game.tsunamis[:]:
+        tsunami.update(game, dt)
+
     game.tectonic_timer += dt
     if game.tectonic_timer >= game.tectonic_interval:
         game.tectonic_timer = 0.0
@@ -44,18 +47,14 @@ def update_events(game, dt):
             print(f"Spawning dormant volcano at ({x}, {y})")
             spawn_dormant_volcano(game, x, y)
 
-    # Example random tsunami chance
-    if random.random() < 0.0005:
-        x = random.randint(0, game.world.cols - 1)
-        y = random.randint(0, game.world.rows - 1)
+        if random.random() < 0.0005:
+            x = random.randint(0, game.world.cols - 1)
+            y = random.randint(0, game.world.rows - 1)
 
-        tile = game.world.get_tile(x, y)
-        if tile is not None and tile.terrain in ("ocean", "shallows"):
-            print(f"Spawning tsunami at ({x}, {y})")
-            game.tsunamis.append(Tsunami(x, y, max_steps=12, interval=0.2))
-
-    for tsunami in game.tsunamis[:]:
-        tsunami.update(game, dt)
+            tile = game.world.get_tile(x, y)
+            if tile is not None and tile.terrain in ("ocean", "shallows"):
+                print(f"Spawning tsunami at ({x}, {y})")
+                game.tsunamis.append(Tsunami(x, y, max_steps=12, interval=0.2))
 
     game.polar_timer += dt
     if game.polar_timer >= game.polar_interval:
