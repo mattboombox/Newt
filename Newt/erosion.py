@@ -109,7 +109,7 @@ def apply_polar_climate(world):
             if tile is None:
                 continue
 
-            if tile.terrain in ("ocean", "lake"):
+            if tile.terrain in ("ocean", "lake", "shallows", "tsunami"):
                 tile.set_terrain("ice_sheet")
                 changed = True
             elif tile.terrain not in ("ice_sheet","mountain", "active_volcano", "dormant_volcano", "lava"):
@@ -122,7 +122,7 @@ def apply_polar_climate(world):
             if tile is None:
                 continue
 
-            if tile.terrain in ("ocean", "lake"):
+            if tile.terrain in ("ocean", "lake", "shallows", "tsunami"):
                 tile.set_terrain("ice_sheet")
                 changed = True
             elif tile.terrain not in ("ice_sheet", "mountain", "active_volcano", "dormant_volcano", "lava"):

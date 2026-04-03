@@ -4,7 +4,6 @@ from impact import trigger_impact_event
 from lake import convert_landlocked_ocean_to_lake
 from tectonics import generate_uplift_chain, spawn_dormant_volcano
 from tsunami import Tsunami
-
 import random
 
 
@@ -53,7 +52,7 @@ def update_events(game, dt):
         tile = game.world.get_tile(x, y)
         if tile is not None and tile.terrain in ("ocean", "shallows"):
             print(f"Spawning tsunami at ({x}, {y})")
-            game.tsunamis.append(Tsunami(x, y, max_radius=12, interval=0.2))
+            game.tsunamis.append(Tsunami(x, y, max_steps=12, interval=0.2))
 
     for tsunami in game.tsunamis[:]:
         tsunami.update(game, dt)

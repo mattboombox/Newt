@@ -36,7 +36,7 @@ def convert_landlocked_ocean_to_lake(world):
     visited = set()
     queue = deque()
 
-    water_terrain = {"ocean", "shallows"}
+    water_terrain = {"ocean", "shallows", "tsunami"}
 
     # Start flood fill from edge water tiles
     for tile in world.get_edge_tiles():
@@ -81,7 +81,7 @@ def convert_landlocked_shallows_to_lake(world):
                 continue
 
             if tile.terrain == "shallows":
-                if not world.is_adjacent_to_terrain(tile.x, tile.y, {"ocean", "shallows"}):
+                if not world.is_adjacent_to_terrain(tile.x, tile.y, {"ocean", "shallows", "tsunami"}):
                     tile.set_terrain("lake")
 
 
@@ -96,7 +96,7 @@ def grow_lake(world, tile):
             continue
 
         # Don't grow into coastline
-        if world.is_adjacent_to_terrain(neighbor.x, neighbor.y, {"ocean", "shallows"}):
+        if world.is_adjacent_to_terrain(neighbor.x, neighbor.y, {"ocean", "shallows", "tsunami"}):
             continue
 
         valid_neighbors.append(neighbor)
