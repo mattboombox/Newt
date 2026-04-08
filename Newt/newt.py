@@ -9,7 +9,7 @@ from events import update_events
 # -----------------------------
 # Config
 # -----------------------------
-WINDOW_WIDTH = 1200
+WINDOW_WIDTH = 1600
 WINDOW_HEIGHT = 800
 WINDOW_TITLE = "Newt"
 HUD_HEIGHT = 18
