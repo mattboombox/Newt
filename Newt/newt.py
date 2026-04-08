@@ -16,6 +16,7 @@ HUD_HEIGHT = 18
 TARGET_FPS = 60
 BACKGROUND_COLOR = (0, 0, 0)
 
+
 # -----------------------------
 # Temporary game state
 # -----------------------------
@@ -59,6 +60,8 @@ class Game:
 
         self.speed = 1.0
 
+        self.sprites = {}
+
 
 # -----------------------------
 # Systems
@@ -80,6 +83,20 @@ def update(game, dt):
 
 
 # -----------------------------
+# Sprites
+# -----------------------------
+def load_sprite(path, size):
+    img = pygame.image.load(path).convert_alpha()
+    return pygame.transform.scale(img, size)
+
+
+def load_sprites(tile_size):
+    sprites = {}
+    sprites["crab"] = load_sprite("Newt/sprites/crab.png", (tile_size, tile_size))
+    return sprites
+
+
+# -----------------------------
 # Main
 # -----------------------------
 def main():
@@ -90,6 +107,7 @@ def main():
     clock = pygame.time.Clock()
 
     game = Game()
+    game.sprites = load_sprites(game.tile_size)
 
     while game.running:
         dt = clock.tick(TARGET_FPS) / 1000.0

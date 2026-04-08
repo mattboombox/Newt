@@ -11,6 +11,8 @@ class Critter:
         color=(255, 200, 40),
         allowed_terrains=None,
         required_tags=None,
+        sprite=None,
+        move_cooldown=0.25,
     ):
         self.id = Critter._next_id
         Critter._next_id += 1
@@ -18,11 +20,11 @@ class Critter:
         self.x = x
         self.y = y
         self.color = color
+        self.sprite = sprite
 
-        self.move_cooldown = 0.25
+        self.move_cooldown = move_cooldown
         self.move_timer = 0.0
 
-        # Movement rules
         self.allowed_terrains = allowed_terrains
         self.required_tags = required_tags or set()
 
@@ -73,9 +75,22 @@ class Critter:
 
         for dx, dy in directions:
             nx = (self.x + dx) % world.cols
-            ny = self.y + dy   # left/right wrap only
+            ny = self.y + dy
 
             tile = world.get_tile(nx, ny)
             if self.can_enter_tile(tile):
                 self.move_to(world, nx, ny)
                 return
+
+
+class Crab(Critter):
+    ALLOWED_TERRAINS = {"beach", "shallows"}
+
+    def __init__(self, x, y):
+        super().__init__(
+            x, y,
+            color=(255, 80, 80),
+            allowed_terrains=Crab.ALLOWED_TERRAINS,
+            move_cooldown=0.30,
+            sprite="crab"
+        )

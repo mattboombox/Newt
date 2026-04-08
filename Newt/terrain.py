@@ -14,7 +14,6 @@ TERRAIN_DATA = {
         "walkable": False,
         "tags": {"water", "freshwater"},
     },
-
     "grass": {
         "color": (70, 150, 70),
         "walkable": True,
@@ -35,13 +34,11 @@ TERRAIN_DATA = {
         "walkable": True,
         "tags": {"land", "coastal"},
     },
-
     "mountain": {
         "color": (89, 85, 84),
         "walkable": False,
         "tags": {"mountain", "rocky"},
     },
-
     "lava": {
         "color": (255, 80, 0),
         "walkable": False,
@@ -57,7 +54,6 @@ TERRAIN_DATA = {
         "walkable": False,
         "tags": {"mountain", "rocky"},
     },
-
     "ice_sheet": {
         "color": (199, 236, 240),
         "walkable": True,

@@ -36,15 +36,20 @@ def draw_hud(screen, game, background_color):
     text_surface = font.render(hud_text, True, (220, 220, 220))
     screen.blit(text_surface, (6, screen.get_height() - hud_height + 2))
 
-def draw_critter(screen, critter, tile_size):
-    inset = max(2, tile_size // 4)
-    rect = pygame.Rect(
-        critter.x * tile_size + inset,
-        critter.y * tile_size + inset,
-        tile_size - inset * 2,
-        tile_size - inset * 2
-    )
-    pygame.draw.rect(screen, critter.color, rect)
+def draw_critter(screen, critter, tile_size, sprites):
+    sprite = sprites.get(critter.sprite)
+
+    if sprite is not None:
+        screen.blit(sprite, (critter.x * tile_size, critter.y * tile_size))
+    else:
+        inset = max(2, tile_size // 4)
+        rect = pygame.Rect(
+            critter.x * tile_size + inset,
+            critter.y * tile_size + inset,
+            tile_size - inset * 2,
+            tile_size - inset * 2
+        )
+        pygame.draw.rect(screen, critter.color, rect)
 
 def render(screen, game, background_color):
     screen.fill(background_color)
@@ -54,7 +59,7 @@ def render(screen, game, background_color):
             draw_tile(screen, game.world.board[x][y], game.tile_size)
 
     for critter in game.critters:
-        draw_critter(screen, critter, game.tile_size)        
+        draw_critter(screen, critter, game.tile_size, game.sprites)       
 
     if game.hovered_tile is not None:
         rect = pygame.Rect(

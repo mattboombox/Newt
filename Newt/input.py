@@ -2,6 +2,7 @@ import pygame
 from brush import paint_radius
 from critter import Critter
 from terrain import TERRAIN_DATA
+from critter import Crab
 
 
 def handle_input(game):
@@ -39,11 +40,11 @@ def handle_input(game):
                 game.brush_size += 1
                 print("Brush size:", game.brush_size)
 
-            elif event.key == pygame.K_PERIOD:   # >
+            elif event.key == pygame.K_PERIOD:
                 game.speed = min(16, game.speed * 2)
                 print("Speed:", game.speed)
 
-            elif event.key == pygame.K_COMMA:    # <
+            elif event.key == pygame.K_COMMA:
                 game.speed = max(0.25, game.speed / 2)
                 print("Speed:", game.speed)
 
@@ -51,11 +52,11 @@ def handle_input(game):
                 mx, my = pygame.mouse.get_pos()
                 tile = game.world.get_tile_at_pixel(mx, my, game.tile_size)
 
-                if tile is not None and tile.is_walkable() and tile.critter is None:
-                    critter = Critter(tile.x, tile.y)
+                if tile is not None and tile.terrain in Crab.ALLOWED_TERRAINS and tile.critter is None:
+                    critter = Crab(tile.x, tile.y)
                     tile.critter = critter
                     game.critters.append(critter)
-                    print(f"Spawned critter {critter.id} at ({tile.x}, {tile.y})")
+                    print(f"Spawned crab {critter.id} at ({tile.x}, {tile.y})")
 
         elif event.type == pygame.MOUSEBUTTONDOWN:
             mx, my = pygame.mouse.get_pos()
@@ -65,7 +66,6 @@ def handle_input(game):
                 if tile is not None:
                     paint_radius(game, tile, game.current_terrain, game.brush_size)
 
-                # Only hold for drag-paint tools
                 if game.current_terrain not in ("meteor", "comet", "tectonic_uplift", "tsunami"):
                     game.left_mouse_held = True
 
