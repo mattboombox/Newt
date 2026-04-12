@@ -3,6 +3,7 @@ from brush import paint_radius
 from critter import Critter
 from terrain import TERRAIN_DATA
 from critter import Crab
+from city import City
 
 
 def handle_input(game):
@@ -47,6 +48,13 @@ def handle_input(game):
             elif event.key == pygame.K_COMMA:
                 game.speed = max(0.25, game.speed / 2)
                 print("Speed:", game.speed)
+
+            elif event.key == pygame.K_r:
+                tile = game.hovered_tile
+                if tile and tile.building is None:
+                    if tile.has_tag("land"):
+                        tile.building = City(tile.x, tile.y, level="village", population=10)
+                        print(f"Placed city at ({tile.x}, {tile.y})")
 
             elif event.key == pygame.K_c:
                 mx, my = pygame.mouse.get_pos()

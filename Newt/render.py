@@ -1,4 +1,5 @@
 import pygame
+from city import City
 
 
 def draw_tile(screen, tile, tile_size):
@@ -24,6 +25,12 @@ def draw_hud(screen, game, background_color):
 
         if tile.critter is not None:
             fields.append(f"Critter: ID {tile.critter.id}")
+
+        if tile.building is not None:
+            if isinstance(tile.building, City):
+                fields.append(f"Building: {tile.building.level.title()}")
+            else:
+                fields.append(f"Building: {type(tile.building).__name__}")
     else:
         fields.append("Tile: none")
 
@@ -35,6 +42,7 @@ def draw_hud(screen, game, background_color):
     pygame.draw.rect(screen, (0, 0, 0), hud_rect)
     text_surface = font.render(hud_text, True, (220, 220, 220))
     screen.blit(text_surface, (6, screen.get_height() - hud_height + 2))
+
 
 def draw_critter(screen, critter, tile_size, sprites):
     sprite = sprites.get(critter.sprite)
@@ -51,15 +59,36 @@ def draw_critter(screen, critter, tile_size, sprites):
         )
         pygame.draw.rect(screen, critter.color, rect)
 
+
+def draw_building(screen, building, tile_size):
+    rect = pygame.Rect(
+        building.x * tile_size,
+        building.y * tile_size,
+        tile_size,
+        tile_size
+    )
+
+    pygame.draw.rect(screen, (200, 50, 50), rect)
+
+    if isinstance(building, City):
+        font = pygame.font.SysFont(None, 14)
+        text_surface = font.render(building.level[0].upper(), True, (255, 255, 255))
+        screen.blit(text_surface, (building.x * tile_size + 2, building.y * tile_size + 1))
+
+
 def render(screen, game, background_color):
     screen.fill(background_color)
 
     for x in range(game.world.cols):
         for y in range(game.world.rows):
-            draw_tile(screen, game.world.board[x][y], game.tile_size)
+            tile = game.world.board[x][y]
+            draw_tile(screen, tile, game.tile_size)
+
+            if tile.building is not None:
+                draw_building(screen, tile.building, game.tile_size)
 
     for critter in game.critters:
-        draw_critter(screen, critter, game.tile_size, game.sprites)       
+        draw_critter(screen, critter, game.tile_size, game.sprites)
 
     if game.hovered_tile is not None:
         rect = pygame.Rect(
@@ -71,5 +100,4 @@ def render(screen, game, background_color):
         pygame.draw.rect(screen, (255, 255, 255), rect, 1)
 
     draw_hud(screen, game, background_color)
-
     pygame.display.flip()

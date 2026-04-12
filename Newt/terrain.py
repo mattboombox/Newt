@@ -17,7 +17,7 @@ TERRAIN_DATA = {
     "grass": {
         "color": (70, 150, 70),
         "walkable": True,
-        "tags": {"land"},
+        "tags": {"land", "fertile"},
     },
     "stone": {
         "color": (100, 100, 100),

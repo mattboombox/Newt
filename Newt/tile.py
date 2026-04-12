@@ -6,6 +6,7 @@ class Tile:
         self.x = x
         self.y = y
         self.terrain = terrain
+        self.building = None
         self.critter = None
 
     def set_terrain(self, terrain_name):
