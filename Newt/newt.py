@@ -1,65 +1,77 @@
 import sys
+
 import pygame
-from world import World
+
 from brush import paint_radius
-from render import render
-from input import handle_input
+from config import (
+    BACKGROUND_COLOR,
+    DEFAULT_BRUSH_SIZE,
+    DEFAULT_GAME_SPEED,
+    DEFAULT_PAINT_TERRAIN,
+    EROSION_INTERVAL,
+    HUD_HEIGHT,
+    IMPACT_CHANCE,
+    IMPACT_INTERVAL,
+    INITIAL_TERRAIN,
+    LIFE_INTERVAL,
+    POLAR_INTERVAL,
+    SPRITE_PATHS,
+    TARGET_FPS,
+    TECTONIC_INTERVAL,
+    TILE_SIZE,
+    WINDOW_HEIGHT,
+    WINDOW_TITLE,
+    WINDOW_WIDTH,
+)
 from events import update_events
-
-# -----------------------------
-# Config
-# -----------------------------
-WINDOW_WIDTH = 1600
-WINDOW_HEIGHT = 800
-WINDOW_TITLE = "Newt"
-HUD_HEIGHT = 18
-TARGET_FPS = 60
-BACKGROUND_COLOR = (0, 0, 0)
+from input import handle_input
+from render import render
+from world import World
 
 
 # -----------------------------
-# Temporary game state
+# Runtime game state
 # -----------------------------
 class Game:
     def __init__(self):
         self.running = True
         self.paused = False
 
-        self.tile_size = 16
+        self.tile_size = TILE_SIZE
 
         cols = WINDOW_WIDTH // self.tile_size
         rows = (WINDOW_HEIGHT - HUD_HEIGHT) // self.tile_size
-        self.world = World(cols, rows, "ocean")
+        self.world = World(cols, rows, INITIAL_TERRAIN)
 
         self.selected_tile = None
         self.hovered_tile = None
 
-        self.current_terrain = "stone"
+        self.current_terrain = DEFAULT_PAINT_TERRAIN
         self.left_mouse_held = False
-        self.brush_size = 0
+        self.brush_size = DEFAULT_BRUSH_SIZE
 
         self.critters = []
         self.tsunamis = []
         self.volcanoes = []
 
+        # Timers are live state; their interval values come from config.py.
         self.erosion_timer = 0.0
-        self.erosion_interval = 0.25
+        self.erosion_interval = EROSION_INTERVAL
 
         self.life_timer = 0.0
-        self.life_interval = 0.35
+        self.life_interval = LIFE_INTERVAL
 
         self.impact_timer = 0.0
-        self.impact_interval = 5.0
-        self.impact_chance = 0.001
+        self.impact_interval = IMPACT_INTERVAL
+        self.impact_chance = IMPACT_CHANCE
 
         self.tectonic_timer = 0.0
-        self.tectonic_interval = 5.0
+        self.tectonic_interval = TECTONIC_INTERVAL
 
-        self.polar_timer = 10.0
-        self.polar_interval = 10.0
+        self.polar_timer = POLAR_INTERVAL
+        self.polar_interval = POLAR_INTERVAL
 
-        self.speed = 1.0
-
+        self.speed = DEFAULT_GAME_SPEED
         self.sprites = {}
 
 
@@ -91,9 +103,10 @@ def load_sprite(path, size):
 
 
 def load_sprites(tile_size):
-    sprites = {}
-    sprites["crab"] = load_sprite("Newt/sprites/crab.png", (tile_size, tile_size))
-    return sprites
+    return {
+        name: load_sprite(path, (tile_size, tile_size))
+        for name, path in SPRITE_PATHS.items()
+    }
 
 
 # -----------------------------
