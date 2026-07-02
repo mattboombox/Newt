@@ -1,5 +1,6 @@
 import pygame
 from city import City
+from terrain import TERRAIN_DATA
 
 
 def draw_tile(screen, tile, tile_size):
@@ -76,6 +77,11 @@ def draw_building(screen, building, tile_size):
         screen.blit(text_surface, (building.x * tile_size + 2, building.y * tile_size + 1))
 
 
+def draw_tsunami_wave(screen, x, y, tile_size):
+    rect = pygame.Rect(x * tile_size, y * tile_size, tile_size, tile_size)
+    pygame.draw.rect(screen, TERRAIN_DATA["tsunami"]["color"], rect, max(1, tile_size // 6))
+
+
 def render(screen, game, background_color):
     screen.fill(background_color)
 
@@ -86,6 +92,13 @@ def render(screen, game, background_color):
 
             if tile.building is not None:
                 draw_building(screen, tile.building, game.tile_size)
+
+    active_wave_tiles = set()
+    for tsunami in game.tsunamis:
+        active_wave_tiles.update(tsunami.current_ring)
+
+    for x, y in active_wave_tiles:
+        draw_tsunami_wave(screen, x, y, game.tile_size)
 
     for critter in game.critters:
         draw_critter(screen, critter, game.tile_size, game.sprites)

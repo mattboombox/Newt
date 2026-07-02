@@ -1,3 +1,8 @@
+from pathlib import Path
+
+
+BASE_DIR = Path(__file__).resolve().parent
+
 # Window and rendering
 WINDOW_WIDTH = 1600
 WINDOW_HEIGHT = 800
@@ -26,5 +31,5 @@ DEFAULT_GAME_SPEED = 1.0
 
 # Assets
 SPRITE_PATHS = {
-    "crab": "Newt/sprites/crab.png",
+    "crab": BASE_DIR / "sprites" / "crab.png",
 }
