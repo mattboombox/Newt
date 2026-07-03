@@ -11,6 +11,13 @@ DIRECTIONS = [
     (1, -1),   # northeast
 ]
 
+UPLIFT_BLOCKED_TERRAINS = {
+    "active_volcano",
+    "dormant_volcano",
+    "lava",
+    "lake",
+}
+
 
 class Volcano:
     def __init__(self, x, y, state="active"):
@@ -194,15 +201,89 @@ def spawn_dormant_volcano(game, x, y):
     return True
 
 
+def choose_uplift_profile():
+    roll = random.random()
+
+    if roll < 0.45:
+        return {
+            "length": random.randint(8, 18),
+            "land_half_width": 0,
+        }
+
+    if roll < 0.80:
+        return {
+            "length": random.randint(12, 22),
+            "land_half_width": 1,
+        }
+
+    return {
+        "length": random.randint(16, 28),
+        "land_half_width": random.choice([1, 2]),
+    }
+
+
+def raise_uplift_spine_tile(game, x, y):
+    tile = game.world.get_tile(x, y)
+    if tile is None or tile.terrain in UPLIFT_BLOCKED_TERRAINS:
+        return
+
+    tile.set_terrain("mountain")
+
+    # Chance to seed stone as a mountain pass.
+    if random.random() < 0.05:
+        tile.set_terrain("stone")
+
+    # Low chance to seed a dormant volcano inside the chain.
+    if random.random() < 0.08:
+        spawn_dormant_volcano(game, x, y)
+
+
+def raise_uplift_shoulder_tile(game, x, y, terrain_name):
+    tile = game.world.get_tile(x, y)
+    if tile is None or tile.terrain in UPLIFT_BLOCKED_TERRAINS:
+        return
+
+    tile.set_terrain(terrain_name)
+
+
+def widen_uplift_chain(game, x, y, dir_index, land_half_width):
+    if land_half_width <= 0:
+        return
+
+    left_dx, left_dy = DIRECTIONS[(dir_index - 2) % len(DIRECTIONS)]
+    right_dx, right_dy = DIRECTIONS[(dir_index + 2) % len(DIRECTIONS)]
+    side_vectors = ((left_dx, left_dy), (right_dx, right_dy))
+
+    for side_dx, side_dy in side_vectors:
+        for offset in range(1, land_half_width + 1):
+            tx = x + side_dx * offset
+            ty = y + side_dy * offset
+            raise_uplift_shoulder_tile(game, tx, ty, "stone")
+
+            # Fill occasional diagonal gaps so wider chains feel contiguous.
+            if random.random() < 0.22:
+                fan_tx = tx + DIRECTIONS[dir_index][0]
+                fan_ty = ty + DIRECTIONS[dir_index][1]
+                raise_uplift_shoulder_tile(game, fan_tx, fan_ty, "stone")
+
+
 def generate_uplift_chain(game, start_x, start_y, length=None):
     world = game.world
 
+    profile = choose_uplift_profile()
+
     if length is None:
-        length = random.randint(8, 18)
+        length = profile["length"]
+
+    land_half_width = profile["land_half_width"]
 
     x = start_x
     y = start_y
-    print(f"Generating uplift chain starting at ({x}, {y}) with length {length}")
+    print(
+        f"Generating uplift chain starting at ({x}, {y}) with length {length}, "
+        f"mountain width 1, "
+        f"land width {1 + land_half_width * 2}"
+    )
 
     main_dir_index = random.randint(0, len(DIRECTIONS) - 1)
 
@@ -211,16 +292,15 @@ def generate_uplift_chain(game, start_x, start_y, length=None):
         if tile is None:
             break
 
-        if tile.terrain not in ("active_volcano", "dormant_volcano", "lava", "lake"):
-            tile.set_terrain("mountain")
-
-            # chance to seed stone as a mountain pass
-            if random.random() < 0.05:
-                tile.set_terrain("stone")
-
-            # Low chance to seed a dormant volcano inside the chain
-            if random.random() < 0.03:
-                spawn_dormant_volcano(game, x, y)
+        if tile.terrain not in UPLIFT_BLOCKED_TERRAINS:
+            raise_uplift_spine_tile(game, x, y)
+            widen_uplift_chain(
+                game,
+                x,
+                y,
+                main_dir_index,
+                land_half_width,
+            )
 
         scatter_stone_around_tile(world, x, y)
 

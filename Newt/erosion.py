@@ -1,5 +1,5 @@
 import random
-from lake import try_spawn_lake_from_mountain, trigger_random_lake_growth, convert_landlocked_shallows_to_lake
+from lake import try_spawn_lake_from_mountain, convert_landlocked_shallows_to_lake
 
 
 def erode_tile(world, tile):
@@ -24,9 +24,6 @@ def erode_tile(world, tile):
     if tile.terrain == "mountain":
         if random.random() < 0.01:
             return try_spawn_lake_from_mountain(world, tile)
-
-    if random.random() < 0.001:
-        trigger_random_lake_growth(world)
 
     # Stone near ocean becomes beach, otherwise sand
     if tile.terrain == "stone":
