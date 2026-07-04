@@ -4,16 +4,16 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent
 
 # Window and rendering
-WINDOW_WIDTH = 1600
+WINDOW_WIDTH = 1400
 WINDOW_HEIGHT = 800
 WINDOW_TITLE = "Newt"
-HUD_HEIGHT = 18
+HUD_HEIGHT = 20
 TARGET_FPS = 60
 BACKGROUND_COLOR = (0, 0, 0)
 BUILDING_COLOR = (200, 50, 50)
 
 # World setup
-TILE_SIZE = 16
+TILE_SIZE = 10
 INITIAL_TERRAIN = "ocean"
 DEFAULT_PAINT_TERRAIN = "stone"
 DEFAULT_BRUSH_SIZE = 0

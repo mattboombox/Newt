@@ -29,19 +29,30 @@ from input import handle_input
 from render import render
 from world import World
 
+SIZE_PRESET_LABELS = [
+    ("Small", 100, 60),
+    ("Medium", WINDOW_WIDTH // TILE_SIZE, (WINDOW_HEIGHT - HUD_HEIGHT) // TILE_SIZE),
+    ("Large", 180, 90),
+    ("Huge", 220, 100),
+]
+
+RING_WORLD_ROWS = 34
+RING_WORLD_MIN_COLS = 140
+RING_WORLD_MAX_COLS = 240
+
 
 # -----------------------------
 # Runtime game state
 # -----------------------------
 class Game:
-    def __init__(self):
+    def __init__(self, cols, rows):
         self.running = True
         self.paused = False
 
         self.tile_size = TILE_SIZE
+        self.hud_height = HUD_HEIGHT
+        self.window_width, self.window_height = get_window_size_for_map(cols, rows)
 
-        cols = WINDOW_WIDTH // self.tile_size
-        rows = (WINDOW_HEIGHT - HUD_HEIGHT) // self.tile_size
         self.world = World(cols, rows, INITIAL_TERRAIN)
 
         self.selected_tile = None
@@ -111,17 +122,149 @@ def load_sprites(tile_size):
     }
 
 
+def get_window_size_for_map(cols, rows):
+    return cols * TILE_SIZE, rows * TILE_SIZE + HUD_HEIGHT
+
+
+def get_available_size_presets():
+    info = pygame.display.Info()
+    max_width = max(640, info.current_w - 120)
+    max_height = max(480, info.current_h - 120)
+    presets = []
+
+    for label, cols, rows in SIZE_PRESET_LABELS:
+        window_width, window_height = get_window_size_for_map(cols, rows)
+        if window_width <= max_width and window_height <= max_height:
+            presets.append((label, cols, rows, window_width, window_height))
+
+    ring_world_cols = min(RING_WORLD_MAX_COLS, max_width // TILE_SIZE)
+    ring_world_cols = max(RING_WORLD_MIN_COLS, ring_world_cols)
+    ring_world_width, ring_world_height = get_window_size_for_map(ring_world_cols, RING_WORLD_ROWS)
+    if ring_world_width <= max_width and ring_world_height <= max_height:
+        presets.append(("Ring World", ring_world_cols, RING_WORLD_ROWS, ring_world_width, ring_world_height))
+
+    if presets:
+        return presets
+
+    fallback_cols = max(40, max_width // TILE_SIZE)
+    fallback_rows = max(30, (max_height - HUD_HEIGHT) // TILE_SIZE)
+    fallback_width, fallback_height = get_window_size_for_map(fallback_cols, fallback_rows)
+    return [("Auto Fit", fallback_cols, fallback_rows, fallback_width, fallback_height)]
+
+
+def select_window_size():
+    info = pygame.display.Info()
+    presets = get_available_size_presets()
+    selector_width = min(760, max(520, info.current_w - 100))
+    required_height = 180 + len(presets) * 62 + 70
+    selector_height = min(required_height, max(360, info.current_h - 100))
+    screen = pygame.display.set_mode((selector_width, selector_height))
+    pygame.display.set_caption(f"{WINDOW_TITLE} - Select Window Size")
+
+    title_font = pygame.font.SysFont(None, 42)
+    body_font = pygame.font.SysFont(None, 28)
+    hint_font = pygame.font.SysFont(None, 22)
+
+    selected_index = 1 if len(presets) > 1 else 0
+    buttons = [
+        pygame.Rect(40, 140 + index * 62, selector_width - 80, 48)
+        for index in range(len(presets))
+    ]
+
+    while True:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return None
+
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    return None
+                if event.key in (pygame.K_UP, pygame.K_w):
+                    selected_index = (selected_index - 1) % len(presets)
+                elif event.key in (pygame.K_DOWN, pygame.K_s):
+                    selected_index = (selected_index + 1) % len(presets)
+                elif event.key in (pygame.K_RETURN, pygame.K_SPACE):
+                    _, cols, rows, _, _ = presets[selected_index]
+                    return cols, rows
+                elif pygame.K_1 <= event.key <= pygame.K_9:
+                    number_index = event.key - pygame.K_1
+                    if number_index < len(presets):
+                        _, cols, rows, _, _ = presets[number_index]
+                        return cols, rows
+
+            if event.type == pygame.MOUSEMOTION:
+                for index, rect in enumerate(buttons):
+                    if rect.collidepoint(event.pos):
+                        selected_index = index
+                        break
+
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                for index, rect in enumerate(buttons):
+                    if rect.collidepoint(event.pos):
+                        _, cols, rows, _, _ = presets[index]
+                        return cols, rows
+
+        screen.fill((0, 0, 0))
+
+        title = title_font.render("Choose a Newt Window Size", True, (255, 255, 255))
+        subtitle = body_font.render(
+            f"Tile size is {TILE_SIZE}px, so each option creates an exact tile-aligned map.",
+            True,
+            (255, 255, 255),
+        )
+        screen.blit(title, (40, 36))
+        screen.blit(subtitle, (40, 82))
+
+        for index, (label, cols, rows, window_width, window_height) in enumerate(presets):
+            rect = buttons[index]
+            is_selected = index == selected_index
+            fill = (255, 255, 255) if is_selected else (0, 0, 0)
+            outline = (255, 255, 255)
+            text_color = (0, 0, 0) if is_selected else (255, 255, 255)
+            pygame.draw.rect(screen, fill, rect, border_radius=8)
+            pygame.draw.rect(screen, outline, rect, width=2, border_radius=8)
+
+            label_text = body_font.render(
+                f"{index + 1}. {label}: {window_width} x {window_height} window",
+                True,
+                text_color,
+            )
+            detail_text = hint_font.render(
+                f"Map size: {cols} x {rows} tiles",
+                True,
+                text_color,
+            )
+            screen.blit(label_text, (56, rect.y + 8))
+            screen.blit(detail_text, (min(selector_width - 260, 430), rect.y + 14))
+
+        hints = hint_font.render(
+            "Use mouse, number keys, or Up/Down + Enter. Esc closes Newt.",
+            True,
+            (255, 255, 255),
+        )
+        screen.blit(hints, (40, selector_height - 48))
+
+        pygame.display.flip()
+
+
 # -----------------------------
 # Main
 # -----------------------------
 def main():
     pygame.init()
 
-    screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
+    selected_map_size = select_window_size()
+    if selected_map_size is None:
+        pygame.quit()
+        return
+
+    cols, rows = selected_map_size
+    window_width, window_height = get_window_size_for_map(cols, rows)
+    screen = pygame.display.set_mode((window_width, window_height))
     pygame.display.set_caption(WINDOW_TITLE)
     clock = pygame.time.Clock()
 
-    game = Game()
+    game = Game(cols, rows)
     game.sprites = load_sprites(game.tile_size)
 
     while game.running:

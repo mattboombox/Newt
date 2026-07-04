@@ -1,5 +1,6 @@
 import pygame
 from city import City
+from config import HUD_HEIGHT
 from terrain import TERRAIN_DATA
 
 
@@ -38,12 +39,11 @@ def draw_hud(screen, game, background_color):
 
     hud_text = " | ".join(fields)
 
-    hud_height = 20
-    hud_rect = pygame.Rect(0, screen.get_height() - hud_height, screen.get_width(), hud_height)
+    hud_rect = pygame.Rect(0, screen.get_height() - HUD_HEIGHT, screen.get_width(), HUD_HEIGHT)
 
     pygame.draw.rect(screen, (0, 0, 0), hud_rect)
     text_surface = font.render(hud_text, True, (220, 220, 220))
-    screen.blit(text_surface, (6, screen.get_height() - hud_height + 2))
+    screen.blit(text_surface, (6, screen.get_height() - HUD_HEIGHT + 2))
 
 
 def draw_critter(screen, critter, tile_size, sprites):
