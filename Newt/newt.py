@@ -23,6 +23,7 @@ from config import (
     WINDOW_TITLE,
     WINDOW_WIDTH,
 )
+from critter import CRITTER_ORDER
 from events import update_events
 from input import handle_input
 from render import render
@@ -47,6 +48,7 @@ class Game:
         self.hovered_tile = None
 
         self.current_terrain = DEFAULT_PAINT_TERRAIN
+        self.current_critter = CRITTER_ORDER[0]
         self.left_mouse_held = False
         self.brush_size = DEFAULT_BRUSH_SIZE
 

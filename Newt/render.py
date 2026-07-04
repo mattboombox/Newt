@@ -16,6 +16,7 @@ def draw_hud(screen, game, background_color):
     fields = [
         f"Critters: {len(game.critters)}",
         f"Brush: {game.current_terrain}",
+        f"Critter Tool: {game.current_critter}",
         f"Size: {game.brush_size}",
         f"Status: {status}",
     ]
@@ -25,7 +26,7 @@ def draw_hud(screen, game, background_color):
         fields.append(f"Tile: ({tile.x}, {tile.y}) {tile.terrain}")
 
         if tile.critter is not None:
-            fields.append(f"Critter: ID {tile.critter.id}")
+            fields.append(f"Critter: {type(tile.critter).__name__} ID {tile.critter.id}")
 
         if tile.building is not None:
             if isinstance(tile.building, City):

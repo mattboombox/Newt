@@ -94,3 +94,24 @@ class Crab(Critter):
             move_cooldown=0.30,
             sprite="crab"
         )
+
+
+class Fish(Critter):
+    ALLOWED_TERRAINS = {"ocean", "shallows", "lake"}
+
+    def __init__(self, x, y):
+        super().__init__(
+            x, y,
+            color=(80, 180, 255),
+            allowed_terrains=Fish.ALLOWED_TERRAINS,
+            move_cooldown=0.22,
+            sprite="fish"
+        )
+
+
+CRITTER_TYPES = {
+    "crab": Crab,
+    "fish": Fish,
+}
+
+CRITTER_ORDER = list(CRITTER_TYPES.keys())

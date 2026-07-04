@@ -1,8 +1,7 @@
 import pygame
 from brush import paint_radius
-from critter import Critter
 from terrain import TERRAIN_DATA
-from critter import Crab
+from critter import CRITTER_ORDER, CRITTER_TYPES
 from city import City
 
 
@@ -56,15 +55,22 @@ def handle_input(game):
                         tile.building = City(tile.x, tile.y, level="village", population=10)
                         print(f"Placed city at ({tile.x}, {tile.y})")
 
+            elif event.key == pygame.K_v:
+                current_index = CRITTER_ORDER.index(game.current_critter)
+                new_index = (current_index + 1) % len(CRITTER_ORDER)
+                game.current_critter = CRITTER_ORDER[new_index]
+                print("Critter:", game.current_critter)
+
             elif event.key == pygame.K_c:
                 mx, my = pygame.mouse.get_pos()
                 tile = game.world.get_tile_at_pixel(mx, my, game.tile_size)
+                critter_cls = CRITTER_TYPES[game.current_critter]
 
-                if tile is not None and tile.terrain in Crab.ALLOWED_TERRAINS and tile.critter is None:
-                    critter = Crab(tile.x, tile.y)
+                if tile is not None and tile.terrain in critter_cls.ALLOWED_TERRAINS and tile.critter is None:
+                    critter = critter_cls(tile.x, tile.y)
                     tile.critter = critter
                     game.critters.append(critter)
-                    print(f"Spawned crab {critter.id} at ({tile.x}, {tile.y})")
+                    print(f"Spawned {game.current_critter} {critter.id} at ({tile.x}, {tile.y})")
 
         elif event.type == pygame.MOUSEBUTTONDOWN:
             mx, my = pygame.mouse.get_pos()

@@ -32,4 +32,5 @@ DEFAULT_GAME_SPEED = 1.0
 # Assets
 SPRITE_PATHS = {
     "crab": BASE_DIR / "sprites" / "crab.png",
+    "fish": BASE_DIR / "sprites" / "fish.png",
 }
