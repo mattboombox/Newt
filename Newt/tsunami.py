@@ -62,8 +62,13 @@ class Tsunami:
                     next_frontier.add((nx, ny))
                     continue
 
+                if tile.terrain == "mountain":
+                    clear_tile_occupants(game, tile, "it was hit by a tsunami")
+                    tile.set_terrain("stone")
+                    continue
+
                 # Hard blockers: stop this branch
-                if tile.terrain in ("mountain", "active_volcano", "dormant_volcano"):
+                if tile.terrain in ("active_volcano", "dormant_volcano"):
                     continue
 
                 # Land gets hit once, becomes shallows, and this branch stops there

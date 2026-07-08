@@ -3,7 +3,7 @@ from entity_cleanup import clear_tile_occupants
 from life import trigger_random_growth
 from impact import trigger_impact_event
 from lake import convert_landlocked_ocean_to_lake
-from tectonics import generate_trench_chain, generate_uplift_chain, spawn_dormant_volcano
+from tectonics import spawn_dormant_volcano, trigger_trench_event, trigger_uplift_event
 from tsunami import Tsunami
 import random
 
@@ -41,7 +41,7 @@ def update_events(game, dt):
         if random.random() < 0.001:
             start_x = random.randint(0, game.world.cols - 1)
             start_y = random.randint(0, game.world.rows - 1)
-            generate_uplift_chain(game, start_x, start_y)
+            trigger_uplift_event(game, start_x, start_y)
             convert_landlocked_ocean_to_lake(game.world)
 
         if random.random() < 0.0008:
@@ -50,7 +50,7 @@ def update_events(game, dt):
 
             tile = game.world.get_tile(x, y)
             if tile is not None and tile.terrain == "ocean":
-                generate_trench_chain(game, x, y)
+                trigger_trench_event(game, x, y)
 
         if random.random() < 0.001:
             x = random.randint(0, game.world.cols - 1)

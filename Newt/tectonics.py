@@ -228,6 +228,15 @@ def choose_uplift_profile():
     }
 
 
+def choose_uplift_chain_count():
+    roll = random.random()
+    if roll < 0.05:
+        return 3
+    if roll < 0.30:
+        return 2
+    return 1
+
+
 def choose_trench_profile():
     roll = random.random()
 
@@ -345,6 +354,15 @@ def generate_uplift_chain(game, start_x, start_y, length=None):
             main_dir_index = (main_dir_index + turn) % len(DIRECTIONS)
 
 
+def trigger_uplift_event(game, start_x, start_y):
+    chain_count = choose_uplift_chain_count()
+    if chain_count > 1:
+        print(f"Generating {chain_count} uplift chains from ({start_x}, {start_y})")
+
+    for _ in range(chain_count):
+        generate_uplift_chain(game, start_x, start_y)
+
+
 def carve_trench_tile(world, x, y):
     tile = world.get_tile(x, y)
     if tile is None or tile.terrain not in TRENCH_CARVABLE_TERRAINS:
@@ -402,6 +420,19 @@ def generate_trench_chain(game, start_x, start_y, length=None):
         if random.random() < 0.25:
             turn = random.choice([-1, 1])
             main_dir_index = (main_dir_index + turn) % len(DIRECTIONS)
+
+    return carved_any
+
+
+def trigger_trench_event(game, start_x, start_y):
+    chain_count = choose_uplift_chain_count()
+    if chain_count > 1:
+        print(f"Generating {chain_count} trench chains from ({start_x}, {start_y})")
+
+    carved_any = False
+    for _ in range(chain_count):
+        if generate_trench_chain(game, start_x, start_y):
+            carved_any = True
 
     return carved_any
 

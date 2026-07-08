@@ -1,6 +1,6 @@
 from entity_cleanup import clear_tile_occupants
 from impact import trigger_impact_event
-from tectonics import remove_volcano_at, sync_volcano_at_tile, generate_trench_chain, generate_uplift_chain
+from tectonics import remove_volcano_at, sync_volcano_at_tile, trigger_trench_event, trigger_uplift_event
 from lake import convert_landlocked_ocean_to_lake
 from tsunami import Tsunami
 
@@ -21,12 +21,12 @@ def paint_radius(game, center_tile, terrain_name, radius=0):
 
     if terrain_name == "tectonic_uplift":
         remove_volcano_at(game, center_tile.x, center_tile.y)
-        generate_uplift_chain(game, center_tile.x, center_tile.y)
+        trigger_uplift_event(game, center_tile.x, center_tile.y)
         convert_landlocked_ocean_to_lake(game.world)
         return
 
     if terrain_name == "trench":
-        if not generate_trench_chain(game, center_tile.x, center_tile.y):
+        if not trigger_trench_event(game, center_tile.x, center_tile.y):
             print("Trench event requires open ocean.")
         return
 
