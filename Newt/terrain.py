@@ -4,6 +4,11 @@ TERRAIN_DATA = {
         "walkable": False,
         "tags": {"water", "saltwater", "deep_water"},
     },
+    "trench": {
+        "color": (22, 47, 138),
+        "walkable": False,
+        "tags": {"water", "saltwater", "deep_water"},
+    },
     "shallows": {
         "color": (32, 67, 186),
         "walkable": True,

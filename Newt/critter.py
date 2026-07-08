@@ -36,11 +36,8 @@ class Critter:
         self.move_timer = 0.0
         self.try_wander(world)
 
-    def can_enter_tile(self, tile):
+    def is_habitable_tile(self, tile):
         if tile is None:
-            return False
-
-        if tile.critter is not None:
             return False
 
         if self.allowed_terrains is not None and tile.terrain not in self.allowed_terrains:
@@ -51,6 +48,15 @@ class Critter:
                 return False
 
         return True
+
+    def can_enter_tile(self, tile):
+        if tile is None:
+            return False
+
+        if tile.critter is not None:
+            return False
+
+        return self.is_habitable_tile(tile)
 
     def move_to(self, world, nx, ny):
         tile = world.get_tile(nx, ny)
@@ -97,7 +103,7 @@ class Crab(Critter):
 
 
 class Fish(Critter):
-    ALLOWED_TERRAINS = {"ocean", "shallows", "lake"}
+    ALLOWED_TERRAINS = {"ocean", "trench", "shallows", "lake"}
 
     def __init__(self, x, y):
         super().__init__(

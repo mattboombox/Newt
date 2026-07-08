@@ -83,6 +83,11 @@ def draw_tsunami_wave(screen, x, y, tile_size):
     pygame.draw.rect(screen, TERRAIN_DATA["tsunami"]["color"], rect, max(1, tile_size // 6))
 
 
+def draw_wave_ring(screen, x, y, tile_size, color):
+    rect = pygame.Rect(x * tile_size, y * tile_size, tile_size, tile_size)
+    pygame.draw.rect(screen, color, rect, max(1, tile_size // 6))
+
+
 def render(screen, game, background_color):
     screen.fill(background_color)
 
@@ -100,6 +105,11 @@ def render(screen, game, background_color):
 
     for x, y in active_wave_tiles:
         draw_tsunami_wave(screen, x, y, game.tile_size)
+
+    for impact_wave in game.impact_waves:
+        wave_color = TERRAIN_DATA[impact_wave.target_terrain]["color"]
+        for x, y in impact_wave.current_ring:
+            draw_wave_ring(screen, x, y, game.tile_size, wave_color)
 
     for critter in game.critters:
         draw_critter(screen, critter, game.tile_size, game.sprites)

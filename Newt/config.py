@@ -29,6 +29,12 @@ POLAR_INTERVAL = 10.0
 # Simulation controls
 DEFAULT_GAME_SPEED = 1.0
 
+# Web viewer
+WEB_MIRROR_ENABLED = True
+WEB_MIRROR_HOST = "127.0.0.1"
+WEB_MIRROR_PORT = 8765
+WEB_MIRROR_FPS = 5
+
 # Assets
 SPRITE_PATHS = {
     "crab": BASE_DIR / "sprites" / "crab.png",

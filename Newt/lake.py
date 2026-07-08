@@ -18,7 +18,7 @@ def try_spawn_lake_from_mountain(world, mountain_tile):
         # Combined Validation: 
         # 1. Must exist 2. Must be sand 3. No oceans nearby 4. No mountains nearby
         if (tile and tile.terrain == "sand" and
-            not world.is_adjacent_to_terrain(tile.x, tile.y, {"ocean"}) and
+            not world.is_adjacent_to_terrain(tile.x, tile.y, {"ocean", "trench"}) and
             not world.is_adjacent_to_terrain(tile.x, tile.y, BLOCKED_TERRAINS)):
             
             # Final check: ensure the area is clear enough
@@ -36,7 +36,7 @@ def convert_landlocked_ocean_to_lake(world):
     visited = set()
     queue = deque()
 
-    water_terrain = {"ocean", "shallows"}
+    water_terrain = {"ocean", "trench", "shallows"}
 
     # Start flood fill from edge water tiles
     for tile in world.get_edge_tiles():
@@ -81,5 +81,5 @@ def convert_landlocked_shallows_to_lake(world):
                 continue
 
             if tile.terrain == "shallows":
-                if not world.is_adjacent_to_terrain(tile.x, tile.y, {"ocean", "shallows"}):
+                if not world.is_adjacent_to_terrain(tile.x, tile.y, {"ocean", "trench", "shallows"}):
                     tile.set_terrain("lake")

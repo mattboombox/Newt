@@ -1,3 +1,6 @@
+from entity_cleanup import clear_tile_occupants
+
+
 class Tsunami:
     def __init__(self, x, y, max_steps=12, interval=0.2):
         self.interval = interval
@@ -23,12 +26,13 @@ class Tsunami:
         self.timer = 0.0
 
         self.steps += 1
-        still_active = self.expand(game.world)
+        still_active = self.expand(game)
 
         if not still_active or self.steps >= self.max_steps:
             self.remove_from_game(game)
 
-    def expand(self, world):
+    def expand(self, game):
+        world = game.world
         next_frontier = set()
         current_ring = set()
 
@@ -52,7 +56,8 @@ class Tsunami:
                 self.visited.add((nx, ny))
 
                 # Water keeps propagating
-                if tile.terrain in ("ocean", "shallows", "lake"):
+                if tile.terrain in ("ocean", "trench", "shallows", "lake"):
+                    clear_tile_occupants(game, tile, "it was hit by a tsunami")
                     current_ring.add((nx, ny))
                     next_frontier.add((nx, ny))
                     continue
@@ -62,6 +67,7 @@ class Tsunami:
                     continue
 
                 # Land gets hit once, becomes shallows, and this branch stops there
+                clear_tile_occupants(game, tile, "it was hit by a tsunami")
                 tile.set_terrain("shallows")
 
         self.current_ring = current_ring

@@ -19,14 +19,20 @@ from config import (
     TARGET_FPS,
     TECTONIC_INTERVAL,
     TILE_SIZE,
+    WEB_MIRROR_ENABLED,
+    WEB_MIRROR_FPS,
+    WEB_MIRROR_HOST,
+    WEB_MIRROR_PORT,
     WINDOW_HEIGHT,
     WINDOW_TITLE,
     WINDOW_WIDTH,
 )
 from critter import CRITTER_ORDER
+from entity_cleanup import remove_stranded_critters
 from events import update_events
 from input import handle_input
 from render import render
+from webmirror import start_frame_mirror
 from world import World
 
 SIZE_PRESET_LABELS = [
@@ -64,6 +70,7 @@ class Game:
         self.brush_size = DEFAULT_BRUSH_SIZE
 
         self.critters = []
+        self.impact_waves = []
         self.tsunamis = []
         self.volcanoes = []
 
@@ -95,6 +102,8 @@ def update(game, dt):
     mx, my = pygame.mouse.get_pos()
     game.hovered_tile = game.world.get_tile_at_pixel(mx, my, game.tile_size)
 
+    remove_stranded_critters(game)
+
     if game.paused:
         return
 
@@ -102,8 +111,9 @@ def update(game, dt):
         paint_radius(game, game.hovered_tile, game.current_terrain, game.brush_size)
 
     update_events(game, dt)
+    remove_stranded_critters(game)
 
-    for critter in game.critters:
+    for critter in game.critters[:]:
         critter.update(game.world, dt)
 
 
@@ -252,6 +262,7 @@ def select_window_size():
 # -----------------------------
 def main():
     pygame.init()
+    frame_mirror = None
 
     selected_map_size = select_window_size()
     if selected_map_size is None:
@@ -267,15 +278,28 @@ def main():
     game = Game(cols, rows)
     game.sprites = load_sprites(game.tile_size)
 
-    while game.running:
-        dt = clock.tick(TARGET_FPS) / 1000.0
-        dt *= game.speed
+    if WEB_MIRROR_ENABLED:
+        try:
+            frame_mirror = start_frame_mirror(WEB_MIRROR_HOST, WEB_MIRROR_PORT, WEB_MIRROR_FPS)
+        except OSError as exc:
+            print(f"Web mirror unavailable on {WEB_MIRROR_HOST}:{WEB_MIRROR_PORT}: {exc}")
 
-        handle_input(game)
-        update(game, dt)
-        render(screen, game, BACKGROUND_COLOR)
+    try:
+        while game.running:
+            dt = clock.tick(TARGET_FPS) / 1000.0
+            dt *= game.speed
 
-    pygame.quit()
+            handle_input(game)
+            update(game, dt)
+            render(screen, game, BACKGROUND_COLOR)
+
+            if frame_mirror is not None:
+                frame_mirror.publish(screen)
+    finally:
+        if frame_mirror is not None:
+            frame_mirror.stop()
+        pygame.quit()
+
     sys.exit()
 
 

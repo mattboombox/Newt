@@ -1,12 +1,15 @@
 import random
 from lake import try_spawn_lake_from_mountain, convert_landlocked_shallows_to_lake
 
+COASTAL_WATER_TERRAINS = {"ocean", "trench", "shallows"}
+POLAR_WATER_TERRAINS = {"ocean", "trench", "lake", "shallows"}
+
 
 def erode_tile(world, tile):
     if tile is None:
         return False
 
-    near_ocean = world.is_adjacent_to_terrain(tile.x, tile.y, {"ocean", "shallows"})
+    near_ocean = world.is_adjacent_to_terrain(tile.x, tile.y, COASTAL_WATER_TERRAINS)
 
     # Lava cools into stone
     if tile.terrain == "lava":
@@ -16,6 +19,13 @@ def erode_tile(world, tile):
     # Lake touching ocean/shallows becomes ocean
     if tile.terrain == "lake":
         if near_ocean:
+            tile.set_terrain("ocean")
+            return True
+        return False
+
+    # Trenches touching shallows relax back into open ocean
+    if tile.terrain == "trench":
+        if world.is_adjacent_to_terrain(tile.x, tile.y, {"shallows"}):
             tile.set_terrain("ocean")
             return True
         return False
@@ -81,7 +91,7 @@ def get_erodible_tiles(world):
     for x in range(world.cols):
         for y in range(world.rows):
             tile = world.board[x][y]
-            if tile.terrain in ("lava", "lake", "stone", "beach", "sand", "grass", "mountain", "shallows", "snow"):
+            if tile.terrain in ("lava", "lake", "stone", "beach", "sand", "grass", "mountain", "trench", "shallows", "snow"):
                 erodible.append(tile)
 
     return erodible
@@ -106,7 +116,7 @@ def apply_polar_climate(world):
             if tile is None:
                 continue
 
-            if tile.terrain in ("ocean", "lake", "shallows"):
+            if tile.terrain in POLAR_WATER_TERRAINS:
                 tile.set_terrain("ice_sheet")
                 changed = True
             elif tile.terrain not in ("ice_sheet","mountain", "active_volcano", "dormant_volcano", "lava"):
@@ -119,7 +129,7 @@ def apply_polar_climate(world):
             if tile is None:
                 continue
 
-            if tile.terrain in ("ocean", "lake", "shallows"):
+            if tile.terrain in POLAR_WATER_TERRAINS:
                 tile.set_terrain("ice_sheet")
                 changed = True
             elif tile.terrain not in ("ice_sheet", "mountain", "active_volcano", "dormant_volcano", "lava"):

@@ -1,8 +1,9 @@
 from erosion import trigger_random_erosion, apply_polar_climate
+from entity_cleanup import clear_tile_occupants
 from life import trigger_random_growth
 from impact import trigger_impact_event
 from lake import convert_landlocked_ocean_to_lake
-from tectonics import generate_uplift_chain, spawn_dormant_volcano
+from tectonics import generate_trench_chain, generate_uplift_chain, spawn_dormant_volcano
 from tsunami import Tsunami
 import random
 
@@ -22,14 +23,16 @@ def update_events(game, dt):
     if game.impact_timer >= game.impact_interval:
         game.impact_timer = 0.0
         if random.random() < game.impact_chance:
-            trigger_impact_event(game.world)
-            convert_landlocked_ocean_to_lake(game.world)
+            trigger_impact_event(game)
 
     for volcano in game.volcanoes[:]:
         volcano.update(game, dt)
 
     for tsunami in game.tsunamis[:]:
         tsunami.update(game, dt)
+
+    for impact_wave in game.impact_waves[:]:
+        impact_wave.update(game, dt)
 
     game.tectonic_timer += dt
     if game.tectonic_timer >= game.tectonic_interval:
@@ -40,6 +43,14 @@ def update_events(game, dt):
             start_y = random.randint(0, game.world.rows - 1)
             generate_uplift_chain(game, start_x, start_y)
             convert_landlocked_ocean_to_lake(game.world)
+
+        if random.random() < 0.0008:
+            x = random.randint(0, game.world.cols - 1)
+            y = random.randint(0, game.world.rows - 1)
+
+            tile = game.world.get_tile(x, y)
+            if tile is not None and tile.terrain == "ocean":
+                generate_trench_chain(game, x, y)
 
         if random.random() < 0.001:
             x = random.randint(0, game.world.cols - 1)
@@ -52,8 +63,9 @@ def update_events(game, dt):
             y = random.randint(0, game.world.rows - 1)
 
             tile = game.world.get_tile(x, y)
-            if tile is not None and tile.terrain in ("ocean", "shallows"):
+            if tile is not None and tile.terrain in ("ocean", "trench", "shallows"):
                 print(f"Spawning tsunami at ({x}, {y})")
+                clear_tile_occupants(game, tile, "it was hit by a tsunami")
                 game.tsunamis.append(Tsunami(x, y, max_steps=12, interval=0.2))
 
     game.polar_timer += dt

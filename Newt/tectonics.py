@@ -1,5 +1,7 @@
 import random
 
+from entity_cleanup import clear_tile_occupants
+
 DIRECTIONS = [
     (1, 0),    # east
     (1, 1),    # southeast
@@ -17,6 +19,8 @@ UPLIFT_BLOCKED_TERRAINS = {
     "lava",
     "lake",
 }
+
+TRENCH_CARVABLE_TERRAINS = {"ocean", "trench"}
 
 
 class Volcano:
@@ -43,7 +47,7 @@ class Volcano:
 
             if self.eruption_timer >= self.eruption_interval:
                 self.eruption_timer = 0.0
-                self.erupt(game.world)
+                self.erupt(game)
 
             if self.dormancy_timer >= self.dormancy_interval:
                 self.go_dormant(game)
@@ -57,7 +61,8 @@ class Volcano:
                 self.go_extinct(game)
                 return
 
-    def erupt(self, world):
+    def erupt(self, game):
+        world = game.world
         center_tile = world.get_tile(self.x, self.y)
         if center_tile is not None:
             center_tile.set_terrain("active_volcano")
@@ -88,6 +93,7 @@ class Volcano:
 
         shots = min(len(valid_tiles), random.randint(1, 3))
         for tile in random.sample(valid_tiles, shots):
+            clear_tile_occupants(game, tile, "lava erupted from a volcano")
             tile.set_terrain("lava")
 
     def go_dormant(self, game):
@@ -222,6 +228,24 @@ def choose_uplift_profile():
     }
 
 
+def choose_trench_profile():
+    roll = random.random()
+
+    if roll < 0.55:
+        return {
+            "length": random.randint(8, 14),
+        }
+
+    if roll < 0.85:
+        return {
+            "length": random.randint(10, 18),
+        }
+
+    return {
+        "length": random.randint(14, 22),
+    }
+
+
 def raise_uplift_spine_tile(game, x, y):
     tile = game.world.get_tile(x, y)
     if tile is None or tile.terrain in UPLIFT_BLOCKED_TERRAINS:
@@ -319,6 +343,67 @@ def generate_uplift_chain(game, start_x, start_y, length=None):
         if random.random() < 0.25:
             turn = random.choice([-1, 1])
             main_dir_index = (main_dir_index + turn) % len(DIRECTIONS)
+
+
+def carve_trench_tile(world, x, y):
+    tile = world.get_tile(x, y)
+    if tile is None or tile.terrain not in TRENCH_CARVABLE_TERRAINS:
+        return False
+
+    if world.is_adjacent_to_terrain(x, y, {"shallows"}):
+        tile.set_terrain("ocean")
+        return False
+
+    tile.set_terrain("trench")
+    return True
+
+
+def generate_trench_chain(game, start_x, start_y, length=None):
+    world = game.world
+    start_tile = world.get_tile(start_x, start_y)
+    if start_tile is None or start_tile.terrain not in TRENCH_CARVABLE_TERRAINS:
+        return False
+
+    profile = choose_trench_profile()
+    if length is None:
+        length = profile["length"]
+
+    x = start_x
+    y = start_y
+    print(f"Generating trench chain starting at ({x}, {y}) with length {length}")
+
+    main_dir_index = random.randint(0, len(DIRECTIONS) - 1)
+    carved_any = False
+
+    for _ in range(length):
+        if not carve_trench_tile(world, x, y):
+            break
+
+        carved_any = True
+
+        roll = random.random()
+        if roll < 0.65:
+            dir_index = main_dir_index
+        elif roll < 0.825:
+            dir_index = (main_dir_index - 1) % len(DIRECTIONS)
+        else:
+            dir_index = (main_dir_index + 1) % len(DIRECTIONS)
+
+        dx, dy = DIRECTIONS[dir_index]
+        next_x = x + dx
+        next_y = y + dy
+        next_tile = world.get_tile(next_x, next_y)
+        if next_tile is None or next_tile.terrain not in TRENCH_CARVABLE_TERRAINS:
+            break
+
+        x = next_x
+        y = next_y
+
+        if random.random() < 0.25:
+            turn = random.choice([-1, 1])
+            main_dir_index = (main_dir_index + turn) % len(DIRECTIONS)
+
+    return carved_any
 
 
 def scatter_stone_around_tile(world, x, y):
