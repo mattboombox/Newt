@@ -10,8 +10,8 @@ import random
 
 def update_events(game, dt):
     game.erosion_timer += dt
-    if game.erosion_timer >= game.erosion_interval:
-        game.erosion_timer = 0.0
+    while game.erosion_timer >= game.erosion_interval:
+        game.erosion_timer -= game.erosion_interval
         trigger_random_erosion(game.world)
 
     game.life_timer += dt
