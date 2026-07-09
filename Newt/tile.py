@@ -2,16 +2,24 @@ from terrain import TERRAIN_DATA
 
 
 class Tile:
-    def __init__(self, x, y, terrain="ocean"):
+    def __init__(self, x, y, terrain="ocean", world=None):
         self.x = x
         self.y = y
         self.terrain = terrain
+        self.world = world
         self.building = None
         self.critter = None
 
     def set_terrain(self, terrain_name):
         if terrain_name in TERRAIN_DATA:
+            if terrain_name == self.terrain:
+                return
+
+            old_terrain = self.terrain
             self.terrain = terrain_name
+
+            if self.world is not None:
+                self.world.on_tile_terrain_changed(self, old_terrain, terrain_name)
 
     def get_color(self):
         return TERRAIN_DATA[self.terrain]["color"]

@@ -20,7 +20,7 @@ UPLIFT_BLOCKED_TERRAINS = {
     "lake",
 }
 
-TRENCH_CARVABLE_TERRAINS = {"ocean", "trench"}
+TRENCH_CARVABLE_TERRAINS = {"ocean", "shallows", "trench"}
 
 
 class Volcano:
@@ -368,9 +368,9 @@ def carve_trench_tile(world, x, y):
     if tile is None or tile.terrain not in TRENCH_CARVABLE_TERRAINS:
         return False
 
-    if world.is_adjacent_to_terrain(x, y, {"shallows"}):
+    if tile.terrain == "shallows":
         tile.set_terrain("ocean")
-        return False
+        return True
 
     tile.set_terrain("trench")
     return True

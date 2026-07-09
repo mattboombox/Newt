@@ -1,3 +1,5 @@
+import random
+
 from tile import Tile
 
 
@@ -5,13 +7,64 @@ class World:
     def __init__(self, cols, rows, default_terrain="ocean"):
         self.cols = cols
         self.rows = rows
+        self.erosion_chunk_size = 16
         self.board = self.make_board(default_terrain)
+        self._erodible_chunks = {}
+        self.rebuild_erosion_chunks()
 
     def make_board(self, default_terrain):
         return [
-            [Tile(x, y, default_terrain) for y in range(self.rows)]
+            [Tile(x, y, default_terrain, world=self) for y in range(self.rows)]
             for x in range(self.cols)
         ]
+
+    def get_chunk_key(self, x, y):
+        return x // self.erosion_chunk_size, y // self.erosion_chunk_size
+
+    def rebuild_erosion_chunks(self):
+        from erosion import is_erodible_terrain
+
+        self._erodible_chunks = {}
+        for x in range(self.cols):
+            for y in range(self.rows):
+                tile = self.board[x][y]
+                if not is_erodible_terrain(tile.terrain):
+                    continue
+
+                chunk_key = self.get_chunk_key(x, y)
+                self._erodible_chunks.setdefault(chunk_key, set()).add(tile)
+
+    def on_tile_terrain_changed(self, tile, old_terrain, new_terrain):
+        from erosion import is_erodible_terrain
+
+        old_is_erodible = is_erodible_terrain(old_terrain)
+        new_is_erodible = is_erodible_terrain(new_terrain)
+        if old_is_erodible == new_is_erodible:
+            return
+
+        chunk_key = self.get_chunk_key(tile.x, tile.y)
+
+        if old_is_erodible:
+            chunk_tiles = self._erodible_chunks.get(chunk_key)
+            if chunk_tiles is not None:
+                chunk_tiles.discard(tile)
+                if not chunk_tiles:
+                    del self._erodible_chunks[chunk_key]
+
+        if new_is_erodible:
+            self._erodible_chunks.setdefault(chunk_key, set()).add(tile)
+
+    def get_random_erodible_tile(self):
+        if not self._erodible_chunks:
+            return None
+
+        chunk_key = random.choice(tuple(self._erodible_chunks.keys()))
+        chunk_tiles = self._erodible_chunks[chunk_key]
+        if not chunk_tiles:
+            del self._erodible_chunks[chunk_key]
+            return self.get_random_erodible_tile()
+
+        return random.choice(tuple(chunk_tiles))
 
     def get_tile(self, x, y):
         if 0 <= x < self.cols and 0 <= y < self.rows:

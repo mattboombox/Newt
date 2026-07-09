@@ -8,8 +8,8 @@ def try_spawn_lake_from_mountain(world, mountain_tile):
     BLOCKED_TERRAINS = {"mountain", "active_volcano", "dormant_volcano"}
     
     # Generate coordinates in the valid ring (Chebyshev distance 2 to 4)
-    offsets = [(dx, dy) for dx in range(-4, 5) for dy in range(-4, 5) 
-               if 2 <= max(abs(dx), abs(dy)) <= 4]
+    offsets = [(dx, dy) for dx in range(-4, 5) for dy in range(-4, 5)
+               if 2 <= max(abs(dx), abs(dy)) <= 4 and dx <= 0 and dy <= 0]
 
     valid_tiles = []
     for dx, dy in offsets:

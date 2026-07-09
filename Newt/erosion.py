@@ -3,6 +3,26 @@ from lake import try_spawn_lake_from_mountain, convert_landlocked_shallows_to_la
 
 COASTAL_WATER_TERRAINS = {"ocean", "trench", "shallows"}
 POLAR_WATER_TERRAINS = {"ocean", "trench", "lake", "shallows"}
+ERODIBLE_TERRAINS = {"lava", "lake", "stone", "beach", "sand", "grass", "mountain", "trench", "shallows", "snow"}
+
+
+def is_erodible_terrain(terrain_name):
+    return terrain_name in ERODIBLE_TERRAINS
+
+
+def get_shallowable_ocean_neighbors(world, tile):
+    ocean_neighbors = []
+
+    for neighbor in world.get_neighbors_all(tile.x, tile.y):
+        if neighbor.terrain != "ocean":
+            continue
+
+        if world.is_adjacent_to_terrain(neighbor.x, neighbor.y, {"trench"}):
+            continue
+
+        ocean_neighbors.append(neighbor)
+
+    return ocean_neighbors
 
 
 def erode_tile(world, tile):
@@ -23,12 +43,14 @@ def erode_tile(world, tile):
             return True
         return False
 
-    # Trenches touching shallows relax back into open ocean
+    # Trenches reclaim nearby shallows so shallow-water creep does not fill them in
     if tile.terrain == "trench":
-        if world.is_adjacent_to_terrain(tile.x, tile.y, {"shallows"}):
-            tile.set_terrain("ocean")
-            return True
-        return False
+        changed = False
+        for neighbor in world.get_neighbors_all(tile.x, tile.y):
+            if neighbor.terrain == "shallows":
+                neighbor.set_terrain("ocean")
+                changed = True
+        return changed
 
     # Mountains can rarely create lakes
     if tile.terrain == "mountain":
@@ -47,11 +69,7 @@ def erode_tile(world, tile):
             return True
 
         # Chance to create shallows in adjacent ocean
-        ocean_neighbors = []
-        for neighbor in world.get_neighbors_all(tile.x, tile.y):
-            if neighbor.terrain == "ocean":
-                ocean_neighbors.append(neighbor)
-
+        ocean_neighbors = get_shallowable_ocean_neighbors(world, tile)
         if ocean_neighbors:
             chosen_ocean = random.choice(ocean_neighbors)
             chosen_ocean.set_terrain("shallows")
@@ -61,11 +79,7 @@ def erode_tile(world, tile):
 
     # Snow can also create shallows, but never turns into sand
     if tile.terrain == "snow":
-        ocean_neighbors = []
-        for neighbor in world.get_neighbors_all(tile.x, tile.y):
-            if neighbor.terrain == "ocean":
-                ocean_neighbors.append(neighbor)
-
+        ocean_neighbors = get_shallowable_ocean_neighbors(world, tile)
         if ocean_neighbors:
             chosen_ocean = random.choice(ocean_neighbors)
             chosen_ocean.set_terrain("shallows")
@@ -91,7 +105,7 @@ def get_erodible_tiles(world):
     for x in range(world.cols):
         for y in range(world.rows):
             tile = world.board[x][y]
-            if tile.terrain in ("lava", "lake", "stone", "beach", "sand", "grass", "mountain", "trench", "shallows", "snow"):
+            if is_erodible_terrain(tile.terrain):
                 erodible.append(tile)
 
     return erodible
@@ -140,8 +154,11 @@ def apply_polar_climate(world):
 
 
 def trigger_random_erosion(world):
-    erodible_tiles = get_erodible_tiles(world)
+    tile = world.get_random_erodible_tile()
+    if tile is not None:
+        return erode_tile(world, tile)
 
+    erodible_tiles = get_erodible_tiles(world)
     if not erodible_tiles:
         return False
 

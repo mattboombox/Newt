@@ -1,4 +1,6 @@
 import sys
+import random
+import math
 
 import pygame
 
@@ -32,6 +34,7 @@ from entity_cleanup import remove_stranded_critters
 from events import update_events
 from input import handle_input
 from render import render
+from tectonics import trigger_trench_event
 from webmirror import start_frame_mirror
 from world import World
 
@@ -45,6 +48,7 @@ SIZE_PRESET_LABELS = [
 RING_WORLD_ROWS = 34
 RING_WORLD_MIN_COLS = 140
 RING_WORLD_MAX_COLS = 240
+INITIAL_TRENCH_TILE_BUDGET = 2000
 
 
 # -----------------------------
@@ -115,6 +119,24 @@ def update(game, dt):
 
     for critter in game.critters[:]:
         critter.update(game.world, dt)
+
+
+def get_initial_trench_count(cols, rows):
+    area = cols * rows
+    return max(1, min(6, math.ceil(area / INITIAL_TRENCH_TILE_BUDGET)))
+
+
+def seed_initial_trenches(game, trench_count=None):
+    if trench_count is None:
+        trench_count = get_initial_trench_count(game.world.cols, game.world.rows)
+
+    for _ in range(trench_count):
+        for _ in range(32):
+            start_x = random.randint(0, game.world.cols - 1)
+            start_y = random.randint(0, game.world.rows - 1)
+
+            if trigger_trench_event(game, start_x, start_y):
+                break
 
 
 # -----------------------------
@@ -276,6 +298,7 @@ def main():
     clock = pygame.time.Clock()
 
     game = Game(cols, rows)
+    seed_initial_trenches(game)
     game.sprites = load_sprites(game.tile_size)
 
     if WEB_MIRROR_ENABLED:
