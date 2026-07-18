@@ -58,17 +58,20 @@ class ImpactWave:
                 if tile is None:
                     continue
 
-                self.current_ring.add((tile.x, tile.y))
-                clear_tile_occupants(game, tile, f"it was hit by a {self.impact_type}")
-
-                if distance_sq <= self.core_radius * self.core_radius:
-                    self.set_tile_terrain(game, tile, self.target_terrain)
-                elif distance_sq <= self.burn_radius * self.burn_radius:
-                    if tile.terrain not in self.protected_terrain:
-                        self.set_tile_terrain(game, tile, "stone")
+                self.apply_wave_to_tile(game, tile, distance_sq)
 
         if self.current_radius >= self.burn_radius:
             self.finish(game)
+
+    def apply_wave_to_tile(self, game, tile, distance_sq):
+        self.current_ring.add((tile.x, tile.y))
+        clear_tile_occupants(game, tile, f"it was hit by a {self.impact_type}")
+
+        if distance_sq <= self.core_radius * self.core_radius:
+            self.set_tile_terrain(game, tile, self.target_terrain)
+        elif distance_sq <= self.burn_radius * self.burn_radius:
+            if tile.terrain not in self.protected_terrain:
+                self.set_tile_terrain(game, tile, "stone")
 
     def set_tile_terrain(self, game, tile, terrain_name):
         sync_volcano_at_tile(game, tile, terrain_name)
@@ -77,6 +80,7 @@ class ImpactWave:
     def finish(self, game):
         center_tile = game.world.get_tile(self.x, self.y)
         if center_tile is not None:
+            clear_tile_occupants(game, center_tile, f"it was hit by a {self.impact_type}")
             self.set_tile_terrain(game, center_tile, "mountain")
 
         convert_landlocked_ocean_to_lake(game.world)
@@ -89,7 +93,16 @@ class ImpactWave:
             game.impact_waves.remove(self)
 
 
-def trigger_impact_event(game, x=None, y=None, min_radius=2, max_radius=4, impact_type=None):
+def trigger_impact_event(
+    game,
+    x=None,
+    y=None,
+    min_radius=2,
+    max_radius=4,
+    impact_type=None,
+    radius_multiplier=1,
+    burn_radius_padding=3,
+):
     world = game.world
     if world.cols <= 0 or world.rows <= 0:
         return False
@@ -99,7 +112,7 @@ def trigger_impact_event(game, x=None, y=None, min_radius=2, max_radius=4, impac
     if y is None:
         y = random.randint(0, world.rows - 1)
 
-    radius = random.randint(min_radius, max_radius)
+    radius = random.randint(min_radius, max_radius) * radius_multiplier
     magnitude = random.randint(radius * 10, radius * 25)
 
     center_tile = world.get_tile(x, y)
@@ -113,11 +126,12 @@ def trigger_impact_event(game, x=None, y=None, min_radius=2, max_radius=4, impac
         x,
         y,
         core_radius=radius,
-        burn_radius=radius + 3,
+        burn_radius=radius + burn_radius_padding * radius_multiplier,
         impact_type=impact_type,
     )
     game.impact_waves.append(wave)
     wave.advance(game)
 
-    print(f"{impact_type.capitalize()} impact! Magnitude {magnitude} at ({x}, {y}) with radius {radius}")
+    impact_name = impact_type.replace("_", " ").title()
+    print(f"{impact_name} impact! Magnitude {magnitude} at ({x}, {y}) with radius {radius}")
     return True

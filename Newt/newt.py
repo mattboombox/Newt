@@ -4,7 +4,6 @@ import math
 
 import pygame
 
-from brush import paint_radius
 from config import (
     BACKGROUND_COLOR,
     DEFAULT_BRUSH_SIZE,
@@ -32,7 +31,7 @@ from config import (
 from critter import CRITTER_ORDER
 from entity_cleanup import remove_stranded_critters
 from events import update_events
-from input import handle_input
+from input import apply_active_tool, handle_input
 from render import render
 from tectonics import trigger_trench_event
 from webmirror import start_frame_mirror
@@ -70,6 +69,9 @@ class Game:
 
         self.current_terrain = DEFAULT_PAINT_TERRAIN
         self.current_critter = CRITTER_ORDER[0]
+        self.current_building = "village"
+        self.current_event = "meteor"
+        self.current_tool = "terrain"
         self.left_mouse_held = False
         self.brush_size = DEFAULT_BRUSH_SIZE
 
@@ -112,13 +114,13 @@ def update(game, dt):
         return
 
     if game.left_mouse_held and game.hovered_tile is not None:
-        paint_radius(game, game.hovered_tile, game.current_terrain, game.brush_size)
+        apply_active_tool(game, game.hovered_tile)
 
     update_events(game, dt)
     remove_stranded_critters(game)
 
     for critter in game.critters[:]:
-        critter.update(game.world, dt)
+        critter.update(game, dt)
 
 
 def get_initial_trench_count(cols, rows):

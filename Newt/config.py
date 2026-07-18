@@ -38,5 +38,9 @@ WEB_MIRROR_FPS = 5
 # Assets
 SPRITE_PATHS = {
     "crab": BASE_DIR / "sprites" / "crab.png",
+    "deer": BASE_DIR / "sprites" / "deer.png",
     "fish": BASE_DIR / "sprites" / "fish.png",
+    "plankton": BASE_DIR / "sprites" / "plankton.png",
+    "squid": BASE_DIR / "sprites" / "squid.png",
+    "wolf": BASE_DIR / "sprites" / "wolf.png",
 }

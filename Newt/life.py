@@ -1,5 +1,7 @@
 import random
 
+PLANKTON_GROWTH_CHANCE = 0.08
+
 
 def is_lake_nearby(world, tile, radius=2):
     for dx in range(-radius, radius + 1):
@@ -12,6 +14,10 @@ def is_lake_nearby(world, tile, radius=2):
                 return True
 
     return False
+
+
+def can_spawn_plankton(world, tile):
+    return tile is not None and tile.terrain == "trench" and tile.critter is None
 
 
 def grow_tile(world, tile):
@@ -37,6 +43,20 @@ def grow_tile(world, tile):
     return False
 
 
+def try_spawn_plankton(world, tile):
+    if not can_spawn_plankton(world, tile):
+        return None
+
+    if random.random() >= PLANKTON_GROWTH_CHANCE:
+        return None
+
+    from critter import Plankton
+
+    plankton = Plankton(tile.x, tile.y)
+    tile.critter = plankton
+    return plankton
+
+
 def get_growable_tiles(world):
     growable = []
 
@@ -57,3 +77,25 @@ def trigger_random_growth(world):
 
     tile = random.choice(growable_tiles)
     return grow_tile(world, tile)
+
+
+def get_plankton_spawn_tiles(world):
+    growable = []
+
+    for x in range(world.cols):
+        for y in range(world.rows):
+            tile = world.board[x][y]
+            if can_spawn_plankton(world, tile):
+                growable.append(tile)
+
+    return growable
+
+
+def trigger_random_plankton_growth(world):
+    spawn_tiles = get_plankton_spawn_tiles(world)
+
+    if not spawn_tiles:
+        return None
+
+    tile = random.choice(spawn_tiles)
+    return try_spawn_plankton(world, tile)

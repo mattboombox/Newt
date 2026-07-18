@@ -1,8 +1,98 @@
 import pygame
-from brush import paint_radius
+from brush import paint_radius, trigger_event_tool
 from terrain import TERRAIN_DATA
 from critter import CRITTER_ORDER, CRITTER_TYPES
 from city import City
+
+
+TOOL_MODE_ORDER = ["terrain", "critter", "building", "event"]
+BUILDING_ORDER = ["village"]
+EVENT_TOOL_ORDER = ["meteor", "mega_meteor", "comet", "tsunami", "tectonic_uplift", "trench_event"]
+EVENT_ONLY_TERRAINS = {"meteor", "comet", "tectonic_uplift", "tsunami"}
+TERRAIN_BRUSH_ORDER = [
+    terrain_name
+    for terrain_name in TERRAIN_DATA.keys()
+    if terrain_name not in EVENT_ONLY_TERRAINS
+]
+
+
+def cycle_terrain(game, step):
+    current_index = TERRAIN_BRUSH_ORDER.index(game.current_terrain)
+    new_index = (current_index + step) % len(TERRAIN_BRUSH_ORDER)
+    game.current_terrain = TERRAIN_BRUSH_ORDER[new_index]
+    print("Brush terrain:", game.current_terrain)
+
+
+def cycle_critter(game, step):
+    current_index = CRITTER_ORDER.index(game.current_critter)
+    new_index = (current_index + step) % len(CRITTER_ORDER)
+    game.current_critter = CRITTER_ORDER[new_index]
+    print("Critter:", game.current_critter)
+
+
+def cycle_building(game, step):
+    current_index = BUILDING_ORDER.index(game.current_building)
+    new_index = (current_index + step) % len(BUILDING_ORDER)
+    game.current_building = BUILDING_ORDER[new_index]
+    print("Building:", game.current_building)
+
+
+def cycle_event_tool(game, step):
+    current_index = EVENT_TOOL_ORDER.index(game.current_event)
+    new_index = (current_index + step) % len(EVENT_TOOL_ORDER)
+    game.current_event = EVENT_TOOL_ORDER[new_index]
+    print("Event:", game.current_event)
+
+
+def cycle_tool_mode(game):
+    current_index = TOOL_MODE_ORDER.index(game.current_tool)
+    new_index = (current_index + 1) % len(TOOL_MODE_ORDER)
+    game.current_tool = TOOL_MODE_ORDER[new_index]
+    print("Tool mode:", game.current_tool)
+
+
+def spawn_current_critter(game, tile):
+    if tile is None:
+        return False
+
+    critter_cls = CRITTER_TYPES[game.current_critter]
+    if tile.terrain not in critter_cls.ALLOWED_TERRAINS or tile.critter is not None:
+        return False
+
+    critter = critter_cls(tile.x, tile.y)
+    tile.critter = critter
+    game.critters.append(critter)
+    print(f"Spawned {game.current_critter} {critter.id} at ({tile.x}, {tile.y})")
+    return True
+
+
+def place_current_building(game, tile):
+    if tile is None or tile.building is not None:
+        return False
+
+    if game.current_building == "village" and tile.has_tag("land"):
+        tile.building = City(tile.x, tile.y, level="village", population=10)
+        print(f"Placed village at ({tile.x}, {tile.y})")
+        return True
+
+    return False
+
+
+def apply_active_tool(game, tile):
+    if tile is None:
+        return False
+
+    if game.current_tool == "critter":
+        return spawn_current_critter(game, tile)
+
+    if game.current_tool == "building":
+        return place_current_building(game, tile)
+
+    if game.current_tool == "event":
+        return trigger_event_tool(game, tile, game.current_event)
+
+    paint_radius(game, tile, game.current_terrain, game.brush_size)
+    return True
 
 
 def handle_input(game):
@@ -19,18 +109,24 @@ def handle_input(game):
                 print("Paused" if game.paused else "Unpaused")
 
             elif event.key == pygame.K_a:
-                terrain_names = list(TERRAIN_DATA.keys())
-                current_index = terrain_names.index(game.current_terrain)
-                new_index = (current_index - 1) % len(terrain_names)
-                game.current_terrain = terrain_names[new_index]
-                print("Brush terrain:", game.current_terrain)
+                if game.current_tool == "critter":
+                    cycle_critter(game, -1)
+                elif game.current_tool == "building":
+                    cycle_building(game, -1)
+                elif game.current_tool == "event":
+                    cycle_event_tool(game, -1)
+                else:
+                    cycle_terrain(game, -1)
 
             elif event.key == pygame.K_d:
-                terrain_names = list(TERRAIN_DATA.keys())
-                current_index = terrain_names.index(game.current_terrain)
-                new_index = (current_index + 1) % len(terrain_names)
-                game.current_terrain = terrain_names[new_index]
-                print("Brush terrain:", game.current_terrain)
+                if game.current_tool == "critter":
+                    cycle_critter(game, 1)
+                elif game.current_tool == "building":
+                    cycle_building(game, 1)
+                elif game.current_tool == "event":
+                    cycle_event_tool(game, 1)
+                else:
+                    cycle_terrain(game, 1)
 
             elif event.key == pygame.K_q:
                 game.brush_size = max(0, game.brush_size - 1)
@@ -49,38 +145,16 @@ def handle_input(game):
                 print("Speed:", game.speed)
 
             elif event.key == pygame.K_r:
-                tile = game.hovered_tile
-                if tile and tile.building is None:
-                    if tile.has_tag("land"):
-                        tile.building = City(tile.x, tile.y, level="village", population=10)
-                        print(f"Placed city at ({tile.x}, {tile.y})")
-
-            elif event.key == pygame.K_v:
-                current_index = CRITTER_ORDER.index(game.current_critter)
-                new_index = (current_index + 1) % len(CRITTER_ORDER)
-                game.current_critter = CRITTER_ORDER[new_index]
-                print("Critter:", game.current_critter)
-
-            elif event.key == pygame.K_c:
-                mx, my = pygame.mouse.get_pos()
-                tile = game.world.get_tile_at_pixel(mx, my, game.tile_size)
-                critter_cls = CRITTER_TYPES[game.current_critter]
-
-                if tile is not None and tile.terrain in critter_cls.ALLOWED_TERRAINS and tile.critter is None:
-                    critter = critter_cls(tile.x, tile.y)
-                    tile.critter = critter
-                    game.critters.append(critter)
-                    print(f"Spawned {game.current_critter} {critter.id} at ({tile.x}, {tile.y})")
+                cycle_tool_mode(game)
 
         elif event.type == pygame.MOUSEBUTTONDOWN:
             mx, my = pygame.mouse.get_pos()
             tile = game.world.get_tile_at_pixel(mx, my, game.tile_size)
 
             if event.button == 1:
-                if tile is not None:
-                    paint_radius(game, tile, game.current_terrain, game.brush_size)
+                apply_active_tool(game, tile)
 
-                if game.current_terrain not in ("meteor", "comet", "tectonic_uplift", "tsunami", "trench"):
+                if game.current_tool in {"terrain", "critter"}:
                     game.left_mouse_held = True
 
             elif event.button == 3:

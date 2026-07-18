@@ -1,4 +1,5 @@
 from entity_cleanup import clear_tile_occupants
+from tectonics import remove_volcano_at
 
 
 class Tsunami:
@@ -57,7 +58,12 @@ class Tsunami:
 
                 # Water keeps propagating
                 if tile.terrain in ("ocean", "trench", "shallows", "lake"):
-                    clear_tile_occupants(game, tile, "it was hit by a tsunami")
+                    clear_tile_occupants(
+                        game,
+                        tile,
+                        "it was hit by a tsunami",
+                        preserve_water_habitable_critters=True,
+                    )
                     current_ring.add((nx, ny))
                     next_frontier.add((nx, ny))
                     continue
@@ -67,8 +73,10 @@ class Tsunami:
                     tile.set_terrain("stone")
                     continue
 
-                # Hard blockers: stop this branch
                 if tile.terrain in ("active_volcano", "dormant_volcano"):
+                    clear_tile_occupants(game, tile, "it was hit by a tsunami")
+                    remove_volcano_at(game, tile.x, tile.y)
+                    tile.set_terrain("mountain")
                     continue
 
                 # Land gets hit once, becomes shallows, and this branch stops there

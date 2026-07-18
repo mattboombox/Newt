@@ -36,11 +36,18 @@ def remove_building_at_tile(tile, reason):
     return True
 
 
-def clear_tile_occupants(game, tile, reason):
+def clear_tile_occupants(game, tile, reason, preserve_water_habitable_critters=False):
     if tile is None:
         return
 
-    if tile.critter is not None:
+    if (
+        tile.critter is not None
+        and not (
+            preserve_water_habitable_critters
+            and tile.has_tag("water")
+            and tile.critter.is_habitable_tile(tile)
+        )
+    ):
         remove_critter(game, tile.critter, reason)
 
     if tile.building is not None:

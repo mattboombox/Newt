@@ -4,6 +4,10 @@ from config import HUD_HEIGHT
 from terrain import TERRAIN_DATA
 
 
+def format_tool_name(name):
+    return name.replace("_", " ").title()
+
+
 def draw_tile(screen, tile, tile_size):
     rect = pygame.Rect(tile.x * tile_size, tile.y * tile_size, tile_size, tile_size)
     pygame.draw.rect(screen, tile.get_color(), rect)
@@ -13,11 +17,20 @@ def draw_hud(screen, game, background_color):
     font = pygame.font.SysFont(None, 18)
 
     status = "Paused" if game.paused else "Running"
+    active_tool = game.current_tool.title()
+    if game.current_tool == "critter":
+        active_selection = f"Critter: {format_tool_name(game.current_critter)}"
+    elif game.current_tool == "building":
+        active_selection = f"Building Tool: {format_tool_name(game.current_building)}"
+    elif game.current_tool == "event":
+        active_selection = f"Event: {format_tool_name(game.current_event)}"
+    else:
+        active_selection = f"Brush: {format_tool_name(game.current_terrain)}"
 
     fields = [
+        f"Tool: {active_tool}",
+        active_selection,
         f"Critters: {len(game.critters)}",
-        f"Brush: {game.current_terrain}",
-        f"Critter Tool: {game.current_critter}",
         f"Size: {game.brush_size}",
         f"Status: {status}",
     ]
@@ -28,6 +41,7 @@ def draw_hud(screen, game, background_color):
 
         if tile.critter is not None:
             fields.append(f"Critter: {type(tile.critter).__name__} ID {tile.critter.id}")
+            fields.append(f"Behavior: {format_tool_name(tile.critter.current_behavior)}")
 
         if tile.building is not None:
             if isinstance(tile.building, City):
