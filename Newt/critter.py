@@ -298,6 +298,19 @@ class Crab(Critter):
         self.starvation_interval = Crab.STARVATION_INTERVAL
         self.reset_hunger()
 
+    def can_displace_critter(self, critter):
+        return isinstance(critter, Plankton)
+
+    def on_displaced_critter(self, game, critter):
+        if isinstance(critter, Plankton):
+            self.handle_successful_meal(game)
+
+    def displace_critter(self, game, world, critter):
+        if self.try_relocate_displaced_critter(world, critter):
+            return
+
+        super().displace_critter(game, world, critter)
+
     def take_hungry_action(self, game):
         current_tile = game.world.get_tile(self.x, self.y)
         if current_tile is not None and current_tile.terrain in Crab.FEED_TERRAINS:
@@ -306,7 +319,7 @@ class Crab(Critter):
 
         path = self.find_path_to_nearest_tile(
             game.world,
-            lambda tile: tile.terrain in Crab.FEED_TERRAINS and tile.critter is None,
+            lambda tile: tile.terrain in Crab.FEED_TERRAINS,
         )
         if not path:
             self.set_behavior("hungry")
@@ -322,7 +335,7 @@ class Crab(Critter):
 
 
 class Plankton(Critter):
-    ALLOWED_TERRAINS = {"ocean", "trench"}
+    ALLOWED_TERRAINS = {"ocean", "trench", "shallows"}
     HUNGER_INTERVAL = 10.0
     STARVATION_INTERVAL = 8.0
 
@@ -344,8 +357,9 @@ class Plankton(Critter):
 
 class Fish(Critter):
     ALLOWED_TERRAINS = {"ocean", "shallows", "lake"}
-    HUNGER_INTERVAL = 100.0
+    HUNGER_INTERVAL = 50.0
     STARVATION_INTERVAL = 100.0
+    REPRODUCTION_MEAL_THRESHOLD = 8
 
     def __init__(self, x, y):
         super().__init__(
@@ -407,7 +421,7 @@ class Fish(Critter):
 
 class Squid(Critter):
     ALLOWED_TERRAINS = {"ocean", "trench", "shallows", "lake"}
-    HUNGER_INTERVAL = 200.0
+    HUNGER_INTERVAL = 150.0
     STARVATION_INTERVAL = 50.0
 
     def __init__(self, x, y):
@@ -471,7 +485,7 @@ class Deer(Critter):
     ALLOWED_TERRAINS = NON_ARCTIC_LAND_TERRAINS
     HUNGER_INTERVAL = 40.0
     STARVATION_INTERVAL = 40.0
-    GRASS_CONSUME_CHANCE = 0.25
+    GRASS_CONSUME_CHANCE = 0.10
 
     def __init__(self, x, y):
         super().__init__(
