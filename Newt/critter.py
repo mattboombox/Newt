@@ -8,6 +8,7 @@ NON_ARCTIC_LAND_TERRAINS = {
     "sand",
     "snow",
     "stone",
+    "ice_sheet",
 }
 
 CARDINAL_DIRECTIONS = [
@@ -20,6 +21,7 @@ class Critter:
     _next_id = 1
     REPRODUCTION_MEAL_THRESHOLD = 5
     REPRODUCTION_MEAL_VALUE = 1
+    FLEE_DETECTION_RADIUS = 0
 
     def __init__(
         self,
@@ -101,6 +103,9 @@ class Critter:
             return
 
         self.move_timer = 0.0
+        if self.try_flee_from_predators(game.world, game):
+            return
+
         if self.is_hungry:
             self.take_hungry_action(game)
         else:
@@ -143,6 +148,12 @@ class Critter:
 
     def can_displace_critter(self, critter):
         return False
+
+    def get_flee_predator_types(self):
+        return ()
+
+    def get_flee_detection_radius(self):
+        return self.FLEE_DETECTION_RADIUS
 
     def should_attempt_shove_displacement(self, critter):
         return True
@@ -264,6 +275,71 @@ class Critter:
             if 0 <= ny < world.rows:
                 neighbors.append((nx, ny))
         return neighbors
+
+    def get_tile_distance(self, world, x1, y1, x2, y2):
+        dx = abs(x1 - x2)
+        dx = min(dx, world.cols - dx)
+        dy = abs(y1 - y2)
+        return dx + dy
+
+    def find_nearby_predators(self, world):
+        predator_types = self.get_flee_predator_types()
+        radius = self.get_flee_detection_radius()
+        if not predator_types or radius <= 0:
+            return []
+
+        threats = []
+        for dy in range(-radius, radius + 1):
+            ny = self.y + dy
+            if ny < 0 or ny >= world.rows:
+                continue
+
+            max_dx = radius - abs(dy)
+            for dx in range(-max_dx, max_dx + 1):
+                if dx == 0 and dy == 0:
+                    continue
+
+                nx = (self.x + dx) % world.cols
+                tile = world.get_tile(nx, ny)
+                if tile is None or tile.critter is None:
+                    continue
+
+                if isinstance(tile.critter, predator_types):
+                    threats.append((nx, ny))
+
+        return threats
+
+    def get_flee_score(self, world, x, y, threats):
+        distances = [self.get_tile_distance(world, x, y, tx, ty) for tx, ty in threats]
+        return (min(distances), sum(distances))
+
+    def try_flee_from_predators(self, world, game=None):
+        threats = self.find_nearby_predators(world)
+        if not threats:
+            return False
+
+        current_score = self.get_flee_score(world, self.x, self.y, threats)
+        destinations = self.get_neighbor_positions(world, self.x, self.y)
+        random.shuffle(destinations)
+
+        best_move = None
+        best_score = current_score
+        for nx, ny in destinations:
+            tile = world.get_tile(nx, ny)
+            if not self.can_enter_tile(tile):
+                continue
+
+            score = self.get_flee_score(world, nx, ny, threats)
+            if score > best_score:
+                best_score = score
+                best_move = (nx, ny)
+
+        self.set_behavior("flee")
+        if best_move is None:
+            return True
+
+        self.move_to(world, best_move[0], best_move[1], game)
+        return True
 
     def reconstruct_path(self, came_from, end_pos):
         path = []
@@ -433,13 +509,14 @@ class Fish(Critter):
     STARVATION_INTERVAL = 100.0
     REPRODUCTION_MEAL_THRESHOLD = 8
     REPRODUCTION_MEAL_VALUE = 2
+    FLEE_DETECTION_RADIUS = 4
 
     def __init__(self, x, y):
         super().__init__(
             x, y,
             color=(80, 180, 255),
             allowed_terrains=Fish.ALLOWED_TERRAINS,
-            move_cooldown=0.25,
+            move_cooldown=0.18,
             sprite="fish"
         )
         self.configure_hunger(Fish.HUNGER_INTERVAL, Fish.STARVATION_INTERVAL)
@@ -451,6 +528,9 @@ class Fish(Critter):
         if isinstance(critter, Plankton):
             return self.get_reproduction_meal_value(critter)
         return None
+
+    def get_flee_predator_types(self):
+        return (Squid,)
 
     def take_hungry_action(self, game):
         self.hunt_nearest_prey(game, (Crab, Plankton), "Fish")
@@ -467,7 +547,7 @@ class Squid(Critter):
             x, y,
             color=(180, 120, 220),
             allowed_terrains=Squid.ALLOWED_TERRAINS,
-            move_cooldown=0.18,
+            move_cooldown=0.24,
             sprite="squid"
         )
         self.configure_hunger(Squid.HUNGER_INTERVAL, Squid.STARVATION_INTERVAL)
@@ -541,16 +621,20 @@ class Deer(Critter):
     STARVATION_INTERVAL = 40.0
     GRASS_CONSUME_CHANCE = 0.10
     REPRODUCTION_MEAL_VALUE = 5
+    FLEE_DETECTION_RADIUS = 5
 
     def __init__(self, x, y):
         super().__init__(
             x, y,
             color=(180, 140, 90),
             allowed_terrains=Deer.ALLOWED_TERRAINS,
-            move_cooldown=0.28,
+            move_cooldown=0.18,
             sprite="deer"
         )
         self.configure_hunger(Deer.HUNGER_INTERVAL, Deer.STARVATION_INTERVAL)
+
+    def get_flee_predator_types(self):
+        return (Wolf,)
 
     def take_hungry_action(self, game):
         def eat_grass(tile):
@@ -578,7 +662,7 @@ class Wolf(Critter):
             x, y,
             color=(160, 160, 160),
             allowed_terrains=Wolf.ALLOWED_TERRAINS,
-            move_cooldown=0.24,
+            move_cooldown=0.32,
             sprite="wolf"
         )
         self.configure_hunger(Wolf.HUNGER_INTERVAL, Wolf.STARVATION_INTERVAL)
