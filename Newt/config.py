@@ -41,6 +41,8 @@ SPRITE_PATHS = {
     "deer": BASE_DIR / "sprites" / "deer.png",
     "fish": BASE_DIR / "sprites" / "fish.png",
     "plankton": BASE_DIR / "sprites" / "plankton.png",
+    "sperm_whale": BASE_DIR / "sprites" / "sperm_whale.png",
     "squid": BASE_DIR / "sprites" / "squid.png",
+    "whale": BASE_DIR / "sprites" / "whale.png",
     "wolf": BASE_DIR / "sprites" / "wolf.png",
 }

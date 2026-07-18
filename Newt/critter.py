@@ -19,6 +19,7 @@ CARDINAL_DIRECTIONS = [
 class Critter:
     _next_id = 1
     REPRODUCTION_MEAL_THRESHOLD = 5
+    REPRODUCTION_MEAL_VALUE = 1
 
     def __init__(
         self,
@@ -54,6 +55,11 @@ class Critter:
     def set_behavior(self, behavior_name):
         self.current_behavior = behavior_name
 
+    def configure_hunger(self, hunger_interval, starvation_interval):
+        self.hunger_interval = hunger_interval
+        self.starvation_interval = starvation_interval
+        self.reset_hunger()
+
     def reset_hunger(self):
         if self.hunger_interval is None:
             return
@@ -62,8 +68,16 @@ class Critter:
         self.hunger_timer = self.hunger_interval
         self.starvation_timer = self.starvation_interval
 
-    def handle_successful_meal(self, game):
-        self.meals_eaten += 1
+    def get_reproduction_meal_value(self, prey=None):
+        if prey is None:
+            return 1
+        return getattr(prey, "REPRODUCTION_MEAL_VALUE", 1)
+
+    def handle_successful_meal(self, game, meal_points=None):
+        if meal_points is None:
+            meal_points = 1
+
+        self.meals_eaten += meal_points
         self.set_behavior("eat")
         self.reset_hunger()
 
@@ -130,8 +144,19 @@ class Critter:
     def can_displace_critter(self, critter):
         return False
 
-    def on_displaced_critter(self, game, critter):
-        return
+    def should_attempt_shove_displacement(self, critter):
+        return True
+
+    def get_displacement_meal_value(self, critter):
+        return None
+
+    def remove_other_critter(self, game, critter, predator_name=None):
+        from entity_cleanup import remove_critter
+
+        if predator_name is None:
+            predator_name = type(self).__name__
+
+        remove_critter(game, critter, f"it was eaten by {predator_name} {self.id}")
 
     def try_relocate_displaced_critter(self, world, critter):
         destinations = critter.get_neighbor_positions(world, critter.x, critter.y)
@@ -157,10 +182,13 @@ class Critter:
         return False
 
     def displace_critter(self, game, world, critter):
-        from entity_cleanup import remove_critter
+        if self.should_attempt_shove_displacement(critter) and self.try_relocate_displaced_critter(world, critter):
+            return
 
-        remove_critter(game, critter, f"it was eaten by {type(self).__name__} {self.id}")
-        self.on_displaced_critter(game, critter)
+        self.remove_other_critter(game, critter)
+        meal_points = self.get_displacement_meal_value(critter)
+        if meal_points is not None:
+            self.handle_successful_meal(game, meal_points)
 
     def can_enter_tile(self, tile):
         if tile is None:
@@ -276,15 +304,72 @@ class Critter:
 
         return None
 
+    def forage_nearest_tile(self, game, current_tile_predicate, path_target_predicate, seek_behavior, on_feed):
+        current_tile = game.world.get_tile(self.x, self.y)
+        if current_tile is not None and current_tile_predicate(current_tile):
+            on_feed(current_tile)
+            return True
+
+        path = self.find_path_to_nearest_tile(game.world, path_target_predicate)
+        if not path:
+            self.set_behavior("hungry")
+            return False
+
+        self.set_behavior(seek_behavior)
+        next_x, next_y = path[0]
+        self.move_to(game.world, next_x, next_y, game)
+
+        current_tile = game.world.get_tile(self.x, self.y)
+        if current_tile is not None and current_tile_predicate(current_tile):
+            on_feed(current_tile)
+            return True
+
+        return False
+
+    def hunt_nearest_prey(self, game, prey_types, predator_name=None):
+        if not isinstance(prey_types, tuple):
+            prey_types = (prey_types,)
+
+        path = self.find_path_to_nearest_tile(
+            game.world,
+            lambda tile: (
+                tile.critter is not None
+                and isinstance(tile.critter, prey_types)
+                and self.is_habitable_tile(tile)
+            ),
+            allow_occupied_target=True,
+        )
+        if not path:
+            self.set_behavior("hungry")
+            return False
+
+        target_x, target_y = path[0]
+        target_tile = game.world.get_tile(target_x, target_y)
+        if target_tile is None:
+            self.set_behavior("hungry")
+            return False
+
+        if target_tile.critter is not None and isinstance(target_tile.critter, prey_types):
+            prey = target_tile.critter
+            self.remove_other_critter(game, prey, predator_name)
+            self.move_to(game.world, target_x, target_y, game)
+            self.handle_successful_meal(game, self.get_reproduction_meal_value(prey))
+            return True
+
+        self.set_behavior("hunt")
+        self.move_to(game.world, target_x, target_y, game)
+        return True
+
     def take_hungry_action(self, game):
         self.set_behavior("hungry")
 
 
 class Crab(Critter):
     ALLOWED_TERRAINS = {"beach", "shallows"}
-    FEED_TERRAINS = {"beach", "shallows"}
+    FEED_TERRAINS = {"shallows"}
     HUNGER_INTERVAL = 14.0
     STARVATION_INTERVAL = 10.0
+    REPRODUCTION_MEAL_VALUE = 2
 
     def __init__(self, x, y):
         super().__init__(
@@ -294,50 +379,31 @@ class Crab(Critter):
             move_cooldown=0.30,
             sprite="crab"
         )
-        self.hunger_interval = Crab.HUNGER_INTERVAL
-        self.starvation_interval = Crab.STARVATION_INTERVAL
-        self.reset_hunger()
+        self.configure_hunger(Crab.HUNGER_INTERVAL, Crab.STARVATION_INTERVAL)
 
     def can_displace_critter(self, critter):
         return isinstance(critter, Plankton)
 
-    def on_displaced_critter(self, game, critter):
+    def get_displacement_meal_value(self, critter):
         if isinstance(critter, Plankton):
-            self.handle_successful_meal(game)
-
-    def displace_critter(self, game, world, critter):
-        if self.try_relocate_displaced_critter(world, critter):
-            return
-
-        super().displace_critter(game, world, critter)
+            return self.get_reproduction_meal_value(critter)
+        return None
 
     def take_hungry_action(self, game):
-        current_tile = game.world.get_tile(self.x, self.y)
-        if current_tile is not None and current_tile.terrain in Crab.FEED_TERRAINS:
-            self.handle_successful_meal(game)
-            return
-
-        path = self.find_path_to_nearest_tile(
-            game.world,
+        self.forage_nearest_tile(
+            game,
             lambda tile: tile.terrain in Crab.FEED_TERRAINS,
+            lambda tile: tile.terrain in Crab.FEED_TERRAINS,
+            "seek_shallows",
+            lambda tile: self.handle_successful_meal(game),
         )
-        if not path:
-            self.set_behavior("hungry")
-            return
-
-        self.set_behavior("seek_shore_food")
-        next_x, next_y = path[0]
-        self.move_to(game.world, next_x, next_y, game)
-
-        current_tile = game.world.get_tile(self.x, self.y)
-        if current_tile is not None and current_tile.terrain in Crab.FEED_TERRAINS:
-            self.handle_successful_meal(game)
 
 
 class Plankton(Critter):
     ALLOWED_TERRAINS = {"ocean", "trench", "shallows"}
-    HUNGER_INTERVAL = 10.0
+    HUNGER_INTERVAL = 15.0
     STARVATION_INTERVAL = 8.0
+    REPRODUCTION_MEAL_VALUE = 1
 
     def __init__(self, x, y):
         super().__init__(
@@ -347,12 +413,18 @@ class Plankton(Critter):
             move_cooldown=4.20,
             sprite="plankton"
         )
-        self.hunger_interval = Plankton.HUNGER_INTERVAL
-        self.starvation_interval = Plankton.STARVATION_INTERVAL
-        self.reset_hunger()
+        self.configure_hunger(Plankton.HUNGER_INTERVAL, Plankton.STARVATION_INTERVAL)
 
     def take_hungry_action(self, game):
         self.handle_successful_meal(game)
+
+    def try_reproduce(self, world):
+        for nx, ny in self.get_neighbor_positions(world, self.x, self.y):
+            neighbor_tile = world.get_tile(nx, ny)
+            if neighbor_tile is not None and isinstance(neighbor_tile.critter, Plankton):
+                return None
+
+        return super().try_reproduce(world)
 
 
 class Fish(Critter):
@@ -360,6 +432,7 @@ class Fish(Critter):
     HUNGER_INTERVAL = 50.0
     STARVATION_INTERVAL = 100.0
     REPRODUCTION_MEAL_THRESHOLD = 8
+    REPRODUCTION_MEAL_VALUE = 2
 
     def __init__(self, x, y):
         super().__init__(
@@ -369,116 +442,97 @@ class Fish(Critter):
             move_cooldown=0.25,
             sprite="fish"
         )
-        self.hunger_interval = Fish.HUNGER_INTERVAL
-        self.starvation_interval = Fish.STARVATION_INTERVAL
-        self.reset_hunger()
+        self.configure_hunger(Fish.HUNGER_INTERVAL, Fish.STARVATION_INTERVAL)
 
     def can_displace_critter(self, critter):
         return isinstance(critter, Plankton)
 
-    def on_displaced_critter(self, game, critter):
+    def get_displacement_meal_value(self, critter):
         if isinstance(critter, Plankton):
-            self.handle_successful_meal(game)
-
-    def displace_critter(self, game, world, critter):
-        if self.try_relocate_displaced_critter(world, critter):
-            return
-
-        super().displace_critter(game, world, critter)
+            return self.get_reproduction_meal_value(critter)
+        return None
 
     def take_hungry_action(self, game):
-        from entity_cleanup import remove_critter
-
-        path = self.find_path_to_nearest_tile(
-            game.world,
-            lambda tile: (
-                tile.critter is not None
-                and isinstance(tile.critter, (Crab, Plankton))
-                and tile.terrain in Fish.ALLOWED_TERRAINS
-            ),
-            allow_occupied_target=True,
-        )
-        if not path:
-            self.set_behavior("hungry")
-            return
-
-        target_x, target_y = path[0]
-        target_tile = game.world.get_tile(target_x, target_y)
-        if target_tile is None:
-            self.set_behavior("hungry")
-            return
-
-        if target_tile.critter is not None and isinstance(target_tile.critter, (Crab, Plankton)):
-            prey = target_tile.critter
-            remove_critter(game, prey, f"it was eaten by Fish {self.id}")
-            self.move_to(game.world, target_x, target_y, game)
-            self.handle_successful_meal(game)
-            return
-
-        self.set_behavior("hunt")
-        self.move_to(game.world, target_x, target_y, game)
+        self.hunt_nearest_prey(game, (Crab, Plankton), "Fish")
 
 
 class Squid(Critter):
     ALLOWED_TERRAINS = {"ocean", "trench", "shallows", "lake"}
     HUNGER_INTERVAL = 150.0
     STARVATION_INTERVAL = 50.0
+    REPRODUCTION_MEAL_VALUE = 5
 
     def __init__(self, x, y):
         super().__init__(
             x, y,
             color=(180, 120, 220),
             allowed_terrains=Squid.ALLOWED_TERRAINS,
-            move_cooldown=0.20,
+            move_cooldown=0.18,
             sprite="squid"
         )
-        self.hunger_interval = Squid.HUNGER_INTERVAL
-        self.starvation_interval = Squid.STARVATION_INTERVAL
-        self.reset_hunger()
+        self.configure_hunger(Squid.HUNGER_INTERVAL, Squid.STARVATION_INTERVAL)
+
+    def can_displace_critter(self, critter):
+        return isinstance(critter, (Plankton, Crab))
+
+    def get_displacement_meal_value(self, critter):
+        if isinstance(critter, Crab):
+            return self.get_reproduction_meal_value(critter)
+        return None
+
+    def take_hungry_action(self, game):
+        self.hunt_nearest_prey(game, (Fish, Crab), "Squid")
+
+
+class Whale(Critter):
+    ALLOWED_TERRAINS = {"ocean", "trench", "shallows"}
+    REPRODUCTION_MEAL_THRESHOLD = 30
+    HUNGER_INTERVAL = 18.0
+    STARVATION_INTERVAL = 90.0
+
+    def __init__(self, x, y):
+        super().__init__(
+            x, y,
+            color=(110, 150, 190),
+            allowed_terrains=Whale.ALLOWED_TERRAINS,
+            move_cooldown=0.36,
+            sprite="whale"
+        )
+        self.configure_hunger(Whale.HUNGER_INTERVAL, Whale.STARVATION_INTERVAL)
 
     def can_displace_critter(self, critter):
         return isinstance(critter, Plankton)
 
-    def on_displaced_critter(self, game, critter):
-        return
-
-    def displace_critter(self, game, world, critter):
-        if self.try_relocate_displaced_critter(world, critter):
-            return
-
-        super().displace_critter(game, world, critter)
+    def get_displacement_meal_value(self, critter):
+        if isinstance(critter, Plankton):
+            return self.get_reproduction_meal_value(critter)
+        return None
 
     def take_hungry_action(self, game):
-        from entity_cleanup import remove_critter
+        self.hunt_nearest_prey(game, Plankton, "Whale")
 
-        path = self.find_path_to_nearest_tile(
-            game.world,
-            lambda tile: (
-                tile.critter is not None
-                and isinstance(tile.critter, Fish)
-                and tile.terrain in Squid.ALLOWED_TERRAINS
-            ),
-            allow_occupied_target=True,
+
+class SpermWhale(Critter):
+    ALLOWED_TERRAINS = Whale.ALLOWED_TERRAINS
+    REPRODUCTION_MEAL_THRESHOLD = Whale.REPRODUCTION_MEAL_THRESHOLD
+    HUNGER_INTERVAL = Whale.HUNGER_INTERVAL
+    STARVATION_INTERVAL = Whale.STARVATION_INTERVAL
+
+    def __init__(self, x, y):
+        super().__init__(
+            x, y,
+            color=(95, 105, 125),
+            allowed_terrains=SpermWhale.ALLOWED_TERRAINS,
+            move_cooldown=0.36,
+            sprite="sperm_whale"
         )
-        if not path:
-            self.set_behavior("hungry")
-            return
+        self.configure_hunger(SpermWhale.HUNGER_INTERVAL, SpermWhale.STARVATION_INTERVAL)
 
-        target_x, target_y = path[0]
-        target_tile = game.world.get_tile(target_x, target_y)
-        if target_tile is None:
-            self.set_behavior("hungry")
-            return
+    def can_displace_critter(self, critter):
+        return isinstance(critter, Plankton)
 
-        if target_tile.critter is not None and isinstance(target_tile.critter, Fish):
-            prey = target_tile.critter
-            remove_critter(game, prey, f"it was eaten by Squid {self.id}")
-            self.move_to(game.world, target_x, target_y, game)
-            self.handle_successful_meal(game)
-            return
-
-        self.set_behavior("hunt")
-        self.move_to(game.world, target_x, target_y, game)
+    def take_hungry_action(self, game):
+        self.hunt_nearest_prey(game, Squid, "Sperm Whale")
 
 
 class Deer(Critter):
@@ -486,6 +540,7 @@ class Deer(Critter):
     HUNGER_INTERVAL = 40.0
     STARVATION_INTERVAL = 40.0
     GRASS_CONSUME_CHANCE = 0.10
+    REPRODUCTION_MEAL_VALUE = 5
 
     def __init__(self, x, y):
         super().__init__(
@@ -495,35 +550,21 @@ class Deer(Critter):
             move_cooldown=0.28,
             sprite="deer"
         )
-        self.hunger_interval = Deer.HUNGER_INTERVAL
-        self.starvation_interval = Deer.STARVATION_INTERVAL
-        self.reset_hunger()
+        self.configure_hunger(Deer.HUNGER_INTERVAL, Deer.STARVATION_INTERVAL)
 
     def take_hungry_action(self, game):
-        current_tile = game.world.get_tile(self.x, self.y)
-        if current_tile is not None and current_tile.terrain == "grass":
+        def eat_grass(tile):
             if random.random() < Deer.GRASS_CONSUME_CHANCE:
-                current_tile.set_terrain("sand")
+                tile.set_terrain("sand")
             self.handle_successful_meal(game)
-            return
 
-        path = self.find_path_to_nearest_tile(
-            game.world,
+        self.forage_nearest_tile(
+            game,
+            lambda tile: tile.terrain == "grass",
             lambda tile: tile.terrain == "grass" and tile.critter is None,
+            "seek_grass",
+            eat_grass,
         )
-        if not path:
-            self.set_behavior("hungry")
-            return
-
-        self.set_behavior("seek_grass")
-        next_x, next_y = path[0]
-        self.move_to(game.world, next_x, next_y, game)
-
-        current_tile = game.world.get_tile(self.x, self.y)
-        if current_tile is not None and current_tile.terrain == "grass":
-            if random.random() < Deer.GRASS_CONSUME_CHANCE:
-                current_tile.set_terrain("sand")
-            self.handle_successful_meal(game)
 
 
 class Wolf(Critter):
@@ -540,41 +581,10 @@ class Wolf(Critter):
             move_cooldown=0.24,
             sprite="wolf"
         )
-        self.hunger_interval = Wolf.HUNGER_INTERVAL
-        self.starvation_interval = Wolf.STARVATION_INTERVAL
-        self.reset_hunger()
+        self.configure_hunger(Wolf.HUNGER_INTERVAL, Wolf.STARVATION_INTERVAL)
 
     def take_hungry_action(self, game):
-        from entity_cleanup import remove_critter
-
-        path = self.find_path_to_nearest_tile(
-            game.world,
-            lambda tile: (
-                tile.critter is not None
-                and isinstance(tile.critter, (Crab, Deer))
-                and tile.terrain in Wolf.ALLOWED_TERRAINS
-            ),
-            allow_occupied_target=True,
-        )
-        if not path:
-            self.set_behavior("hungry")
-            return
-
-        target_x, target_y = path[0]
-        target_tile = game.world.get_tile(target_x, target_y)
-        if target_tile is None:
-            self.set_behavior("hungry")
-            return
-
-        if target_tile.critter is not None and isinstance(target_tile.critter, (Crab, Deer)):
-            prey = target_tile.critter
-            remove_critter(game, prey, f"it was eaten by Wolf {self.id}")
-            self.move_to(game.world, target_x, target_y, game)
-            self.handle_successful_meal(game)
-            return
-
-        self.set_behavior("hunt")
-        self.move_to(game.world, target_x, target_y, game)
+        self.hunt_nearest_prey(game, (Crab, Deer), "Wolf")
 
 
 CRITTER_TYPES = {
@@ -582,7 +592,9 @@ CRITTER_TYPES = {
     "deer": Deer,
     "fish": Fish,
     "plankton": Plankton,
+    "sperm_whale": SpermWhale,
     "squid": Squid,
+    "whale": Whale,
     "wolf": Wolf,
 }
 

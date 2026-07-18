@@ -54,6 +54,20 @@ def clear_tile_occupants(game, tile, reason, preserve_water_habitable_critters=F
         remove_building_at_tile(tile, reason)
 
 
+def clear_stale_tile_critters(game):
+    active_critters = set(game.critters)
+
+    for x in range(game.world.cols):
+        for y in range(game.world.rows):
+            tile = game.world.board[x][y]
+            critter = tile.critter
+            if critter is None:
+                continue
+
+            if critter not in active_critters or critter.x != x or critter.y != y:
+                tile.critter = None
+
+
 def remove_stranded_critters(game):
     for critter in game.critters[:]:
         tile = game.world.get_tile(critter.x, critter.y)
