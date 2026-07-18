@@ -133,6 +133,29 @@ class Critter:
     def on_displaced_critter(self, game, critter):
         return
 
+    def try_relocate_displaced_critter(self, world, critter):
+        destinations = critter.get_neighbor_positions(world, critter.x, critter.y)
+        random.shuffle(destinations)
+
+        for nx, ny in destinations:
+            tile = world.get_tile(nx, ny)
+            if tile is None or tile.critter is not None:
+                continue
+
+            if not critter.is_habitable_tile(tile):
+                continue
+
+            current_tile = world.get_tile(critter.x, critter.y)
+            if current_tile is not None and current_tile.critter is critter:
+                current_tile.critter = None
+
+            critter.x = nx
+            critter.y = ny
+            tile.critter = critter
+            return True
+
+        return False
+
     def displace_critter(self, game, world, critter):
         from entity_cleanup import remove_critter
 
@@ -343,6 +366,12 @@ class Fish(Critter):
         if isinstance(critter, Plankton):
             self.handle_successful_meal(game)
 
+    def displace_critter(self, game, world, critter):
+        if self.try_relocate_displaced_critter(world, critter):
+            return
+
+        super().displace_critter(game, world, critter)
+
     def take_hungry_action(self, game):
         from entity_cleanup import remove_critter
 
@@ -400,24 +429,7 @@ class Squid(Critter):
         return
 
     def displace_critter(self, game, world, critter):
-        destinations = critter.get_neighbor_positions(world, critter.x, critter.y)
-        random.shuffle(destinations)
-
-        for nx, ny in destinations:
-            tile = world.get_tile(nx, ny)
-            if tile is None or tile.critter is not None:
-                continue
-
-            if not critter.is_habitable_tile(tile):
-                continue
-
-            current_tile = world.get_tile(critter.x, critter.y)
-            if current_tile is not None and current_tile.critter is critter:
-                current_tile.critter = None
-
-            critter.x = nx
-            critter.y = ny
-            tile.critter = critter
+        if self.try_relocate_displaced_critter(world, critter):
             return
 
         super().displace_critter(game, world, critter)
