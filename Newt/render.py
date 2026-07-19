@@ -1,18 +1,7 @@
 import pygame
 from city import City
-from config import HUD_HEIGHT, POPULATION_GRAPH_HEIGHT
+from config import HUD_HEIGHT
 from terrain import TERRAIN_DATA
-
-GRAPH_COLORS = {
-    "crab": (255, 80, 80),
-    "deer": (180, 140, 90),
-    "fish": (80, 180, 255),
-    "plankton": (160, 255, 180),
-    "sperm_whale": (95, 105, 125),
-    "squid": (180, 120, 220),
-    "whale": (110, 150, 190),
-    "wolf": (160, 160, 160),
-}
 
 
 def format_tool_name(name):
@@ -64,70 +53,19 @@ def draw_hud(screen, game, background_color):
 
     hud_text = " | ".join(fields)
 
-    graph_top = screen.get_height() - POPULATION_GRAPH_HEIGHT
-    hud_rect = pygame.Rect(0, graph_top - HUD_HEIGHT, screen.get_width(), HUD_HEIGHT)
+    hud_rect = pygame.Rect(0, screen.get_height() - HUD_HEIGHT, screen.get_width(), HUD_HEIGHT)
 
     pygame.draw.rect(screen, (0, 0, 0), hud_rect)
     text_surface = font.render(hud_text, True, (220, 220, 220))
     screen.blit(text_surface, (6, hud_rect.y + 2))
 
 
-def draw_population_graph(screen, game):
-    font = pygame.font.SysFont(None, 16)
-    graph_rect = pygame.Rect(0, screen.get_height() - POPULATION_GRAPH_HEIGHT, screen.get_width(), POPULATION_GRAPH_HEIGHT)
-    pygame.draw.rect(screen, (0, 0, 0), graph_rect)
-    pygame.draw.line(screen, (70, 70, 70), (0, graph_rect.y), (screen.get_width(), graph_rect.y))
-
-    inner_padding = 8
-    legend_height = 18
-    plot_left = graph_rect.x + inner_padding
-    plot_top = graph_rect.y + legend_height + inner_padding
-    plot_width = max(1, graph_rect.width - inner_padding * 2)
-    plot_height = max(1, graph_rect.height - legend_height - inner_padding * 2 - 6)
-    plot_rect = pygame.Rect(plot_left, plot_top, plot_width, plot_height)
-
-    pygame.draw.rect(screen, (25, 25, 25), plot_rect)
-    pygame.draw.rect(screen, (70, 70, 70), plot_rect, 1)
-
-    history = game.population_history
-    max_population = 1
-    for series in history.values():
-        if series:
-            max_population = max(max_population, max(series))
-
-    max_label = font.render(str(max_population), True, (170, 170, 170))
-    screen.blit(max_label, (plot_rect.x + 4, plot_rect.y + 2))
-
-    if plot_rect.height > 12:
-        mid_y = plot_rect.y + plot_rect.height // 2
-        pygame.draw.line(screen, (40, 40, 40), (plot_rect.x, mid_y), (plot_rect.right, mid_y))
-
-    legend_x = graph_rect.x + inner_padding
-    legend_y = graph_rect.y + 3
-    for critter_name, series in history.items():
-        color = GRAPH_COLORS.get(critter_name, (220, 220, 220))
-        label = font.render(format_tool_name(critter_name), True, color)
-        screen.blit(label, (legend_x, legend_y))
-        legend_x += label.get_width() + 10
-
-        if len(series) < 2:
-            continue
-
-        point_step = plot_rect.width / max(1, len(series) - 1)
-        points = []
-        for index, population in enumerate(series):
-            x = plot_rect.x + round(index * point_step)
-            y_ratio = population / max_population
-            y = plot_rect.bottom - round(y_ratio * (plot_rect.height - 1))
-            points.append((x, y))
-
-        pygame.draw.lines(screen, color, False, points, 2)
-
-
 def draw_critter(screen, critter, tile_size, sprites):
     sprite = sprites.get(critter.sprite)
 
     if sprite is not None:
+        if critter.current_behavior == "dying":
+            sprite = pygame.transform.flip(sprite, False, True)
         screen.blit(sprite, (critter.x * tile_size, critter.y * tile_size))
     else:
         inset = max(2, tile_size // 4)
@@ -202,5 +140,4 @@ def render(screen, game, background_color):
         pygame.draw.rect(screen, (255, 255, 255), rect, 1)
 
     draw_hud(screen, game, background_color)
-    draw_population_graph(screen, game)
     pygame.display.flip()

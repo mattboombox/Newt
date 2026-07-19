@@ -1,7 +1,6 @@
 import sys
 import random
 import math
-from collections import Counter, deque
 
 import pygame
 
@@ -16,7 +15,6 @@ from config import (
     IMPACT_INTERVAL,
     INITIAL_TERRAIN,
     LIFE_INTERVAL,
-    POPULATION_GRAPH_HEIGHT,
     POLAR_INTERVAL,
     SPRITE_PATHS,
     TARGET_FPS,
@@ -50,7 +48,6 @@ RING_WORLD_ROWS = 34
 RING_WORLD_MIN_COLS = 140
 RING_WORLD_MAX_COLS = 240
 INITIAL_TRENCH_TILE_BUDGET = 2000
-POPULATION_HISTORY_INTERVAL = 0.5
 
 
 # -----------------------------
@@ -63,8 +60,7 @@ class Game:
 
         self.tile_size = TILE_SIZE
         self.hud_height = HUD_HEIGHT
-        self.population_graph_height = POPULATION_GRAPH_HEIGHT
-        self.bottom_panel_height = HUD_HEIGHT + POPULATION_GRAPH_HEIGHT
+        self.bottom_panel_height = HUD_HEIGHT
         self.window_width, self.window_height = get_window_size_for_map(cols, rows)
 
         self.world = World(cols, rows, INITIAL_TERRAIN)
@@ -104,26 +100,6 @@ class Game:
 
         self.speed = DEFAULT_GAME_SPEED
         self.sprites = {}
-        self.population_history_interval = POPULATION_HISTORY_INTERVAL
-        self.population_history_timer = 0.0
-        self.population_history = {
-            critter_name: deque(maxlen=max(120, self.window_width - 24))
-            for critter_name in CRITTER_ORDER
-        }
-
-
-# -----------------------------
-# Systems
-# -----------------------------
-def record_population_snapshot(game, dt, force=False):
-    game.population_history_timer += dt
-    if not force and game.population_history_timer < game.population_history_interval:
-        return
-
-    game.population_history_timer = 0.0
-    counts = Counter(critter.sprite for critter in game.critters)
-    for critter_name in CRITTER_ORDER:
-        game.population_history[critter_name].append(counts.get(critter_name, 0))
 
 
 def update(game, dt):
@@ -135,7 +111,6 @@ def update(game, dt):
     remove_stranded_critters(game)
 
     if game.paused:
-        record_population_snapshot(game, dt)
         return
 
     if game.left_mouse_held and game.hovered_tile is not None:
@@ -148,7 +123,6 @@ def update(game, dt):
         critter.update(game, dt)
 
     clear_stale_tile_critters(game)
-    record_population_snapshot(game, dt)
 
 
 def get_initial_trench_count(cols, rows):
@@ -185,7 +159,7 @@ def load_sprites(tile_size):
 
 
 def get_window_size_for_map(cols, rows):
-    return cols * TILE_SIZE, rows * TILE_SIZE + HUD_HEIGHT + POPULATION_GRAPH_HEIGHT
+    return cols * TILE_SIZE, rows * TILE_SIZE + HUD_HEIGHT
 
 
 def get_available_size_presets():
@@ -209,7 +183,7 @@ def get_available_size_presets():
         return presets
 
     fallback_cols = max(40, max_width // TILE_SIZE)
-    fallback_rows = max(30, (max_height - HUD_HEIGHT - POPULATION_GRAPH_HEIGHT) // TILE_SIZE)
+    fallback_rows = max(30, (max_height - HUD_HEIGHT) // TILE_SIZE)
     fallback_width, fallback_height = get_window_size_for_map(fallback_cols, fallback_rows)
     return [("Auto Fit", fallback_cols, fallback_rows, fallback_width, fallback_height)]
 
@@ -330,7 +304,6 @@ def main():
     game = Game(cols, rows)
     seed_initial_trenches(game)
     game.sprites = load_sprites(game.tile_size)
-    record_population_snapshot(game, 0.0, force=True)
 
     if WEB_MIRROR_ENABLED:
         try:

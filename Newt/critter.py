@@ -19,6 +19,7 @@ CARDINAL_DIRECTIONS = [
 
 class Critter:
     _next_id = 1
+    DYING_INTERVAL = 12.0
     REPRODUCTION_MEAL_THRESHOLD = 5
     REPRODUCTION_MEAL_VALUE = 1
     FLEE_DETECTION_RADIUS = 0
@@ -48,6 +49,7 @@ class Critter:
         self.starvation_interval = None
         self.hunger_timer = None
         self.starvation_timer = None
+        self.dying_timer = None
         self.is_hungry = False
         self.meals_eaten = 0
 
@@ -95,6 +97,10 @@ class Critter:
         return offspring
 
     def update(self, game, dt):
+        if self.current_behavior == "dying":
+            self.update_dying(game, dt)
+            return
+
         if not self.update_hunger(game, dt):
             return
 
@@ -104,6 +110,9 @@ class Critter:
 
         self.move_timer = 0.0
         if self.try_flee_from_predators(game.world, game):
+            return
+
+        if self.try_scavenge_nearby_corpse(game):
             return
 
         if self.is_hungry:
@@ -118,10 +127,7 @@ class Critter:
         if self.is_hungry:
             self.starvation_timer -= dt
             if self.starvation_timer <= 0:
-                from entity_cleanup import remove_critter
-
-                self.set_behavior("starve")
-                remove_critter(game, self, "it starved while searching for food")
+                self.start_dying()
                 return False
             return True
 
@@ -131,6 +137,52 @@ class Critter:
             self.starvation_timer = self.starvation_interval
             self.set_behavior("hungry")
 
+        return True
+
+    def start_dying(self):
+        self.is_hungry = False
+        self.hunger_timer = None
+        self.starvation_timer = None
+        self.dying_timer = self.DYING_INTERVAL
+        self.move_timer = 0.0
+        self.set_behavior("dying")
+
+    def update_dying(self, game, dt):
+        if self.dying_timer is None:
+            self.dying_timer = self.DYING_INTERVAL
+
+        self.dying_timer -= dt
+        if self.dying_timer > 0:
+            return
+
+        self.finish_dying(game)
+
+    def finish_dying(self, game):
+        from entity_cleanup import remove_critter
+
+        tile = game.world.get_tile(self.x, self.y)
+        removed = remove_critter(game, self, "its corpse decayed away")
+        if removed:
+            self.spawn_death_remains(game, tile)
+
+    def spawn_death_remains(self, game, tile):
+        return False
+
+    def try_spawn_grass_remains(self, game, tile):
+        if tile is None or tile.critter is not None or tile.terrain != "sand":
+            return False
+
+        from life import grow_tile
+
+        return grow_tile(game.world, tile)
+
+    def try_spawn_plankton_remains(self, game, tile):
+        if tile is None or tile.critter is not None or tile.terrain not in Plankton.ALLOWED_TERRAINS:
+            return False
+
+        plankton = Plankton(tile.x, tile.y)
+        tile.critter = plankton
+        game.critters.append(plankton)
         return True
 
     def is_habitable_tile(self, tile):
@@ -160,6 +212,43 @@ class Critter:
 
     def get_displacement_meal_value(self, critter):
         return None
+
+    def get_scavenge_prey_types(self):
+        return ()
+
+    def get_scavenge_predator_name(self):
+        return type(self).__name__
+
+    def try_scavenge_nearby_corpse(self, game):
+        prey_types = self.get_scavenge_prey_types()
+        if not prey_types:
+            return False
+
+        if not isinstance(prey_types, tuple):
+            prey_types = (prey_types,)
+
+        destinations = self.get_neighbor_positions(game.world, self.x, self.y)
+        random.shuffle(destinations)
+
+        for nx, ny in destinations:
+            tile = game.world.get_tile(nx, ny)
+            if tile is None or not self.is_habitable_tile(tile):
+                continue
+
+            prey = tile.critter
+            if (
+                prey is None
+                or prey.current_behavior != "dying"
+                or not isinstance(prey, prey_types)
+            ):
+                continue
+
+            self.remove_other_critter(game, prey, self.get_scavenge_predator_name())
+            self.move_to(game.world, nx, ny, game)
+            self.handle_successful_meal(game, self.get_reproduction_meal_value(prey))
+            return True
+
+        return False
 
     def remove_other_critter(self, game, critter, predator_name=None):
         from entity_cleanup import remove_critter
@@ -302,6 +391,9 @@ class Critter:
                 nx = (self.x + dx) % world.cols
                 tile = world.get_tile(nx, ny)
                 if tile is None or tile.critter is None:
+                    continue
+
+                if tile.critter.current_behavior == "dying":
                     continue
 
                 if isinstance(tile.critter, predator_types):
@@ -474,6 +566,9 @@ class Crab(Critter):
             lambda tile: self.handle_successful_meal(game),
         )
 
+    def spawn_death_remains(self, game, tile):
+        return self.try_spawn_plankton_remains(game, tile)
+
 
 class Plankton(Critter):
     ALLOWED_TERRAINS = {"ocean", "trench", "shallows"}
@@ -505,8 +600,8 @@ class Plankton(Critter):
 
 class Fish(Critter):
     ALLOWED_TERRAINS = {"ocean", "shallows", "lake"}
-    HUNGER_INTERVAL = 50.0
-    STARVATION_INTERVAL = 100.0
+    HUNGER_INTERVAL = 40.0
+    STARVATION_INTERVAL = 40.0
     REPRODUCTION_MEAL_THRESHOLD = 8
     REPRODUCTION_MEAL_VALUE = 2
     FLEE_DETECTION_RADIUS = 4
@@ -535,11 +630,14 @@ class Fish(Critter):
     def take_hungry_action(self, game):
         self.hunt_nearest_prey(game, (Crab, Plankton), "Fish")
 
+    def spawn_death_remains(self, game, tile):
+        return self.try_spawn_plankton_remains(game, tile)
+
 
 class Squid(Critter):
     ALLOWED_TERRAINS = {"ocean", "trench", "shallows", "lake"}
-    HUNGER_INTERVAL = 150.0
-    STARVATION_INTERVAL = 50.0
+    HUNGER_INTERVAL = 200.0
+    STARVATION_INTERVAL = 120.0
     REPRODUCTION_MEAL_VALUE = 5
 
     def __init__(self, x, y):
@@ -547,7 +645,7 @@ class Squid(Critter):
             x, y,
             color=(180, 120, 220),
             allowed_terrains=Squid.ALLOWED_TERRAINS,
-            move_cooldown=0.24,
+            move_cooldown=0.32,
             sprite="squid"
         )
         self.configure_hunger(Squid.HUNGER_INTERVAL, Squid.STARVATION_INTERVAL)
@@ -560,8 +658,17 @@ class Squid(Critter):
             return self.get_reproduction_meal_value(critter)
         return None
 
+    def get_scavenge_prey_types(self):
+        return (Fish, Crab)
+
+    def get_scavenge_predator_name(self):
+        return "Squid"
+
     def take_hungry_action(self, game):
         self.hunt_nearest_prey(game, (Fish, Crab), "Squid")
+
+    def spawn_death_remains(self, game, tile):
+        return self.try_spawn_plankton_remains(game, tile)
 
 
 class Whale(Critter):
@@ -591,12 +698,15 @@ class Whale(Critter):
     def take_hungry_action(self, game):
         self.hunt_nearest_prey(game, Plankton, "Whale")
 
+    def spawn_death_remains(self, game, tile):
+        return self.try_spawn_plankton_remains(game, tile)
+
 
 class SpermWhale(Critter):
     ALLOWED_TERRAINS = Whale.ALLOWED_TERRAINS
     REPRODUCTION_MEAL_THRESHOLD = Whale.REPRODUCTION_MEAL_THRESHOLD
     HUNGER_INTERVAL = Whale.HUNGER_INTERVAL
-    STARVATION_INTERVAL = Whale.STARVATION_INTERVAL
+    STARVATION_INTERVAL = 220.0
 
     def __init__(self, x, y):
         super().__init__(
@@ -611,8 +721,17 @@ class SpermWhale(Critter):
     def can_displace_critter(self, critter):
         return isinstance(critter, Plankton)
 
+    def get_scavenge_prey_types(self):
+        return Squid
+
+    def get_scavenge_predator_name(self):
+        return "Sperm Whale"
+
     def take_hungry_action(self, game):
         self.hunt_nearest_prey(game, Squid, "Sperm Whale")
+
+    def spawn_death_remains(self, game, tile):
+        return self.try_spawn_plankton_remains(game, tile)
 
 
 class Deer(Critter):
@@ -650,12 +769,15 @@ class Deer(Critter):
             eat_grass,
         )
 
+    def spawn_death_remains(self, game, tile):
+        return self.try_spawn_grass_remains(game, tile)
+
 
 class Wolf(Critter):
     ALLOWED_TERRAINS = NON_ARCTIC_LAND_TERRAINS
     REPRODUCTION_MEAL_THRESHOLD = 10
     HUNGER_INTERVAL = 200.0
-    STARVATION_INTERVAL = 50.0
+    STARVATION_INTERVAL = 120.0
 
     def __init__(self, x, y):
         super().__init__(
@@ -667,8 +789,17 @@ class Wolf(Critter):
         )
         self.configure_hunger(Wolf.HUNGER_INTERVAL, Wolf.STARVATION_INTERVAL)
 
+    def get_scavenge_prey_types(self):
+        return (Crab, Deer)
+
+    def get_scavenge_predator_name(self):
+        return "Wolf"
+
     def take_hungry_action(self, game):
         self.hunt_nearest_prey(game, (Crab, Deer), "Wolf")
+
+    def spawn_death_remains(self, game, tile):
+        return self.try_spawn_grass_remains(game, tile)
 
 
 CRITTER_TYPES = {
