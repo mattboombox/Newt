@@ -3,11 +3,13 @@ from brush import paint_radius, trigger_event_tool
 from terrain import TERRAIN_DATA
 from critter import CRITTER_ORDER, CRITTER_TYPES
 from city import City
+from building import WolfDen
+from entity_cleanup import remove_critter
 
 
 TOOL_MODE_ORDER = ["terrain", "critter", "building", "event"]
-BUILDING_ORDER = ["village"]
-EVENT_TOOL_ORDER = ["meteor", "mega_meteor", "comet", "tsunami", "tectonic_uplift", "trench_event"]
+BUILDING_ORDER = ["village", "wolf_den"]
+EVENT_TOOL_ORDER = ["meteor", "mega_meteor", "comet", "tsunami", "tectonic_uplift", "trench_event", "evolve"]
 EVENT_ONLY_TERRAINS = {"meteor", "comet", "tectonic_uplift", "tsunami"}
 TERRAIN_BRUSH_ORDER = [
     terrain_name
@@ -56,10 +58,15 @@ def spawn_current_critter(game, tile):
         return False
 
     critter_cls = CRITTER_TYPES[game.current_critter]
-    if tile.terrain not in critter_cls.ALLOWED_TERRAINS or tile.critter is not None:
+    if tile.terrain not in critter_cls.ALLOWED_TERRAINS:
         return False
 
+    if tile.critter is not None:
+        remove_critter(game, tile.critter, f"it was replaced by a spawned {game.current_critter}")
+
     critter = critter_cls(tile.x, tile.y)
+    if isinstance(tile.building, WolfDen) and game.current_critter == "wolf":
+        critter.set_home_building(tile.building)
     tile.critter = critter
     game.critters.append(critter)
     print(f"Spawned {game.current_critter} {critter.id} at ({tile.x}, {tile.y})")
@@ -73,6 +80,11 @@ def place_current_building(game, tile):
     if game.current_building == "village" and tile.has_tag("land"):
         tile.building = City(tile.x, tile.y, level="village", population=10)
         print(f"Placed village at ({tile.x}, {tile.y})")
+        return True
+
+    if game.current_building == "wolf_den" and WolfDen.can_place_on_tile(tile):
+        tile.building = WolfDen(tile.x, tile.y, charges=1)
+        print(f"Placed wolf den at ({tile.x}, {tile.y})")
         return True
 
     return False
@@ -160,9 +172,7 @@ def handle_input(game):
             elif event.button == 3:
                 if tile is not None and tile.critter is not None:
                     critter = tile.critter
-                    tile.critter = None
-                    if critter in game.critters:
-                        game.critters.remove(critter)
+                    remove_critter(game, critter, "it was manually deleted")
                     print(f"Deleted critter {critter.id} at ({tile.x}, {tile.y})")
 
         elif event.type == pygame.MOUSEBUTTONUP:

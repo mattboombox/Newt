@@ -1,5 +1,6 @@
 from erosion import trigger_random_erosion, apply_polar_climate
 from entity_cleanup import clear_tile_occupants
+from evolution import trigger_random_evolution
 from life import trigger_random_growth, trigger_random_plankton_growth
 from impact import trigger_impact_event
 from lake import convert_landlocked_ocean_to_lake
@@ -21,6 +22,11 @@ def update_events(game, dt):
         spawned_plankton = trigger_random_plankton_growth(game.world)
         if spawned_plankton is not None:
             game.critters.append(spawned_plankton)
+
+    game.evolution_timer += dt
+    while game.evolution_timer >= game.evolution_interval:
+        game.evolution_timer -= game.evolution_interval
+        trigger_random_evolution(game)
 
     game.impact_timer += dt
     if game.impact_timer >= game.impact_interval:

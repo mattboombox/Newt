@@ -9,25 +9,24 @@ def describe_building(building):
 
 
 def remove_critter(game, critter, reason):
+    if hasattr(critter, "clear_home_building"):
+        critter.clear_home_building()
+
     tile = game.world.get_tile(critter.x, critter.y)
     if tile is not None and tile.critter is critter:
         tile.critter = None
 
     if critter in game.critters:
         game.critters.remove(critter)
-
-    print(
-        f"Removed {type(critter).__name__} {critter.id} at "
-        f"({critter.x}, {critter.y}) because {reason}."
-    )
     return True
 
 
-def remove_building_at_tile(tile, reason):
+def remove_building_at_tile(game, tile, reason):
     building = tile.building
     if building is None:
         return False
 
+    building.on_removed(game)
     tile.building = None
     print(
         f"Removed {describe_building(building)} at "
@@ -51,7 +50,7 @@ def clear_tile_occupants(game, tile, reason, preserve_water_habitable_critters=F
         remove_critter(game, tile.critter, reason)
 
     if tile.building is not None:
-        remove_building_at_tile(tile, reason)
+        remove_building_at_tile(game, tile, reason)
 
 
 def clear_stale_tile_critters(game):

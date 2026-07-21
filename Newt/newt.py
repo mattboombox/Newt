@@ -10,6 +10,8 @@ from config import (
     DEFAULT_GAME_SPEED,
     DEFAULT_PAINT_TERRAIN,
     EROSION_INTERVAL,
+    EVOLUTION_CHANCE,
+    EVOLUTION_INTERVAL,
     HUD_HEIGHT,
     IMPACT_CHANCE,
     IMPACT_INTERVAL,
@@ -47,7 +49,7 @@ SIZE_PRESET_LABELS = [
 RING_WORLD_ROWS = 34
 RING_WORLD_MIN_COLS = 140
 RING_WORLD_MAX_COLS = 240
-INITIAL_TRENCH_TILE_BUDGET = 2000
+INITIAL_TRENCH_TILE_BUDGET = 1000
 
 
 # -----------------------------
@@ -88,6 +90,10 @@ class Game:
         self.life_timer = 0.0
         self.life_interval = LIFE_INTERVAL
 
+        self.evolution_timer = 0.0
+        self.evolution_interval = EVOLUTION_INTERVAL
+        self.evolution_chance = EVOLUTION_CHANCE
+
         self.impact_timer = 0.0
         self.impact_interval = IMPACT_INTERVAL
         self.impact_chance = IMPACT_CHANCE
@@ -100,6 +106,20 @@ class Game:
 
         self.speed = DEFAULT_GAME_SPEED
         self.sprites = {}
+
+
+def update_buildings(game, dt):
+    updated_buildings = set()
+
+    for x in range(game.world.cols):
+        for y in range(game.world.rows):
+            tile = game.world.board[x][y]
+            building = tile.building
+            if building is None or id(building) in updated_buildings:
+                continue
+
+            updated_buildings.add(id(building))
+            building.update(game, dt)
 
 
 def update(game, dt):
@@ -118,6 +138,7 @@ def update(game, dt):
 
     update_events(game, dt)
     remove_stranded_critters(game)
+    update_buildings(game, dt)
 
     for critter in game.critters[:]:
         critter.update(game, dt)

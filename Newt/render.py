@@ -1,4 +1,5 @@
 import pygame
+from building import WolfDen
 from city import City
 from config import HUD_HEIGHT
 from terrain import TERRAIN_DATA
@@ -41,11 +42,19 @@ def draw_hud(screen, game, background_color):
 
         if tile.critter is not None:
             fields.append(f"Critter: {type(tile.critter).__name__} ID {tile.critter.id}")
-            fields.append(f"Behavior: {format_tool_name(tile.critter.current_behavior)}")
+            fields.append(
+                f"Behavior: {format_tool_name(tile.critter.current_behavior)} "
+                f"(Meals: {tile.critter.meals_eaten}/{tile.critter.REPRODUCTION_MEAL_THRESHOLD})"
+            )
 
         if tile.building is not None:
             if isinstance(tile.building, City):
                 fields.append(f"Building: {tile.building.level.title()}")
+            elif isinstance(tile.building, WolfDen):
+                fields.append(
+                    f"Building: Wolf Den ({tile.building.charges} charges, "
+                    f"{len(tile.building.resident_wolf_ids)} wolves)"
+                )
             else:
                 fields.append(f"Building: {type(tile.building).__name__}")
     else:
@@ -88,10 +97,13 @@ def draw_building(screen, building, tile_size):
 
     pygame.draw.rect(screen, (200, 50, 50), rect)
 
+    font = pygame.font.SysFont(None, 14)
     if isinstance(building, City):
-        font = pygame.font.SysFont(None, 14)
         text_surface = font.render(building.level[0].upper(), True, (255, 255, 255))
         screen.blit(text_surface, (building.x * tile_size + 2, building.y * tile_size + 1))
+    elif isinstance(building, WolfDen):
+        text_surface = font.render("W", True, (255, 255, 255))
+        screen.blit(text_surface, (building.x * tile_size + 1, building.y * tile_size + 1))
 
 
 def draw_tsunami_wave(screen, x, y, tile_size):
