@@ -1,6 +1,6 @@
 import random
 
-from critter import Crab, Deer, Fish, Nautilus, Newt, Plankton, SpermWhale, Squid, Therapsid, Whale, Wolf
+from critter import Crab, Deer, Fish, GigaSlug, LandKraken, Nautilus, Newt, Plankton, Snail, SpermWhale, Squid, Therapsid, Whale, Wolf
 
 EVOLUTION_TREE = {
     Plankton: (
@@ -26,14 +26,34 @@ EVOLUTION_TREE = {
     ),
     Nautilus: (
         {
+            "result_type": Snail,
+            "weight": 1.0,
+            "terrain": "shallows",
+        },
+        {
             "result_type": Squid,
             "weight": 1.0,
+            "terrains": {"ocean", "trench"},
         },
     ),
     Newt: (
         {
             "result_type": Therapsid,
             "weight": 1.0,
+        },
+    ),
+    Snail: (
+        {
+            "result_type": GigaSlug,
+            "weight": 1.0,
+            "terrain": "shallows",
+        },
+    ),
+    Squid: (
+        {
+            "result_type": LandKraken,
+            "weight": 1.0,
+            "terrain": "shallows",
         },
     ),
     Therapsid: (

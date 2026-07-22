@@ -18,6 +18,8 @@ def remove_critter(game, critter, reason):
 
     if critter in game.critters:
         game.critters.remove(critter)
+    if hasattr(game, "dying_critters"):
+        game.dying_critters.discard(critter)
     return True
 
 

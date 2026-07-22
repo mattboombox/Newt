@@ -7,9 +7,12 @@ from .critter import (
 )
 from .deer import Deer
 from .fish import Fish
+from .giga_slug import GigaSlug
+from .land_kraken import LandKraken
 from .nautilus import Nautilus
 from .newt import Newt
 from .plankton import Plankton
+from .snail import Snail
 from .sperm_whale import SpermWhale
 from .squid import Squid
 from .squid_egg import SquidEgg
@@ -31,9 +34,12 @@ CRITTER_TYPES = {
     "crab": Crab,
     "deer": Deer,
     "fish": Fish,
+    "giga_slug": GigaSlug,
+    "land_kraken": LandKraken,
     "nautilus": Nautilus,
     "newt": Newt,
     "plankton": Plankton,
+    "snail": Snail,
     "sperm_whale": SpermWhale,
     "squid": Squid,
     "therapsid": Therapsid,
@@ -52,10 +58,13 @@ __all__ = [
     "Crab",
     "Deer",
     "Fish",
+    "GigaSlug",
+    "LandKraken",
     "Nautilus",
     "Newt",
     "NON_ARCTIC_LAND_TERRAINS",
     "Plankton",
+    "Snail",
     "SpermWhale",
     "Squid",
     "SquidEgg",

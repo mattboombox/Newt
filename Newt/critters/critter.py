@@ -25,6 +25,7 @@ class Critter:
     REPRODUCTION_MEAL_THRESHOLD = 5
     FLEE_DETECTION_RADIUS = 0
     HUNT_RANGE = None
+    SCAVENGE_RANGE = None
     HUNT_PREY_TYPES = ()
     SCAVENGE_PREY_TYPES = ()
     DISPLACEABLE_CRITTER_TYPES = ()
@@ -161,7 +162,7 @@ class Critter:
         if self.is_hungry:
             self.starvation_timer -= dt
             if self.starvation_timer <= 0:
-                self.start_dying()
+                self.start_dying(game)
                 return False
             return True
 
@@ -173,13 +174,15 @@ class Critter:
 
         return True
 
-    def start_dying(self):
+    def start_dying(self, game=None):
         self.is_hungry = False
         self.hunger_timer = None
         self.starvation_timer = None
         self.dying_timer = self.DYING_INTERVAL
         self.move_timer = 0.0
         self.set_behavior("dying")
+        if game is not None and hasattr(game, "dying_critters"):
+            game.dying_critters.add(self)
 
     def update_dying(self, game, dt):
         if self.dying_timer is None:
@@ -298,6 +301,9 @@ class Critter:
         return self.HUNT_RANGE
 
     def get_scavenge_range(self):
+        if self.SCAVENGE_RANGE is not None:
+            return self.SCAVENGE_RANGE
+
         hunt_range = self.get_hunt_range()
         if hunt_range is None:
             return None
@@ -362,6 +368,11 @@ class Critter:
     def try_scavenge_corpse(self, game):
         prey_types = self.get_scavenge_prey_types()
         if not prey_types:
+            return False
+
+        # A corpse path search is by far the most expensive AI action on a
+        # large map.  In the usual case there are no corpses at all.
+        if hasattr(game, "dying_critters") and not game.dying_critters:
             return False
 
         if not isinstance(prey_types, tuple):
@@ -635,20 +646,21 @@ class Critter:
         if path_tile_predicate is None:
             path_tile_predicate = self.can_path_through_tile
 
-        queue = deque([start_pos])
+        # A range-limited search is substantially cheaper than calling
+        # get_tile_distance for every visited tile.  BFS visits positions in
+        # increasing path distance, so the first position at the limit need
+        # not be expanded.
+        queue = deque([(self.x, self.y, 0)])
         came_from = {start_pos: None}
 
         while queue:
-            x, y = queue.popleft()
+            x, y, distance = queue.popleft()
+            if max_search_distance is not None and distance >= max_search_distance:
+                continue
+
             for nx, ny in self.get_neighbor_positions(world, x, y):
                 next_pos = (nx, ny)
                 if next_pos in came_from:
-                    continue
-
-                if (
-                    max_search_distance is not None
-                    and self.get_tile_distance(world, start_pos[0], start_pos[1], nx, ny) > max_search_distance
-                ):
                     continue
 
                 tile = world.get_tile(nx, ny)
@@ -661,7 +673,7 @@ class Critter:
 
                 if path_tile_predicate(tile):
                     came_from[next_pos] = (x, y)
-                    queue.append(next_pos)
+                    queue.append((nx, ny, distance + 1))
 
         return None
 

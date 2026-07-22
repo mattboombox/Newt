@@ -1,4 +1,5 @@
 from .critter import Critter
+from .fish import Fish
 from .plankton import Plankton
 
 
@@ -7,7 +8,9 @@ class Nautilus(Critter):
     REPRODUCTION_MEAL_THRESHOLD = 5
     HUNGER_INTERVAL = 55.0
     STARVATION_INTERVAL = 55.0
+    HUNT_RANGE = 12
     HUNT_PREY_TYPES = (Plankton,)
+    SCAVENGE_PREY_TYPES = (Fish,)
     DISPLACEABLE_CRITTER_TYPES = (Plankton,)
     PREDATOR_NAME = "Nautilus"
 

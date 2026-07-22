@@ -30,14 +30,17 @@ class SquidEgg(Critter):
         game.critters.append(squid)
 
     def update(self, game, dt):
-        from .crab import Crab
-        from .fish import Fish
+        from .squid import Squid
 
         if self.current_behavior == "dying":
             self.update_dying(game, dt)
             return
 
-        nearby_hatch_trigger = self.find_nearby_critters(game.world, (Fish, Crab), 1)
+        nearby_hatch_trigger = self.find_nearby_critters(
+            game.world,
+            Squid.HUNT_PREY_TYPES,
+            1,
+        )
         if nearby_hatch_trigger:
             self.hatch(game)
             return

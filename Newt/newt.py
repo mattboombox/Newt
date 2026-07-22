@@ -31,7 +31,7 @@ from config import (
     WINDOW_WIDTH,
 )
 from critter import CRITTER_ORDER
-from entity_cleanup import clear_stale_tile_critters, remove_stranded_critters
+from entity_cleanup import remove_stranded_critters
 from events import update_events
 from input import apply_active_tool, handle_input
 from render import render
@@ -79,6 +79,8 @@ class Game:
         self.brush_size = DEFAULT_BRUSH_SIZE
 
         self.critters = []
+        # Lets scavengers avoid a map-wide path search when no corpse exists.
+        self.dying_critters = set()
         self.impact_waves = []
         self.tsunamis = []
         self.volcanoes = []
@@ -123,12 +125,8 @@ def update_buildings(game, dt):
 
 
 def update(game, dt):
-    clear_stale_tile_critters(game)
-
     mx, my = pygame.mouse.get_pos()
     game.hovered_tile = game.world.get_tile_at_pixel(mx, my, game.tile_size)
-
-    remove_stranded_critters(game)
 
     if game.paused:
         return
@@ -142,8 +140,6 @@ def update(game, dt):
 
     for critter in game.critters[:]:
         critter.update(game, dt)
-
-    clear_stale_tile_critters(game)
 
 
 def get_initial_trench_count(cols, rows):

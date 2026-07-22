@@ -21,7 +21,7 @@ DEFAULT_BRUSH_SIZE = 0
 # Simulation timing, in seconds
 EROSION_INTERVAL = 0.10
 LIFE_INTERVAL = 0.35
-EVOLUTION_INTERVAL = 5.0
+EVOLUTION_INTERVAL = 120.0
 EVOLUTION_CHANCE = 0.25
 IMPACT_INTERVAL = 5.0
 IMPACT_CHANCE = 0.001
@@ -42,9 +42,12 @@ SPRITE_PATHS = {
     "crab": BASE_DIR / "sprites" / "crab.png",
     "deer": BASE_DIR / "sprites" / "deer.png",
     "fish": BASE_DIR / "sprites" / "fish.png",
+    "giga_slug": BASE_DIR / "sprites" / "mega_slug.png",
+    "land_kraken": BASE_DIR / "sprites" / "land_kraken.png",
     "nautilus": BASE_DIR / "sprites" / "nautilus.png",
     "newt": BASE_DIR / "sprites" / "newt.png",
     "plankton": BASE_DIR / "sprites" / "plankton.png",
+    "snail": BASE_DIR / "sprites" / "snail.png",
     "sperm_whale": BASE_DIR / "sprites" / "sperm_whale.png",
     "squid": BASE_DIR / "sprites" / "squid.png",
     "squid_egg": BASE_DIR / "sprites" / "squid_egg.png",

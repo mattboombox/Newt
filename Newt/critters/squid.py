@@ -6,6 +6,7 @@ from .fish import Fish
 from .nautilus import Nautilus
 from .newt import Newt
 from .plankton import Plankton
+from .snail import Snail
 
 
 class Squid(Critter):
@@ -15,8 +16,8 @@ class Squid(Critter):
     STARVATION_INTERVAL = 120.0
     MOVE_COOLDOWN = 0.48
     HUNT_RANGE = 8
-    HUNT_PREY_TYPES = (Fish, Crab, Nautilus, Newt)
-    SCAVENGE_PREY_TYPES = (Fish, Crab, Nautilus, Newt)
+    HUNT_PREY_TYPES = (Fish, Crab, Nautilus, Newt, Snail)
+    SCAVENGE_PREY_TYPES = (Fish, Crab, Nautilus, Newt, Snail)
     DISPLACEABLE_CRITTER_TYPES = (Plankton, Crab)
     PREDATOR_NAME = "Squid"
     REPRODUCTION_BLOCKS_SET_BEHAVIOR = True
@@ -47,7 +48,7 @@ class Squid(Critter):
         if self.hunt_nearest_prey(game, (Crab,), self.get_predator_name()):
             return
 
-        if self.hunt_nearest_prey(game, (Fish, Nautilus, Newt), self.get_predator_name()):
+        if self.hunt_nearest_prey(game, (Fish, Nautilus, Newt, Snail), self.get_predator_name()):
             return
 
         self.try_wander(game.world, game)

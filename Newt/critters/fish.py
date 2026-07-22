@@ -9,6 +9,10 @@ class Fish(Critter):
     HUNGER_INTERVAL = 40.0
     STARVATION_INTERVAL = 40.0
     FLEE_DETECTION_RADIUS = 5
+    # Keep a hungry school from searching the entire large map every time it
+    # moves.  Food farther away is reconsidered on the next decision tick.
+    HUNT_RANGE = 12
+    SCAVENGE_RANGE = 12
     HUNT_PREY_TYPES = (Plankton)
     SCAVENGE_PREY_TYPES = (Plankton, Crab)
     DISPLACEABLE_CRITTER_TYPES = (Plankton, Crab)
