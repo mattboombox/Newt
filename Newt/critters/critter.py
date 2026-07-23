@@ -75,6 +75,12 @@ class Critter:
     def set_behavior(self, behavior_name):
         self.current_behavior = behavior_name
 
+    def get_occupied_positions(self):
+        return ((self.x, self.y),)
+
+    def occupies_position(self, x, y):
+        return (x, y) in self.get_occupied_positions()
+
     def configure_hunger(self, hunger_interval, starvation_interval):
         self.hunger_interval = hunger_interval
         self.starvation_interval = starvation_interval

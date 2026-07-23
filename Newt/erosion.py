@@ -111,18 +111,30 @@ def get_erodible_tiles(world):
     return erodible
 
 
-def apply_polar_climate(world):
+def get_polar_depth(world, x, base_polar_depth=3):
+    if base_polar_depth <= 0:
+        return 0
+
+    if base_polar_depth < 1:
+        base_polar_depth = max(1, round(world.rows * base_polar_depth))
+
+    polar_depth = base_polar_depth
+    if (x % 6 == 0) or (x % 11 == 0):
+        polar_depth += 1
+    if x % 8 == 0:
+        polar_depth -= 1
+
+    return max(1, min(world.rows // 2, polar_depth))
+
+
+def apply_polar_climate(world, base_polar_depth=3):
+    if base_polar_depth <= 0:
+        return False
+
     changed = False
 
     for x in range(world.cols):
-        polar_depth = 3
-
-        if (x % 6 == 0) or (x % 11 == 0):
-            polar_depth += 1
-        if x % 8 == 0:
-            polar_depth -= 1
-
-        polar_depth = max(2, min(4, polar_depth))
+        polar_depth = get_polar_depth(world, x, base_polar_depth)
 
         # Top pole
         for y in range(polar_depth):

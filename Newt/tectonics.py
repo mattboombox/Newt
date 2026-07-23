@@ -21,6 +21,15 @@ UPLIFT_BLOCKED_TERRAINS = {
 }
 
 TRENCH_CARVABLE_TERRAINS = {"ocean", "shallows", "trench"}
+TRENCH_LAND_TERRAINS = {
+    "beach",
+    "grass",
+    "ice_sheet",
+    "mountain",
+    "sand",
+    "snow",
+    "stone",
+}
 
 
 class Volcano:
@@ -404,23 +413,81 @@ def trigger_island_uplift_event(game, start_x, start_y):
         )
 
 
-def carve_trench_tile(world, x, y):
-    tile = world.get_tile(x, y)
-    if tile is None or tile.terrain not in TRENCH_CARVABLE_TERRAINS:
+def can_carve_trench_tile(tile, allow_land=False):
+    if tile is None:
+        return False
+    if tile.terrain in TRENCH_CARVABLE_TERRAINS:
+        return True
+    return allow_land and tile.terrain in TRENCH_LAND_TERRAINS
+
+
+def carve_trench_tile(game, x, y, allow_land=False):
+    from entity_cleanup import clear_tile_occupants
+
+    tile = game.world.get_tile(x, y)
+    if not can_carve_trench_tile(tile, allow_land):
         return False
 
-    if tile.terrain == "shallows":
+    if tile.terrain == "shallows" and not allow_land:
         tile.set_terrain("ocean")
         return True
+
+    if tile.terrain not in TRENCH_CARVABLE_TERRAINS:
+        clear_tile_occupants(game, tile, "the land collapsed into a trench")
+        remove_volcano_at(game, x, y)
 
     tile.set_terrain("trench")
     return True
 
 
-def generate_trench_chain(game, start_x, start_y, length=None):
+def add_land_trench_coastline(game, trench_positions):
+    """Flood land around a new trench core, then soften its outer coast."""
+    from entity_cleanup import clear_tile_occupants
+
+    world = game.world
+    trench_positions = set(trench_positions)
+    ocean_positions = set()
+    shallow_positions = set()
+
+    for trench_x, trench_y in trench_positions:
+        for dx in range(-2, 3):
+            for dy in range(-2, 3):
+                distance = max(abs(dx), abs(dy))
+                position = (trench_x + dx, trench_y + dy)
+                if position in trench_positions:
+                    continue
+                if distance == 1:
+                    ocean_positions.add(position)
+                elif distance == 2:
+                    shallow_positions.add(position)
+
+    shallow_positions -= ocean_positions
+    for x, y in shallow_positions:
+        tile = world.get_tile(x, y)
+        if tile is None or tile.terrain not in TRENCH_LAND_TERRAINS:
+            continue
+        clear_tile_occupants(game, tile, "a new trench flooded the coast")
+        remove_volcano_at(game, x, y)
+        tile.set_terrain("shallows")
+
+    for x, y in ocean_positions:
+        tile = world.get_tile(x, y)
+        if tile is None:
+            continue
+        clear_tile_occupants(game, tile, "a new trench opened into ocean")
+        remove_volcano_at(game, x, y)
+        tile.set_terrain("ocean")
+
+    for x, y in trench_positions:
+        tile = world.get_tile(x, y)
+        if tile is not None:
+            tile.set_terrain("trench")
+
+
+def generate_trench_chain(game, start_x, start_y, length=None, allow_land=False):
     world = game.world
     start_tile = world.get_tile(start_x, start_y)
-    if start_tile is None or start_tile.terrain not in TRENCH_CARVABLE_TERRAINS:
+    if not can_carve_trench_tile(start_tile, allow_land):
         return False
 
     profile = choose_trench_profile()
@@ -433,12 +500,15 @@ def generate_trench_chain(game, start_x, start_y, length=None):
 
     main_dir_index = random.randint(0, len(DIRECTIONS) - 1)
     carved_any = False
+    trench_positions = []
 
     for _ in range(length):
-        if not carve_trench_tile(world, x, y):
+        if not carve_trench_tile(game, x, y, allow_land):
             break
 
         carved_any = True
+        if world.get_tile(x, y).terrain == "trench":
+            trench_positions.append((x, y))
 
         roll = random.random()
         if roll < 0.65:
@@ -452,7 +522,7 @@ def generate_trench_chain(game, start_x, start_y, length=None):
         next_x = x + dx
         next_y = y + dy
         next_tile = world.get_tile(next_x, next_y)
-        if next_tile is None or next_tile.terrain not in TRENCH_CARVABLE_TERRAINS:
+        if not can_carve_trench_tile(next_tile, allow_land):
             break
 
         x = next_x
@@ -462,17 +532,22 @@ def generate_trench_chain(game, start_x, start_y, length=None):
             turn = random.choice([-1, 1])
             main_dir_index = (main_dir_index + turn) % len(DIRECTIONS)
 
+    if allow_land and trench_positions:
+        add_land_trench_coastline(game, trench_positions)
+
     return carved_any
 
 
 def trigger_trench_event(game, start_x, start_y):
+    start_tile = game.world.get_tile(start_x, start_y)
+    allow_land = start_tile is not None and start_tile.terrain in TRENCH_LAND_TERRAINS
     chain_count = choose_uplift_chain_count()
     if chain_count > 1:
         print(f"Generating {chain_count} trench chains from ({start_x}, {start_y})")
 
     carved_any = False
     for _ in range(chain_count):
-        if generate_trench_chain(game, start_x, start_y):
+        if generate_trench_chain(game, start_x, start_y, allow_land=allow_land):
             carved_any = True
 
     return carved_any

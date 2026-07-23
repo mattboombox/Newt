@@ -53,7 +53,7 @@ def update_events(game, dt):
             trigger_island_uplift_event(game, start_x, start_y)
             convert_landlocked_ocean_to_lake(game.world)
 
-        if random.random() < 0.0008:
+        if getattr(game, "world_type", "Wet") == "Wet" and random.random() < 0.0008:
             x = random.randint(0, game.world.cols - 1)
             y = random.randint(0, game.world.rows - 1)
 
@@ -80,4 +80,4 @@ def update_events(game, dt):
     game.polar_timer += dt
     if game.polar_timer >= game.polar_interval:
         game.polar_timer = 0.0
-        apply_polar_climate(game.world)
+        apply_polar_climate(game.world, game.polar_depth)

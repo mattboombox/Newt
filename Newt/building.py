@@ -1,3 +1,6 @@
+import random
+
+
 class Building:
     def __init__(self, x, y, sprite=None, tags=None):
         self.x = x
@@ -26,6 +29,75 @@ class Farm(Building):
 class Harbor(Building):
     def __init__(self, x, y, sprite=None):
         super().__init__(x, y, sprite=sprite, tags={"port", "trade"})
+
+
+class CritterPrinter(Building):
+    MIN_SPAWN_INTERVAL = 8.0
+    MAX_SPAWN_INTERVAL = 16.0
+
+    def __init__(self, x, y, sprite=None):
+        super().__init__(x, y, sprite=sprite, tags={"alien", "printer"})
+        self.spawn_timer = self.get_next_spawn_interval()
+        self.printed_count = 0
+        self.last_printed_critter = None
+
+    @classmethod
+    def get_next_spawn_interval(cls):
+        return random.uniform(cls.MIN_SPAWN_INTERVAL, cls.MAX_SPAWN_INTERVAL)
+
+    def get_open_spawn_tiles(self, world):
+        candidates = []
+        origin_tile = world.get_tile(self.x, self.y)
+        if origin_tile is not None:
+            candidates.append(origin_tile)
+        candidates.extend(world.get_neighbors_all(self.x, self.y))
+        return [tile for tile in candidates if tile.critter is None]
+
+    def try_print_critter(self, game):
+        from critter import CRITTER_TYPES
+        from entity_cleanup import remove_critter
+
+        spawn_tiles = self.get_open_spawn_tiles(game.world)
+        if not spawn_tiles:
+            return False
+
+        critter_name, critter_cls = random.choice(tuple(CRITTER_TYPES.items()))
+        random.shuffle(spawn_tiles)
+
+        for spawn_tile in spawn_tiles:
+            critter = critter_cls(spawn_tile.x, spawn_tile.y)
+            # The printer deliberately ignores habitat. Base critters can
+            # cross incompatible terrain while seeking somewhere survivable.
+            critter.needs_habitat_relocation = not critter.is_habitable_tile(spawn_tile)
+            spawn_tile.critter = critter
+            game.critters.append(critter)
+
+            on_spawn = getattr(critter, "on_spawn", None)
+            if on_spawn is not None and not on_spawn(game, allow_incompatible=True):
+                remove_critter(game, critter, "the printer could not assemble its full body")
+                continue
+
+            self.printed_count += 1
+            self.last_printed_critter = critter_name
+            print(
+                f"Critter Printer at ({self.x}, {self.y}) printed "
+                f"{critter_name} {critter.id} on {spawn_tile.terrain}."
+            )
+            return True
+
+        return False
+
+    def update(self, game, dt):
+        tile = game.world.get_tile(self.x, self.y)
+        if tile is None or tile.building is not self:
+            return
+
+        self.spawn_timer -= dt
+        if self.spawn_timer > 0:
+            return
+
+        self.try_print_critter(game)
+        self.spawn_timer = self.get_next_spawn_interval()
 
 
 class WolfDen(Building):

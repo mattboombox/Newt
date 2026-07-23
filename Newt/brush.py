@@ -55,7 +55,7 @@ def trigger_event_tool(game, center_tile, event_name):
 
     if event_name == "trench_event":
         if not trigger_trench_event(game, center_tile.x, center_tile.y):
-            print("Trench event requires open ocean.")
+            print("Trench event could not carve this terrain.")
             return False
         return True
 

@@ -1,7 +1,6 @@
 import pygame
-from building import SpiderWeb, WolfDen
+from building import CritterPrinter, SpiderWeb, WolfDen
 from city import City
-from config import HUD_HEIGHT
 from terrain import TERRAIN_DATA
 
 
@@ -42,10 +41,19 @@ def draw_hud(screen, game, background_color):
 
         if tile.critter is not None:
             fields.append(f"Critter: {type(tile.critter).__name__} ID {tile.critter.id}")
-            fields.append(
-                f"Behavior: {format_tool_name(tile.critter.current_behavior)} "
-                f"(Meals: {tile.critter.meals_eaten}/{tile.critter.REPRODUCTION_MEAL_THRESHOLD})"
-            )
+            if hasattr(tile.critter, "body_positions"):
+                fields.append(
+                    f"Behavior: {format_tool_name(tile.critter.current_behavior)} "
+                    f"(Length: {len(tile.critter.body_positions)}/{tile.critter.MAX_LENGTH}, "
+                    f"Growth: {tile.critter.tiles_since_growth}/"
+                    f"{tile.critter.TILES_PER_GROWTH})"
+                )
+            else:
+                fields.append(
+                    f"Behavior: {format_tool_name(tile.critter.current_behavior)} "
+                    f"(Meals: {tile.critter.meals_eaten}/"
+                    f"{tile.critter.REPRODUCTION_MEAL_THRESHOLD})"
+                )
 
         if tile.building is not None:
             if isinstance(tile.building, City):
@@ -57,18 +65,42 @@ def draw_hud(screen, game, background_color):
                 )
             elif isinstance(tile.building, SpiderWeb):
                 fields.append(f"Building: Spider Web ({tile.building.charges} stored prey)")
+            elif isinstance(tile.building, CritterPrinter):
+                last_printed = tile.building.last_printed_critter or "nothing yet"
+                fields.append(
+                    f"Building: Critter Printer "
+                    f"({tile.building.printed_count} printed, last: "
+                    f"{format_tool_name(last_printed)})"
+                )
             else:
                 fields.append(f"Building: {type(tile.building).__name__}")
     else:
         fields.append("Tile: none")
 
-    hud_text = " | ".join(fields)
+    max_text_width = screen.get_width() - 12
+    lines = []
+    current_line = ""
+    for field in fields:
+        candidate = f"{current_line} | {field}" if current_line else field
+        if not current_line or font.size(candidate)[0] <= max_text_width:
+            current_line = candidate
+        else:
+            lines.append(current_line)
+            current_line = field
+    if current_line:
+        lines.append(current_line)
 
-    hud_rect = pygame.Rect(0, screen.get_height() - HUD_HEIGHT, screen.get_width(), HUD_HEIGHT)
-
+    hud_rect = pygame.Rect(
+        0,
+        screen.get_height() - game.bottom_panel_height,
+        screen.get_width(),
+        game.bottom_panel_height,
+    )
     pygame.draw.rect(screen, (0, 0, 0), hud_rect)
-    text_surface = font.render(hud_text, True, (220, 220, 220))
-    screen.blit(text_surface, (6, hud_rect.y + 2))
+    line_height = font.get_linesize()
+    for index, line in enumerate(lines):
+        text_surface = font.render(line, True, (220, 220, 220))
+        screen.blit(text_surface, (6, hud_rect.y + 2 + index * line_height))
 
 
 def draw_critter(screen, critter, tile_size, sprites):
@@ -80,13 +112,18 @@ def draw_critter(screen, critter, tile_size, sprites):
         screen.blit(sprite, (critter.x * tile_size, critter.y * tile_size))
     else:
         inset = max(2, tile_size // 4)
-        rect = pygame.Rect(
-            critter.x * tile_size + inset,
-            critter.y * tile_size + inset,
-            tile_size - inset * 2,
-            tile_size - inset * 2
-        )
-        pygame.draw.rect(screen, critter.color, rect)
+        positions = critter.get_occupied_positions()
+        for index, (x, y) in enumerate(positions):
+            color = critter.color if index == 0 else tuple(
+                max(0, channel - 25) for channel in critter.color
+            )
+            rect = pygame.Rect(
+                x * tile_size + inset,
+                y * tile_size + inset,
+                tile_size - inset * 2,
+                tile_size - inset * 2,
+            )
+            pygame.draw.rect(screen, color, rect)
 
 
 def draw_building(screen, building, tile_size):
@@ -114,6 +151,9 @@ def draw_building(screen, building, tile_size):
             max(1, tile_size // 3),
             1,
         )
+    elif isinstance(building, CritterPrinter):
+        text_surface = font.render("P", True, (150, 255, 210))
+        screen.blit(text_surface, (building.x * tile_size + 1, building.y * tile_size + 1))
 
 
 def draw_tsunami_wave(screen, x, y, tile_size):

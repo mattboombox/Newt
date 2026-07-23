@@ -13,6 +13,7 @@ from .mega_spider import MegaSpider
 from .nautilus import Nautilus
 from .newt import Newt
 from .plankton import Plankton
+from .sand_worm import SandWorm
 from .snail import Snail
 from .sperm_whale import SpermWhale
 from .squid import Squid
@@ -43,6 +44,7 @@ CRITTER_TYPES = {
     "nautilus": Nautilus,
     "newt": Newt,
     "plankton": Plankton,
+    "sand_worm": SandWorm,
     "sea_scorpion": SeaScorpion,
     "snail": Snail,
     "sperm_whale": SpermWhale,
@@ -71,6 +73,7 @@ __all__ = [
     "Newt",
     "NON_ARCTIC_LAND_TERRAINS",
     "Plankton",
+    "SandWorm",
     "SeaScorpion",
     "Snail",
     "SpermWhale",

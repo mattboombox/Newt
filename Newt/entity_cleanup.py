@@ -12,9 +12,15 @@ def remove_critter(game, critter, reason):
     if hasattr(critter, "clear_home_building"):
         critter.clear_home_building()
 
-    tile = game.world.get_tile(critter.x, critter.y)
-    if tile is not None and tile.critter is critter:
-        tile.critter = None
+    occupied_positions = getattr(
+        critter,
+        "get_occupied_positions",
+        lambda: ((critter.x, critter.y),),
+    )()
+    for x, y in occupied_positions:
+        tile = game.world.get_tile(x, y)
+        if tile is not None and tile.critter is critter:
+            tile.critter = None
 
     if critter in game.critters:
         game.critters.remove(critter)
@@ -65,7 +71,12 @@ def clear_stale_tile_critters(game):
             if critter is None:
                 continue
 
-            if critter not in active_critters or critter.x != x or critter.y != y:
+            occupies_position = getattr(
+                critter,
+                "occupies_position",
+                lambda tx, ty: critter.x == tx and critter.y == ty,
+            )
+            if critter not in active_critters or not occupies_position(x, y):
                 tile.critter = None
 
 
