@@ -3,12 +3,13 @@ from .critter import AMPHIBIOUS_LAND_TERRAINS, Critter
 
 
 class Newt(Critter):
-    ALLOWED_TERRAINS = AMPHIBIOUS_LAND_TERRAINS
+    ALLOWED_TERRAINS = AMPHIBIOUS_LAND_TERRAINS - {"shallows"}
     FEED_TERRAINS = {"lake"}
     HUNGER_INTERVAL = 24.0
     STARVATION_INTERVAL = 28.0
     MOVE_COOLDOWN = 0.64
     DISPLACEABLE_CRITTER_TYPES = (Crab,)
+    REPRODUCTION_MEAL_THRESHOLD = 3
 
     def __init__(self, x, y):
         super().__init__(

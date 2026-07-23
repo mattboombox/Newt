@@ -9,7 +9,7 @@ from entity_cleanup import remove_critter
 
 TOOL_MODE_ORDER = ["terrain", "critter", "building", "event"]
 BUILDING_ORDER = ["village", "wolf_den"]
-EVENT_TOOL_ORDER = ["meteor", "mega_meteor", "comet", "tsunami", "tectonic_uplift", "trench_event", "evolve"]
+EVENT_TOOL_ORDER = ["meteor", "mega_meteor", "comet", "tsunami", "tectonic_uplift", "island_uplift", "trench_event", "evolve"]
 EVENT_ONLY_TERRAINS = {"meteor", "comet", "tectonic_uplift", "tsunami"}
 TERRAIN_BRUSH_ORDER = [
     terrain_name

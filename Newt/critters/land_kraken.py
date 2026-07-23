@@ -7,7 +7,7 @@ class LandKraken(Critter):
     """A denless land predator descended from squid."""
 
     ALLOWED_TERRAINS = NON_ARCTIC_LAND_TERRAINS | {"shallows"}
-    REPRODUCTION_MEAL_THRESHOLD = 5
+    REPRODUCTION_MEAL_THRESHOLD = 10
     HUNGER_INTERVAL = 260.0
     STARVATION_INTERVAL = 120.0
     HUNT_RANGE = 8
@@ -23,7 +23,7 @@ class LandKraken(Critter):
             y,
             color=(105, 80, 125),
             allowed_terrains=LandKraken.ALLOWED_TERRAINS,
-            move_cooldown=0.32,
+            move_cooldown=0.40,
             sprite="land_kraken",
         )
         self.configure_hunger(LandKraken.HUNGER_INTERVAL, LandKraken.STARVATION_INTERVAL)

@@ -11,7 +11,6 @@ from config import (
     DEFAULT_PAINT_TERRAIN,
     EROSION_INTERVAL,
     EVOLUTION_CHANCE,
-    EVOLUTION_INTERVAL,
     HUD_HEIGHT,
     IMPACT_CHANCE,
     IMPACT_INTERVAL,
@@ -31,7 +30,7 @@ from config import (
     WINDOW_WIDTH,
 )
 from critter import CRITTER_ORDER
-from entity_cleanup import remove_stranded_critters
+from entity_cleanup import clear_stale_tile_critters, remove_stranded_critters
 from events import update_events
 from input import apply_active_tool, handle_input
 from render import render
@@ -92,8 +91,6 @@ class Game:
         self.life_timer = 0.0
         self.life_interval = LIFE_INTERVAL
 
-        self.evolution_timer = 0.0
-        self.evolution_interval = EVOLUTION_INTERVAL
         self.evolution_chance = EVOLUTION_CHANCE
 
         self.impact_timer = 0.0
@@ -127,6 +124,11 @@ def update_buildings(game, dt):
 def update(game, dt):
     mx, my = pygame.mouse.get_pos()
     game.hovered_tile = game.world.get_tile_at_pixel(mx, my, game.tile_size)
+
+    # A tile's occupant is the authority movement and the HUD consult.  Keep
+    # it synchronized with the active critter list so an already-removed
+    # critter cannot become an invisible, permanent movement blocker.
+    clear_stale_tile_critters(game)
 
     if game.paused:
         return

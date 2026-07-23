@@ -1,10 +1,9 @@
 from erosion import trigger_random_erosion, apply_polar_climate
 from entity_cleanup import clear_tile_occupants
-from evolution import trigger_random_evolution
 from life import trigger_random_growth, trigger_random_plankton_growth
 from impact import trigger_impact_event
 from lake import convert_landlocked_ocean_to_lake
-from tectonics import spawn_dormant_volcano, trigger_trench_event, trigger_uplift_event
+from tectonics import spawn_dormant_volcano, trigger_island_uplift_event, trigger_trench_event, trigger_uplift_event
 from tsunami import Tsunami
 import random
 
@@ -22,11 +21,6 @@ def update_events(game, dt):
         spawned_plankton = trigger_random_plankton_growth(game.world)
         if spawned_plankton is not None:
             game.critters.append(spawned_plankton)
-
-    game.evolution_timer += dt
-    while game.evolution_timer >= game.evolution_interval:
-        game.evolution_timer -= game.evolution_interval
-        trigger_random_evolution(game)
 
     game.impact_timer += dt
     if game.impact_timer >= game.impact_interval:
@@ -51,6 +45,12 @@ def update_events(game, dt):
             start_x = random.randint(0, game.world.cols - 1)
             start_y = random.randint(0, game.world.rows - 1)
             trigger_uplift_event(game, start_x, start_y)
+            convert_landlocked_ocean_to_lake(game.world)
+
+        if random.random() < 0.0005:
+            start_x = random.randint(0, game.world.cols - 1)
+            start_y = random.randint(0, game.world.rows - 1)
+            trigger_island_uplift_event(game, start_x, start_y)
             convert_landlocked_ocean_to_lake(game.world)
 
         if random.random() < 0.0008:

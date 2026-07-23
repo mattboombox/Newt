@@ -9,6 +9,7 @@ from .deer import Deer
 from .fish import Fish
 from .giga_slug import GigaSlug
 from .land_kraken import LandKraken
+from .mega_spider import MegaSpider
 from .nautilus import Nautilus
 from .newt import Newt
 from .plankton import Plankton
@@ -16,7 +17,9 @@ from .snail import Snail
 from .sperm_whale import SpermWhale
 from .squid import Squid
 from .squid_egg import SquidEgg
+from .sea_scorpion import SeaScorpion
 from .therapsid import Therapsid
+from .trilobite import Trilobite
 from .whale import Whale
 from .wolf import Wolf
 
@@ -36,13 +39,16 @@ CRITTER_TYPES = {
     "fish": Fish,
     "giga_slug": GigaSlug,
     "land_kraken": LandKraken,
+    "mega_spider": MegaSpider,
     "nautilus": Nautilus,
     "newt": Newt,
     "plankton": Plankton,
+    "sea_scorpion": SeaScorpion,
     "snail": Snail,
     "sperm_whale": SpermWhale,
     "squid": Squid,
     "therapsid": Therapsid,
+    "trilobite": Trilobite,
     "whale": Whale,
     "wolf": Wolf,
 }
@@ -60,15 +66,18 @@ __all__ = [
     "Fish",
     "GigaSlug",
     "LandKraken",
+    "MegaSpider",
     "Nautilus",
     "Newt",
     "NON_ARCTIC_LAND_TERRAINS",
     "Plankton",
+    "SeaScorpion",
     "Snail",
     "SpermWhale",
     "Squid",
     "SquidEgg",
     "Therapsid",
+    "Trilobite",
     "Whale",
     "Wolf",
 ]

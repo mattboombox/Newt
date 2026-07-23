@@ -55,12 +55,15 @@ class Wolf(Critter):
         return self.carrying_den_charge or self.current_behavior == "return_home"
 
     def can_displace_critter(self, critter):
-        if isinstance(critter, Deer):
-            return self.is_returning_home()
+        if self.is_returning_home():
+            return True
 
         return super().can_displace_critter(critter)
 
     def should_remove_on_failed_displacement(self, critter):
+        if self.is_returning_home():
+            return True
+
         if isinstance(critter, Deer):
             return False
 
@@ -71,7 +74,6 @@ class Wolf(Critter):
             self.is_returning_home()
             and tile is not None
             and tile.critter is not None
-            and isinstance(tile.critter, Deer)
             and self.is_habitable_tile(tile)
         ):
             return True

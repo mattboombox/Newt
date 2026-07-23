@@ -5,7 +5,7 @@ from .plankton import Plankton
 
 class Fish(Critter):
     ALLOWED_TERRAINS = {"ocean", "shallows", "lake"}
-    REPRODUCTION_MEAL_THRESHOLD = 3
+    REPRODUCTION_MEAL_THRESHOLD = 2
     HUNGER_INTERVAL = 40.0
     STARVATION_INTERVAL = 40.0
     FLEE_DETECTION_RADIUS = 5
@@ -30,8 +30,16 @@ class Fish(Critter):
 
     def get_flee_predator_types(self):
         from .squid import Squid
+        from .sea_scorpion import SeaScorpion
 
-        return (Squid,)
+        return (Squid, SeaScorpion)
+
+    def get_hunt_prey_types(self):
+
+        return (Plankton, Crab,)
+
+    def get_scavenge_prey_types(self):
+        return self.get_hunt_prey_types()
 
     def spawn_death_remains(self, game, tile):
         return self.try_spawn_plankton_remains(game, tile)

@@ -75,6 +75,12 @@ def remove_stranded_critters(game):
         if critter.is_habitable_tile(tile):
             continue
 
+        if getattr(critter, "needs_habitat_relocation", False):
+            continue
+
+        if tile is not None and tile.terrain == "shallows":
+            continue
+
         terrain_name = "missing terrain" if tile is None else tile.terrain
         remove_critter(
             game,

@@ -101,3 +101,70 @@ class WolfDen(Building):
 
         if self.charges <= 0 and not self.resident_wolf_ids:
             remove_building_at_tile(game, tile, "it had no wolves and no stored charges left")
+
+
+class SpiderWeb(Building):
+    def __init__(self, x, y, world=None, charges=0):
+        super().__init__(x, y, tags={"web", "spider"})
+        self.world = world
+        self.charges = charges
+        self.resident_spider_ids = set()
+
+    @staticmethod
+    def can_place_on_tile(tile):
+        return tile is not None and tile.has_tag("land") and tile.terrain != "beach"
+
+    def add_resident(self, critter):
+        self.resident_spider_ids.add(critter.id)
+
+    def remove_resident(self, critter):
+        self.resident_spider_ids.discard(critter.id)
+        if self.resident_spider_ids or self.world is None:
+            return
+
+        tile = self.world.get_tile(self.x, self.y)
+        if tile is None or tile.building is not self:
+            return
+
+        if tile.critter is not None and getattr(tile.critter, "trapped_by_web", None) is self:
+            tile.critter.trapped_by_web = None
+        tile.building = None
+
+    def trap_critter(self, critter):
+        if critter.id in self.resident_spider_ids or getattr(critter, "home_building", None) is self:
+            return
+
+        critter.trapped_by_web = self
+        critter.set_behavior("trapped")
+
+    def has_trapped_prey(self, world):
+        tile = world.get_tile(self.x, self.y)
+        return (
+            tile is not None
+            and tile.critter is not None
+            and getattr(tile.critter, "trapped_by_web", None) is self
+        )
+
+    def consume_trapped_prey(self, game, spider):
+        from entity_cleanup import remove_critter
+
+        tile = game.world.get_tile(self.x, self.y)
+        prey = None if tile is None else tile.critter
+        if prey is None or getattr(prey, "trapped_by_web", None) is not self:
+            return False
+
+        remove_critter(game, prey, f"it was caught in a web by Mega Spider {spider.id}")
+        if spider.is_hungry:
+            spider.handle_successful_meal(game)
+        else:
+            self.charges += 1
+            spider.set_behavior("store_food")
+        return True
+
+    def on_removed(self, game):
+        for critter in game.critters:
+            if getattr(critter, "home_building", None) is self:
+                critter.home_building = None
+            if getattr(critter, "trapped_by_web", None) is self:
+                critter.trapped_by_web = None
+        self.resident_spider_ids.clear()

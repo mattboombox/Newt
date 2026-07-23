@@ -29,4 +29,4 @@
 
 - Terrain mode includes direct trench tile painting.
 - Building mode currently places villages.
-- Event mode includes `meteor`, `mega meteor`, `comet`, `tsunami`, `tectonic uplift`, and `trench event`.
+- Event mode includes `meteor`, `mega meteor`, `comet`, `tsunami`, `tectonic uplift`, `island uplift`, and `trench event`.

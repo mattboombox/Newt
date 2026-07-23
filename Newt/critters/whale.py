@@ -8,6 +8,8 @@ class Whale(Critter):
     REPRODUCTION_MEAL_THRESHOLD = 15
     HUNGER_INTERVAL = 18.0
     STARVATION_INTERVAL = 90.0
+    # Sonar gives whales a much longer—but still finite—prey search range.
+    HUNT_RANGE = 24
     HUNT_PREY_TYPES = (Plankton,)
     DISPLACEABLE_CRITTER_TYPES = (Plankton, Crab)
     DISPLACEMENT_MEAL_TYPES = (Plankton,)

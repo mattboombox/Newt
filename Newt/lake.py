@@ -2,6 +2,9 @@ import random
 from collections import deque
 
 
+MAX_FLOOD_FILL_LAKE_TILES = 15
+
+
 def try_spawn_lake_from_mountain(world, mountain_tile):
     # Define the range once. Range(2, 5) covers distances 2, 3, and 4.
     # We use a set for faster lookup of blocked terrains.
@@ -32,7 +35,7 @@ def try_spawn_lake_from_mountain(world, mountain_tile):
     return True
 
 
-def convert_landlocked_ocean_to_lake(world):
+def convert_landlocked_ocean_to_lake(world, max_lake_tiles=MAX_FLOOD_FILL_LAKE_TILES):
     visited = set()
     queue = deque()
 
@@ -57,17 +60,40 @@ def convert_landlocked_ocean_to_lake(world):
                     visited.add(pos)
                     queue.append(pos)
 
-    # Any water not connected to edge water becomes lake
+    # Convert only small enclosed bodies.  Larger bodies remain oceanic so a
+    # single flood fill cannot create a huge lake habitat.
     changed = False
     for x in range(world.cols):
         for y in range(world.rows):
-            tile = world.get_tile(x, y)
-            if tile is None:
+            start_tile = world.get_tile(x, y)
+            start_pos = (x, y)
+            if (
+                start_tile is None
+                or start_tile.terrain not in water_terrain
+                or start_pos in visited
+            ):
                 continue
 
-            if tile.terrain in water_terrain and (x, y) not in visited:
-                tile.set_terrain("lake")
-                changed = True
+            component = []
+            component_queue = deque([start_pos])
+            visited.add(start_pos)
+
+            while component_queue:
+                current_x, current_y = component_queue.popleft()
+                component.append((current_x, current_y))
+
+                for neighbor in world.get_neighbors_all(current_x, current_y):
+                    pos = (neighbor.x, neighbor.y)
+                    if neighbor.terrain in water_terrain and pos not in visited:
+                        visited.add(pos)
+                        component_queue.append(pos)
+
+            if len(component) > max_lake_tiles:
+                continue
+
+            for lake_x, lake_y in component:
+                world.get_tile(lake_x, lake_y).set_terrain("lake")
+            changed = True
 
     return changed
 

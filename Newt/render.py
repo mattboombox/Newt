@@ -1,5 +1,5 @@
 import pygame
-from building import WolfDen
+from building import SpiderWeb, WolfDen
 from city import City
 from config import HUD_HEIGHT
 from terrain import TERRAIN_DATA
@@ -55,6 +55,8 @@ def draw_hud(screen, game, background_color):
                     f"Building: Wolf Den ({tile.building.charges} charges, "
                     f"{len(tile.building.resident_wolf_ids)} wolves)"
                 )
+            elif isinstance(tile.building, SpiderWeb):
+                fields.append(f"Building: Spider Web ({tile.building.charges} stored prey)")
             else:
                 fields.append(f"Building: {type(tile.building).__name__}")
     else:
@@ -104,6 +106,14 @@ def draw_building(screen, building, tile_size):
     elif isinstance(building, WolfDen):
         text_surface = font.render("W", True, (255, 255, 255))
         screen.blit(text_surface, (building.x * tile_size + 1, building.y * tile_size + 1))
+    elif isinstance(building, SpiderWeb):
+        pygame.draw.circle(
+            screen,
+            (230, 230, 230),
+            (building.x * tile_size + tile_size // 2, building.y * tile_size + tile_size // 2),
+            max(1, tile_size // 3),
+            1,
+        )
 
 
 def draw_tsunami_wave(screen, x, y, tile_size):

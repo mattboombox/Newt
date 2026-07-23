@@ -1,6 +1,6 @@
 import random
 
-from critter import Crab, Deer, Fish, GigaSlug, LandKraken, Nautilus, Newt, Plankton, Snail, SpermWhale, Squid, Therapsid, Whale, Wolf
+from critter import Crab, Deer, Fish, GigaSlug, LandKraken, MegaSpider, Nautilus, Newt, Plankton, SeaScorpion, Snail, SpermWhale, Squid, Therapsid, Trilobite, Whale, Wolf
 
 EVOLUTION_TREE = {
     Plankton: (
@@ -9,7 +9,7 @@ EVOLUTION_TREE = {
             "weight": 1.0,
         },
         {
-            "result_type": Crab,
+            "result_type": Trilobite,
             "weight": 1.0,
         },
         {
@@ -21,19 +21,32 @@ EVOLUTION_TREE = {
         {
             "result_type": Newt,
             "weight": 1.0,
-            "terrain": "shallows",
+        },
+    ),
+    Trilobite: (
+        {
+            "result_type": Crab,
+            "weight": 1.0,
+        },
+        {
+            "result_type": SeaScorpion,
+            "weight": 1.0,
+        },
+    ),
+    SeaScorpion: (
+        {
+            "result_type": MegaSpider,
+            "weight": 1.0,
         },
     ),
     Nautilus: (
         {
             "result_type": Snail,
             "weight": 1.0,
-            "terrain": "shallows",
         },
         {
             "result_type": Squid,
             "weight": 1.0,
-            "terrains": {"ocean", "trench"},
         },
     ),
     Newt: (
@@ -46,14 +59,12 @@ EVOLUTION_TREE = {
         {
             "result_type": GigaSlug,
             "weight": 1.0,
-            "terrain": "shallows",
         },
     ),
     Squid: (
         {
             "result_type": LandKraken,
             "weight": 1.0,
-            "terrain": "shallows",
         },
     ),
     Therapsid: (
@@ -68,7 +79,6 @@ EVOLUTION_TREE = {
         {
             "result_type": SpermWhale,
             "weight": 1.0,
-            "terrain": "shallows",
         },
     ),
     SpermWhale: (
@@ -80,27 +90,14 @@ EVOLUTION_TREE = {
 }
 
 
-def option_allows_tile(option, tile):
-    if tile is None:
-        return False
-
-    terrain = option.get("terrain")
-    if terrain is not None:
-        return tile.terrain == terrain
-
-    terrains = option.get("terrains")
-    if terrains is not None:
-        return tile.terrain in terrains
-
-    return tile.terrain in option["result_type"].ALLOWED_TERRAINS
-
-
-def get_evolution_options(critter, tile):
+def get_evolution_options(critter):
     for source_type, options in EVOLUTION_TREE.items():
-        if not isinstance(critter, source_type):
+        # Evolution steps are exact species transitions: a source can only
+        # use its own entry, never an entry inherited through a superclass.
+        if type(critter) is not source_type:
             continue
 
-        return [option for option in options if option_allows_tile(option, tile)]
+        return options
 
     return []
 
@@ -118,60 +115,27 @@ def choose_evolution_option(options):
     return options[-1]
 
 
-def replace_critter(game, old_critter, new_critter, tile):
-    tile.critter = new_critter
-
-    try:
-        index = game.critters.index(old_critter)
-    except ValueError:
-        game.critters.append(new_critter)
-        return new_critter
-
-    game.critters[index] = new_critter
-    return new_critter
-
-
-def evolve_critter(game, critter, tile=None):
-    if critter is None or critter.current_behavior == "dying":
-        return None
-
-    if tile is None:
-        tile = game.world.get_tile(critter.x, critter.y)
-
-    if tile is None or tile.critter is not critter:
-        return None
-
-    options = get_evolution_options(critter, tile)
+def create_evolved_offspring(parent, x, y):
+    """Create a mutation of a parent's offspring, regardless of its birthplace."""
+    options = get_evolution_options(parent)
     if not options:
         return None
 
     evolution_option = choose_evolution_option(options)
-    evolved_critter = evolution_option["result_type"](critter.x, critter.y)
-    return replace_critter(game, critter, evolved_critter, tile)
+    offspring = evolution_option["result_type"](x, y)
+    offspring.needs_habitat_relocation = True
+    return offspring
 
 
-def get_evolution_candidates(game):
-    candidates = []
-
-    for critter in game.critters:
-        if critter.current_behavior == "dying":
-            continue
-
-        tile = game.world.get_tile(critter.x, critter.y)
-        if tile is None or tile.critter is not critter:
-            continue
-
-        options = get_evolution_options(critter, tile)
-        if options:
-            candidates.append((critter, tile, options))
-
-    return candidates
-
-
-def trigger_random_evolution(game):
-    candidates = get_evolution_candidates(game)
-    if not candidates or random.random() >= game.evolution_chance:
+def replace_with_evolved_offspring(parent, offspring, world):
+    """Replace a just-spawned offspring with its parent's evolved descendant."""
+    evolved_offspring = create_evolved_offspring(parent, offspring.x, offspring.y)
+    if evolved_offspring is None:
         return None
 
-    critter, tile, options = random.choice(candidates)
-    return evolve_critter(game, critter, tile)
+    tile = world.get_tile(offspring.x, offspring.y)
+    if tile is None or tile.critter is not offspring:
+        return None
+
+    tile.critter = evolved_offspring
+    return evolved_offspring

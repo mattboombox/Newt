@@ -24,8 +24,11 @@ class Critter:
     DYING_INTERVAL = 12.0
     REPRODUCTION_MEAL_THRESHOLD = 5
     FLEE_DETECTION_RADIUS = 0
-    HUNT_RANGE = None
+    # Finite by default so new predator species cannot accidentally scan the
+    # whole map.  Whales explicitly override this for global prey searches.
+    HUNT_RANGE = 12
     SCAVENGE_RANGE = None
+    FORAGE_RANGE = 12
     HUNT_PREY_TYPES = ()
     SCAVENGE_PREY_TYPES = ()
     DISPLACEABLE_CRITTER_TYPES = ()
@@ -63,6 +66,8 @@ class Critter:
         self.is_hungry = False
         self.meals_eaten = 0
         self.home_building = None
+        self.needs_habitat_relocation = False
+        self.trapped_by_web = None
 
         self.allowed_terrains = allowed_terrains
         self.required_tags = required_tags or set()
@@ -115,6 +120,13 @@ class Critter:
         if offspring is None:
             return None
 
+        if random.random() < game.evolution_chance:
+            from evolution import replace_with_evolved_offspring
+
+            evolved_offspring = replace_with_evolved_offspring(self, offspring, game.world)
+            if evolved_offspring is not None:
+                offspring = evolved_offspring
+
         game.critters.append(offspring)
         self.meals_eaten = 0
         return offspring
@@ -130,6 +142,13 @@ class Critter:
             self.update_dying(game, dt)
             return
 
+        if self.trapped_by_web is not None:
+            tile = game.world.get_tile(self.x, self.y)
+            if tile is not None and tile.building is self.trapped_by_web and tile.critter is self:
+                self.set_behavior("trapped")
+                return
+            self.trapped_by_web = None
+
         if not self.update_hunger(game, dt):
             return
 
@@ -138,6 +157,18 @@ class Critter:
             return
 
         self.move_timer = 0.0
+        current_tile = game.world.get_tile(self.x, self.y)
+        if (
+            not self.is_habitable_tile(current_tile)
+            and (
+                self.needs_habitat_relocation
+                or (current_tile is not None and current_tile.terrain == "shallows")
+            )
+        ):
+            self.try_relocate_to_habitat(game)
+            return
+
+        self.needs_habitat_relocation = False
         if self.try_flee_from_predators(game.world, game):
             return
 
@@ -249,6 +280,11 @@ class Critter:
         return True
 
     def can_displace_critter(self, critter):
+        from .trilobite import Trilobite
+
+        if isinstance(critter, Trilobite):
+            return True
+
         displaceable_types = self.DISPLACEABLE_CRITTER_TYPES
         if not displaceable_types:
             return False
@@ -309,6 +345,9 @@ class Critter:
             return None
 
         return hunt_range * 3
+
+    def get_forage_range(self):
+        return self.FORAGE_RANGE
 
     def get_reproduction_blocking_types(self):
         return ()
@@ -463,7 +502,15 @@ class Critter:
         if tile.critter is not None and not self.can_displace_critter(tile.critter):
             return False
 
-        return self.is_habitable_tile(tile)
+        # Shallows are universal transit terrain.  Species that cannot live
+        # there are forced to seek valid habitat on their next update.
+        # Evolved offspring may also cross other incompatible terrain while
+        # seeking their first valid habitat.
+        return (
+            self.needs_habitat_relocation
+            or tile.terrain == "shallows"
+            or self.is_habitable_tile(tile)
+        )
 
     def can_path_through_tile(self, tile):
         return self.can_enter_tile(tile)
@@ -492,6 +539,8 @@ class Critter:
         self.x = nx
         self.y = ny
         tile.critter = self
+        if tile.building is not None and hasattr(tile.building, "trap_critter"):
+            tile.building.trap_critter(self)
         return True
 
     def try_wander(self, world, game=None):
@@ -507,6 +556,19 @@ class Critter:
             if self.can_enter_tile(tile):
                 self.move_to(world, nx, ny, game)
                 return
+
+    def try_relocate_to_habitat(self, game):
+        path = self.find_path_to_nearest_tile(
+            game.world,
+            self.is_habitable_tile,
+        )
+        if not path:
+            self.set_behavior("seek_habitat")
+            return False
+
+        self.set_behavior("seek_habitat")
+        next_x, next_y = path[0]
+        return self.move_to(game.world, next_x, next_y, game)
 
     def try_spawn_adjacent_offspring(self, world, tile_predicate=None):
         directions = CARDINAL_DIRECTIONS[:]
@@ -658,7 +720,12 @@ class Critter:
             if max_search_distance is not None and distance >= max_search_distance:
                 continue
 
-            for nx, ny in self.get_neighbor_positions(world, x, y):
+            for dx, dy in CARDINAL_DIRECTIONS:
+                nx = (x + dx) % world.cols
+                ny = y + dy
+                if ny < 0 or ny >= world.rows:
+                    continue
+
                 next_pos = (nx, ny)
                 if next_pos in came_from:
                     continue
@@ -677,13 +744,24 @@ class Critter:
 
         return None
 
-    def forage_nearest_tile(self, game, current_tile_predicate, path_target_predicate, seek_behavior, on_feed):
+    def forage_nearest_tile(
+        self,
+        game,
+        current_tile_predicate,
+        path_target_predicate,
+        seek_behavior,
+        on_feed,
+    ):
         current_tile = game.world.get_tile(self.x, self.y)
         if current_tile is not None and current_tile_predicate(current_tile):
             on_feed(current_tile)
             return True
 
-        path = self.find_path_to_nearest_tile(game.world, path_target_predicate)
+        path = self.find_path_to_nearest_tile(
+            game.world,
+            path_target_predicate,
+            max_search_distance=self.get_forage_range(),
+        )
         if not path:
             self.set_behavior("hungry")
             return False
@@ -719,6 +797,7 @@ class Critter:
             game.world,
             lambda tile: (
                 tile.critter is not None
+                and tile.critter is not self
                 and isinstance(tile.critter, prey_types)
                 and self.is_habitable_tile(tile)
             ),

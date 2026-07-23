@@ -4,11 +4,12 @@ from .critter import AMPHIBIOUS_LAND_TERRAINS, Critter
 class Snail(Critter):
     """A lake-feeding mollusk descended from nautilus in shallow water."""
 
-    ALLOWED_TERRAINS = AMPHIBIOUS_LAND_TERRAINS
+    ALLOWED_TERRAINS = AMPHIBIOUS_LAND_TERRAINS - {"shallows"}
     FEED_TERRAINS = {"lake"}
     HUNGER_INTERVAL = 28.0
     STARVATION_INTERVAL = 32.0
     MOVE_COOLDOWN = 0.56
+    REPRODUCTION_MEAL_THRESHOLD = 3
 
     def __init__(self, x, y):
         super().__init__(

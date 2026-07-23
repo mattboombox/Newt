@@ -7,18 +7,19 @@ from .nautilus import Nautilus
 from .newt import Newt
 from .plankton import Plankton
 from .snail import Snail
+from .trilobite import Trilobite
 
 
 class Squid(Critter):
     ALLOWED_TERRAINS = {"ocean", "trench", "shallows", "lake"}
-    REPRODUCTION_MEAL_THRESHOLD = 8
+    REPRODUCTION_MEAL_THRESHOLD = 6
     HUNGER_INTERVAL = 200.0
     STARVATION_INTERVAL = 120.0
     MOVE_COOLDOWN = 0.48
     HUNT_RANGE = 8
-    HUNT_PREY_TYPES = (Fish, Crab, Nautilus, Newt, Snail)
-    SCAVENGE_PREY_TYPES = (Fish, Crab, Nautilus, Newt, Snail)
-    DISPLACEABLE_CRITTER_TYPES = (Plankton, Crab)
+    HUNT_PREY_TYPES = (Fish, Crab, Nautilus, Trilobite)
+    SCAVENGE_PREY_TYPES = (Fish, Crab, Nautilus, Trilobite)
+    DISPLACEABLE_CRITTER_TYPES = (Plankton, Crab, Trilobite)
     PREDATOR_NAME = "Squid"
     REPRODUCTION_BLOCKS_SET_BEHAVIOR = True
     REPRODUCTION_BLOCKS_RESET_MEALS = True
@@ -45,10 +46,7 @@ class Squid(Critter):
         return self.get_hunt_range()
 
     def take_hungry_action(self, game):
-        if self.hunt_nearest_prey(game, (Crab,), self.get_predator_name()):
-            return
-
-        if self.hunt_nearest_prey(game, (Fish, Nautilus, Newt, Snail), self.get_predator_name()):
+        if self.hunt_nearest_prey(game, (Fish, Nautilus, Trilobite), self.get_predator_name()):
             return
 
         self.try_wander(game.world, game)

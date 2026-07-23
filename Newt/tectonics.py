@@ -255,19 +255,19 @@ def choose_trench_profile():
     }
 
 
-def raise_uplift_spine_tile(game, x, y):
+def raise_uplift_spine_tile(game, x, y, terrain_name="mountain", allow_volcanoes=True):
     tile = game.world.get_tile(x, y)
     if tile is None or tile.terrain in UPLIFT_BLOCKED_TERRAINS:
         return
 
-    tile.set_terrain("mountain")
+    tile.set_terrain(terrain_name)
 
-    # Chance to seed stone as a mountain pass.
-    if random.random() < 0.05:
+    # Standard uplifts occasionally create a stone mountain pass.
+    if terrain_name == "mountain" and random.random() < 0.05:
         tile.set_terrain("stone")
 
     # Low chance to seed a dormant volcano inside the chain.
-    if random.random() < 0.08:
+    if allow_volcanoes and random.random() < 0.08:
         spawn_dormant_volcano(game, x, y)
 
 
@@ -279,7 +279,7 @@ def raise_uplift_shoulder_tile(game, x, y, terrain_name):
     tile.set_terrain(terrain_name)
 
 
-def widen_uplift_chain(game, x, y, dir_index, land_half_width):
+def widen_uplift_chain(game, x, y, dir_index, land_half_width, terrain_name="stone"):
     if land_half_width <= 0:
         return
 
@@ -291,16 +291,26 @@ def widen_uplift_chain(game, x, y, dir_index, land_half_width):
         for offset in range(1, land_half_width + 1):
             tx = x + side_dx * offset
             ty = y + side_dy * offset
-            raise_uplift_shoulder_tile(game, tx, ty, "stone")
+            raise_uplift_shoulder_tile(game, tx, ty, terrain_name)
 
             # Fill occasional diagonal gaps so wider chains feel contiguous.
             if random.random() < 0.22:
                 fan_tx = tx + DIRECTIONS[dir_index][0]
                 fan_ty = ty + DIRECTIONS[dir_index][1]
-                raise_uplift_shoulder_tile(game, fan_tx, fan_ty, "stone")
+                raise_uplift_shoulder_tile(game, fan_tx, fan_ty, terrain_name)
 
 
-def generate_uplift_chain(game, start_x, start_y, length=None):
+def generate_uplift_chain(
+    game,
+    start_x,
+    start_y,
+    length=None,
+    spine_terrain="mountain",
+    shoulder_terrain="stone",
+    scatter_terrain="stone",
+    spine_gap_chance=0.0,
+    allow_volcanoes=True,
+):
     world = game.world
 
     profile = choose_uplift_profile()
@@ -314,8 +324,8 @@ def generate_uplift_chain(game, start_x, start_y, length=None):
     y = start_y
     print(
         f"Generating uplift chain starting at ({x}, {y}) with length {length}, "
-        f"mountain width 1, "
-        f"land width {1 + land_half_width * 2}"
+        f"{spine_terrain} width 1, "
+        f"{shoulder_terrain} width {1 + land_half_width * 2}"
     )
 
     main_dir_index = random.randint(0, len(DIRECTIONS) - 1)
@@ -326,16 +336,28 @@ def generate_uplift_chain(game, start_x, start_y, length=None):
             break
 
         if tile.terrain not in UPLIFT_BLOCKED_TERRAINS:
-            raise_uplift_spine_tile(game, x, y)
-            widen_uplift_chain(
-                game,
-                x,
-                y,
-                main_dir_index,
-                land_half_width,
+            has_spine_tile = (
+                spine_gap_chance <= 0.0
+                or random.random() >= spine_gap_chance
             )
+            if has_spine_tile:
+                raise_uplift_spine_tile(
+                    game,
+                    x,
+                    y,
+                    spine_terrain,
+                    allow_volcanoes,
+                )
+                widen_uplift_chain(
+                    game,
+                    x,
+                    y,
+                    main_dir_index,
+                    land_half_width,
+                    shoulder_terrain,
+                )
 
-        scatter_stone_around_tile(world, x, y)
+        scatter_terrain_around_tile(world, x, y, scatter_terrain)
 
         roll = random.random()
         if roll < 0.65:
@@ -361,6 +383,25 @@ def trigger_uplift_event(game, start_x, start_y):
 
     for _ in range(chain_count):
         generate_uplift_chain(game, start_x, start_y)
+
+
+def trigger_island_uplift_event(game, start_x, start_y):
+    """Raise a volcanic island: stone core with a shallows fringe."""
+    chain_count = choose_uplift_chain_count()
+    if chain_count > 1:
+        print(f"Generating {chain_count} island uplift chains from ({start_x}, {start_y})")
+
+    for _ in range(chain_count):
+        generate_uplift_chain(
+            game,
+            start_x,
+            start_y,
+            spine_terrain="stone",
+            shoulder_terrain="shallows",
+            scatter_terrain="shallows",
+            spine_gap_chance=0.28,
+            allow_volcanoes=False,
+        )
 
 
 def carve_trench_tile(world, x, y):
@@ -437,7 +478,7 @@ def trigger_trench_event(game, start_x, start_y):
     return carved_any
 
 
-def scatter_stone_around_tile(world, x, y):
+def scatter_terrain_around_tile(world, x, y, terrain_name="stone"):
     # Weighted so radius 4 and 5 are the most common
     scatter_radius = random.choices([2, 3, 4, 5, 6], weights=[1, 2, 3, 3, 1])[0]
 
@@ -472,4 +513,4 @@ def scatter_stone_around_tile(world, x, y):
                 chance = 0.10
 
             if random.random() < chance:
-                neighbor.set_terrain("stone")
+                neighbor.set_terrain(terrain_name)

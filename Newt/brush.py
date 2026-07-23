@@ -1,7 +1,7 @@
 from entity_cleanup import clear_tile_occupants
-from evolution import evolve_critter
+from evolution import get_evolution_options, replace_with_evolved_offspring
 from impact import trigger_impact_event
-from tectonics import remove_volcano_at, sync_volcano_at_tile, trigger_trench_event, trigger_uplift_event
+from tectonics import remove_volcano_at, sync_volcano_at_tile, trigger_island_uplift_event, trigger_trench_event, trigger_uplift_event
 from lake import convert_landlocked_ocean_to_lake
 from tsunami import Tsunami
 
@@ -47,6 +47,12 @@ def trigger_event_tool(game, center_tile, event_name):
         convert_landlocked_ocean_to_lake(game.world)
         return True
 
+    if event_name == "island_uplift":
+        remove_volcano_at(game, center_tile.x, center_tile.y)
+        trigger_island_uplift_event(game, center_tile.x, center_tile.y)
+        convert_landlocked_ocean_to_lake(game.world)
+        return True
+
     if event_name == "trench_event":
         if not trigger_trench_event(game, center_tile.x, center_tile.y):
             print("Trench event requires open ocean.")
@@ -57,18 +63,35 @@ def trigger_event_tool(game, center_tile, event_name):
         return spawn_tsunami(game, center_tile)
 
     if event_name == "evolve":
-        if center_tile.critter is None:
+        parent = center_tile.critter
+        if parent is None:
             return False
 
-        original_critter = center_tile.critter
-        evolved_critter = evolve_critter(game, original_critter, center_tile)
-        if evolved_critter is None:
-            print("That critter cannot evolve here.")
+        if not get_evolution_options(parent):
+            print("That critter has no evolutionary offspring.")
             return False
 
+        # The manual evolution tool ignores parent and offspring terrain
+        # restrictions.  An evolved offspring can seek suitable habitat after
+        # it is born; the only hard limit is an occupied surrounding tile.
+        offspring = parent.try_spawn_adjacent_offspring(game.world)
+        if offspring is None:
+            print("That critter needs an open adjacent tile for its evolved offspring.")
+            return False
+
+        evolved_offspring = replace_with_evolved_offspring(parent, offspring, game.world)
+        if evolved_offspring is None:
+            offspring_tile = game.world.get_tile(offspring.x, offspring.y)
+            if offspring_tile is not None and offspring_tile.critter is offspring:
+                offspring_tile.critter = None
+            print("That critter could not create an evolved offspring.")
+            return False
+
+        game.critters.append(evolved_offspring)
         print(
-            f"Evolved {type(original_critter).__name__} at "
-            f"({center_tile.x}, {center_tile.y}) into {type(evolved_critter).__name__} {evolved_critter.id}"
+            f"Evolved offspring of {type(parent).__name__} at "
+            f"({evolved_offspring.x}, {evolved_offspring.y}) into "
+            f"{type(evolved_offspring).__name__} {evolved_offspring.id}"
         )
         return True
 
