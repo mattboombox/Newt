@@ -53,11 +53,13 @@ class WolfDen(Building):
                 critter.home_building = None
         self.resident_wolf_ids.clear()
 
-    def has_adjacent_deer(self, world):
-        from critter import Deer
+    def has_adjacent_wolf_prey(self, world):
+        from critter import Wolf
+
+        prey_types = Wolf.HUNT_PREY_TYPES
 
         for tile in world.get_neighbors_all(self.x, self.y):
-            if tile.critter is not None and isinstance(tile.critter, Deer):
+            if tile.critter is not None and isinstance(tile.critter, prey_types):
                 return True
         return False
 
@@ -89,7 +91,11 @@ class WolfDen(Building):
             remove_building_at_tile(game, tile, "its ground no longer supported a wolf den")
             return
 
-        if self.charges > 0 and self.spawn_timer <= 0 and self.has_adjacent_deer(game.world):
+        if (
+            self.charges > 0
+            and self.spawn_timer <= 0
+            and self.has_adjacent_wolf_prey(game.world)
+        ):
             spawn_tile = self.find_spawn_tile(game.world)
             if spawn_tile is not None:
                 wolf = Wolf(spawn_tile.x, spawn_tile.y)
@@ -154,7 +160,10 @@ class SpiderWeb(Building):
             return False
 
         remove_critter(game, prey, f"it was caught in a web by Mega Spider {spider.id}")
-        if spider.is_hungry:
+        # Keep a modest emergency reserve.  Once it is full, fresh trapped
+        # prey becomes an actual meal so the spider can reproduce rather
+        # than stockpiling an unlimited number of corpses.
+        if spider.is_hungry or self.charges >= spider.WEB_RESERVE_CAP:
             spider.handle_successful_meal(game)
         else:
             self.charges += 1

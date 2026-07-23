@@ -9,6 +9,7 @@ class MegaSpider(Critter):
     HUNT_RANGE = 18
     PREDATOR_NAME = "Mega Spider"
     WEB_CLAIM_RANGE = 28
+    WEB_RESERVE_CAP = 4
 
     def __init__(self, x, y):
         super().__init__(
@@ -88,6 +89,20 @@ class MegaSpider(Critter):
         self.set_behavior("eat_web_reserve")
         return True
 
+    def consume_excess_web_charges(self, game):
+        """Turn food beyond the emergency reserve into reproductive meals."""
+        web = self.get_home_web(game.world)
+        if web is None or web.charges <= self.WEB_RESERVE_CAP:
+            return False
+
+        excess_charges = web.charges - self.WEB_RESERVE_CAP
+        web.charges = self.WEB_RESERVE_CAP
+        for _ in range(excess_charges):
+            self.handle_successful_meal(game)
+
+        self.set_behavior("eat_web_surplus")
+        return True
+
     def update_hunger(self, game, dt):
         was_hungry = self.is_hungry
         can_continue = super().update_hunger(game, dt)
@@ -127,6 +142,8 @@ class MegaSpider(Critter):
         if self.x == web.x and self.y == web.y:
             if web.has_trapped_prey(game.world):
                 return web.consume_trapped_prey(game, self)
+            if self.consume_excess_web_charges(game):
+                return True
             return self.deposit_web_seed() if self.carrying_web_seed else True
 
         path = self.find_path_to_nearest_tile(
@@ -153,6 +170,7 @@ class MegaSpider(Critter):
             and (
                 web.has_trapped_prey(game.world)
                 or (self.is_hungry and web.charges > 0)
+                or web.charges > self.WEB_RESERVE_CAP
             )
         ):
             return self.try_return_to_web(game)
