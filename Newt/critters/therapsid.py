@@ -2,17 +2,20 @@ from .crab import Crab
 from .critter import Critter, NON_ARCTIC_LAND_TERRAINS
 from .newt import Newt
 from .snail import Snail
+from .trilobite import Trilobite
+from .fish import Fish
 
 
 class Therapsid(Critter):
     ALLOWED_TERRAINS = NON_ARCTIC_LAND_TERRAINS | {"shallows"}
     HUNGER_INTERVAL = 34.0
     STARVATION_INTERVAL = 40.0
-    HUNT_RANGE = 12
-    HUNT_PREY_TYPES = (Crab, Newt, Snail)
+    HUNT_RANGE = 18
+    HUNT_PREY_TYPES = (Crab, Newt, Snail, Trilobite, Fish)
     SCAVENGE_PREY_TYPES = (Critter,)
     REPRODUCTION_BLOCKS_SET_BEHAVIOR = True
     REPRODUCTION_BLOCKS_RESET_MEALS = True
+    REPRODUCTION_MEAL_THRESHOLD = 3
 
     def __init__(self, x, y):
         super().__init__(

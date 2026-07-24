@@ -209,6 +209,11 @@ class SpiderWeb(Building):
         tile.building = None
 
     def trap_critter(self, critter):
+        from critter import MegaSpider
+
+        if isinstance(critter, MegaSpider):
+            return
+
         if critter.id in self.resident_spider_ids or getattr(critter, "home_building", None) is self:
             return
 
