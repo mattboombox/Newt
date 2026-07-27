@@ -1,3 +1,4 @@
+from .ape import Ape
 from .crab import Crab
 from .critter import Critter, NON_ARCTIC_LAND_TERRAINS
 from .deer import Deer
@@ -6,12 +7,12 @@ from .therapsid import Therapsid
 
 class Wolf(Critter):
     ALLOWED_TERRAINS = NON_ARCTIC_LAND_TERRAINS
-    REPRODUCTION_MEAL_THRESHOLD = 5
+    REPRODUCTION_MEAL_THRESHOLD = 10
     HUNGER_INTERVAL = 260.0
     STARVATION_INTERVAL = 120.0
     HUNT_RANGE = 8
-    HUNT_PREY_TYPES = (Deer, Therapsid)
-    SCAVENGE_PREY_TYPES = (Deer, Therapsid)
+    HUNT_PREY_TYPES = (Ape, Deer, Therapsid)
+    SCAVENGE_PREY_TYPES = (Ape, Deer, Therapsid)
     DISPLACEABLE_CRITTER_TYPES = (Crab,)
     PREDATOR_NAME = "Wolf"
     REPRODUCTION_BLOCKS_SET_BEHAVIOR = True
@@ -41,7 +42,7 @@ class Wolf(Critter):
             return None
 
         self.carrying_den_charge = True
-        self.meals_eaten = 0
+        self.meals_eaten -= self.REPRODUCTION_MEAL_THRESHOLD
         self.set_behavior("return_home")
         return None
 
@@ -111,11 +112,27 @@ class Wolf(Critter):
     def create_home_den(self, game):
         from building import WolfDen
 
-        path = self.find_path_to_nearest_tile(
-            game.world,
-            lambda tile: tile.building is None and WolfDen.can_place_on_tile(tile),
-            path_tile_predicate=self.is_habitable_tile,
-        )
+        path = None
+        for require_village_gap in (True, False):
+            path = self.find_path_to_nearest_tile(
+                game.world,
+                lambda tile, require_village_gap=require_village_gap: (
+                    tile.building is None
+                    and WolfDen.can_place_on_tile(tile)
+                    and (
+                        not require_village_gap
+                        or WolfDen.has_preferred_village_clearance(
+                            game.world,
+                            tile.x,
+                            tile.y,
+                        )
+                    )
+                ),
+                path_tile_predicate=self.is_habitable_tile,
+            )
+            if path is not None:
+                break
+
         if path is None:
             return None
 

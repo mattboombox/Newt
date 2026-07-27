@@ -1,3 +1,5 @@
+from .ape import Ape
+from .ape_warrior import ApeWarrior
 from .crab import Crab
 from .critter import (
     AMPHIBIOUS_LAND_TERRAINS,
@@ -35,6 +37,7 @@ Whale.DISPLACEABLE_CRITTER_TYPES = (Plankton, Crab, Newt)
 Wolf.DISPLACEABLE_CRITTER_TYPES = (Crab, Newt)
 
 CRITTER_TYPES = {
+    "ape": Ape,
     "crab": Crab,
     "deer": Deer,
     "fish": Fish,
@@ -63,6 +66,8 @@ __all__ = [
     "CRITTER_ORDER",
     "CRITTER_TYPES",
     "Critter",
+    "Ape",
+    "ApeWarrior",
     "Crab",
     "Deer",
     "Fish",

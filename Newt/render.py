@@ -1,5 +1,5 @@
 import pygame
-from building import CritterPrinter, SpiderWeb, WolfDen
+from building import CritterPrinter, Farm, MilitaryDistrict, ResidentialDistrict, Ruins, SpiderWeb, WolfDen
 from city import City
 from terrain import TERRAIN_DATA
 
@@ -15,6 +15,8 @@ def draw_tile(screen, tile, tile_size):
 
 def draw_hud(screen, game, background_color):
     font = pygame.font.SysFont(None, 18)
+    building_field = None
+    critter_field = None
 
     status = "Paused" if game.paused else "Running"
     active_tool = game.current_tool.title()
@@ -40,40 +42,89 @@ def draw_hud(screen, game, background_color):
         fields.append(f"Tile: ({tile.x}, {tile.y}) {tile.terrain}")
 
         if tile.critter is not None:
-            fields.append(f"Critter: {type(tile.critter).__name__} ID {tile.critter.id}")
+            critter_parts = [
+                f"Critter: {type(tile.critter).__name__} ID {tile.critter.id}"
+            ]
             if hasattr(tile.critter, "body_positions"):
-                fields.append(
+                critter_parts.append(
                     f"Behavior: {format_tool_name(tile.critter.current_behavior)} "
                     f"(Length: {len(tile.critter.body_positions)}/{tile.critter.MAX_LENGTH}, "
                     f"Growth: {tile.critter.tiles_since_growth}/"
                     f"{tile.critter.TILES_PER_GROWTH})"
                 )
             else:
-                fields.append(
+                critter_parts.append(
                     f"Behavior: {format_tool_name(tile.critter.current_behavior)} "
                     f"(Meals: {tile.critter.meals_eaten}/"
                     f"{tile.critter.REPRODUCTION_MEAL_THRESHOLD})"
                 )
+                if hasattr(tile.critter, "carrying_food"):
+                    village = tile.critter.home_building
+                    home_status = "None"
+                    if isinstance(village, City):
+                        home_status = (
+                            f"Food {village.food}, "
+                            f"Population {village.population}/{village.population_cap}"
+                        )
+                    critter_parts.append(
+                        f"Carrying Food: {tile.critter.carrying_food}"
+                    )
+                    critter_parts.append(f"Home Village: {home_status}")
+            critter_field = " | ".join(critter_parts)
 
         if tile.building is not None:
             if isinstance(tile.building, City):
-                fields.append(f"Building: {tile.building.level.title()}")
+                building_field = (
+                    f"Building: {tile.building.level.title()} "
+                    f"(Food: {tile.building.food}, Population: "
+                    f"{tile.building.population}/{tile.building.population_cap})"
+                )
+            elif isinstance(tile.building, Farm):
+                settlement = tile.building.settlement
+                food = 0 if settlement is None else settlement.food
+                building_field = f"Building: Farm (Settlement food: {food})"
+            elif isinstance(tile.building, ResidentialDistrict):
+                settlement = tile.building.settlement
+                population = 0 if settlement is None else settlement.population
+                population_cap = 0 if settlement is None else settlement.population_cap
+                building_field = (
+                    f"Building: Residential District "
+                    f"(Population: {population}/{population_cap})"
+                )
+            elif isinstance(tile.building, MilitaryDistrict):
+                settlement = tile.building.settlement
+                food = 0 if settlement is None else settlement.food
+                warriors = tile.building.get_village_warriors(game)
+                capacity = tile.building.get_connected_military_capacity(game.world)
+                building_field = (
+                    f"Building: Military District "
+                    f"(Warriors: {len(warriors)}/{capacity}, Food: {food}, "
+                    f"Recruitment: {max(0, tile.building.recruitment_timer):.0f}s)"
+                )
+            elif isinstance(tile.building, Ruins):
+                former_type = tile.building.former_building_type or "building"
+                building_field = (
+                    f"Building: {format_tool_name(former_type)} Ruins "
+                    f"(Decay: {max(0, tile.building.decay_timer):.0f}s)"
+                )
             elif isinstance(tile.building, WolfDen):
-                fields.append(
+                building_field = (
                     f"Building: Wolf Den ({tile.building.charges} charges, "
                     f"{len(tile.building.resident_wolf_ids)} wolves)"
                 )
             elif isinstance(tile.building, SpiderWeb):
-                fields.append(f"Building: Spider Web ({tile.building.charges} stored prey)")
+                building_field = (
+                    f"Building: Spider Web ({tile.building.charges} stored prey)"
+                )
             elif isinstance(tile.building, CritterPrinter):
                 last_printed = tile.building.last_printed_critter or "nothing yet"
-                fields.append(
+                building_field = (
                     f"Building: Critter Printer "
                     f"({tile.building.printed_count} printed, last: "
                     f"{format_tool_name(last_printed)})"
                 )
             else:
-                fields.append(f"Building: {type(tile.building).__name__}")
+                building_field = f"Building: {type(tile.building).__name__}"
     else:
         fields.append("Tile: none")
 
@@ -89,6 +140,10 @@ def draw_hud(screen, game, background_color):
             current_line = field
     if current_line:
         lines.append(current_line)
+    if building_field is not None:
+        lines.append(building_field)
+    if critter_field is not None:
+        lines.append(critter_field)
 
     hud_rect = pygame.Rect(
         0,
@@ -140,6 +195,19 @@ def draw_building(screen, building, tile_size):
     if isinstance(building, City):
         text_surface = font.render(building.level[0].upper(), True, (255, 255, 255))
         screen.blit(text_surface, (building.x * tile_size + 2, building.y * tile_size + 1))
+    elif isinstance(building, Farm):
+        text_surface = font.render("F", True, (175, 255, 150))
+        screen.blit(text_surface, (building.x * tile_size + 2, building.y * tile_size + 1))
+    elif isinstance(building, ResidentialDistrict):
+        text_surface = font.render("R", True, (255, 220, 150))
+        screen.blit(text_surface, (building.x * tile_size + 1, building.y * tile_size + 1))
+    elif isinstance(building, MilitaryDistrict):
+        text_surface = font.render("M", True, (255, 145, 125))
+        screen.blit(text_surface, (building.x * tile_size + 1, building.y * tile_size + 1))
+    elif isinstance(building, Ruins):
+        pygame.draw.rect(screen, (75, 70, 65), rect)
+        text_surface = font.render("X", True, (170, 160, 145))
+        screen.blit(text_surface, (building.x * tile_size + 1, building.y * tile_size + 1))
     elif isinstance(building, WolfDen):
         text_surface = font.render("W", True, (255, 255, 255))
         screen.blit(text_surface, (building.x * tile_size + 1, building.y * tile_size + 1))

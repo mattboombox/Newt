@@ -1,4 +1,6 @@
 from critters import (
+    Ape,
+    ApeWarrior,
     AMPHIBIOUS_LAND_TERRAINS,
     CARDINAL_DIRECTIONS,
     CRITTER_ORDER,
@@ -32,6 +34,8 @@ __all__ = [
     "CRITTER_ORDER",
     "CRITTER_TYPES",
     "Critter",
+    "Ape",
+    "ApeWarrior",
     "Crab",
     "Deer",
     "Fish",

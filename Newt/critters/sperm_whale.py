@@ -5,6 +5,7 @@ from .trilobite import Trilobite
 
 
 class SpermWhale(Whale):
+    FOOD_VALUE = 5
     ALLOWED_TERRAINS = Whale.ALLOWED_TERRAINS
     REPRODUCTION_MEAL_THRESHOLD = Whale.REPRODUCTION_MEAL_THRESHOLD
     HUNGER_INTERVAL = Whale.HUNGER_INTERVAL

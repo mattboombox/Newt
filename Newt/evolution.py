@@ -1,6 +1,6 @@
 import random
 
-from critter import Crab, Deer, Fish, GigaSlug, LandKraken, MegaSpider, Nautilus, Newt, Plankton, SeaScorpion, Snail, SpermWhale, Squid, Therapsid, Trilobite, Whale, Wolf
+from critter import Ape, Crab, Deer, Fish, GigaSlug, LandKraken, MegaSpider, Nautilus, Newt, Plankton, SeaScorpion, Snail, SpermWhale, Squid, Therapsid, Trilobite, Whale, Wolf
 
 EVOLUTION_TREE = {
     Plankton: (
@@ -68,6 +68,10 @@ EVOLUTION_TREE = {
         },
     ),
     Therapsid: (
+        {
+            "result_type": Ape,
+            "weight": 1.0,
+        },
         {
             "result_type": Deer,
             "weight": 1.0,

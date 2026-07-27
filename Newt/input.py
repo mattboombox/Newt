@@ -1,14 +1,21 @@
 import pygame
 from brush import paint_radius, trigger_event_tool
 from terrain import TERRAIN_DATA
-from critter import CRITTER_ORDER, CRITTER_TYPES
+from critter import Ape, CRITTER_ORDER, CRITTER_TYPES
 from city import City
-from building import CritterPrinter, WolfDen
+from building import CritterPrinter, Farm, MilitaryDistrict, ResidentialDistrict, WolfDen
 from entity_cleanup import remove_building_at_tile, remove_critter
 
 
 TOOL_MODE_ORDER = ["terrain", "critter", "building", "event"]
-BUILDING_ORDER = ["village", "wolf_den", "critter_printer"]
+BUILDING_ORDER = [
+    "village",
+    "farm",
+    "residential_district",
+    "military_district",
+    "wolf_den",
+    "critter_printer",
+]
 EVENT_TOOL_ORDER = ["meteor", "mega_meteor", "comet", "tsunami", "tectonic_uplift", "island_uplift", "trench_event", "evolve"]
 EVENT_ONLY_TERRAINS = {"meteor", "comet", "tectonic_uplift", "tsunami"}
 TERRAIN_BRUSH_ORDER = [
@@ -67,6 +74,12 @@ def spawn_current_critter(game, tile):
     critter = critter_cls(tile.x, tile.y)
     if isinstance(tile.building, WolfDen) and game.current_critter == "wolf":
         critter.set_home_building(tile.building)
+    elif (
+        isinstance(tile.building, City)
+        and isinstance(critter, Ape)
+        and tile.building.has_population_space()
+    ):
+        critter.set_home_building(tile.building)
     tile.critter = critter
     game.critters.append(critter)
 
@@ -86,9 +99,64 @@ def place_current_building(game, tile):
     if tile is None or tile.building is not None:
         return False
 
-    if game.current_building == "village" and tile.has_tag("land"):
-        tile.building = City(tile.x, tile.y, level="village", population=10)
+    if (
+        game.current_building == "village"
+        and City.can_place_on_tile(tile)
+    ):
+        tile.building = City(tile.x, tile.y, level="village", world=game.world)
+        tile.building.try_build_initial_farm(game.world)
         print(f"Placed village at ({tile.x}, {tile.y})")
+        return True
+
+    if (
+        game.current_building == "farm"
+        and tile.critter is None
+        and tile.terrain == "grass"
+    ):
+        village = City.find_connectable_village(game.world, tile)
+        if village is None:
+            return False
+
+        farm = Farm(tile.x, tile.y, settlement=village)
+        tile.building = farm
+        village.add_aux_building(farm)
+        print(f"Placed farm for village at ({village.x}, {village.y})")
+        return True
+
+    if (
+        game.current_building == "residential_district"
+        and tile.critter is None
+        and tile.has_tag("land")
+    ):
+        village = City.find_connectable_village(game.world, tile)
+        if village is None:
+            return False
+
+        district = ResidentialDistrict(tile.x, tile.y, settlement=village)
+        tile.building = district
+        village.add_aux_building(district)
+        print(
+            f"Placed residential district for village at "
+            f"({village.x}, {village.y})"
+        )
+        return True
+
+    if (
+        game.current_building == "military_district"
+        and tile.critter is None
+        and tile.has_tag("land")
+    ):
+        village = City.find_connectable_village(game.world, tile)
+        if village is None:
+            return False
+
+        district = MilitaryDistrict(tile.x, tile.y, settlement=village)
+        tile.building = district
+        village.add_aux_building(district)
+        print(
+            f"Placed military district for village at "
+            f"({village.x}, {village.y})"
+        )
         return True
 
     if game.current_building == "wolf_den" and WolfDen.can_place_on_tile(tile):

@@ -1,3 +1,4 @@
+from .ape import Ape
 from .critter import Critter, NON_ARCTIC_LAND_TERRAINS
 from .giga_slug import GigaSlug
 from .therapsid import Therapsid
@@ -11,11 +12,12 @@ class LandKraken(Critter):
     HUNGER_INTERVAL = 260.0
     STARVATION_INTERVAL = 120.0
     HUNT_RANGE = 8
-    HUNT_PREY_TYPES = Therapsid.HUNT_PREY_TYPES + (GigaSlug,)
+    HUNT_PREY_TYPES = Therapsid.HUNT_PREY_TYPES + (Ape, GigaSlug)
     SCAVENGE_PREY_TYPES = HUNT_PREY_TYPES
     PREDATOR_NAME = "Land Kraken"
     REPRODUCTION_BLOCKS_SET_BEHAVIOR = True
     REPRODUCTION_BLOCKS_RESET_MEALS = True
+    REQUIRES_LIQUID_TO_REPRODUCE = True
 
     def __init__(self, x, y):
         super().__init__(

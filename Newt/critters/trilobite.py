@@ -4,6 +4,7 @@ from .plankton import Plankton
 
 
 class Trilobite(Critter):
+    FOOD_VALUE = 1
     """An early seafloor arthropod that survives by scavenging carrion."""
 
     ALLOWED_TERRAINS = {"ocean", "trench", "shallows"}

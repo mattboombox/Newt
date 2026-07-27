@@ -4,6 +4,7 @@ from .critter import AMPHIBIOUS_LAND_TERRAINS, Critter
 class Snail(Critter):
     """A lake-feeding mollusk descended from nautilus in shallow water."""
 
+    FOOD_VALUE = 1
     ALLOWED_TERRAINS = AMPHIBIOUS_LAND_TERRAINS - {"shallows"}
     FEED_TERRAINS = {"lake"}
     HUNGER_INTERVAL = 28.0

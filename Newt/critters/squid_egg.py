@@ -2,6 +2,7 @@ from .critter import Critter
 
 
 class SquidEgg(Critter):
+    FOOD_VALUE = 1
     ALLOWED_TERRAINS = {"ocean", "trench", "shallows", "lake"}
     MOVE_COOLDOWN = 4.20
 

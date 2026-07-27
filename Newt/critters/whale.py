@@ -4,6 +4,7 @@ from .plankton import Plankton
 
 
 class Whale(Critter):
+    FOOD_VALUE = 5
     ALLOWED_TERRAINS = {"ocean", "trench", "shallows"}
     REPRODUCTION_MEAL_THRESHOLD = 15
     HUNGER_INTERVAL = 18.0

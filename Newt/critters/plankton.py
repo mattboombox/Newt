@@ -2,6 +2,7 @@ from .critter import Critter
 
 
 class Plankton(Critter):
+    FOOD_VALUE = 1
     ALLOWED_TERRAINS = {"ocean", "trench", "shallows"}
     HUNGER_INTERVAL = 15.0
     STARVATION_INTERVAL = 8.0

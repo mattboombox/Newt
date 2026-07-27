@@ -3,6 +3,7 @@ from .critter import AMPHIBIOUS_LAND_TERRAINS, Critter
 
 
 class Newt(Critter):
+    FOOD_VALUE = 1
     ALLOWED_TERRAINS = AMPHIBIOUS_LAND_TERRAINS - {"shallows"}
     FEED_TERRAINS = {"lake"}
     HUNGER_INTERVAL = 24.0

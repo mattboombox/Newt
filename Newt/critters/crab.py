@@ -2,11 +2,13 @@ from .critter import Critter
 
 
 class Crab(Critter):
+    FOOD_VALUE = 1
     ALLOWED_TERRAINS = {"beach", "shallows"}
     FEED_TERRAINS = {"shallows"}
     HUNGER_INTERVAL = 14.0
     STARVATION_INTERVAL = 10.0
     DISPLACEABLE_CRITTER_TYPES = ()
+    REPRODUCTION_MEAL_THRESHOLD = 3
     REPRODUCTION_BLOCKS_SET_BEHAVIOR = True
     REPRODUCTION_BLOCKS_RESET_MEALS = True
 

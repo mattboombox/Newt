@@ -22,9 +22,145 @@ class Building:
         pass
 
 class Farm(Building):
-    def __init__(self, x, y, sprite=None):
+    FOOD_INTERVAL = 30.0
+
+    def __init__(self, x, y, settlement=None, sprite=None):
         super().__init__(x, y, sprite=sprite, tags={"food"})
-        self.output = 2
+        self.settlement = settlement
+        self.output = 1
+        self.food_timer = self.FOOD_INTERVAL
+
+    def update(self, game, dt):
+        if self.settlement is None or not self.settlement.is_connected_building(game.world, self):
+            return
+
+        self.food_timer -= dt
+        while self.food_timer <= 0:
+            self.food_timer += self.FOOD_INTERVAL
+            self.settlement.food += self.output
+
+    def on_removed(self, game):
+        if self.settlement is not None:
+            self.settlement.remove_aux_building(self)
+            self.settlement = None
+
+
+class ResidentialDistrict(Building):
+    POPULATION_CAPACITY = 5
+
+    def __init__(self, x, y, settlement=None, sprite=None):
+        super().__init__(x, y, sprite=sprite, tags={"residential"})
+        self.settlement = settlement
+
+    def on_removed(self, game):
+        if self.settlement is not None:
+            self.settlement.remove_aux_building(self)
+            self.settlement = None
+
+
+class MilitaryDistrict(Building):
+    RECRUITMENT_COST = 5
+    RECRUITMENT_INTERVAL = 30.0
+    WARRIOR_CAPACITY = 5
+
+    def __init__(self, x, y, settlement=None, sprite=None):
+        super().__init__(x, y, sprite=sprite, tags={"military"})
+        self.settlement = settlement
+        self.recruitment_timer = self.RECRUITMENT_INTERVAL
+
+    def get_village_warriors(self, game):
+        from critters.ape_warrior import ApeWarrior
+
+        return [
+            critter
+            for critter in game.critters
+            if (
+                isinstance(critter, ApeWarrior)
+                and critter.home_building is self.settlement
+                and critter.current_behavior != "dying"
+            )
+        ]
+
+    def get_connected_military_capacity(self, world):
+        if self.settlement is None:
+            return 0
+
+        return sum(
+            building.WARRIOR_CAPACITY
+            for building in self.settlement.get_connected_buildings(world)
+            if isinstance(building, MilitaryDistrict)
+        )
+
+    def try_recruit(self, game):
+        from critters.ape import Ape
+        from critters.ape_warrior import ApeWarrior
+
+        village = self.settlement
+        if village is None or village.food < self.RECRUITMENT_COST:
+            return None
+
+        if len(self.get_village_warriors(game)) >= self.get_connected_military_capacity(game.world):
+            return None
+
+        civilians = [
+            critter
+            for critter in game.critters
+            if (
+                type(critter) is Ape
+                and critter.home_building is village
+                and critter.current_behavior != "dying"
+            )
+        ]
+        if len(civilians) <= 1:
+            return None
+
+        recruit = min(
+            civilians,
+            key=lambda ape: abs(ape.x - self.x) + abs(ape.y - self.y),
+        )
+        village.food -= self.RECRUITMENT_COST
+        return ApeWarrior.recruit(recruit)
+
+    def update(self, game, dt):
+        if self.settlement is None or not self.settlement.is_connected_building(game.world, self):
+            return
+
+        self.recruitment_timer -= dt
+        if self.recruitment_timer > 0:
+            return
+
+        self.recruitment_timer += self.RECRUITMENT_INTERVAL
+        self.try_recruit(game)
+
+    def on_removed(self, game):
+        if self.settlement is not None:
+            self.settlement.remove_aux_building(self)
+            self.settlement = None
+
+
+class Ruins(Building):
+    MIN_DECAY_INTERVAL = 300.0
+    MAX_DECAY_INTERVAL = 480.0
+
+    def __init__(self, x, y, former_building_type=None, sprite=None):
+        super().__init__(x, y, sprite=sprite, tags={"ruins"})
+        self.former_building_type = former_building_type
+        self.decay_timer = random.uniform(
+            self.MIN_DECAY_INTERVAL,
+            self.MAX_DECAY_INTERVAL,
+        )
+
+    def update(self, game, dt):
+        from entity_cleanup import remove_building_at_tile
+
+        tile = game.world.get_tile(self.x, self.y)
+        if tile is None or tile.building is not self:
+            return
+
+        self.decay_timer -= dt
+        if self.decay_timer <= 0:
+            remove_building_at_tile(game, tile, "the ruins weathered away")
+
 
 class Harbor(Building):
     def __init__(self, x, y, sprite=None):
@@ -102,6 +238,7 @@ class CritterPrinter(Building):
 
 class WolfDen(Building):
     SPAWN_COOLDOWN = 2.0
+    PREFERRED_VILLAGE_GAP = 2
 
     def __init__(self, x, y, sprite=None, charges=0):
         super().__init__(x, y, sprite=sprite, tags={"den", "wolf"})
@@ -112,6 +249,28 @@ class WolfDen(Building):
     @staticmethod
     def can_place_on_tile(tile):
         return tile is not None and tile.has_tag("land") and tile.terrain != "beach"
+
+    @classmethod
+    def has_preferred_village_clearance(cls, world, x, y):
+        from city import City
+
+        gap = cls.PREFERRED_VILLAGE_GAP
+        for dy in range(-gap, gap + 1):
+            ny = y + dy
+            if ny < 0 or ny >= world.rows:
+                continue
+
+            max_dx = gap - abs(dy)
+            for dx in range(-max_dx, max_dx + 1):
+                nx = (x + dx) % world.cols
+                building = world.get_tile(nx, ny).building
+                if isinstance(building, City):
+                    return False
+
+                if isinstance(getattr(building, "settlement", None), City):
+                    return False
+
+        return True
 
     def add_resident(self, critter):
         self.resident_wolf_ids.add(critter.id)
