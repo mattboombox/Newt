@@ -54,7 +54,7 @@ class ImpactWave:
                 elif distance_sq > current_radius_sq or distance_sq <= previous_radius_sq:
                     continue
 
-                tile = game.world.get_tile(self.x + dx, self.y + dy)
+                tile = game.world.get_wrapped_tile(self.x + dx, self.y + dy)
                 if tile is None:
                     continue
 

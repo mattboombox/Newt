@@ -44,13 +44,13 @@ class Tsunami:
                 (1, 1), (1, -1),
                 (-1, 1), (-1, -1),
             ]:
-                nx = x + dx
+                nx = (x + dx) % world.cols
                 ny = y + dy
 
                 if (nx, ny) in self.visited:
                     continue
 
-                tile = world.get_tile(nx, ny)
+                tile = world.get_wrapped_tile(nx, ny)
                 if tile is None:
                     continue
 

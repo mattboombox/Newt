@@ -20,7 +20,7 @@ from building import (
 from entity_cleanup import remove_building_at_tile, remove_critter
 
 
-TOOL_MODE_ORDER = ["terrain", "critter", "building", "event"]
+TOOL_MODE_ORDER = ["terrain", "critter", "building", "event", "inspect"]
 BUILDING_ORDER = [
     "village",
     "farm",
@@ -241,6 +241,18 @@ def apply_active_tool(game, tile):
     if tile is None:
         return False
 
+    if game.current_tool == "inspect":
+        game.selected_critter = tile.critter
+        if tile.critter is None:
+            print("Critter selection cleared")
+            return False
+        print(
+            f"Selected {type(tile.critter).__name__} {tile.critter.id} "
+            f"at ({tile.critter.x}, {tile.critter.y})"
+        )
+        game.follow_selected_critter()
+        return True
+
     if game.current_tool == "critter":
         return spawn_current_critter(game, tile)
 
@@ -290,7 +302,7 @@ def handle_input(game):
                     cycle_building(game, -1)
                 elif game.current_tool == "event":
                     cycle_event_tool(game, -1)
-                else:
+                elif game.current_tool == "terrain":
                     cycle_terrain(game, -1)
 
             elif event.key == pygame.K_d:
@@ -300,7 +312,7 @@ def handle_input(game):
                     cycle_building(game, 1)
                 elif game.current_tool == "event":
                     cycle_event_tool(game, 1)
-                else:
+                elif game.current_tool == "terrain":
                     cycle_terrain(game, 1)
 
             elif event.key == pygame.K_q:

@@ -9,6 +9,9 @@ def describe_building(building):
 
 
 def remove_critter(game, critter, reason):
+    if getattr(game, "selected_critter", None) is critter:
+        game.selected_critter = None
+
     if hasattr(critter, "clear_home_building"):
         critter.clear_home_building()
 

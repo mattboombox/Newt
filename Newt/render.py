@@ -48,6 +48,13 @@ def draw_hud(screen, game, background_color):
         active_selection = f"Building Tool: {format_tool_name(game.current_building)}"
     elif game.current_tool == "event":
         active_selection = f"Event: {format_tool_name(game.current_event)}"
+    elif game.current_tool == "inspect":
+        selected = game.selected_critter
+        active_selection = (
+            "Selection: None"
+            if selected is None
+            else f"Selection: {type(selected).__name__} ID {selected.id}"
+        )
     else:
         active_selection = f"Brush: {format_tool_name(game.current_terrain)}"
 
@@ -61,8 +68,15 @@ def draw_hud(screen, game, background_color):
         f"Status: {status}",
     ]
 
-    if game.hovered_tile is not None:
-        tile = game.hovered_tile
+    inspected_tile = game.hovered_tile
+    if game.selected_critter is not None:
+        inspected_tile = game.world.get_tile(
+            game.selected_critter.x,
+            game.selected_critter.y,
+        )
+
+    if inspected_tile is not None:
+        tile = inspected_tile
         fields.append(f"Tile: ({tile.x}, {tile.y}) {tile.terrain}")
 
         if tile.critter is not None:
@@ -323,6 +337,26 @@ def render(screen, game, background_color):
 
     for critter in game.critters:
         draw_critter(screen, game, critter, game.tile_size, game.sprites)
+
+    if game.selected_critter is not None:
+        screen_position = get_screen_position(
+            game,
+            game.selected_critter.x,
+            game.selected_critter.y,
+        )
+        if screen_position is not None:
+            rect = pygame.Rect(
+                screen_position[0],
+                screen_position[1],
+                game.tile_size,
+                game.tile_size,
+            )
+            pygame.draw.rect(
+                screen,
+                (255, 0, 0),
+                rect,
+                max(2, game.tile_size // 8),
+            )
 
     if game.hovered_tile is not None:
         screen_position = get_screen_position(

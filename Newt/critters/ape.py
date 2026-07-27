@@ -276,10 +276,12 @@ class Ape(Therapsid):
         return True
 
     def try_handle_priority_behavior(self, game):
-        village = self.ensure_home_village(game)
-
         if self.carrying_food:
+            if self.is_hungry:
+                return self.consume_carried_food()
             return self.try_return_to_settlement(game, "return_food")
+
+        village = self.ensure_home_village(game)
 
         if self.is_hungry and village is not None and village.food > 0:
             return self.try_return_to_settlement(game, "seek_food_store")
@@ -288,6 +290,20 @@ class Ape(Therapsid):
             return self.try_return_to_settlement(game, "return_to_reproduce")
 
         return False
+
+    def try_handle_hunter_priority_behavior(self, game):
+        """Prioritize assigned prey while preserving carried-food behavior."""
+        if self.carrying_food:
+            return Ape.try_handle_priority_behavior(self, game)
+
+        if self.hunt_nearest_prey(
+            game,
+            self.get_hunt_prey_types(),
+            self.get_predator_name(),
+        ):
+            return True
+
+        return Ape.try_handle_priority_behavior(self, game)
 
     def take_hungry_action(self, game):
         village = self.ensure_home_village(game)

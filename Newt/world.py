@@ -71,6 +71,26 @@ class World:
             return self.board[x][y]
         return None
 
+    def get_wrapped_tile(self, x, y):
+        """Return a tile with horizontal wrapping and bounded polar edges."""
+        if self.cols <= 0 or not 0 <= y < self.rows:
+            return None
+        return self.board[x % self.cols][y]
+
+    def get_wrapped_neighbors_all(self, x, y):
+        neighbors = []
+        seen = set()
+        for dx in (-1, 0, 1):
+            for dy in (-1, 0, 1):
+                if dx == 0 and dy == 0:
+                    continue
+                tile = self.get_wrapped_tile(x + dx, y + dy)
+                if tile is None or (tile.x, tile.y) in seen:
+                    continue
+                seen.add((tile.x, tile.y))
+                neighbors.append(tile)
+        return neighbors
+
     def get_tile_at_pixel(self, mx, my, tile_size):
         x = mx // tile_size
         y = my // tile_size

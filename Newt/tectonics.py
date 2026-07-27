@@ -88,7 +88,7 @@ class Volcano:
                 if distance_sq > effective_radius * effective_radius:
                     continue
 
-                tile = world.get_tile(self.x + dx, self.y + dy)
+                tile = world.get_wrapped_tile(self.x + dx, self.y + dy)
                 if tile is None:
                     continue
 
@@ -132,7 +132,7 @@ class Volcano:
         self.remove_from_game(game)
 
     def try_chain_spawn(self, game):
-        neighbors = game.world.get_neighbors_all(self.x, self.y)
+        neighbors = game.world.get_wrapped_neighbors_all(self.x, self.y)
         random.shuffle(neighbors)
 
         valid_tiles = []
@@ -265,10 +265,12 @@ def choose_trench_profile():
 
 
 def raise_uplift_spine_tile(game, x, y, terrain_name="mountain", allow_volcanoes=True):
-    tile = game.world.get_tile(x, y)
+    tile = game.world.get_wrapped_tile(x, y)
     if tile is None or tile.terrain in UPLIFT_BLOCKED_TERRAINS:
         return
 
+    x = tile.x
+    y = tile.y
     tile.set_terrain(terrain_name)
 
     # Standard uplifts occasionally create a stone mountain pass.
@@ -281,7 +283,7 @@ def raise_uplift_spine_tile(game, x, y, terrain_name="mountain", allow_volcanoes
 
 
 def raise_uplift_shoulder_tile(game, x, y, terrain_name):
-    tile = game.world.get_tile(x, y)
+    tile = game.world.get_wrapped_tile(x, y)
     if tile is None or tile.terrain in UPLIFT_BLOCKED_TERRAINS:
         return
 
@@ -340,10 +342,12 @@ def generate_uplift_chain(
     main_dir_index = random.randint(0, len(DIRECTIONS) - 1)
 
     for _ in range(length):
-        tile = world.get_tile(x, y)
+        tile = world.get_wrapped_tile(x, y)
         if tile is None:
             break
 
+        x = tile.x
+        y = tile.y
         if tile.terrain not in UPLIFT_BLOCKED_TERRAINS:
             has_spine_tile = (
                 spine_gap_chance <= 0.0
@@ -377,7 +381,7 @@ def generate_uplift_chain(
             dir_index = (main_dir_index + 1) % len(DIRECTIONS)
 
         dx, dy = DIRECTIONS[dir_index]
-        x += dx
+        x = (x + dx) % world.cols
         y += dy
 
         if random.random() < 0.25:
@@ -424,10 +428,12 @@ def can_carve_trench_tile(tile, allow_land=False):
 def carve_trench_tile(game, x, y, allow_land=False):
     from entity_cleanup import clear_tile_occupants
 
-    tile = game.world.get_tile(x, y)
+    tile = game.world.get_wrapped_tile(x, y)
     if not can_carve_trench_tile(tile, allow_land):
         return False
 
+    x = tile.x
+    y = tile.y
     if tile.terrain == "shallows" and not allow_land:
         tile.set_terrain("ocean")
         return True
@@ -453,7 +459,7 @@ def add_land_trench_coastline(game, trench_positions):
         for dx in range(-2, 3):
             for dy in range(-2, 3):
                 distance = max(abs(dx), abs(dy))
-                position = (trench_x + dx, trench_y + dy)
+                position = ((trench_x + dx) % world.cols, trench_y + dy)
                 if position in trench_positions:
                     continue
                 if distance == 1:
@@ -463,7 +469,7 @@ def add_land_trench_coastline(game, trench_positions):
 
     shallow_positions -= ocean_positions
     for x, y in shallow_positions:
-        tile = world.get_tile(x, y)
+        tile = world.get_wrapped_tile(x, y)
         if tile is None or tile.terrain not in TRENCH_LAND_TERRAINS:
             continue
         clear_tile_occupants(game, tile, "a new trench flooded the coast")
@@ -471,7 +477,7 @@ def add_land_trench_coastline(game, trench_positions):
         tile.set_terrain("shallows")
 
     for x, y in ocean_positions:
-        tile = world.get_tile(x, y)
+        tile = world.get_wrapped_tile(x, y)
         if tile is None:
             continue
         clear_tile_occupants(game, tile, "a new trench opened into ocean")
@@ -479,7 +485,7 @@ def add_land_trench_coastline(game, trench_positions):
         tile.set_terrain("ocean")
 
     for x, y in trench_positions:
-        tile = world.get_tile(x, y)
+        tile = world.get_wrapped_tile(x, y)
         if tile is not None:
             tile.set_terrain("trench")
 
@@ -506,6 +512,7 @@ def generate_trench_chain(game, start_x, start_y, length=None, allow_land=False)
         if not carve_trench_tile(game, x, y, allow_land):
             break
 
+        x %= world.cols
         carved_any = True
         if world.get_tile(x, y).terrain == "trench":
             trench_positions.append((x, y))
@@ -519,9 +526,9 @@ def generate_trench_chain(game, start_x, start_y, length=None, allow_land=False)
             dir_index = (main_dir_index + 1) % len(DIRECTIONS)
 
         dx, dy = DIRECTIONS[dir_index]
-        next_x = x + dx
+        next_x = (x + dx) % world.cols
         next_y = y + dy
-        next_tile = world.get_tile(next_x, next_y)
+        next_tile = world.get_wrapped_tile(next_x, next_y)
         if not can_carve_trench_tile(next_tile, allow_land):
             break
 
@@ -562,7 +569,7 @@ def scatter_terrain_around_tile(world, x, y, terrain_name="stone"):
             if dx == 0 and dy == 0:
                 continue
 
-            neighbor = world.get_tile(x + dx, y + dy)
+            neighbor = world.get_wrapped_tile(x + dx, y + dy)
             if neighbor is None:
                 continue
 

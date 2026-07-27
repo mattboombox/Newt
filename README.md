@@ -14,6 +14,8 @@ The `Micro` map size creates a 40 x 24 tile world for quick testing.
 Its HUD expands vertically and wraps status information so no controls or
 hover details are clipped by the narrow window.
 
+The `Ring World` map size creates a wide 252 x 40 tile world.
+
 The `Custom` size option uses `A`/Left and `D`/Right for width, and `W`/Up
 and `S`/Down to increase or decrease height. Each press adjusts one tile;
 hold `Shift` to adjust by ten. It cannot be smaller than Micro or larger than
@@ -39,19 +41,23 @@ Finally, choose the world type, which sets its default terrain:
 - `Left Click` + drag in critter mode: spawn the selected critter on valid tiles
 - `Left Click` in building mode: place the selected building
 - `Left Click` in event mode: trigger the selected event
+- `Left Click` in inspect mode: select a critter, show its live status, and
+  follow it with the camera while zoomed in; click an empty tile to clear
 - `Right Click`: delete the critter on the hovered tile, or the building if
   no critter is present; when stacked, two clicks remove them in that order
 - `A` / `D`: cycle the active terrain, critter, building, or event selection
 - `Q` / `E`: decrease or increase brush size
 - `,` / `.`: slow down or speed up the simulation
 - `P`: pause or unpause
-- `R`: cycle between terrain, critter, building, and event mode
+- `R`: cycle between terrain, critter, building, event, and inspect mode
 - `X`: quit
 
 ### Tool Notes
 
 - Terrain mode includes direct trench tile painting. The trench event can
   also collapse land into a trench with an ocean ring and shallows coastline.
+- Tsunamis, meteor and comet waves, tectonic chains, trenches, and volcanic
+  spread wrap across the east and west edges of the world.
 - Sand worms are player-spawned desert critters. They begin at length 2,
   grow after every 200 sand tiles crossed, and split into two young worms
   after completing a growth cycle at their maximum length of 9.

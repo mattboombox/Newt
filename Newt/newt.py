@@ -43,6 +43,7 @@ SIZE_PRESET_LABELS = [
     ("1600 x 900", 192, 96, 1536, 828),
     ("1920 x 1080", 232, 118, 1856, 1004),
     ("2560 x 1440", 252, 130, 2016, 1100),
+    ("Ring World", 252, 40, 2016, 380),
 ]
 
 TEMPERATURE_PRESETS = [
@@ -88,6 +89,7 @@ class Game:
         self.world_type = world_type
 
         self.selected_tile = None
+        self.selected_critter = None
         self.hovered_tile = None
 
         self.current_terrain = DEFAULT_PAINT_TERRAIN
@@ -160,6 +162,23 @@ class Game:
         self.camera_y = 0
         self.clamp_camera()
 
+    def follow_selected_critter(self):
+        critter = self.selected_critter
+        if critter is None:
+            return
+
+        if critter not in self.critters:
+            self.selected_critter = None
+            return
+
+        if self.tile_size == OVERVIEW_TILE_SIZE:
+            return
+
+        visible_cols, visible_rows = self.get_visible_tile_size()
+        self.camera_x = critter.x - visible_cols // 2
+        self.camera_y = critter.y - visible_rows // 2
+        self.clamp_camera()
+
     def screen_to_world_tile(self, screen_x, screen_y):
         if (
             screen_x < 0
@@ -196,6 +215,7 @@ def update(game, dt):
     # it synchronized with the active critter list so an already-removed
     # critter cannot become an invisible, permanent movement blocker.
     clear_stale_tile_critters(game)
+    game.follow_selected_critter()
 
     if game.paused:
         return
@@ -209,6 +229,8 @@ def update(game, dt):
 
     for critter in game.critters[:]:
         critter.update(game, dt)
+
+    game.follow_selected_critter()
 
 
 def get_initial_trench_count(cols, rows):
