@@ -1,6 +1,11 @@
 import pygame
 from brush import paint_radius, trigger_event_tool
-from config import SPRITE_PATHS
+from config import (
+    OVERVIEW_TILE_SIZE,
+    SPRITE_PATHS,
+    TILE_SIZE,
+    ZOOMED_IN_TILE_SIZE,
+)
 from terrain import TERRAIN_DATA
 from critter import Ape, CRITTER_ORDER, CRITTER_TYPES
 from city import City
@@ -27,7 +32,7 @@ BUILDING_ORDER = [
 ]
 EVENT_TOOL_ORDER = ["meteor", "mega_meteor", "comet", "tsunami", "tectonic_uplift", "island_uplift", "trench_event", "evolve"]
 EVENT_ONLY_TERRAINS = {"meteor", "comet", "tectonic_uplift", "tsunami"}
-ZOOM_TILE_SIZES = (16, 8)
+ZOOM_TILE_SIZES = (OVERVIEW_TILE_SIZE, TILE_SIZE, ZOOMED_IN_TILE_SIZE)
 TERRAIN_BRUSH_ORDER = [
     terrain_name
     for terrain_name in TERRAIN_DATA.keys()
@@ -95,6 +100,10 @@ def toggle_zoom(game):
 
     game.clamp_camera()
     reload_sprites_for_zoom(game)
+    sound_name = "zoom_out" if game.tile_size == OVERVIEW_TILE_SIZE else "zoom_in"
+    sound = game.sounds.get(sound_name)
+    if sound is not None:
+        sound.play()
     print(f"Zoom: {game.tile_size}x{game.tile_size} pixels per tile")
 
 

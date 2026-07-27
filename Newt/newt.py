@@ -15,7 +15,9 @@ from config import (
     IMPACT_INTERVAL,
     INITIAL_TERRAIN,
     LIFE_INTERVAL,
+    OVERVIEW_TILE_SIZE,
     POLAR_INTERVAL,
+    SOUND_PATHS,
     SPRITE_PATHS,
     TARGET_FPS,
     TECTONIC_INTERVAL,
@@ -37,10 +39,10 @@ from webmirror import start_frame_mirror
 from world import World
 
 SIZE_PRESET_LABELS = [
-    ("Micro", 40, 24),
-    ("1600 x 900", 96, 48),
-    ("1920 x 1080", 116, 59),
-    ("2560 x 1440", 126, 65),
+    ("Micro", 80, 48, 640, 444),
+    ("1600 x 900", 192, 96, 1536, 828),
+    ("1920 x 1080", 232, 118, 1856, 1004),
+    ("2560 x 1440", 252, 130, 2016, 1100),
 ]
 
 TEMPERATURE_PRESETS = [
@@ -75,7 +77,7 @@ class Game:
         self.running = True
         self.paused = False
 
-        self.tile_size = TILE_SIZE
+        self.tile_size = OVERVIEW_TILE_SIZE
         self.camera_x = 0
         self.camera_y = 0
         self.hud_height = get_hud_height_for_map(cols)
@@ -126,6 +128,7 @@ class Game:
 
         self.speed = DEFAULT_GAME_SPEED
         self.sprites = {}
+        self.sounds = {}
 
     def get_world_view_height(self):
         return max(0, self.window_height - self.bottom_panel_height)
@@ -294,12 +297,32 @@ def load_sprites(tile_size):
     }
 
 
+def load_sounds():
+    try:
+        if pygame.mixer.get_init() is None:
+            pygame.mixer.init()
+        return {
+            name: pygame.mixer.Sound(path)
+            for name, path in SOUND_PATHS.items()
+        }
+    except (OSError, pygame.error) as exc:
+        print(f"Sound unavailable: {exc}")
+        return {}
+
+
 def get_hud_height_for_map(cols):
-    return MICRO_HUD_HEIGHT if cols * TILE_SIZE <= 500 else HUD_HEIGHT
+    return (
+        MICRO_HUD_HEIGHT
+        if cols * OVERVIEW_TILE_SIZE <= 500
+        else HUD_HEIGHT
+    )
 
 
 def get_window_size_for_map(cols, rows):
-    return cols * TILE_SIZE, rows * TILE_SIZE + get_hud_height_for_map(cols)
+    return (
+        cols * OVERVIEW_TILE_SIZE,
+        rows * OVERVIEW_TILE_SIZE + get_hud_height_for_map(cols),
+    )
 
 
 def fit_window_size_to_desktop(window_width, window_height):
@@ -312,18 +335,12 @@ def fit_window_size_to_desktop(window_width, window_height):
 
 
 def get_available_size_presets():
-    presets = []
-
-    for label, cols, rows in SIZE_PRESET_LABELS:
-        window_width, window_height = get_window_size_for_map(cols, rows)
-        presets.append((label, cols, rows, window_width, window_height))
-
-    return presets
+    return list(SIZE_PRESET_LABELS)
 
 
 def resolve_size_preset(preset):
-    _, cols, rows, _, _ = preset
-    return cols, rows
+    _, cols, rows, window_width, window_height = preset
+    return cols, rows, window_width, window_height
 
 
 def select_window_size():
@@ -382,7 +399,7 @@ def select_window_size():
 
         title = title_font.render("Choose a Newt Window Size", True, (255, 255, 255))
         subtitle = body_font.render(
-            f"Tile size is {TILE_SIZE}px, so each option creates an exact tile-aligned map.",
+            f"Overview is {OVERVIEW_TILE_SIZE}px; native sprites are {TILE_SIZE}px.",
             True,
             (255, 255, 255),
         )
@@ -585,10 +602,9 @@ def main():
         pygame.quit()
         return
 
-    cols, rows = selected_map_size
+    cols, rows, window_width, window_height = selected_map_size
     temperature, polar_depth = selected_temperature
     world_type, initial_terrain = selected_world_type
-    window_width, window_height = get_window_size_for_map(cols, rows)
     window_width, window_height = fit_window_size_to_desktop(
         window_width,
         window_height,
@@ -603,6 +619,7 @@ def main():
     game.clamp_camera()
     seed_initial_trenches(game)
     game.sprites = load_sprites(game.tile_size)
+    game.sounds = load_sounds()
 
     if WEB_MIRROR_ENABLED:
         try:

@@ -12,6 +12,8 @@ BUILDING_COLOR = (200, 50, 50)
 
 # World setup
 TILE_SIZE = 16
+OVERVIEW_TILE_SIZE = 8
+ZOOMED_IN_TILE_SIZE = 32
 INITIAL_TERRAIN = "ocean"
 DEFAULT_PAINT_TERRAIN = "stone"
 DEFAULT_BRUSH_SIZE = 0
@@ -57,4 +59,9 @@ SPRITE_PATHS = {
     "trilobite": BASE_DIR / "sprites" / "trilobite.png",
     "whale": BASE_DIR / "sprites" / "whale.png",
     "wolf": BASE_DIR / "sprites" / "wolf.png",
+}
+
+SOUND_PATHS = {
+    "zoom_in": BASE_DIR / "sounds" / "zoom_in[zoom_in].wav",
+    "zoom_out": BASE_DIR / "sounds" / "zoom_out[zoom_out].wav",
 }
