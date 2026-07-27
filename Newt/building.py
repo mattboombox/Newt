@@ -138,6 +138,98 @@ class MilitaryDistrict(Building):
             self.settlement = None
 
 
+class NavalDistrict(Building):
+    RECRUITMENT_COST = 5
+    RECRUITMENT_INTERVAL = 30.0
+    SAILOR_CAPACITY = 5
+
+    def __init__(self, x, y, settlement=None, sprite=None):
+        super().__init__(x, y, sprite=sprite, tags={"naval"})
+        self.settlement = settlement
+        self.recruitment_timer = self.RECRUITMENT_INTERVAL
+
+    def get_village_sailors(self, game):
+        from critters.ape_sailor import ApeSailor
+
+        return [
+            critter
+            for critter in game.critters
+            if (
+                isinstance(critter, ApeSailor)
+                and critter.home_building is self.settlement
+                and critter.current_behavior != "dying"
+            )
+        ]
+
+    def get_connected_naval_capacity(self, world):
+        if self.settlement is None:
+            return 0
+
+        return sum(
+            building.SAILOR_CAPACITY
+            for building in self.settlement.get_connected_buildings(world)
+            if isinstance(building, NavalDistrict)
+        )
+
+    def try_recruit(self, game):
+        from critters.ape import Ape
+        from critters.ape_sailor import ApeSailor
+
+        village = self.settlement
+        tile = game.world.get_tile(self.x, self.y)
+        if (
+            village is None
+            or village.food < self.RECRUITMENT_COST
+            or tile is None
+            or tile.building is not self
+            or tile.critter is not None
+        ):
+            return None
+
+        if len(self.get_village_sailors(game)) >= self.get_connected_naval_capacity(game.world):
+            return None
+
+        civilians = [
+            critter
+            for critter in game.critters
+            if (
+                type(critter) is Ape
+                and critter.home_building is village
+                and critter.current_behavior != "dying"
+            )
+        ]
+        if len(civilians) <= 1:
+            return None
+
+        recruit = min(
+            civilians,
+            key=lambda ape: abs(ape.x - self.x) + abs(ape.y - self.y),
+        )
+        village.food -= self.RECRUITMENT_COST
+        return ApeSailor.recruit(
+            recruit,
+            game.world,
+            self.x,
+            self.y,
+        )
+
+    def update(self, game, dt):
+        if self.settlement is None or not self.settlement.is_connected_building(game.world, self):
+            return
+
+        self.recruitment_timer -= dt
+        if self.recruitment_timer > 0:
+            return
+
+        self.recruitment_timer += self.RECRUITMENT_INTERVAL
+        self.try_recruit(game)
+
+    def on_removed(self, game):
+        if self.settlement is not None:
+            self.settlement.remove_aux_building(self)
+            self.settlement = None
+
+
 class Ruins(Building):
     MIN_DECAY_INTERVAL = 300.0
     MAX_DECAY_INTERVAL = 480.0

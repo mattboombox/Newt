@@ -1,4 +1,5 @@
 from .ape import Ape
+from .ape_sailor import ApeSailor
 from .ape_warrior import ApeWarrior
 from .crab import Crab
 from .critter import (
@@ -67,6 +68,7 @@ __all__ = [
     "CRITTER_TYPES",
     "Critter",
     "Ape",
+    "ApeSailor",
     "ApeWarrior",
     "Crab",
     "Deer",

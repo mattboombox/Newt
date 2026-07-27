@@ -1,9 +1,17 @@
 import pygame
 from brush import paint_radius, trigger_event_tool
+from config import SPRITE_PATHS
 from terrain import TERRAIN_DATA
 from critter import Ape, CRITTER_ORDER, CRITTER_TYPES
 from city import City
-from building import CritterPrinter, Farm, MilitaryDistrict, ResidentialDistrict, WolfDen
+from building import (
+    CritterPrinter,
+    Farm,
+    MilitaryDistrict,
+    NavalDistrict,
+    ResidentialDistrict,
+    WolfDen,
+)
 from entity_cleanup import remove_building_at_tile, remove_critter
 
 
@@ -12,12 +20,14 @@ BUILDING_ORDER = [
     "village",
     "farm",
     "residential_district",
+    "naval_district",
     "military_district",
     "wolf_den",
     "critter_printer",
 ]
 EVENT_TOOL_ORDER = ["meteor", "mega_meteor", "comet", "tsunami", "tectonic_uplift", "island_uplift", "trench_event", "evolve"]
 EVENT_ONLY_TERRAINS = {"meteor", "comet", "tectonic_uplift", "tsunami"}
+ZOOM_TILE_SIZES = (16, 8)
 TERRAIN_BRUSH_ORDER = [
     terrain_name
     for terrain_name in TERRAIN_DATA.keys()
@@ -58,6 +68,34 @@ def cycle_tool_mode(game):
     new_index = (current_index + 1) % len(TOOL_MODE_ORDER)
     game.current_tool = TOOL_MODE_ORDER[new_index]
     print("Tool mode:", game.current_tool)
+
+
+def reload_sprites_for_zoom(game):
+    sprites = {}
+    for name, path in SPRITE_PATHS.items():
+        image = pygame.image.load(path).convert_alpha()
+        target_size = (game.tile_size, game.tile_size)
+        sprites[name] = (
+            image
+            if image.get_size() == target_size
+            else pygame.transform.scale(image, target_size)
+        )
+    game.sprites = sprites
+
+
+def toggle_zoom(game):
+    mouse_x, mouse_y = pygame.mouse.get_pos()
+    anchor_tile = game.screen_to_world_tile(mouse_x, mouse_y)
+    current_index = ZOOM_TILE_SIZES.index(game.tile_size)
+    game.tile_size = ZOOM_TILE_SIZES[(current_index + 1) % len(ZOOM_TILE_SIZES)]
+
+    if anchor_tile is not None:
+        game.camera_x = anchor_tile.x - mouse_x // game.tile_size
+        game.camera_y = anchor_tile.y - mouse_y // game.tile_size
+
+    game.clamp_camera()
+    reload_sprites_for_zoom(game)
+    print(f"Zoom: {game.tile_size}x{game.tile_size} pixels per tile")
 
 
 def spawn_current_critter(game, tile):
@@ -155,6 +193,24 @@ def place_current_building(game, tile):
         village.add_aux_building(district)
         print(
             f"Placed military district for village at "
+            f"({village.x}, {village.y})"
+        )
+        return True
+
+    if (
+        game.current_building == "naval_district"
+        and tile.critter is None
+        and tile.terrain == "shallows"
+    ):
+        village = City.find_connectable_village(game.world, tile)
+        if village is None:
+            return False
+
+        district = NavalDistrict(tile.x, tile.y, settlement=village)
+        tile.building = district
+        village.add_aux_building(district)
+        print(
+            f"Placed naval district for village at "
             f"({village.x}, {village.y})"
         )
         return True
@@ -257,9 +313,38 @@ def handle_input(game):
             elif event.key == pygame.K_r:
                 cycle_tool_mode(game)
 
+            elif event.key == pygame.K_z:
+                toggle_zoom(game)
+
+            elif event.key == pygame.K_HOME:
+                game.reset_camera()
+
+            elif event.key in (
+                pygame.K_LEFT,
+                pygame.K_RIGHT,
+                pygame.K_UP,
+                pygame.K_DOWN,
+            ):
+                camera_step = 15 if event.mod & pygame.KMOD_SHIFT else 5
+                dx = (
+                    -camera_step
+                    if event.key == pygame.K_LEFT
+                    else camera_step
+                    if event.key == pygame.K_RIGHT
+                    else 0
+                )
+                dy = (
+                    -camera_step
+                    if event.key == pygame.K_UP
+                    else camera_step
+                    if event.key == pygame.K_DOWN
+                    else 0
+                )
+                game.pan_camera(dx, dy)
+
         elif event.type == pygame.MOUSEBUTTONDOWN:
             mx, my = pygame.mouse.get_pos()
-            tile = game.world.get_tile_at_pixel(mx, my, game.tile_size)
+            tile = game.screen_to_world_tile(mx, my)
 
             if event.button == 1:
                 apply_active_tool(game, tile)

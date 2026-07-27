@@ -31,9 +31,18 @@ class ApeWarrior(Ape):
             return ()
         return self.get_hunt_prey_types()
 
-    def try_reproduce_in_village(self, game, village):
-        # Military districts recruit warriors from the civilian population;
-        # warriors do not create a separate reproductive lineage.
-        self.meals_eaten = 0
-        self.set_behavior("patrol")
-        return False
+    def create_offspring(self, x, y):
+        return Ape(x, y)
+
+    def try_handle_priority_behavior(self, game):
+        if self.carrying_food:
+            return super().try_handle_priority_behavior(game)
+
+        if self.hunt_nearest_prey(
+            game,
+            self.get_hunt_prey_types(),
+            self.get_predator_name(),
+        ):
+            return True
+
+        return super().try_handle_priority_behavior(game)

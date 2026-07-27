@@ -390,6 +390,12 @@ class Critter:
     def get_scavenge_predator_name(self):
         return self.get_predator_name()
 
+    def is_valid_hunt_prey(self, critter, prey_types):
+        return isinstance(critter, prey_types)
+
+    def is_valid_scavenge_prey(self, critter, prey_types):
+        return isinstance(critter, prey_types)
+
     def get_hunt_range(self):
         return self.HUNT_RANGE
 
@@ -450,7 +456,7 @@ class Critter:
             if (
                 prey is None
                 or prey.current_behavior != "dying"
-                or not isinstance(prey, prey_types)
+                or not self.is_valid_scavenge_prey(prey, prey_types)
             ):
                 continue
 
@@ -479,7 +485,7 @@ class Critter:
             lambda tile: (
                 tile.critter is not None
                 and tile.critter.current_behavior == "dying"
-                and isinstance(tile.critter, prey_types)
+                and self.is_valid_scavenge_prey(tile.critter, prey_types)
                 and self.is_habitable_tile(tile)
             ),
             allow_occupied_target=True,
@@ -496,7 +502,7 @@ class Critter:
         if (
             target_tile.critter is not None
             and target_tile.critter.current_behavior == "dying"
-            and isinstance(target_tile.critter, prey_types)
+            and self.is_valid_scavenge_prey(target_tile.critter, prey_types)
         ):
             prey = target_tile.critter
             self.remove_other_critter(game, prey, self.get_scavenge_predator_name())
@@ -859,7 +865,7 @@ class Critter:
             lambda tile: (
                 tile.critter is not None
                 and tile.critter is not self
-                and isinstance(tile.critter, prey_types)
+                and self.is_valid_hunt_prey(tile.critter, prey_types)
                 and self.is_habitable_tile(tile)
             ),
             allow_occupied_target=True,
@@ -875,7 +881,10 @@ class Critter:
             self.set_behavior("hungry")
             return False
 
-        if target_tile.critter is not None and isinstance(target_tile.critter, prey_types):
+        if (
+            target_tile.critter is not None
+            and self.is_valid_hunt_prey(target_tile.critter, prey_types)
+        ):
             prey = target_tile.critter
             self.remove_other_critter(game, prey, predator_name)
             self.move_to(game.world, target_x, target_y, game)

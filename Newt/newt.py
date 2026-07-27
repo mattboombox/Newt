@@ -24,9 +24,7 @@ from config import (
     WEB_MIRROR_FPS,
     WEB_MIRROR_HOST,
     WEB_MIRROR_PORT,
-    WINDOW_HEIGHT,
     WINDOW_TITLE,
-    WINDOW_WIDTH,
 )
 from critter import CRITTER_ORDER
 from entity_cleanup import clear_stale_tile_critters, remove_stranded_critters
@@ -40,11 +38,9 @@ from world import World
 
 SIZE_PRESET_LABELS = [
     ("Micro", 40, 24),
-    ("Small", 100, 60),
-    ("Medium", WINDOW_WIDTH // TILE_SIZE, (WINDOW_HEIGHT - HUD_HEIGHT) // TILE_SIZE),
-    ("Large", 180, 90),
-    ("Huge", 220, 100),
-    ("Ring World", 280, 26),
+    ("1600 x 900", 96, 48),
+    ("1920 x 1080", 116, 59),
+    ("2560 x 1440", 126, 65),
 ]
 
 TEMPERATURE_PRESETS = [
@@ -63,13 +59,6 @@ WORLD_TYPE_PRESETS = [
 INITIAL_TRENCH_AREA_STEP = 5000
 MAX_INITIAL_TRENCHES = 6
 MICRO_HUD_HEIGHT = 64
-CUSTOM_MIN_COLS = 40
-CUSTOM_MIN_ROWS = 24
-CUSTOM_MAX_WIDTH = 3840
-CUSTOM_MAX_HEIGHT = 2160
-CUSTOM_WINDOW_SAFETY = 10
-
-
 # -----------------------------
 # Runtime game state
 # -----------------------------
@@ -87,6 +76,8 @@ class Game:
         self.paused = False
 
         self.tile_size = TILE_SIZE
+        self.camera_x = 0
+        self.camera_y = 0
         self.hud_height = get_hud_height_for_map(cols)
         self.bottom_panel_height = self.hud_height
         self.window_width, self.window_height = get_window_size_for_map(cols, rows)
@@ -136,6 +127,49 @@ class Game:
         self.speed = DEFAULT_GAME_SPEED
         self.sprites = {}
 
+    def get_world_view_height(self):
+        return max(0, self.window_height - self.bottom_panel_height)
+
+    def get_visible_tile_size(self):
+        visible_cols = (self.window_width + self.tile_size - 1) // self.tile_size
+        visible_rows = (
+            self.get_world_view_height() + self.tile_size - 1
+        ) // self.tile_size
+        return visible_cols, visible_rows
+
+    def clamp_camera(self):
+        visible_cols, visible_rows = self.get_visible_tile_size()
+        if visible_cols >= self.world.cols:
+            self.camera_x = 0
+        else:
+            self.camera_x %= self.world.cols
+
+        max_camera_y = max(0, self.world.rows - visible_rows)
+        self.camera_y = max(0, min(self.camera_y, max_camera_y))
+
+    def pan_camera(self, dx, dy):
+        self.camera_x += dx
+        self.camera_y += dy
+        self.clamp_camera()
+
+    def reset_camera(self):
+        self.camera_x = 0
+        self.camera_y = 0
+        self.clamp_camera()
+
+    def screen_to_world_tile(self, screen_x, screen_y):
+        if (
+            screen_x < 0
+            or screen_x >= self.window_width
+            or screen_y < 0
+            or screen_y >= self.get_world_view_height()
+        ):
+            return None
+
+        world_x = (self.camera_x + screen_x // self.tile_size) % self.world.cols
+        world_y = self.camera_y + screen_y // self.tile_size
+        return self.world.get_tile(world_x, world_y)
+
 
 def update_buildings(game, dt):
     updated_buildings = set()
@@ -153,7 +187,7 @@ def update_buildings(game, dt):
 
 def update(game, dt):
     mx, my = pygame.mouse.get_pos()
-    game.hovered_tile = game.world.get_tile_at_pixel(mx, my, game.tile_size)
+    game.hovered_tile = game.screen_to_world_tile(mx, my)
 
     # A tile's occupant is the authority movement and the HUD consult.  Keep
     # it synchronized with the active critter list so an already-removed
@@ -248,6 +282,8 @@ def seed_initial_trenches(game, trench_count=None):
 # -----------------------------
 def load_sprite(path, size):
     img = pygame.image.load(path).convert_alpha()
+    if img.get_size() == size:
+        return img
     return pygame.transform.scale(img, size)
 
 
@@ -266,125 +302,27 @@ def get_window_size_for_map(cols, rows):
     return cols * TILE_SIZE, rows * TILE_SIZE + get_hud_height_for_map(cols)
 
 
+def fit_window_size_to_desktop(window_width, window_height):
+    desktop_sizes = pygame.display.get_desktop_sizes()
+    if not desktop_sizes:
+        return window_width, window_height
+
+    desktop_width, desktop_height = desktop_sizes[0]
+    return min(window_width, desktop_width), min(window_height, desktop_height)
+
+
 def get_available_size_presets():
-    info = pygame.display.Info()
-    max_width = max(640, info.current_w - 120)
-    max_height = max(480, info.current_h - 120)
     presets = []
 
     for label, cols, rows in SIZE_PRESET_LABELS:
-        fitted_cols = cols
-        if label == "Ring World":
-            fitted_cols = min(cols, info.current_w // TILE_SIZE)
-
-        window_width, window_height = get_window_size_for_map(fitted_cols, rows)
-        allowed_width = info.current_w if label == "Ring World" else max_width
-        if window_width <= allowed_width and window_height <= max_height:
-            presets.append((label, fitted_cols, rows, window_width, window_height))
-
-    custom_width, custom_height = get_window_size_for_map(CUSTOM_MIN_COLS, CUSTOM_MIN_ROWS)
-    presets.append(
-        ("Custom", CUSTOM_MIN_COLS, CUSTOM_MIN_ROWS, custom_width, custom_height)
-    )
-
-    if presets:
-        return presets
-
-    fallback_cols = max(40, max_width // TILE_SIZE)
-    fallback_rows = max(30, (max_height - HUD_HEIGHT) // TILE_SIZE)
-    fallback_width, fallback_height = get_window_size_for_map(fallback_cols, fallback_rows)
-    return [("Auto Fit", fallback_cols, fallback_rows, fallback_width, fallback_height)]
-
-
-def get_custom_size_bounds():
-    desktop_sizes = pygame.display.get_desktop_sizes()
-    if desktop_sizes:
-        desktop_width, desktop_height = desktop_sizes[0]
-    else:
-        info = pygame.display.Info()
-        desktop_width, desktop_height = info.current_w, info.current_h
-
-    safe_width = min(desktop_width, CUSTOM_MAX_WIDTH) - CUSTOM_WINDOW_SAFETY
-    safe_height = min(desktop_height, CUSTOM_MAX_HEIGHT) - CUSTOM_WINDOW_SAFETY
-    max_cols = max(CUSTOM_MIN_COLS, safe_width // TILE_SIZE)
-    max_rows = max(
-        CUSTOM_MIN_ROWS,
-        (safe_height - max(HUD_HEIGHT, MICRO_HUD_HEIGHT)) // TILE_SIZE,
-    )
-    return CUSTOM_MIN_COLS, CUSTOM_MIN_ROWS, max_cols, max_rows
-
-
-def select_custom_size():
-    min_cols, min_rows, max_cols, max_rows = get_custom_size_bounds()
-    cols = min(max_cols, WINDOW_WIDTH // TILE_SIZE)
-    rows = min(max_rows, (WINDOW_HEIGHT - HUD_HEIGHT) // TILE_SIZE)
-
-    selector_width = 620
-    selector_height = 300
-    screen = pygame.display.set_mode((selector_width, selector_height))
-    pygame.display.set_caption(f"{WINDOW_TITLE} - Custom World Size")
-    title_font = pygame.font.SysFont(None, 42)
-    body_font = pygame.font.SysFont(None, 30)
-    hint_font = pygame.font.SysFont(None, 22)
-
-    while True:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                return None
-
-            if event.type == pygame.KEYDOWN:
-                step = 10 if event.mod & pygame.KMOD_SHIFT else 1
-                if event.key == pygame.K_ESCAPE:
-                    return None
-                if event.key in (pygame.K_LEFT, pygame.K_a):
-                    cols = max(min_cols, cols - step)
-                elif event.key in (pygame.K_RIGHT, pygame.K_d):
-                    cols = min(max_cols, cols + step)
-                elif event.key in (pygame.K_UP, pygame.K_w):
-                    rows = min(max_rows, rows + step)
-                elif event.key in (pygame.K_DOWN, pygame.K_s):
-                    rows = max(min_rows, rows - step)
-                elif event.key in (pygame.K_RETURN, pygame.K_SPACE):
-                    return cols, rows
-
-        screen.fill((0, 0, 0))
-        title = title_font.render("Choose a Custom World Size", True, (255, 255, 255))
-        screen.blit(title, (40, 34))
-
         window_width, window_height = get_window_size_for_map(cols, rows)
-        size_text = body_font.render(
-            f"{cols} x {rows} tiles  |  {window_width} x {window_height} window",
-            True,
-            (255, 255, 255),
-        )
-        screen.blit(size_text, (40, 112))
+        presets.append((label, cols, rows, window_width, window_height))
 
-        bounds_text = hint_font.render(
-            f"Bounds: {min_cols} x {min_rows} to {max_cols} x {max_rows} tiles",
-            True,
-            (200, 200, 200),
-        )
-        screen.blit(bounds_text, (40, 158))
-
-        controls = hint_font.render(
-            "A/Left: narrower  D/Right: wider  W/Up: taller  S/Down: shorter",
-            True,
-            (255, 255, 255),
-        )
-        screen.blit(controls, (40, 208))
-        confirm = hint_font.render(
-            "Hold Shift for 10 tiles. Enter confirms. Esc cancels.",
-            True,
-            (255, 255, 255),
-        )
-        screen.blit(confirm, (40, 238))
-        pygame.display.flip()
+    return presets
 
 
 def resolve_size_preset(preset):
-    label, cols, rows, _, _ = preset
-    if label == "Custom":
-        return select_custom_size()
+    _, cols, rows, _, _ = preset
     return cols, rows
 
 
@@ -402,7 +340,7 @@ def select_window_size():
     hint_font = pygame.font.SysFont(None, 22)
 
     selected_index = next(
-        (index for index, preset in enumerate(presets) if preset[0] == "Medium"),
+        (index for index, preset in enumerate(presets) if preset[0] == "1920 x 1080"),
         0,
     )
     buttons = [
@@ -651,11 +589,18 @@ def main():
     temperature, polar_depth = selected_temperature
     world_type, initial_terrain = selected_world_type
     window_width, window_height = get_window_size_for_map(cols, rows)
+    window_width, window_height = fit_window_size_to_desktop(
+        window_width,
+        window_height,
+    )
     screen = pygame.display.set_mode((window_width, window_height))
     pygame.display.set_caption(WINDOW_TITLE)
     clock = pygame.time.Clock()
 
     game = Game(cols, rows, temperature, polar_depth, world_type, initial_terrain)
+    game.window_width = window_width
+    game.window_height = window_height
+    game.clamp_camera()
     seed_initial_trenches(game)
     game.sprites = load_sprites(game.tile_size)
 

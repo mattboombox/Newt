@@ -47,6 +47,37 @@ class Ape(Therapsid):
         # blocking for apes.
         return ()
 
+    def is_returning_to_village(self):
+        return (
+            self.carrying_food > 0
+            or self.current_behavior
+            in {
+                "return_food",
+                "seek_food_store",
+                "return_to_reproduce",
+            }
+        )
+
+    def can_displace_critter(self, critter):
+        if self.is_returning_to_village():
+            return True
+        return super().can_displace_critter(critter)
+
+    def should_remove_on_failed_displacement(self, critter):
+        if self.is_returning_to_village():
+            return False
+        return super().should_remove_on_failed_displacement(critter)
+
+    def can_path_through_tile(self, tile):
+        if (
+            self.is_returning_to_village()
+            and tile is not None
+            and tile.critter is not None
+            and self.is_habitable_tile(tile)
+        ):
+            return True
+        return super().can_path_through_tile(tile)
+
     def get_home_village(self, world):
         from city import City
 
@@ -155,11 +186,9 @@ class Ape(Therapsid):
         connected_buildings = village.get_connected_buildings(world)
         return self.find_path_to_nearest_tile(
             world,
-            lambda tile: (
-                tile.building in connected_buildings
-                and (tile.critter is None or tile.critter is self)
-            ),
-            path_tile_predicate=self.is_habitable_tile,
+            lambda tile: tile.building in connected_buildings,
+            allow_occupied_target=True,
+            path_tile_predicate=self.can_path_through_tile,
         )
 
     def deposit_carried_food(self, village):
@@ -233,8 +262,8 @@ class Ape(Therapsid):
         if self.is_at_connected_settlement_building(game.world, village):
             return self.arrive_at_settlement(game, village)
 
-        path = self.find_path_to_settlement(game.world, village)
         self.set_behavior(behavior)
+        path = self.find_path_to_settlement(game.world, village)
         if not path:
             if self.is_hungry and self.carrying_food:
                 return self.consume_carried_food()

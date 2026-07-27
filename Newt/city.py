@@ -1,4 +1,11 @@
-from building import Building, Farm, ResidentialDistrict, Ruins
+from building import (
+    Building,
+    Farm,
+    MilitaryDistrict,
+    NavalDistrict,
+    ResidentialDistrict,
+    Ruins,
+)
 
 
 class City(Building):
@@ -8,6 +15,14 @@ class City(Building):
         "city": {"max_tags": 6, "max_aux": 6, "population_cap": 1000, "sprite_key": "city"},
     }
     FARM_COST = 5
+    MILITARY_DISTRICT_COST = 10
+    MILITARY_DISTRICT_MIN_FOOD = 10
+    MILITARY_DISTRICT_MIN_POPULATION = 10
+    POPULATION_PER_MILITARY_DISTRICT = 25
+    NAVAL_DISTRICT_COST = 5
+    NAVAL_DISTRICT_MIN_FOOD = 5
+    NAVAL_DISTRICT_MIN_POPULATION = 5
+    POPULATION_PER_NAVAL_DISTRICT = 25
     RESIDENTIAL_COST = 5
     MIN_VILLAGE_DISTANCE = 12
 
@@ -109,6 +124,8 @@ class City(Building):
             return
 
         self.try_expand_farms(game.world)
+        self.try_expand_naval_districts(game.world)
+        self.try_expand_military_districts(game.world)
 
     def abandon_to_ruins(self, game):
         connected_buildings = self.get_connected_buildings(game.world)
@@ -258,6 +275,98 @@ class City(Building):
             return None
 
         return self.try_build_farm(world)
+
+    def get_connected_military_district_count(self, world):
+        return sum(
+            isinstance(building, MilitaryDistrict)
+            for building in self.get_connected_buildings(world)
+        )
+
+    def try_build_military_district(self, world):
+        if self.food < self.MILITARY_DISTRICT_MIN_FOOD:
+            return None
+
+        candidates = [
+            tile
+            for tile in self.get_open_construction_tiles(world)
+            if tile.has_tag("land")
+        ]
+        candidates.sort(key=lambda tile: tile.terrain == "grass")
+        if not candidates:
+            return None
+
+        tile = candidates[0]
+        district = MilitaryDistrict(tile.x, tile.y, settlement=self)
+        tile.building = district
+        self.add_aux_building(district)
+        self.food -= self.MILITARY_DISTRICT_COST
+        return district
+
+    def try_expand_military_districts(self, world):
+        if self.population < self.MILITARY_DISTRICT_MIN_POPULATION:
+            return None
+
+        target_district_count = max(
+            1,
+            (self.population + self.POPULATION_PER_MILITARY_DISTRICT - 1)
+            // self.POPULATION_PER_MILITARY_DISTRICT,
+        )
+        if self.get_connected_military_district_count(world) >= target_district_count:
+            return None
+
+        return self.try_build_military_district(world)
+
+    def get_connected_naval_district_count(self, world):
+        return sum(
+            isinstance(building, NavalDistrict)
+            for building in self.get_connected_buildings(world)
+        )
+
+    def has_possible_connected_farm_site(self, world):
+        return any(
+            tile.terrain == "grass"
+            for tile in self.get_open_construction_tiles(world)
+        )
+
+    def try_build_naval_district(self, world):
+        if self.food < self.NAVAL_DISTRICT_MIN_FOOD:
+            return None
+
+        candidates = [
+            tile
+            for tile in self.get_open_construction_tiles(world)
+            if tile.terrain == "shallows"
+        ]
+        if not candidates:
+            return None
+
+        tile = candidates[0]
+        district = NavalDistrict(tile.x, tile.y, settlement=self)
+        tile.building = district
+        self.add_aux_building(district)
+        self.food -= self.NAVAL_DISTRICT_COST
+        return district
+
+    def try_expand_naval_districts(self, world):
+        has_no_farm_option = (
+            self.get_connected_farm_count(world) == 0
+            and not self.has_possible_connected_farm_site(world)
+        )
+        if (
+            self.population < self.NAVAL_DISTRICT_MIN_POPULATION
+            and not has_no_farm_option
+        ):
+            return None
+
+        target_district_count = max(
+            1,
+            (self.population + self.POPULATION_PER_NAVAL_DISTRICT - 1)
+            // self.POPULATION_PER_NAVAL_DISTRICT,
+        )
+        if self.get_connected_naval_district_count(world) >= target_district_count:
+            return None
+
+        return self.try_build_naval_district(world)
 
     def try_build_residential_district(self, world):
         if self.food < self.RESIDENTIAL_COST:
