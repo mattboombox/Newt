@@ -6,6 +6,7 @@ from .critter import CARDINAL_DIRECTIONS, Critter
 class SandWorm(Critter):
     """A multi-tile desert burrower that grows like a classic snake."""
 
+    DISPLACEMENT_LEVEL = 2
     ALLOWED_TERRAINS = {"sand"}
     START_LENGTH = 2
     MAX_LENGTH = 13

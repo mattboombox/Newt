@@ -1,20 +1,21 @@
-from .critter import Critter
+from .critter import AQUATIC_TERRAINS, Critter
 
 
 class Plankton(Critter):
-    FOOD_VALUE = 1
-    ALLOWED_TERRAINS = {"ocean", "trench", "shallows"}
+    DISPLACEMENT_LEVEL = 0
+    ALLOWED_TERRAINS = AQUATIC_TERRAINS - {"lake"}
     HUNGER_INTERVAL = 15.0
     STARVATION_INTERVAL = 8.0
+    MOVE_COOLDOWN = 5.0
     REPRODUCTION_BLOCKS_RESET_MEALS = True
-    REPRODUCTION_MEAL_THRESHOLD = 5
+    REPRODUCTION_MEAL_THRESHOLD = 4
 
     def __init__(self, x, y):
         super().__init__(
             x, y,
             color=(160, 255, 180),
             allowed_terrains=Plankton.ALLOWED_TERRAINS,
-            move_cooldown=4.20,
+            move_cooldown=Plankton.MOVE_COOLDOWN,
             sprite="plankton"
         )
         self.configure_hunger(Plankton.HUNGER_INTERVAL, Plankton.STARVATION_INTERVAL)

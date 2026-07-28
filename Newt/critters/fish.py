@@ -1,12 +1,11 @@
 from .crab import Crab
-from .critter import Critter
+from .critter import AQUATIC_TERRAINS, Critter
 from .plankton import Plankton
 
 
 class Fish(Critter):
-    FOOD_VALUE = 1
-    ALLOWED_TERRAINS = {"ocean", "shallows", "lake"}
-    REPRODUCTION_MEAL_THRESHOLD = 2
+    ALLOWED_TERRAINS = AQUATIC_TERRAINS - {"trench"}
+    REPRODUCTION_MEAL_THRESHOLD = 3
     HUNGER_INTERVAL = 40.0
     STARVATION_INTERVAL = 40.0
     FLEE_DETECTION_RADIUS = 5
@@ -16,7 +15,6 @@ class Fish(Critter):
     SCAVENGE_RANGE = 12
     HUNT_PREY_TYPES = (Plankton)
     SCAVENGE_PREY_TYPES = (Plankton, Crab)
-    DISPLACEABLE_CRITTER_TYPES = (Plankton, Crab)
     PREDATOR_NAME = "Fish"
 
     def __init__(self, x, y):
@@ -43,4 +41,4 @@ class Fish(Critter):
         return self.get_hunt_prey_types()
 
     def spawn_death_remains(self, game, tile):
-        return self.try_spawn_plankton_remains(game, tile)
+        return self.try_spawn_meal_based_plankton_remains(game, tile)

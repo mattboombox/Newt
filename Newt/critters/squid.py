@@ -1,25 +1,20 @@
-import random
-
 from .crab import Crab
-from .critter import Critter
+from .critter import AQUATIC_TERRAINS, Critter
 from .fish import Fish
 from .nautilus import Nautilus
-from .newt import Newt
-from .plankton import Plankton
-from .snail import Snail
 from .trilobite import Trilobite
 
 
 class Squid(Critter):
-    ALLOWED_TERRAINS = {"ocean", "trench", "shallows", "lake"}
-    REPRODUCTION_MEAL_THRESHOLD = 6
+    DISPLACEMENT_LEVEL = 2
+    ALLOWED_TERRAINS = AQUATIC_TERRAINS
+    REPRODUCTION_MEAL_THRESHOLD = 10
     HUNGER_INTERVAL = 200.0
     STARVATION_INTERVAL = 120.0
     MOVE_COOLDOWN = 0.48
     HUNT_RANGE = 8
     HUNT_PREY_TYPES = (Fish, Crab, Nautilus, Trilobite)
     SCAVENGE_PREY_TYPES = (Fish, Crab, Nautilus, Trilobite)
-    DISPLACEABLE_CRITTER_TYPES = (Plankton, Crab, Trilobite)
     PREDATOR_NAME = "Squid"
     REPRODUCTION_BLOCKS_SET_BEHAVIOR = True
     REPRODUCTION_BLOCKS_RESET_MEALS = True
@@ -55,8 +50,9 @@ class Squid(Critter):
         return (Squid,)
 
     def spawn_death_remains(self, game, tile):
-        egg_spawn_chance = min(1.0, self.meals_eaten / Squid.REPRODUCTION_MEAL_THRESHOLD)
-        if self.meals_eaten > 0 and random.random() < egg_spawn_chance and self.try_spawn_squid_egg_remains(game, tile):
+        if self.try_spawn_meal_based_remains(
+            lambda: self.try_spawn_squid_egg_remains(game, tile),
+        ):
             return True
 
-        return self.try_spawn_plankton_remains(game, tile)
+        return self.try_spawn_meal_based_plankton_remains(game, tile)

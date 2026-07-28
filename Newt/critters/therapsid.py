@@ -1,5 +1,5 @@
 from .crab import Crab
-from .critter import Critter, NON_ARCTIC_LAND_TERRAINS
+from .critter import Critter, LAND_TERRAINS
 from .newt import Newt
 from .snail import Snail
 from .trilobite import Trilobite
@@ -7,7 +7,8 @@ from .fish import Fish
 
 
 class Therapsid(Critter):
-    ALLOWED_TERRAINS = NON_ARCTIC_LAND_TERRAINS | {"shallows"}
+    DISPLACEMENT_LEVEL = 2
+    ALLOWED_TERRAINS = LAND_TERRAINS
     HUNGER_INTERVAL = 34.0
     STARVATION_INTERVAL = 40.0
     HUNT_RANGE = 18

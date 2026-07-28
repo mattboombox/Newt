@@ -1,10 +1,11 @@
-from .critter import Critter
+from .critter import AQUATIC_TERRAINS, Critter
+from .plankton import Plankton
 
 
 class SquidEgg(Critter):
-    FOOD_VALUE = 1
-    ALLOWED_TERRAINS = {"ocean", "trench", "shallows", "lake"}
-    MOVE_COOLDOWN = 4.20
+    DISPLACEMENT_LEVEL = 0
+    ALLOWED_TERRAINS = AQUATIC_TERRAINS
+    MOVE_COOLDOWN = Plankton.MOVE_COOLDOWN
 
     def __init__(self, x, y):
         super().__init__(

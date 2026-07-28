@@ -1,8 +1,9 @@
-from .critter import Critter, NON_ARCTIC_LAND_TERRAINS
+from .critter import Critter, LAND_TERRAINS
 
 
 class MegaSpider(Critter):
-    ALLOWED_TERRAINS = NON_ARCTIC_LAND_TERRAINS | {"shallows"}
+    DISPLACEMENT_LEVEL = 2
+    ALLOWED_TERRAINS = LAND_TERRAINS
     REPRODUCTION_MEAL_THRESHOLD = 8
     HUNGER_INTERVAL = 70.0
     STARVATION_INTERVAL = 120.0
@@ -109,6 +110,13 @@ class MegaSpider(Critter):
         if can_continue and not was_hungry and self.is_hungry:
             self.consume_web_charge(game.world)
         return can_continue
+
+    def start_dying(self, game=None):
+        # A web belongs to its living spider, not to the corpse that remains
+        # during the dying interval. Removing the last resident also removes
+        # the web from the world.
+        self.clear_home_building()
+        super().start_dying(game)
 
     def handle_successful_meal(self, game, meal_points=None):
         if meal_points is None:

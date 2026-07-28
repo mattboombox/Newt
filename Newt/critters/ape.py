@@ -1,3 +1,5 @@
+import random
+
 from .critter import Critter
 from .therapsid import Therapsid
 
@@ -10,6 +12,7 @@ class Ape(Therapsid):
     REPRODUCTION_BLOCKS_SET_BEHAVIOR = False
     REPRODUCTION_BLOCKS_RESET_MEALS = False
     VILLAGE_CLAIM_RANGE = 28
+    WOLF_TAMING_CHANCE = 0.05
 
     def __init__(self, x, y):
         Critter.__init__(
@@ -23,6 +26,7 @@ class Ape(Therapsid):
         )
         self.configure_hunger(Ape.HUNGER_INTERVAL, Ape.STARVATION_INTERVAL)
         self.carrying_food = 0
+        self.wolf_taming_contact_ids = set()
 
     @staticmethod
     def is_recruitable_civilian(critter):
@@ -293,6 +297,9 @@ class Ape(Therapsid):
         return True
 
     def try_handle_priority_behavior(self, game):
+        if self.try_tame_adjacent_wolf(game):
+            return True
+
         if self.carrying_food:
             if self.is_hungry:
                 return self.consume_carried_food()
@@ -305,6 +312,45 @@ class Ape(Therapsid):
 
         if self.meals_eaten >= self.REPRODUCTION_MEAL_THRESHOLD:
             return self.try_return_to_settlement(game, "return_to_reproduce")
+
+        return False
+
+    def try_tame_adjacent_wolf(self, game):
+        if type(self) is not Ape:
+            return False
+
+        village = self.get_home_village(game.world)
+        if village is None:
+            self.wolf_taming_contact_ids.clear()
+            return False
+
+        from .dog import Dog
+        from .wolf import Wolf
+
+        adjacent_wolves = []
+        for x, y in self.get_neighbor_positions(game.world, self.x, self.y):
+            tile = game.world.get_tile(x, y)
+            wolf = None if tile is None else tile.critter
+            if (
+                isinstance(wolf, Wolf)
+                and wolf.current_behavior != "dying"
+            ):
+                adjacent_wolves.append(wolf)
+
+        adjacent_ids = {wolf.id for wolf in adjacent_wolves}
+        self.wolf_taming_contact_ids.intersection_update(adjacent_ids)
+
+        for wolf in adjacent_wolves:
+            if wolf.id in self.wolf_taming_contact_ids:
+                continue
+
+            self.wolf_taming_contact_ids.add(wolf.id)
+            if random.random() >= self.WOLF_TAMING_CHANCE:
+                continue
+
+            Dog.tame(wolf, village)
+            self.set_behavior("tame_wolf")
+            return True
 
         return False
 

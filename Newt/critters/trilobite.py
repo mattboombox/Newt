@@ -1,20 +1,15 @@
-from .critter import Critter
-from .plankton import Plankton
-
-
+from .critter import AQUATIC_TERRAINS, Critter
 
 class Trilobite(Critter):
-    FOOD_VALUE = 1
     """An early seafloor arthropod that survives by scavenging carrion."""
 
-    ALLOWED_TERRAINS = {"ocean", "trench", "shallows"}
+    ALLOWED_TERRAINS = AQUATIC_TERRAINS
     FEED_TERRAINS = {"shallows"}
-    REPRODUCTION_MEAL_THRESHOLD = 3
+    REPRODUCTION_MEAL_THRESHOLD = 5
     HUNGER_INTERVAL = 50.0
-    STARVATION_INTERVAL = 45.0
+    STARVATION_INTERVAL = 180.0
     SCAVENGE_RANGE = 14
-    FORAGE_RANGE = 10
-    DISPLACEABLE_CRITTER_TYPES = (Plankton,)
+    FORAGE_RANGE = 14
     PREDATOR_NAME = "Trilobite"
     REPRODUCTION_BLOCKS_SET_BEHAVIOR = True
     REPRODUCTION_BLOCKS_RESET_MEALS = True
@@ -46,4 +41,4 @@ class Trilobite(Critter):
         return (Trilobite,)
 
     def spawn_death_remains(self, game, tile):
-        return self.try_spawn_plankton_remains(game, tile)
+        return self.try_spawn_meal_based_plankton_remains(game, tile)

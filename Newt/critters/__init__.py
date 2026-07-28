@@ -3,14 +3,16 @@ from .ape_sailor import ApeSailor
 from .ape_warrior import ApeWarrior
 from .crab import Crab
 from .critter import (
-    AMPHIBIOUS_LAND_TERRAINS,
+    AQUATIC_TERRAINS,
     CARDINAL_DIRECTIONS,
     Critter,
-    NON_ARCTIC_LAND_TERRAINS,
+    LAND_TERRAINS,
 )
 from .deer import Deer
+from .dog import Dog
 from .fish import Fish
 from .giga_slug import GigaSlug
+from .jelly_fish import Jellyfish
 from .land_kraken import LandKraken
 from .mega_spider import MegaSpider
 from .nautilus import Nautilus
@@ -27,22 +29,14 @@ from .trilobite import Trilobite
 from .whale import Whale
 from .wolf import Wolf
 
-Crab.DISPLACEABLE_CRITTER_TYPES = (Plankton,)
-Deer.DISPLACEABLE_CRITTER_TYPES = (Crab, Newt)
-Fish.DISPLACEABLE_CRITTER_TYPES = (Plankton, Crab, Newt)
-Nautilus.DISPLACEABLE_CRITTER_TYPES = (Plankton, Newt)
-Squid.DISPLACEABLE_CRITTER_TYPES = (Plankton, Crab, Newt)
-SpermWhale.DISPLACEABLE_CRITTER_TYPES = (Plankton, Crab, Newt)
-Therapsid.DISPLACEABLE_CRITTER_TYPES = (Crab, Newt)
-Whale.DISPLACEABLE_CRITTER_TYPES = (Plankton, Crab, Newt)
-Wolf.DISPLACEABLE_CRITTER_TYPES = (Crab, Newt)
-
 CRITTER_TYPES = {
     "ape": Ape,
     "crab": Crab,
     "deer": Deer,
+    "dog": Dog,
     "fish": Fish,
     "giga_slug": GigaSlug,
+    "jelly_fish": Jellyfish,
     "land_kraken": LandKraken,
     "mega_spider": MegaSpider,
     "nautilus": Nautilus,
@@ -62,7 +56,7 @@ CRITTER_TYPES = {
 CRITTER_ORDER = list(CRITTER_TYPES.keys())
 
 __all__ = [
-    "AMPHIBIOUS_LAND_TERRAINS",
+    "AQUATIC_TERRAINS",
     "CARDINAL_DIRECTIONS",
     "CRITTER_ORDER",
     "CRITTER_TYPES",
@@ -72,13 +66,15 @@ __all__ = [
     "ApeWarrior",
     "Crab",
     "Deer",
+    "Dog",
     "Fish",
     "GigaSlug",
+    "Jellyfish",
     "LandKraken",
     "MegaSpider",
     "Nautilus",
     "Newt",
-    "NON_ARCTIC_LAND_TERRAINS",
+    "LAND_TERRAINS",
     "Plankton",
     "SandWorm",
     "SeaScorpion",

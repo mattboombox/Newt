@@ -1,5 +1,5 @@
 from .ape import Ape
-from .critter import Critter, NON_ARCTIC_LAND_TERRAINS
+from .critter import Critter, LAND_TERRAINS
 from .giga_slug import GigaSlug
 from .therapsid import Therapsid
 
@@ -7,7 +7,8 @@ from .therapsid import Therapsid
 class LandKraken(Critter):
     """A denless land predator descended from squid."""
 
-    ALLOWED_TERRAINS = NON_ARCTIC_LAND_TERRAINS | {"shallows"}
+    DISPLACEMENT_LEVEL = 2
+    ALLOWED_TERRAINS = LAND_TERRAINS
     REPRODUCTION_MEAL_THRESHOLD = 10
     HUNGER_INTERVAL = 260.0
     STARVATION_INTERVAL = 120.0

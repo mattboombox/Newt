@@ -1,15 +1,12 @@
-from .crab import Crab
-from .critter import AMPHIBIOUS_LAND_TERRAINS, Critter
+from .critter import Critter, LAND_TERRAINS
 
 
 class Newt(Critter):
-    FOOD_VALUE = 1
-    ALLOWED_TERRAINS = AMPHIBIOUS_LAND_TERRAINS - {"shallows"}
+    ALLOWED_TERRAINS = LAND_TERRAINS | {"lake"}
     FEED_TERRAINS = {"lake"}
     HUNGER_INTERVAL = 24.0
     STARVATION_INTERVAL = 28.0
     MOVE_COOLDOWN = 0.64
-    DISPLACEABLE_CRITTER_TYPES = (Crab,)
     REPRODUCTION_MEAL_THRESHOLD = 3
 
     def __init__(self, x, y):

@@ -1,19 +1,16 @@
-from .crab import Crab
-from .critter import Critter
+from .critter import AQUATIC_TERRAINS, Critter
 from .plankton import Plankton
 
 
 class Whale(Critter):
-    FOOD_VALUE = 5
-    ALLOWED_TERRAINS = {"ocean", "trench", "shallows"}
+    DISPLACEMENT_LEVEL = 3
+    ALLOWED_TERRAINS = AQUATIC_TERRAINS - {"lake"}
     REPRODUCTION_MEAL_THRESHOLD = 15
     HUNGER_INTERVAL = 18.0
     STARVATION_INTERVAL = 90.0
     # Sonar gives whales a much longer—but still finite—prey search range.
     HUNT_RANGE = 24
     HUNT_PREY_TYPES = (Plankton,)
-    DISPLACEABLE_CRITTER_TYPES = (Plankton, Crab)
-    DISPLACEMENT_MEAL_TYPES = (Plankton,)
     PREDATOR_NAME = "Whale"
 
     def __init__(self, x, y):
@@ -27,4 +24,9 @@ class Whale(Critter):
         self.configure_hunger(Whale.HUNGER_INTERVAL, Whale.STARVATION_INTERVAL)
 
     def spawn_death_remains(self, game, tile):
-        return self.try_spawn_plankton_remains(game, tile)
+        return self.try_spawn_meal_based_plankton_remains(game, tile)
+
+    def get_displacement_meal_value(self, critter):
+        if isinstance(critter, Plankton):
+            return self.get_reproduction_meal_value(critter)
+        return None

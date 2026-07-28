@@ -22,7 +22,7 @@ class Building:
         pass
 
 class Farm(Building):
-    FOOD_INTERVAL = 12.0
+    FOOD_INTERVAL = 12
 
     def __init__(self, x, y, settlement=None, sprite=None):
         super().__init__(x, y, sprite=sprite, tags={"food"})
@@ -96,7 +96,11 @@ class MilitaryDistrict(Building):
         from critters.ape_warrior import ApeWarrior
 
         village = self.settlement
-        if village is None or village.food < self.RECRUITMENT_COST:
+        if (
+            village is None
+            or village.should_prioritize_farms(game.world)
+            or village.food < self.RECRUITMENT_COST
+        ):
             return None
 
         if len(self.get_village_warriors(game)) >= self.get_connected_military_capacity(game.world):
@@ -179,6 +183,7 @@ class NavalDistrict(Building):
         tile = game.world.get_tile(self.x, self.y)
         if (
             village is None
+            or village.should_prioritize_farms(game.world)
             or village.food < self.RECRUITMENT_COST
             or tile is None
             or tile.building is not self

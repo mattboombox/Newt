@@ -1,11 +1,10 @@
-from .critter import AMPHIBIOUS_LAND_TERRAINS, Critter
+from .critter import Critter, LAND_TERRAINS
 
 
 class Snail(Critter):
     """A lake-feeding mollusk descended from nautilus in shallow water."""
 
-    FOOD_VALUE = 1
-    ALLOWED_TERRAINS = AMPHIBIOUS_LAND_TERRAINS - {"shallows"}
+    ALLOWED_TERRAINS = LAND_TERRAINS | {"lake"}
     FEED_TERRAINS = {"lake"}
     HUNGER_INTERVAL = 28.0
     STARVATION_INTERVAL = 32.0

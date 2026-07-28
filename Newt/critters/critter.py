@@ -2,16 +2,17 @@ import random
 from collections import deque
 
 
-NON_ARCTIC_LAND_TERRAINS = {
+LAND_TERRAINS = {
     "beach",
     "grass",
     "sand",
     "snow",
     "stone",
     "ice_sheet",
+    "shallows",
 }
 
-AMPHIBIOUS_LAND_TERRAINS = NON_ARCTIC_LAND_TERRAINS | {"lake", "shallows"}
+AQUATIC_TERRAINS = {"ocean", "lake", "shallows", "trench"}
 
 CARDINAL_DIRECTIONS = [
     (1, 0), (-1, 0),
@@ -22,7 +23,10 @@ CARDINAL_DIRECTIONS = [
 class Critter:
     _next_id = 1
     DYING_INTERVAL = 12.0
-    FOOD_VALUE = 3
+    # Critters may displace occupants from lower levels. Nutrition follows
+    # the same scale by default, with +1 keeping level-zero prey valuable.
+    DISPLACEMENT_LEVEL = 1
+    FOOD_VALUE = None
     REPRODUCTION_MEAL_THRESHOLD = 5
     FLEE_DETECTION_RADIUS = 0
     # Finite by default so new predator species cannot accidentally scan the
@@ -32,8 +36,6 @@ class Critter:
     FORAGE_RANGE = 12
     HUNT_PREY_TYPES = ()
     SCAVENGE_PREY_TYPES = ()
-    DISPLACEABLE_CRITTER_TYPES = ()
-    DISPLACEMENT_MEAL_TYPES = ()
     PREDATOR_NAME = None
     REPRODUCTION_BLOCKS_SET_BEHAVIOR = False
     REPRODUCTION_BLOCKS_RESET_MEALS = False
@@ -113,7 +115,12 @@ class Critter:
     def get_reproduction_meal_value(self, prey=None):
         if prey is None:
             return 1
-        return prey.FOOD_VALUE + getattr(prey, "carrying_food", 0)
+        return prey.get_food_value() + getattr(prey, "carrying_food", 0)
+
+    def get_food_value(self):
+        if self.FOOD_VALUE is not None:
+            return self.FOOD_VALUE
+        return self.DISPLACEMENT_LEVEL + 1
 
     def handle_successful_meal(self, game, meal_points=None):
         if meal_points is None:
@@ -272,6 +279,20 @@ class Critter:
         game.critters.append(plankton)
         return True
 
+    def get_meal_based_remains_chance(self):
+        if self.meals_eaten <= 0 or self.REPRODUCTION_MEAL_THRESHOLD <= 0:
+            return 0.0
+        return min(1.0, self.meals_eaten / self.REPRODUCTION_MEAL_THRESHOLD)
+
+    def try_spawn_meal_based_remains(self, spawn_remains):
+        chance = self.get_meal_based_remains_chance()
+        return chance > 0 and random.random() < chance and spawn_remains()
+
+    def try_spawn_meal_based_plankton_remains(self, game, tile):
+        return self.try_spawn_meal_based_remains(
+            lambda: self.try_spawn_plankton_remains(game, tile),
+        )
+
     def try_spawn_squid_egg_remains(self, game, tile):
         from .squid_egg import SquidEgg
 
@@ -297,19 +318,7 @@ class Critter:
         return True
 
     def can_displace_critter(self, critter):
-        from .trilobite import Trilobite
-
-        if isinstance(critter, Trilobite):
-            return True
-
-        displaceable_types = self.DISPLACEABLE_CRITTER_TYPES
-        if not displaceable_types:
-            return False
-
-        if not isinstance(displaceable_types, tuple):
-            displaceable_types = (displaceable_types,)
-
-        return isinstance(critter, displaceable_types)
+        return self.DISPLACEMENT_LEVEL > critter.DISPLACEMENT_LEVEL
 
     def get_flee_predator_types(self):
         return ()
@@ -324,15 +333,6 @@ class Critter:
         return True
 
     def get_displacement_meal_value(self, critter):
-        meal_types = self.DISPLACEMENT_MEAL_TYPES
-        if not meal_types:
-            return None
-
-        if not isinstance(meal_types, tuple):
-            meal_types = (meal_types,)
-
-        if isinstance(critter, meal_types):
-            return self.get_reproduction_meal_value(critter)
         return None
 
     def try_handle_priority_behavior(self, game):

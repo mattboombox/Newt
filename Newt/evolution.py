@@ -1,6 +1,6 @@
 import random
 
-from critter import Ape, Crab, Deer, Fish, GigaSlug, LandKraken, MegaSpider, Nautilus, Newt, Plankton, SeaScorpion, Snail, SpermWhale, Squid, Therapsid, Trilobite, Whale, Wolf
+from critter import Ape, Crab, Deer, Fish, GigaSlug, Jellyfish, LandKraken, MegaSpider, Nautilus, Newt, Plankton, SeaScorpion, Snail, SpermWhale, Squid, Therapsid, Trilobite, Whale, Wolf
 
 EVOLUTION_TREE = {
     Plankton: (
@@ -14,6 +14,10 @@ EVOLUTION_TREE = {
         },
         {
             "result_type": Nautilus,
+            "weight": 1.0,
+        },
+        {
+            "result_type": Jellyfish,
             "weight": 1.0,
         },
     ),

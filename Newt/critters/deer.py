@@ -1,17 +1,16 @@
 import random
 
-from .crab import Crab
-from .critter import Critter, NON_ARCTIC_LAND_TERRAINS
+from .critter import Critter, LAND_TERRAINS
 
 
 class Deer(Critter):
-    ALLOWED_TERRAINS = NON_ARCTIC_LAND_TERRAINS
+    DISPLACEMENT_LEVEL = 2
+    ALLOWED_TERRAINS = LAND_TERRAINS
     HUNGER_INTERVAL = 40.0
     STARVATION_INTERVAL = 40.0
     GRASS_CONSUME_CHANCE = 0.10
     REPRODUCTION_MEAL_THRESHOLD = 4
     FLEE_DETECTION_RADIUS = 5
-    DISPLACEABLE_CRITTER_TYPES = (Crab,)
 
     def __init__(self, x, y):
         super().__init__(

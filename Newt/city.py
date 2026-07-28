@@ -33,11 +33,16 @@ class City(Building):
         self.world = world
         self.food = 0
         self.resident_ape_ids = set()
+        self.resident_dog_ids = set()
         self.aux_buildings = []
 
     @property
     def population(self):
         return len(self.resident_ape_ids)
+
+    @property
+    def food_consumer_count(self):
+        return self.population + len(self.resident_dog_ids)
 
     @property
     def population_cap(self):
@@ -99,19 +104,36 @@ class City(Building):
         )
 
     def add_resident(self, critter):
-        self.resident_ape_ids.add(critter.id)
+        from critters.dog import Dog
+
+        if isinstance(critter, Dog):
+            self.resident_dog_ids.add(critter.id)
+        else:
+            self.resident_ape_ids.add(critter.id)
 
     def remove_resident(self, critter):
         self.resident_ape_ids.discard(critter.id)
+        self.resident_dog_ids.discard(critter.id)
 
     def reconcile_residents(self, game):
         from critters.ape import Ape
+        from critters.dog import Dog
 
         self.resident_ape_ids = {
             critter.id
             for critter in game.critters
             if (
                 isinstance(critter, Ape)
+                and not isinstance(critter, Dog)
+                and critter.home_building is self
+                and critter.current_behavior != "dying"
+            )
+        }
+        self.resident_dog_ids = {
+            critter.id
+            for critter in game.critters
+            if (
+                isinstance(critter, Dog)
                 and critter.home_building is self
                 and critter.current_behavior != "dying"
             )
@@ -157,6 +179,7 @@ class City(Building):
             if getattr(critter, "home_building", None) is self:
                 critter.home_building = None
         self.resident_ape_ids.clear()
+        self.resident_dog_ids.clear()
 
         for building in [self, *self.aux_buildings]:
             self.replace_building_with_ruins(game, building)
@@ -245,13 +268,12 @@ class City(Building):
         return candidates
 
     def try_build_initial_farm(self, world):
-        if any(isinstance(building, Farm) for building in self.aux_buildings):
+        if self.get_connected_farm_count(world) > 0:
             return None
 
-        for tile in world.get_neighbors_cardinal(self.x, self.y):
-            if tile.building is not None or tile.critter is not None or tile.terrain != "grass":
+        for tile in self.get_open_construction_tiles(world):
+            if tile.terrain != "grass":
                 continue
-
             farm = Farm(tile.x, tile.y, settlement=self)
             tile.building = farm
             self.add_aux_building(farm)
@@ -284,9 +306,25 @@ class City(Building):
         self.food -= self.FARM_COST
         return farm
 
+    def get_target_farm_count(self):
+        food_consumers = self.food_consumer_count
+        baseline = (food_consumers + 4) // 5
+        food_shortage_buffer = int(food_consumers > 0 and self.food <= food_consumers)
+        return baseline + food_shortage_buffer
+
+    def should_prioritize_farms(self, world):
+        return (
+            self.get_connected_farm_count(world) < self.get_target_farm_count()
+            and self.has_possible_connected_farm_site(world)
+        )
+
     def try_expand_farms(self, world):
-        target_farm_count = (self.population + 4) // 5
-        if self.get_connected_farm_count(world) >= target_farm_count:
+        if self.get_connected_farm_count(world) == 0:
+            initial_farm = self.try_build_initial_farm(world)
+            if initial_farm is not None:
+                return initial_farm
+
+        if not self.should_prioritize_farms(world):
             return None
 
         return self.try_build_farm(world)
@@ -384,7 +422,7 @@ class City(Building):
         return self.try_build_naval_district(world)
 
     def try_build_residential_district(self, world):
-        if self.food < self.RESIDENTIAL_COST:
+        if self.should_prioritize_farms(world) or self.food < self.RESIDENTIAL_COST:
             return None
 
         candidates = [
@@ -408,6 +446,7 @@ class City(Building):
             if getattr(critter, "home_building", None) is self:
                 critter.home_building = None
         self.resident_ape_ids.clear()
+        self.resident_dog_ids.clear()
 
         for building in self.aux_buildings:
             self.replace_building_with_ruins(game, building)

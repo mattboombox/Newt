@@ -1,17 +1,12 @@
-from .crab import Crab
-from .plankton import Plankton
 from .whale import Whale
-from .trilobite import Trilobite
 
 
 class SpermWhale(Whale):
-    FOOD_VALUE = 5
     ALLOWED_TERRAINS = Whale.ALLOWED_TERRAINS
     REPRODUCTION_MEAL_THRESHOLD = Whale.REPRODUCTION_MEAL_THRESHOLD
     HUNGER_INTERVAL = Whale.HUNGER_INTERVAL
     STARVATION_INTERVAL = 220.0
     MOVE_COOLDOWN = 0.28
-    DISPLACEABLE_CRITTER_TYPES = (Plankton, Crab, Trilobite)
     PREDATOR_NAME = "Sperm Whale"
 
     def __init__(self, x, y):
@@ -51,4 +46,4 @@ class SpermWhale(Whale):
         )
 
     def spawn_death_remains(self, game, tile):
-        return self.try_spawn_plankton_remains(game, tile)
+        return self.try_spawn_meal_based_plankton_remains(game, tile)

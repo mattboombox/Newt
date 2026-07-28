@@ -1,19 +1,19 @@
 from .ape import Ape
 from .crab import Crab
-from .critter import Critter, NON_ARCTIC_LAND_TERRAINS
+from .critter import Critter, LAND_TERRAINS
 from .deer import Deer
 from .therapsid import Therapsid
 from .land_kraken import LandKraken
 
 class Wolf(Critter):
-    ALLOWED_TERRAINS = NON_ARCTIC_LAND_TERRAINS | {"shallows"}
+    DISPLACEMENT_LEVEL = 2
+    ALLOWED_TERRAINS = LAND_TERRAINS
     REPRODUCTION_MEAL_THRESHOLD = 10
     HUNGER_INTERVAL = 260.0
     STARVATION_INTERVAL = 120.0
     HUNT_RANGE = 8
-    HUNT_PREY_TYPES = (Ape, Deer, Therapsid, LandKraken)
-    SCAVENGE_PREY_TYPES = (Ape, Deer, Therapsid, LandKraken)
-    DISPLACEABLE_CRITTER_TYPES = (Crab,)
+    HUNT_PREY_TYPES = (Ape, Deer, Therapsid, LandKraken, Crab)
+    SCAVENGE_PREY_TYPES = (Ape, Deer, Therapsid, LandKraken, Crab)
     PREDATOR_NAME = "Wolf"
     REPRODUCTION_BLOCKS_SET_BEHAVIOR = True
     REPRODUCTION_BLOCKS_RESET_MEALS = True

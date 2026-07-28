@@ -320,6 +320,13 @@ def load_sprites(tile_size):
     }
 
 
+def set_window_icon():
+    try:
+        pygame.display.set_icon(pygame.image.load(SPRITE_PATHS["newt"]))
+    except (KeyError, OSError, pygame.error) as exc:
+        print(f"Window icon unavailable: {exc}")
+
+
 def load_sounds():
     try:
         if pygame.mixer.get_init() is None:
@@ -608,6 +615,7 @@ def select_world_type():
 # -----------------------------
 def main():
     pygame.init()
+    set_window_icon()
     frame_mirror = None
 
     selected_map_size = select_window_size()

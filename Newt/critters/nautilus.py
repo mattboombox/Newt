@@ -1,15 +1,14 @@
-from .critter import Critter
+from .critter import AQUATIC_TERRAINS, Critter
 from .plankton import Plankton
 
 
 class Nautilus(Critter):
-    ALLOWED_TERRAINS = {"ocean", "trench", "shallows"}
+    ALLOWED_TERRAINS = AQUATIC_TERRAINS - {"lake"}
     REPRODUCTION_MEAL_THRESHOLD = 5
     HUNGER_INTERVAL = 55.0
     STARVATION_INTERVAL = 55.0
     HUNT_RANGE = 12
     HUNT_PREY_TYPES = (Plankton,)
-    DISPLACEABLE_CRITTER_TYPES = (Plankton,)
     PREDATOR_NAME = "Nautilus"
 
     def __init__(self, x, y):
@@ -23,4 +22,4 @@ class Nautilus(Critter):
         self.configure_hunger(Nautilus.HUNGER_INTERVAL, Nautilus.STARVATION_INTERVAL)
 
     def spawn_death_remains(self, game, tile):
-        return self.try_spawn_plankton_remains(game, tile)
+        return self.try_spawn_meal_based_plankton_remains(game, tile)

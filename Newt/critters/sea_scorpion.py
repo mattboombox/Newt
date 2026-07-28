@@ -1,13 +1,14 @@
-from .critter import Critter
+from .critter import AQUATIC_TERRAINS, Critter
 
 
 class SeaScorpion(Critter):
     """A swift coastal predator descended from the trilobite branch."""
 
-    ALLOWED_TERRAINS = {"ocean", "shallows"}
+    DISPLACEMENT_LEVEL = 2
+    ALLOWED_TERRAINS = AQUATIC_TERRAINS - {"lake", "trench"}
     REPRODUCTION_MEAL_THRESHOLD = 8
     HUNGER_INTERVAL = 110.0
-    STARVATION_INTERVAL = 80.0
+    STARVATION_INTERVAL = 120.0
     HUNT_RANGE = 4
     PREDATOR_NAME = "Sea Scorpion"
 
@@ -54,4 +55,4 @@ class SeaScorpion(Critter):
         return super().try_reproduce(world)
 
     def spawn_death_remains(self, game, tile):
-        return self.try_spawn_plankton_remains(game, tile)
+        return self.try_spawn_meal_based_plankton_remains(game, tile)

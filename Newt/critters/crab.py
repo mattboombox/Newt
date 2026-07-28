@@ -2,13 +2,11 @@ from .critter import Critter
 
 
 class Crab(Critter):
-    FOOD_VALUE = 1
     ALLOWED_TERRAINS = {"beach", "shallows"}
     FEED_TERRAINS = {"shallows"}
     HUNGER_INTERVAL = 14.0
     STARVATION_INTERVAL = 10.0
-    DISPLACEABLE_CRITTER_TYPES = ()
-    REPRODUCTION_MEAL_THRESHOLD = 4
+    REPRODUCTION_MEAL_THRESHOLD = 5
     REPRODUCTION_BLOCKS_SET_BEHAVIOR = True
     REPRODUCTION_BLOCKS_RESET_MEALS = True
 
@@ -44,7 +42,7 @@ class Crab(Critter):
         self.feed_on_nearest_terrain(game, Crab.FEED_TERRAINS, "seek_shallows")
 
     def spawn_death_remains(self, game, tile):
-        return self.try_spawn_plankton_remains(game, tile)
+        return self.try_spawn_meal_based_plankton_remains(game, tile)
 
     def get_reproduction_blocking_types(self):
         return (Crab,)
