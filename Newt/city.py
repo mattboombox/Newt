@@ -123,28 +123,43 @@ class City(Building):
             self.abandon_to_ruins(game)
             return
 
+        self.ruin_disconnected_aux_buildings(game)
         self.try_expand_farms(game.world)
         self.try_expand_naval_districts(game.world)
         self.try_expand_military_districts(game.world)
 
-    def abandon_to_ruins(self, game):
-        connected_buildings = self.get_connected_buildings(game.world)
+    def replace_building_with_ruins(self, game, building):
+        tile = game.world.get_tile(building.x, building.y)
+        if tile is None or tile.building is not building:
+            return False
 
+        tile.building = Ruins(
+            tile.x,
+            tile.y,
+            former_building_type=type(building).__name__,
+        )
+        building.settlement = None
+        return True
+
+    def ruin_disconnected_aux_buildings(self, game):
+        connected_buildings = self.get_connected_buildings(game.world)
+        disconnected_buildings = [
+            building
+            for building in self.aux_buildings
+            if building not in connected_buildings
+        ]
+        for building in disconnected_buildings:
+            self.replace_building_with_ruins(game, building)
+            self.remove_aux_building(building)
+
+    def abandon_to_ruins(self, game):
         for critter in game.critters:
             if getattr(critter, "home_building", None) is self:
                 critter.home_building = None
         self.resident_ape_ids.clear()
 
-        for building in connected_buildings:
-            tile = game.world.get_tile(building.x, building.y)
-            if tile is None or tile.building is not building:
-                continue
-
-            tile.building = Ruins(
-                tile.x,
-                tile.y,
-                former_building_type=type(building).__name__,
-            )
+        for building in [self, *self.aux_buildings]:
+            self.replace_building_with_ruins(game, building)
 
         for building in self.aux_buildings:
             building.settlement = None
@@ -395,5 +410,6 @@ class City(Building):
         self.resident_ape_ids.clear()
 
         for building in self.aux_buildings:
+            self.replace_building_with_ruins(game, building)
             building.settlement = None
         self.aux_buildings.clear()

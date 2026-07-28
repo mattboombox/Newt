@@ -22,7 +22,7 @@ class Building:
         pass
 
 class Farm(Building):
-    FOOD_INTERVAL = 30.0
+    FOOD_INTERVAL = 12.0
 
     def __init__(self, x, y, settlement=None, sprite=None):
         super().__init__(x, y, sprite=sprite, tags={"food"})
@@ -106,7 +106,7 @@ class MilitaryDistrict(Building):
             critter
             for critter in game.critters
             if (
-                type(critter) is Ape
+                Ape.is_recruitable_civilian(critter)
                 and critter.home_building is village
                 and critter.current_behavior != "dying"
             )
@@ -193,7 +193,7 @@ class NavalDistrict(Building):
             critter
             for critter in game.critters
             if (
-                type(critter) is Ape
+                Ape.is_recruitable_civilian(critter)
                 and critter.home_building is village
                 and critter.current_behavior != "dying"
             )

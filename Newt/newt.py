@@ -90,6 +90,7 @@ class Game:
 
         self.selected_tile = None
         self.selected_critter = None
+        self.selection_notice = None
         self.hovered_tile = None
 
         self.current_terrain = DEFAULT_PAINT_TERRAIN

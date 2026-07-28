@@ -15,6 +15,9 @@ class ApeWarrior(Ape):
 
     @classmethod
     def recruit(cls, ape):
+        if not Ape.is_recruitable_civilian(ape):
+            return None
+
         ape.__class__ = cls
         ape.color = (145, 85, 65)
         ape.sprite = "ape_warrior"

@@ -6,6 +6,8 @@ class ApeSailor(Ape):
 
     ALLOWED_TERRAINS = {"ocean", "shallows", "beach"}
     HUNGER_INTERVAL = 260.0
+    STARVATION_INTERVAL = 220.0
+    MINIMUM_RETURN_HAUL = 3
     PREDATOR_NAME = "Ape Sailor"
 
     def __init__(self, x, y):
@@ -17,6 +19,9 @@ class ApeSailor(Ape):
 
     @classmethod
     def recruit(cls, ape, world, x, y):
+        if not Ape.is_recruitable_civilian(ape):
+            return None
+
         old_tile = world.get_tile(ape.x, ape.y)
         if old_tile is not None and old_tile.critter is ape:
             old_tile.critter = None
@@ -97,3 +102,6 @@ class ApeSailor(Ape):
 
     def try_handle_priority_behavior(self, game):
         return self.try_handle_hunter_priority_behavior(game)
+
+    def should_return_carried_food(self):
+        return self.carrying_food >= self.MINIMUM_RETURN_HAUL

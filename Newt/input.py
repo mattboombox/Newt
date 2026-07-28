@@ -244,8 +244,10 @@ def apply_active_tool(game, tile):
     if game.current_tool == "inspect":
         game.selected_critter = tile.critter
         if tile.critter is None:
+            game.selection_notice = None
             print("Critter selection cleared")
             return False
+        game.selection_notice = None
         print(
             f"Selected {type(tile.critter).__name__} {tile.critter.id} "
             f"at ({tile.critter.x}, {tile.critter.y})"

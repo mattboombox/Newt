@@ -51,7 +51,9 @@ def draw_hud(screen, game, background_color):
     elif game.current_tool == "inspect":
         selected = game.selected_critter
         active_selection = (
-            "Selection: None"
+            f"Selection: {game.selection_notice}"
+            if selected is None and game.selection_notice is not None
+            else "Selection: None"
             if selected is None
             else f"Selection: {type(selected).__name__} ID {selected.id}"
         )

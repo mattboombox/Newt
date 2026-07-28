@@ -7,7 +7,7 @@ class Plankton(Critter):
     HUNGER_INTERVAL = 15.0
     STARVATION_INTERVAL = 8.0
     REPRODUCTION_BLOCKS_RESET_MEALS = True
-    REPRODUCTION_MEAL_THRESHOLD = 3
+    REPRODUCTION_MEAL_THRESHOLD = 5
 
     def __init__(self, x, y):
         super().__init__(

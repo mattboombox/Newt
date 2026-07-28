@@ -10,6 +10,7 @@ class SpermWhale(Whale):
     REPRODUCTION_MEAL_THRESHOLD = Whale.REPRODUCTION_MEAL_THRESHOLD
     HUNGER_INTERVAL = Whale.HUNGER_INTERVAL
     STARVATION_INTERVAL = 220.0
+    MOVE_COOLDOWN = 0.28
     DISPLACEABLE_CRITTER_TYPES = (Plankton, Crab, Trilobite)
     PREDATOR_NAME = "Sperm Whale"
 
@@ -17,7 +18,7 @@ class SpermWhale(Whale):
         super().__init__(x, y)
         self.color = (95, 105, 125)
         self.allowed_terrains = SpermWhale.ALLOWED_TERRAINS
-        self.move_cooldown = 0.36
+        self.move_cooldown = SpermWhale.MOVE_COOLDOWN
         self.sprite = "sperm_whale"
         self.configure_hunger(SpermWhale.HUNGER_INTERVAL, SpermWhale.STARVATION_INTERVAL)
 
@@ -39,6 +40,15 @@ class SpermWhale(Whale):
             return False
 
         return super().try_scavenge_corpse(game)
+
+    def try_handle_priority_behavior(self, game):
+        # Sperm whales actively patrol for ocean predators instead of waiting
+        # for hunger, making them meaningful control on squid populations.
+        return self.hunt_nearest_prey(
+            game,
+            self.get_hunt_prey_types(),
+            self.get_predator_name(),
+        )
 
     def spawn_death_remains(self, game, tile):
         return self.try_spawn_plankton_remains(game, tile)

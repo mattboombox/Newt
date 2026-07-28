@@ -10,6 +10,11 @@ def describe_building(building):
 
 def remove_critter(game, critter, reason):
     if getattr(game, "selected_critter", None) is critter:
+        game.selection_notice = (
+            f"{type(critter).__name__} ID {critter.id} disappeared because "
+            f"{reason}."
+        )
+        print(f"Inspection ended: {game.selection_notice}")
         game.selected_critter = None
 
     if hasattr(critter, "clear_home_building"):

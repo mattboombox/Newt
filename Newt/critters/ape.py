@@ -24,6 +24,11 @@ class Ape(Therapsid):
         self.configure_hunger(Ape.HUNGER_INTERVAL, Ape.STARVATION_INTERVAL)
         self.carrying_food = 0
 
+    @staticmethod
+    def is_recruitable_civilian(critter):
+        """Only an ordinary Ape may be converted into a specialist."""
+        return type(critter) is Ape
+
     def get_hunt_prey_types(self):
         from . import CRITTER_TYPES
         from .land_kraken import LandKraken
@@ -41,6 +46,16 @@ class Ape(Therapsid):
         if self.carrying_food:
             return ()
         return self.get_hunt_prey_types()
+
+    def is_valid_hunt_prey(self, critter, prey_types):
+        if isinstance(critter, Ape):
+            return False
+        return super().is_valid_hunt_prey(critter, prey_types)
+
+    def is_valid_scavenge_prey(self, critter, prey_types):
+        if isinstance(critter, Ape):
+            return False
+        return super().is_valid_scavenge_prey(critter, prey_types)
 
     def get_reproduction_blocking_types(self):
         # Village population capacity replaces neighbor-based reproduction
@@ -64,6 +79,8 @@ class Ape(Therapsid):
         return super().can_displace_critter(critter)
 
     def should_remove_on_failed_displacement(self, critter):
+        if isinstance(critter, Ape):
+            return False
         if self.is_returning_to_village():
             return False
         return super().should_remove_on_failed_displacement(critter)
@@ -293,7 +310,26 @@ class Ape(Therapsid):
 
     def try_handle_hunter_priority_behavior(self, game):
         """Prioritize assigned prey while preserving carried-food behavior."""
+        if self.is_hungry:
+            if self.carrying_food:
+                return self.consume_carried_food()
+
+            village = self.ensure_home_village(game)
+            if village is not None and village.food > 0:
+                return self.try_return_to_settlement(game, "seek_food_store")
+
         if self.carrying_food:
+            if self.should_return_carried_food():
+                return Ape.try_handle_priority_behavior(self, game)
+
+            if self.hunt_nearest_prey(
+                game,
+                self.get_hunt_prey_types(),
+                self.get_predator_name(),
+            ):
+                return True
+
+            # Do not strand a partial haul when no additional prey is in range.
             return Ape.try_handle_priority_behavior(self, game)
 
         if self.hunt_nearest_prey(
@@ -305,10 +341,16 @@ class Ape(Therapsid):
 
         return Ape.try_handle_priority_behavior(self, game)
 
+    def should_return_carried_food(self):
+        return self.carrying_food > 0
+
     def take_hungry_action(self, game):
         village = self.ensure_home_village(game)
-        if village is not None and village.food > 0:
-            self.try_return_to_settlement(game, "seek_food_store")
+        if (
+            village is not None
+            and village.food > 0
+            and self.try_return_to_settlement(game, "seek_food_store")
+        ):
             return
 
         if self.hunt_nearest_prey(game, self.get_hunt_prey_types(), self.get_predator_name()):
