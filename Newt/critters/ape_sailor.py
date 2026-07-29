@@ -63,29 +63,85 @@ class ApeSailor(Ape):
         )
 
     def is_habitable_tile(self, tile):
-        if super().is_habitable_tile(tile):
-            return True
-
-        # Sailors can step onto every building in their connected settlement,
-        # not just the usually scarce naval district, to deposit or eat food.
-        village = self.home_building
-        return (
-            tile is not None
-            and tile.world is not None
-            and tile.building is not None
-            and village is not None
-            and hasattr(village, "is_connected_building")
-            and village.is_connected_building(tile.world, tile.building)
-        )
+        return super().is_habitable_tile(tile)
 
     def can_displace_critter(self, critter):
-        # Coastal chokepoints and the single naval district frequently become
-        # crowded. Sailors may shove occupants aside instead of getting stuck.
-        return True
+        # Sailors may clear lower-priority sea life from a coastal chokepoint,
+        # but no longer shove equal- or higher-level residents.
+        return self.DISPLACEMENT_LEVEL > critter.DISPLACEMENT_LEVEL
 
     def should_remove_on_failed_displacement(self, critter):
         # A shove that has nowhere to move its target should not become a kill.
         return False
+
+    def is_at_connected_settlement_building(self, world, village):
+        from building import NavalDistrict
+
+        tile = world.get_tile(self.x, self.y)
+        return (
+            tile is not None
+            and isinstance(tile.building, NavalDistrict)
+            and tile.building.settlement is village
+            and village.is_connected_building(world, tile.building)
+        )
+
+    def find_path_to_settlement(self, world, village):
+        from building import NavalDistrict
+
+        naval_districts = {
+            building
+            for building in village.get_connected_buildings(world)
+            if isinstance(building, NavalDistrict)
+        }
+        return self.find_path_to_nearest_tile(
+            world,
+            lambda tile: tile.building in naval_districts,
+            path_tile_predicate=self.can_path_through_tile,
+        )
+
+    def try_recover_stranded(self, game):
+        world = game.world
+        is_native_habitat = super().is_habitable_tile
+        candidates = [
+            tile
+            for column in world.board
+            for tile in column
+            if (
+                tile.critter is None
+                and is_native_habitat(tile)
+            )
+        ]
+        if not candidates:
+            return False
+
+        coastal_candidates = [
+            tile
+            for tile in candidates
+            if tile.terrain in {"beach", "shallows"}
+        ]
+        if coastal_candidates:
+            candidates = coastal_candidates
+
+        destination = min(
+            candidates,
+            key=lambda tile: self.get_tile_distance(
+                world,
+                self.x,
+                self.y,
+                tile.x,
+                tile.y,
+            ),
+        )
+        old_tile = world.get_tile(self.x, self.y)
+        if old_tile is not None and old_tile.critter is self:
+            old_tile.critter = None
+
+        self.x = destination.x
+        self.y = destination.y
+        destination.critter = self
+        self.clear_settlement_path()
+        self.set_behavior("return_to_shore")
+        return True
 
     def create_offspring(self, x, y):
         return Ape(x, y)

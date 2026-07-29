@@ -92,6 +92,10 @@ def remove_stranded_critters(game):
         if critter.is_habitable_tile(tile):
             continue
 
+        recover = getattr(critter, "try_recover_stranded", None)
+        if recover is not None and recover(game):
+            continue
+
         if getattr(critter, "needs_habitat_relocation", False):
             continue
 

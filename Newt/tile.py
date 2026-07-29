@@ -59,6 +59,12 @@ class Tile:
             if terrain_name == self.terrain:
                 return
 
+            if (
+                self.building is not None
+                and "ruins" in self.building.tags
+            ):
+                self.building = None
+
             old_terrain = self.terrain
             self.terrain = terrain_name
 

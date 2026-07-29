@@ -1,6 +1,6 @@
 import random
 
-from .critter import Critter
+from .critter import CARDINAL_DIRECTIONS, Critter
 from .therapsid import Therapsid
 
 
@@ -12,6 +12,7 @@ class Ape(Therapsid):
     REPRODUCTION_BLOCKS_SET_BEHAVIOR = False
     REPRODUCTION_BLOCKS_RESET_MEALS = False
     VILLAGE_CLAIM_RANGE = 28
+    VILLAGE_ROAM_RANGE = 16
     WOLF_TAMING_CHANCE = 0.05
 
     def __init__(self, x, y):
@@ -26,6 +27,8 @@ class Ape(Therapsid):
         )
         self.configure_hunger(Ape.HUNGER_INTERVAL, Ape.STARVATION_INTERVAL)
         self.carrying_food = 0
+        self.settlement_path = []
+        self.settlement_path_village = None
         self.wolf_taming_contact_ids = set()
 
     @staticmethod
@@ -222,6 +225,7 @@ class Ape(Therapsid):
 
         village.food += self.carrying_food
         self.carrying_food = 0
+        self.clear_settlement_path()
         self.set_behavior("store_food")
         return True
 
@@ -259,6 +263,7 @@ class Ape(Therapsid):
         return True
 
     def arrive_at_settlement(self, game, village):
+        self.clear_settlement_path()
         self.deposit_carried_food(village)
 
         if self.is_hungry and village.food > 0:
@@ -269,9 +274,14 @@ class Ape(Therapsid):
 
         return True
 
+    def clear_settlement_path(self):
+        self.settlement_path = []
+        self.settlement_path_village = None
+
     def try_return_to_settlement(self, game, behavior):
         village = self.ensure_home_village(game)
         if village is None:
+            self.clear_settlement_path()
             self.set_behavior("seek_village")
             return False
 
@@ -279,12 +289,32 @@ class Ape(Therapsid):
             return self.arrive_at_settlement(game, village)
 
         self.set_behavior(behavior)
-        path = self.find_path_to_settlement(game.world, village)
+        path = getattr(self, "settlement_path", [])
+        cached_village = getattr(self, "settlement_path_village", None)
+        if (
+            cached_village is not village
+            or not path
+            or path[0] not in self.get_neighbor_positions(
+                game.world,
+                self.x,
+                self.y,
+            )
+        ):
+            path = self.find_path_to_settlement(game.world, village)
+            self.settlement_path = [] if path is None else path
+            self.settlement_path_village = village
+
         if not path:
             return False
 
         next_x, next_y = path[0]
-        self.move_to(game.world, next_x, next_y, game)
+        if self.move_to(game.world, next_x, next_y, game):
+            self.settlement_path.pop(0)
+        else:
+            # Occupancy and terrain can change after a route is calculated.
+            # Replan on the next movement update instead of every update.
+            self.clear_settlement_path()
+
         if self.is_at_connected_settlement_building(game.world, village):
             self.arrive_at_settlement(game, village)
         return True
@@ -307,7 +337,59 @@ class Ape(Therapsid):
         return False
 
     def handle_reproduction_priority(self, game, village):
-        return self.try_return_to_settlement(game, "return_to_reproduce")
+        if village is None:
+            self.set_behavior("seek_village")
+            return False
+        return self.try_reproduce_in_village(game, village)
+
+    def try_wander(self, world, game=None):
+        village = self.get_home_village(world)
+        if village is None:
+            return super().try_wander(world, game)
+
+        self.set_behavior("wander")
+        current_distance = self.get_tile_distance(
+            world,
+            self.x,
+            self.y,
+            village.x,
+            village.y,
+        )
+        candidates = []
+        for dx, dy in CARDINAL_DIRECTIONS:
+            nx = (self.x + dx) % world.cols
+            ny = self.y + dy
+            tile = world.get_tile(nx, ny)
+            if not self.can_enter_tile(tile):
+                continue
+
+            distance = self.get_tile_distance(
+                world,
+                nx,
+                ny,
+                village.x,
+                village.y,
+            )
+            if (
+                current_distance <= self.VILLAGE_ROAM_RANGE
+                and distance > self.VILLAGE_ROAM_RANGE
+            ):
+                continue
+            candidates.append((distance, nx, ny))
+
+        if not candidates:
+            return False
+
+        if current_distance > self.VILLAGE_ROAM_RANGE:
+            closest_distance = min(distance for distance, _, _ in candidates)
+            candidates = [
+                candidate
+                for candidate in candidates
+                if candidate[0] == closest_distance
+            ]
+
+        _, nx, ny = random.choice(candidates)
+        return self.move_to(world, nx, ny, game)
 
     def try_tame_adjacent_wolf(self, game):
         if type(self) is not Ape:

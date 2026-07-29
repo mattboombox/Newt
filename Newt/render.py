@@ -67,7 +67,7 @@ def draw_hud(screen, game, background_color):
         f"Size: {game.brush_size}",
         f"Zoom: {game.tile_size}px",
         f"Camera: ({game.camera_x}, {game.camera_y})",
-        f"Status: {status}",
+        f"{status}: {game.speed:g}x",
     ]
 
     inspected_tile = game.hovered_tile
@@ -154,8 +154,7 @@ def draw_hud(screen, game, background_color):
             elif isinstance(tile.building, Ruins):
                 former_type = tile.building.former_building_type or "building"
                 building_field = (
-                    f"Building: {format_tool_name(former_type)} Ruins "
-                    f"(Decay: {max(0, tile.building.decay_timer):.0f}s)"
+                    f"Building: {format_tool_name(former_type)} Ruins"
                 )
             elif isinstance(tile.building, WolfDen):
                 building_field = (

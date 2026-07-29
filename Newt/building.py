@@ -242,27 +242,9 @@ class NavalDistrict(Building):
 
 
 class Ruins(Building):
-    MIN_DECAY_INTERVAL = 300.0
-    MAX_DECAY_INTERVAL = 480.0
-
     def __init__(self, x, y, former_building_type=None, sprite="ruins"):
         super().__init__(x, y, sprite=sprite, tags={"ruins"})
         self.former_building_type = former_building_type
-        self.decay_timer = random.uniform(
-            self.MIN_DECAY_INTERVAL,
-            self.MAX_DECAY_INTERVAL,
-        )
-
-    def update(self, game, dt):
-        from entity_cleanup import remove_building_at_tile
-
-        tile = game.world.get_tile(self.x, self.y)
-        if tile is None or tile.building is not self:
-            return
-
-        self.decay_timer -= dt
-        if self.decay_timer <= 0:
-            remove_building_at_tile(game, tile, "the ruins weathered away")
 
 
 class Harbor(Building):

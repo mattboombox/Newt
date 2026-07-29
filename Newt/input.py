@@ -1,6 +1,7 @@
 import pygame
 from brush import paint_radius, trigger_event_tool
 from config import (
+    CLOSE_UP_TILE_SIZE,
     OVERVIEW_TILE_SIZE,
     SPRITE_PATHS,
     TILE_SIZE,
@@ -15,6 +16,7 @@ from building import (
     MilitaryDistrict,
     NavalDistrict,
     ResidentialDistrict,
+    Ruins,
     WolfDen,
 )
 from entity_cleanup import remove_building_at_tile, remove_critter
@@ -32,7 +34,12 @@ BUILDING_ORDER = [
 ]
 EVENT_TOOL_ORDER = ["meteor", "mega_meteor", "comet", "tsunami", "tectonic_uplift", "island_uplift", "trench_event", "evolve"]
 EVENT_ONLY_TERRAINS = {"meteor", "comet", "tectonic_uplift", "tsunami"}
-ZOOM_TILE_SIZES = (OVERVIEW_TILE_SIZE, TILE_SIZE, ZOOMED_IN_TILE_SIZE)
+ZOOM_TILE_SIZES = (
+    OVERVIEW_TILE_SIZE,
+    TILE_SIZE,
+    ZOOMED_IN_TILE_SIZE,
+    CLOSE_UP_TILE_SIZE,
+)
 TERRAIN_BRUSH_ORDER = [
     terrain_name
     for terrain_name in TERRAIN_DATA.keys()
@@ -143,7 +150,13 @@ def spawn_current_critter(game, tile):
 
 
 def place_current_building(game, tile):
-    if tile is None or tile.building is not None:
+    if (
+        tile is None
+        or (
+            tile.building is not None
+            and not isinstance(tile.building, Ruins)
+        )
+    ):
         return False
 
     if (
@@ -157,7 +170,6 @@ def place_current_building(game, tile):
 
     if (
         game.current_building == "farm"
-        and tile.critter is None
         and tile.terrain == "grass"
     ):
         village = City.find_connectable_village(game.world, tile)
@@ -172,7 +184,6 @@ def place_current_building(game, tile):
 
     if (
         game.current_building == "residential_district"
-        and tile.critter is None
         and tile.has_tag("land")
     ):
         village = City.find_connectable_village(game.world, tile)
@@ -190,7 +201,6 @@ def place_current_building(game, tile):
 
     if (
         game.current_building == "military_district"
-        and tile.critter is None
         and tile.has_tag("land")
     ):
         village = City.find_connectable_village(game.world, tile)
@@ -208,7 +218,6 @@ def place_current_building(game, tile):
 
     if (
         game.current_building == "naval_district"
-        and tile.critter is None
         and tile.terrain == "shallows"
     ):
         village = City.find_connectable_village(game.world, tile)

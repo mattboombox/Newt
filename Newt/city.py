@@ -94,7 +94,14 @@ class City(Building):
 
     @classmethod
     def can_place_on_tile(cls, tile, require_farm_site=False, villages=None):
-        if tile is None or tile.building is not None or not tile.has_tag("land"):
+        if (
+            tile is None
+            or (
+                tile.building is not None
+                and not isinstance(tile.building, Ruins)
+            )
+            or not tile.has_tag("land")
+        ):
             return False
 
         if not cls.is_far_enough_from_other_villages(
@@ -109,7 +116,10 @@ class City(Building):
             return True
 
         return any(
-            neighbor.building is None
+            (
+                neighbor.building is None
+                or isinstance(neighbor.building, Ruins)
+            )
             and neighbor.critter is None
             and neighbor.terrain == "grass"
             for neighbor in tile.world.get_neighbors_cardinal(tile.x, tile.y)
@@ -293,7 +303,10 @@ class City(Building):
                 position = (tile.x, tile.y)
                 if (
                     position in seen_positions
-                    or tile.building is not None
+                    or (
+                        tile.building is not None
+                        and not isinstance(tile.building, Ruins)
+                    )
                     or tile.critter is not None
                 ):
                     continue
