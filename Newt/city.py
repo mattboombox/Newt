@@ -45,6 +45,8 @@ class City(Building):
         self.resident_ape_ids = set()
         self.resident_dog_ids = set()
         self.aux_buildings = []
+        self._connected_buildings_cache = None
+        self._connected_buildings_world = None
 
     @property
     def population(self):
@@ -197,6 +199,7 @@ class City(Building):
         for building in self.aux_buildings:
             building.settlement = None
         self.aux_buildings.clear()
+        self.invalidate_connected_buildings()
 
     def has_population_space(self):
         return self.population < self.population_cap
@@ -211,13 +214,25 @@ class City(Building):
     def add_aux_building(self, building):
         if building not in self.aux_buildings:
             self.aux_buildings.append(building)
+            self.invalidate_connected_buildings()
         building.settlement = self
 
     def remove_aux_building(self, building):
         if building in self.aux_buildings:
             self.aux_buildings.remove(building)
+            self.invalidate_connected_buildings()
+
+    def invalidate_connected_buildings(self):
+        self._connected_buildings_cache = None
+        self._connected_buildings_world = None
 
     def get_connected_buildings(self, world):
+        if (
+            self._connected_buildings_cache is not None
+            and self._connected_buildings_world is world
+        ):
+            return self._connected_buildings_cache
+
         connected = {self}
         frontier = [self]
         owned_buildings = set(self.aux_buildings)
@@ -230,7 +245,9 @@ class City(Building):
                     connected.add(neighbor)
                     frontier.append(neighbor)
 
-        return connected
+        self._connected_buildings_cache = frozenset(connected)
+        self._connected_buildings_world = world
+        return self._connected_buildings_cache
 
     def is_connected_building(self, world, building):
         return building in self.get_connected_buildings(world)
@@ -469,3 +486,4 @@ class City(Building):
             self.replace_building_with_ruins(game, building)
             building.settlement = None
         self.aux_buildings.clear()
+        self.invalidate_connected_buildings()

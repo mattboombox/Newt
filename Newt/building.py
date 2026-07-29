@@ -21,6 +21,9 @@ class Building:
     def remove_resident(self, critter):
         pass
 
+    def can_remain_on_tile(self, tile):
+        return tile is not None and not tile.has_tag("water")
+
 class Farm(Building):
     FOOD_INTERVAL = 14
 
@@ -151,6 +154,9 @@ class NavalDistrict(Building):
         super().__init__(x, y, sprite=sprite, tags={"naval"})
         self.settlement = settlement
         self.recruitment_timer = self.RECRUITMENT_INTERVAL
+
+    def can_remain_on_tile(self, tile):
+        return tile is not None and tile.has_tag("water")
 
     def get_village_sailors(self, game):
         from critters.ape_sailor import ApeSailor
@@ -294,7 +300,12 @@ class CritterPrinter(Building):
         if not spawn_tiles:
             return False
 
-        critter_name, critter_cls = random.choice(tuple(CRITTER_TYPES.items()))
+        printable_critters = tuple(
+            (name, critter_cls)
+            for name, critter_cls in CRITTER_TYPES.items()
+            if not getattr(critter_cls, "PLAYER_SPAWN_ONLY", False)
+        )
+        critter_name, critter_cls = random.choice(printable_critters)
         random.shuffle(spawn_tiles)
 
         for spawn_tile in spawn_tiles:

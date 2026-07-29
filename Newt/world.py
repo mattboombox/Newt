@@ -8,6 +8,8 @@ class World:
         self.cols = cols
         self.rows = rows
         self.erosion_chunk_size = 16
+        self._building_tiles = set()
+        self._occupied_critter_tiles = set()
         self.board = self.make_board(default_terrain)
         self._erodible_chunks = {}
         self.rebuild_erosion_chunks()
@@ -53,6 +55,31 @@ class World:
 
         if new_is_erodible:
             self._erodible_chunks.setdefault(chunk_key, set()).add(tile)
+
+    def on_tile_building_changed(self, tile, old_building, new_building):
+        if old_building is not None:
+            self._building_tiles.discard(tile)
+        if new_building is not None:
+            self._building_tiles.add(tile)
+
+    def on_tile_critter_changed(self, tile, old_critter, new_critter):
+        if old_critter is not None:
+            self._occupied_critter_tiles.discard(tile)
+        if new_critter is not None:
+            self._occupied_critter_tiles.add(tile)
+
+    def get_building_tiles(self):
+        return tuple(
+            sorted(self._building_tiles, key=lambda tile: (tile.x, tile.y))
+        )
+
+    def get_occupied_critter_tiles(self):
+        return tuple(
+            sorted(
+                self._occupied_critter_tiles,
+                key=lambda tile: (tile.x, tile.y),
+            )
+        )
 
     def get_random_erodible_tile(self):
         if not self._erodible_chunks:

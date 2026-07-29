@@ -12,7 +12,6 @@ class Ape(Therapsid):
     REPRODUCTION_BLOCKS_SET_BEHAVIOR = False
     REPRODUCTION_BLOCKS_RESET_MEALS = False
     VILLAGE_CLAIM_RANGE = 28
-    VILLAGE_FOOD_ACCESS_RANGE = 10
     WOLF_TAMING_CHANCE = 0.05
 
     def __init__(self, x, y):
@@ -37,10 +36,11 @@ class Ape(Therapsid):
     def get_hunt_prey_types(self):
         from . import CRITTER_TYPES
         from .land_kraken import LandKraken
+        from .lich import Lich
         from .mega_spider import MegaSpider
         from .wolf import Wolf
 
-        excluded_types = (Ape, LandKraken, MegaSpider, Wolf)
+        excluded_types = (Ape, LandKraken, Lich, MegaSpider, Wolf)
         return tuple(
             critter_type
             for critter_type in CRITTER_TYPES.values()
@@ -73,7 +73,6 @@ class Ape(Therapsid):
             or self.current_behavior
             in {
                 "return_food",
-                "seek_food_store",
                 "return_to_reproduce",
             }
         )
@@ -192,8 +191,8 @@ class Ape(Therapsid):
         return None
 
     def handle_successful_meal(self, game, meal_points=None):
-        # Ape prey becomes transportable settlement food. Hunger is only
-        # satisfied after the ape reaches home and eats from the shared pool.
+        # Ape prey becomes transportable settlement food. It must be deposited
+        # at a connected building before any resident can consume it.
         if meal_points is None:
             meal_points = 1
         self.carrying_food += meal_points
@@ -217,42 +216,6 @@ class Ape(Therapsid):
             path_tile_predicate=self.can_path_through_tile,
         )
 
-    @staticmethod
-    def get_wrapped_manhattan_distance(world, x1, y1, x2, y2):
-        dx = abs(x1 - x2)
-        dx = min(dx, world.cols - dx)
-        return dx + abs(y1 - y2)
-
-    def is_within_village_food_range(self, world, village, x=None, y=None):
-        if x is None:
-            x = self.x
-        if y is None:
-            y = self.y
-
-        return any(
-            self.get_wrapped_manhattan_distance(
-                world,
-                x,
-                y,
-                building.x,
-                building.y,
-            )
-            <= self.VILLAGE_FOOD_ACCESS_RANGE
-            for building in village.get_connected_buildings(world)
-        )
-
-    def find_path_to_village_food_range(self, world, village):
-        return self.find_path_to_nearest_tile(
-            world,
-            lambda tile: self.is_within_village_food_range(
-                world,
-                village,
-                tile.x,
-                tile.y,
-            ),
-            path_tile_predicate=self.can_path_through_tile,
-        )
-
     def deposit_carried_food(self, village):
         if not self.carrying_food:
             return False
@@ -260,16 +223,6 @@ class Ape(Therapsid):
         village.food += self.carrying_food
         self.carrying_food = 0
         self.set_behavior("store_food")
-        return True
-
-    def consume_carried_food(self):
-        if self.carrying_food <= 0:
-            return False
-
-        self.carrying_food -= 1
-        self.meals_eaten += 1
-        self.reset_hunger()
-        self.set_behavior("eat_carried_food")
         return True
 
     def consume_village_food(self, game, village):
@@ -280,9 +233,6 @@ class Ape(Therapsid):
         self.meals_eaten += 1
         self.reset_hunger()
         self.set_behavior("eat_village_food")
-
-        if self.meals_eaten >= self.REPRODUCTION_MEAL_THRESHOLD:
-            self.try_reproduce_in_village(game, village)
         return True
 
     def defer_reproduction(self, behavior):
@@ -322,25 +272,8 @@ class Ape(Therapsid):
     def try_return_to_settlement(self, game, behavior):
         village = self.ensure_home_village(game)
         if village is None:
-            if self.is_hungry and self.carrying_food:
-                return self.consume_carried_food()
             self.set_behavior("seek_village")
             return False
-
-        if behavior == "seek_food_store":
-            if self.is_within_village_food_range(game.world, village):
-                return self.consume_village_food(game, village)
-
-            self.set_behavior(behavior)
-            path = self.find_path_to_village_food_range(game.world, village)
-            if not path:
-                return False
-
-            next_x, next_y = path[0]
-            self.move_to(game.world, next_x, next_y, game)
-            if self.is_within_village_food_range(game.world, village):
-                self.consume_village_food(game, village)
-            return True
 
         if self.is_at_connected_settlement_building(game.world, village):
             return self.arrive_at_settlement(game, village)
@@ -348,8 +281,6 @@ class Ape(Therapsid):
         self.set_behavior(behavior)
         path = self.find_path_to_settlement(game.world, village)
         if not path:
-            if self.is_hungry and self.carrying_food:
-                return self.consume_carried_food()
             return False
 
         next_x, next_y = path[0]
@@ -362,20 +293,21 @@ class Ape(Therapsid):
         if self.try_tame_adjacent_wolf(game):
             return True
 
-        if self.carrying_food:
-            if self.is_hungry:
-                return self.consume_carried_food()
-            return self.try_return_to_settlement(game, "return_food")
-
         village = self.ensure_home_village(game)
 
         if self.is_hungry and village is not None and village.food > 0:
-            return self.try_return_to_settlement(game, "seek_food_store")
+            return self.consume_village_food(game, village)
+
+        if self.carrying_food:
+            return self.try_return_to_settlement(game, "return_food")
 
         if self.meals_eaten >= self.REPRODUCTION_MEAL_THRESHOLD:
-            return self.try_return_to_settlement(game, "return_to_reproduce")
+            return self.handle_reproduction_priority(game, village)
 
         return False
+
+    def handle_reproduction_priority(self, game, village):
+        return self.try_return_to_settlement(game, "return_to_reproduce")
 
     def try_tame_adjacent_wolf(self, game):
         if type(self) is not Ape:
@@ -420,12 +352,11 @@ class Ape(Therapsid):
     def try_handle_hunter_priority_behavior(self, game):
         """Prioritize assigned prey while preserving carried-food behavior."""
         if self.is_hungry:
-            if self.carrying_food:
-                return self.consume_carried_food()
-
             village = self.ensure_home_village(game)
             if village is not None and village.food > 0:
-                return self.try_return_to_settlement(game, "seek_food_store")
+                return self.consume_village_food(game, village)
+            if self.carrying_food:
+                return Ape.try_handle_priority_behavior(self, game)
 
         if self.carrying_food:
             if self.should_return_carried_food():
@@ -455,11 +386,7 @@ class Ape(Therapsid):
 
     def take_hungry_action(self, game):
         village = self.ensure_home_village(game)
-        if (
-            village is not None
-            and village.food > 0
-            and self.try_return_to_settlement(game, "seek_food_store")
-        ):
+        if village is not None and self.consume_village_food(game, village):
             return
 
         if self.hunt_nearest_prey(game, self.get_hunt_prey_types(), self.get_predator_name()):

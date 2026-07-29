@@ -31,7 +31,7 @@ POLAR_INTERVAL = 10.0
 DEFAULT_GAME_SPEED = 1.0
 
 # Web viewer
-WEB_MIRROR_ENABLED = True
+WEB_MIRROR_ENABLED = False
 WEB_MIRROR_HOST = "127.0.0.1"
 WEB_MIRROR_PORT = 8765
 WEB_MIRROR_FPS = 5
@@ -48,6 +48,7 @@ SPRITE_PATHS = {
     "giga_slug": BASE_DIR / "critter_sprites" / "mega_slug.png",
     "jelly_fish": BASE_DIR / "critter_sprites" / "jelly_fish.png",
     "land_kraken": BASE_DIR / "critter_sprites" / "land_kraken.png",
+    "lich": BASE_DIR / "critter_sprites" / "lich.png",
     "mega_spider": BASE_DIR / "critter_sprites" / "mega_spider.png",
     "nautilus": BASE_DIR / "critter_sprites" / "nautilus.png",
     "newt": BASE_DIR / "critter_sprites" / "newt.png",
@@ -59,6 +60,8 @@ SPRITE_PATHS = {
     "squid_egg": BASE_DIR / "critter_sprites" / "squid_egg.png",
     "therapsid": BASE_DIR / "critter_sprites" / "therapsid.png",
     "trilobite": BASE_DIR / "critter_sprites" / "trilobite.png",
+    "undead": BASE_DIR / "critter_sprites" / "undead.png",
+    "undead_beast": BASE_DIR / "critter_sprites" / "undead_beast.png",
     "whale": BASE_DIR / "critter_sprites" / "whale.png",
     "wolf": BASE_DIR / "critter_sprites" / "wolf.png",
     "ape_farm": BASE_DIR / "building_sprites" / "ape_farm.png",

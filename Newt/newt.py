@@ -102,6 +102,7 @@ class Game:
         self.brush_size = DEFAULT_BRUSH_SIZE
 
         self.critters = []
+        self.critter_type_index = None
         # Lets scavengers avoid a map-wide path search when no corpse exists.
         self.dying_critters = set()
         self.impact_waves = []
@@ -132,6 +133,12 @@ class Game:
         self.speed = DEFAULT_GAME_SPEED
         self.sprites = {}
         self.sounds = {}
+
+    def rebuild_critter_type_index(self):
+        critter_type_index = {}
+        for critter in self.critters:
+            critter_type_index.setdefault(type(critter), []).append(critter)
+        self.critter_type_index = critter_type_index
 
     def get_world_view_height(self):
         return max(0, self.window_height - self.bottom_panel_height)
@@ -195,17 +202,30 @@ class Game:
 
 
 def update_buildings(game, dt):
+    from entity_cleanup import remove_building_at_tile
+
     updated_buildings = set()
 
-    for x in range(game.world.cols):
-        for y in range(game.world.rows):
-            tile = game.world.board[x][y]
-            building = tile.building
-            if building is None or id(building) in updated_buildings:
-                continue
+    for tile in game.world.get_building_tiles():
+        building = tile.building
+        if building is None or id(building) in updated_buildings:
+            continue
 
-            updated_buildings.add(id(building))
-            building.update(game, dt)
+        if not building.can_remain_on_tile(tile):
+            required_terrain = (
+                "liquid terrain"
+                if "naval" in building.tags
+                else "non-liquid terrain"
+            )
+            remove_building_at_tile(
+                game,
+                tile,
+                f"it requires {required_terrain}",
+            )
+            continue
+
+        updated_buildings.add(id(building))
+        building.update(game, dt)
 
 
 def update(game, dt):
@@ -227,6 +247,8 @@ def update(game, dt):
     update_events(game, dt)
     remove_stranded_critters(game)
     update_buildings(game, dt)
+
+    game.rebuild_critter_type_index()
 
     for critter in game.critters[:]:
         critter.update(game, dt)

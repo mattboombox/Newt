@@ -7,8 +7,52 @@ class Tile:
         self.y = y
         self.terrain = terrain
         self.world = world
-        self.building = None
-        self.critter = None
+        self._building = None
+        self._critter = None
+
+    @property
+    def building(self):
+        return self._building
+
+    @building.setter
+    def building(self, building):
+        if building is self._building:
+            return
+
+        old_building = self._building
+        self._building = building
+        if self.world is not None:
+            self.world.on_tile_building_changed(self, old_building, building)
+
+        settlements = {
+            getattr(candidate, "settlement", None)
+            for candidate in (old_building, building)
+            if candidate is not None
+        }
+        for settlement in settlements:
+            if settlement is None:
+                continue
+            invalidate = getattr(
+                settlement,
+                "invalidate_connected_buildings",
+                None,
+            )
+            if invalidate is not None:
+                invalidate()
+
+    @property
+    def critter(self):
+        return self._critter
+
+    @critter.setter
+    def critter(self, critter):
+        if critter is self._critter:
+            return
+
+        old_critter = self._critter
+        self._critter = critter
+        if self.world is not None:
+            self.world.on_tile_critter_changed(self, old_critter, critter)
 
     def set_terrain(self, terrain_name):
         if terrain_name in TERRAIN_DATA:

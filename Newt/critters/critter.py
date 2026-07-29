@@ -1,5 +1,6 @@
 import random
 from collections import deque
+from heapq import heappop, heappush
 
 
 LAND_TERRAINS = {
@@ -390,8 +391,14 @@ class Critter:
     def get_scavenge_predator_name(self):
         return self.get_predator_name()
 
+    def can_be_hunted_by(self, predator):
+        return True
+
     def is_valid_hunt_prey(self, critter, prey_types):
-        return isinstance(critter, prey_types)
+        return (
+            isinstance(critter, prey_types)
+            and critter.can_be_hunted_by(self)
+        )
 
     def is_valid_scavenge_prey(self, critter, prey_types):
         return isinstance(critter, prey_types)
@@ -472,24 +479,53 @@ class Critter:
         if not prey_types:
             return False
 
-        # A corpse path search is by far the most expensive AI action on a
-        # large map.  In the usual case there are no corpses at all.
-        if hasattr(game, "dying_critters") and not game.dying_critters:
+        dying_critters = getattr(game, "dying_critters", ())
+        if not dying_critters:
             return False
 
         if not isinstance(prey_types, tuple):
             prey_types = (prey_types,)
 
-        path = self.find_path_to_nearest_tile(
+        scavenge_range = self.get_scavenge_range()
+        target_positions = set()
+        for critter in dying_critters:
+            if (
+                critter.current_behavior != "dying"
+                or not self.is_valid_scavenge_prey(critter, prey_types)
+            ):
+                continue
+
+            for target_x, target_y in critter.get_occupied_positions():
+                tile = game.world.get_tile(target_x, target_y)
+                if (
+                    tile is None
+                    or tile.critter is not critter
+                    or not self.is_habitable_tile(tile)
+                ):
+                    continue
+
+                if (
+                    scavenge_range is not None
+                    and self.get_tile_distance(
+                        game.world,
+                        self.x,
+                        self.y,
+                        target_x,
+                        target_y,
+                    )
+                    > scavenge_range
+                ):
+                    continue
+                target_positions.add((target_x, target_y))
+
+        if not target_positions:
+            return False
+
+        path = self.find_path_to_nearest_position(
             game.world,
-            lambda tile: (
-                tile.critter is not None
-                and tile.critter.current_behavior == "dying"
-                and self.is_valid_scavenge_prey(tile.critter, prey_types)
-                and self.is_habitable_tile(tile)
-            ),
+            target_positions,
             allow_occupied_target=True,
-            max_search_distance=self.get_scavenge_range(),
+            max_search_distance=scavenge_range,
         )
         if not path:
             return False
@@ -521,6 +557,10 @@ class Critter:
             predator_name = type(self).__name__
 
         remove_critter(game, critter, f"it was eaten by {predator_name} {self.id}")
+
+    def resolve_hunt_attack(self, game, prey, predator_name=None):
+        self.remove_other_critter(game, prey, predator_name)
+        return True
 
     def try_relocate_displaced_critter(self, world, critter):
         destinations = critter.get_neighbor_positions(world, critter.x, critter.y)
@@ -811,6 +851,81 @@ class Critter:
 
         return None
 
+    def find_path_to_nearest_position(
+        self,
+        world,
+        target_positions,
+        allow_occupied_target=False,
+        max_search_distance=None,
+        path_tile_predicate=None,
+    ):
+        targets = set(target_positions)
+        if not targets:
+            return None
+
+        start_pos = (self.x, self.y)
+        if start_pos in targets:
+            return []
+
+        if path_tile_predicate is None:
+            path_tile_predicate = self.can_path_through_tile
+
+        def distance_to_nearest_target(x, y):
+            return min(
+                self.get_tile_distance(world, x, y, tx, ty)
+                for tx, ty in targets
+            )
+
+        frontier = []
+        heappush(
+            frontier,
+            (distance_to_nearest_target(*start_pos), 0, *start_pos),
+        )
+        came_from = {start_pos: None}
+        best_distance = {start_pos: 0}
+
+        while frontier:
+            _, distance, x, y = heappop(frontier)
+            position = (x, y)
+            if distance != best_distance.get(position):
+                continue
+            if position in targets:
+                return self.reconstruct_path(came_from, position)
+            if max_search_distance is not None and distance >= max_search_distance:
+                continue
+
+            for dx, dy in CARDINAL_DIRECTIONS:
+                nx = (x + dx) % world.cols
+                ny = y + dy
+                if ny < 0 or ny >= world.rows:
+                    continue
+
+                next_pos = (nx, ny)
+                next_distance = distance + 1
+                if next_distance >= best_distance.get(next_pos, float("inf")):
+                    continue
+
+                tile = world.get_tile(nx, ny)
+                if tile is None:
+                    continue
+
+                is_target = next_pos in targets
+                if not (
+                    path_tile_predicate(tile)
+                    or (is_target and allow_occupied_target)
+                ):
+                    continue
+
+                came_from[next_pos] = position
+                best_distance[next_pos] = next_distance
+                priority = (
+                    next_distance
+                    + distance_to_nearest_target(nx, ny)
+                )
+                heappush(frontier, (priority, next_distance, nx, ny))
+
+        return None
+
     def forage_nearest_tile(
         self,
         game,
@@ -860,6 +975,10 @@ class Critter:
         if not isinstance(prey_types, tuple):
             prey_types = (prey_types,)
 
+        if not self.has_indexed_hunt_candidate(game, prey_types):
+            self.set_behavior("hungry")
+            return False
+
         path = self.find_path_to_nearest_tile(
             game.world,
             lambda tile: (
@@ -886,14 +1005,56 @@ class Critter:
             and self.is_valid_hunt_prey(target_tile.critter, prey_types)
         ):
             prey = target_tile.critter
-            self.remove_other_critter(game, prey, predator_name)
-            self.move_to(game.world, target_x, target_y, game)
-            self.handle_successful_meal(game, self.get_reproduction_meal_value(prey))
+            prey_value = self.get_reproduction_meal_value(prey)
+            if self.resolve_hunt_attack(game, prey, predator_name):
+                self.move_to(game.world, target_x, target_y, game)
+                self.handle_successful_meal(game, prey_value)
             return True
 
         self.set_behavior("hunt")
         self.move_to(game.world, target_x, target_y, game)
         return True
+
+    def has_indexed_hunt_candidate(self, game, prey_types):
+        critter_type_index = getattr(game, "critter_type_index", None)
+        if critter_type_index is None:
+            return True
+
+        hunt_range = self.get_hunt_range()
+        for critter_type, candidates in critter_type_index.items():
+            if not issubclass(critter_type, prey_types):
+                continue
+
+            for candidate in candidates:
+                if (
+                    candidate is self
+                    or not self.is_valid_hunt_prey(candidate, prey_types)
+                ):
+                    continue
+
+                for target_x, target_y in candidate.get_occupied_positions():
+                    tile = game.world.get_tile(target_x, target_y)
+                    if (
+                        tile is None
+                        or tile.critter is not candidate
+                        or not self.is_habitable_tile(tile)
+                    ):
+                        continue
+
+                    if (
+                        hunt_range is None
+                        or self.get_tile_distance(
+                            game.world,
+                            self.x,
+                            self.y,
+                            target_x,
+                            target_y,
+                        )
+                        <= hunt_range
+                    ):
+                        return True
+
+        return False
 
     def take_hungry_action(self, game):
         prey_types = self.get_hunt_prey_types()

@@ -1,3 +1,5 @@
+import random
+
 from .ape import Ape
 
 
@@ -6,6 +8,7 @@ class ApeWarrior(Ape):
 
     PREDATOR_NAME = "Ape Warrior"
     STARVATION_INTERVAL = 120.0
+    LICH_KILL_CHANCE = 0.10
 
     def __init__(self, x, y):
         super().__init__(x, y)
@@ -27,10 +30,11 @@ class ApeWarrior(Ape):
 
     def get_hunt_prey_types(self):
         from .land_kraken import LandKraken
+        from .lich import Lich, Undead, UndeadBeast
         from .mega_spider import MegaSpider
         from .wolf import Wolf
 
-        return (LandKraken, MegaSpider, Wolf)
+        return (LandKraken, Lich, MegaSpider, Undead, UndeadBeast, Wolf)
 
     def get_scavenge_prey_types(self):
         if self.carrying_food:
@@ -39,6 +43,18 @@ class ApeWarrior(Ape):
 
     def create_offspring(self, x, y):
         return Ape(x, y)
+
+    def resolve_hunt_attack(self, game, prey, predator_name=None):
+        from .lich import Lich
+
+        if (
+            isinstance(prey, Lich)
+            and random.random() >= self.LICH_KILL_CHANCE
+        ):
+            self.set_behavior("attack_lich")
+            return False
+
+        return super().resolve_hunt_attack(game, prey, predator_name)
 
     def try_handle_priority_behavior(self, game):
         return self.try_handle_hunter_priority_behavior(game)

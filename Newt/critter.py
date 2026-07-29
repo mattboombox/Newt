@@ -14,6 +14,7 @@ from critters import (
     GigaSlug,
     Jellyfish,
     LandKraken,
+    Lich,
     MegaSpider,
     Nautilus,
     Newt,
@@ -27,6 +28,8 @@ from critters import (
     SquidEgg,
     Therapsid,
     Trilobite,
+    Undead,
+    UndeadBeast,
     Whale,
     Wolf,
 )
@@ -47,6 +50,7 @@ __all__ = [
     "GigaSlug",
     "Jellyfish",
     "LandKraken",
+    "Lich",
     "MegaSpider",
     "Nautilus",
     "Newt",
@@ -60,6 +64,8 @@ __all__ = [
     "SquidEgg",
     "Therapsid",
     "Trilobite",
+    "Undead",
+    "UndeadBeast",
     "Whale",
     "Wolf",
 ]

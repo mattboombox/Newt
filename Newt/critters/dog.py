@@ -88,6 +88,12 @@ class Dog(ApeWarrior):
 
         return super().try_reproduce_in_village(game, village)
 
+    def handle_reproduction_priority(self, game, village):
+        if village is None:
+            self.set_behavior("seek_village")
+            return False
+        return self.try_reproduce_in_village(game, village)
+
     def update(self, game, dt):
         if self.current_behavior == "dying":
             super().update(game, dt)

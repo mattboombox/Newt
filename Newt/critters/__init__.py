@@ -14,6 +14,7 @@ from .fish import Fish
 from .giga_slug import GigaSlug
 from .jelly_fish import Jellyfish
 from .land_kraken import LandKraken
+from .lich import Lich, Undead, UndeadBeast
 from .mega_spider import MegaSpider
 from .nautilus import Nautilus
 from .newt import Newt
@@ -38,6 +39,7 @@ CRITTER_TYPES = {
     "giga_slug": GigaSlug,
     "jelly_fish": Jellyfish,
     "land_kraken": LandKraken,
+    "lich": Lich,
     "mega_spider": MegaSpider,
     "nautilus": Nautilus,
     "newt": Newt,
@@ -71,6 +73,7 @@ __all__ = [
     "GigaSlug",
     "Jellyfish",
     "LandKraken",
+    "Lich",
     "MegaSpider",
     "Nautilus",
     "Newt",
@@ -84,6 +87,8 @@ __all__ = [
     "SquidEgg",
     "Therapsid",
     "Trilobite",
+    "Undead",
+    "UndeadBeast",
     "Whale",
     "Wolf",
 ]
