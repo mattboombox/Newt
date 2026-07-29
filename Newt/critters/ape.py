@@ -12,6 +12,7 @@ class Ape(Therapsid):
     REPRODUCTION_BLOCKS_SET_BEHAVIOR = False
     REPRODUCTION_BLOCKS_RESET_MEALS = False
     VILLAGE_CLAIM_RANGE = 28
+    VILLAGE_FOOD_ACCESS_RANGE = 10
     WOLF_TAMING_CHANCE = 0.05
 
     def __init__(self, x, y):
@@ -78,6 +79,10 @@ class Ape(Therapsid):
         )
 
     def can_displace_critter(self, critter):
+        from .dog import Dog
+
+        if isinstance(critter, Dog):
+            return True
         if self.is_returning_to_village():
             return True
         return super().can_displace_critter(critter)
@@ -212,6 +217,42 @@ class Ape(Therapsid):
             path_tile_predicate=self.can_path_through_tile,
         )
 
+    @staticmethod
+    def get_wrapped_manhattan_distance(world, x1, y1, x2, y2):
+        dx = abs(x1 - x2)
+        dx = min(dx, world.cols - dx)
+        return dx + abs(y1 - y2)
+
+    def is_within_village_food_range(self, world, village, x=None, y=None):
+        if x is None:
+            x = self.x
+        if y is None:
+            y = self.y
+
+        return any(
+            self.get_wrapped_manhattan_distance(
+                world,
+                x,
+                y,
+                building.x,
+                building.y,
+            )
+            <= self.VILLAGE_FOOD_ACCESS_RANGE
+            for building in village.get_connected_buildings(world)
+        )
+
+    def find_path_to_village_food_range(self, world, village):
+        return self.find_path_to_nearest_tile(
+            world,
+            lambda tile: self.is_within_village_food_range(
+                world,
+                village,
+                tile.x,
+                tile.y,
+            ),
+            path_tile_predicate=self.can_path_through_tile,
+        )
+
     def deposit_carried_food(self, village):
         if not self.carrying_food:
             return False
@@ -244,18 +285,24 @@ class Ape(Therapsid):
             self.try_reproduce_in_village(game, village)
         return True
 
+    def defer_reproduction(self, behavior):
+        self.meals_eaten = min(
+            self.meals_eaten,
+            self.REPRODUCTION_MEAL_THRESHOLD - 1,
+        )
+        self.set_behavior(behavior)
+        return False
+
     def try_reproduce_in_village(self, game, village):
         if not village.has_population_space():
             village.try_build_residential_district(game.world)
 
         if not village.has_population_space():
-            self.set_behavior("await_housing")
-            return False
+            return self.defer_reproduction("await_housing")
 
         offspring = self.complete_reproduction(game)
         if offspring is None:
-            self.set_behavior("await_birth_space")
-            return False
+            return self.defer_reproduction("await_birth_space")
 
         if isinstance(offspring, Ape):
             offspring.set_home_building(village)
@@ -279,6 +326,21 @@ class Ape(Therapsid):
                 return self.consume_carried_food()
             self.set_behavior("seek_village")
             return False
+
+        if behavior == "seek_food_store":
+            if self.is_within_village_food_range(game.world, village):
+                return self.consume_village_food(game, village)
+
+            self.set_behavior(behavior)
+            path = self.find_path_to_village_food_range(game.world, village)
+            if not path:
+                return False
+
+            next_x, next_y = path[0]
+            self.move_to(game.world, next_x, next_y, game)
+            if self.is_within_village_food_range(game.world, village):
+                self.consume_village_food(game, village)
+            return True
 
         if self.is_at_connected_settlement_building(game.world, village):
             return self.arrive_at_settlement(game, village)
@@ -348,7 +410,8 @@ class Ape(Therapsid):
             if random.random() >= self.WOLF_TAMING_CHANCE:
                 continue
 
-            Dog.tame(wolf, village)
+            if Dog.tame(wolf, village) is None:
+                continue
             self.set_behavior("tame_wolf")
             return True
 

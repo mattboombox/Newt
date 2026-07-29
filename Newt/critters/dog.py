@@ -17,7 +17,11 @@ class Dog(ApeWarrior):
     def tame(cls, wolf, village):
         from .wolf import Wolf
 
-        if not isinstance(wolf, Wolf) or village is None:
+        if (
+            not isinstance(wolf, Wolf)
+            or village is None
+            or not village.has_dog_space()
+        ):
             return None
 
         wolf.clear_home_building()
@@ -39,6 +43,28 @@ class Dog(ApeWarrior):
     def create_offspring(self, x, y):
         return Dog(x, y)
 
+    def find_accessible_village(self, world):
+        from city import City
+
+        path = self.find_path_to_nearest_tile(
+            world,
+            lambda tile: (
+                isinstance(tile.building, City)
+                and tile.building.has_population_space()
+                and tile.building.has_dog_space()
+            ),
+            allow_occupied_target=True,
+            max_search_distance=self.VILLAGE_CLAIM_RANGE,
+            path_tile_predicate=self.is_habitable_tile,
+        )
+        if path is None:
+            return None
+
+        tile = world.get_tile(self.x, self.y) if not path else world.get_tile(*path[-1])
+        if tile is None or not isinstance(tile.building, City):
+            return None
+        return tile.building
+
     def ensure_home_village(self, game):
         village = self.get_home_village(game.world)
         if village is not None:
@@ -46,10 +72,21 @@ class Dog(ApeWarrior):
             return village
 
         village = self.find_accessible_village(game.world)
-        if village is not None:
+        if (
+            village is not None
+            and village.has_population_space()
+            and village.has_dog_space()
+        ):
             self.set_home_building(village)
             self.feral_timer = self.FERAL_INTERVAL
-        return village
+            return village
+        return None
+
+    def try_reproduce_in_village(self, game, village):
+        if not village.has_dog_space():
+            return self.defer_reproduction("await_dog_capacity")
+
+        return super().try_reproduce_in_village(game, village)
 
     def update(self, game, dt):
         if self.current_behavior == "dying":

@@ -25,8 +25,18 @@ class City(Building):
     POPULATION_PER_NAVAL_DISTRICT = 25
     RESIDENTIAL_COST = 5
     MIN_VILLAGE_DISTANCE = 12
+    APES_PER_DOG = 4
 
-    def __init__(self, x, y, level="village", population=0, world=None, sprite=None, tags=None):
+    def __init__(
+        self,
+        x,
+        y,
+        level="village",
+        population=0,
+        world=None,
+        sprite="ape_village",
+        tags=None,
+    ):
         settlement_tags = set(tags or ()) | {"settlement", level}
         super().__init__(x, y, sprite=sprite, tags=settlement_tags)
         self.level = level
@@ -190,6 +200,13 @@ class City(Building):
 
     def has_population_space(self):
         return self.population < self.population_cap
+
+    @property
+    def dog_capacity(self):
+        return self.population // self.APES_PER_DOG
+
+    def has_dog_space(self):
+        return len(self.resident_dog_ids) < self.dog_capacity
 
     def add_aux_building(self, building):
         if building not in self.aux_buildings:

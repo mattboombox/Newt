@@ -237,13 +237,18 @@ def draw_critter(screen, game, critter, tile_size, sprites):
             pygame.draw.rect(screen, color, rect)
 
 
-def draw_building(screen, building, tile_size, screen_x, screen_y):
+def draw_building(screen, building, tile_size, screen_x, screen_y, sprites):
     rect = pygame.Rect(
         screen_x,
         screen_y,
         tile_size,
         tile_size
     )
+
+    sprite = sprites.get(building.sprite)
+    if sprite is not None:
+        screen.blit(sprite, (screen_x, screen_y))
+        return
 
     pygame.draw.rect(screen, (200, 50, 50), rect)
 
@@ -314,6 +319,7 @@ def render(screen, game, background_color):
                     game.tile_size,
                     screen_x,
                     screen_y,
+                    game.sprites,
                 )
 
     active_wave_tiles = set()

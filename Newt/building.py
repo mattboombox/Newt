@@ -22,9 +22,9 @@ class Building:
         pass
 
 class Farm(Building):
-    FOOD_INTERVAL = 12
+    FOOD_INTERVAL = 14
 
-    def __init__(self, x, y, settlement=None, sprite=None):
+    def __init__(self, x, y, settlement=None, sprite="ape_farm"):
         super().__init__(x, y, sprite=sprite, tags={"food"})
         self.settlement = settlement
         self.output = 1
@@ -48,7 +48,7 @@ class Farm(Building):
 class ResidentialDistrict(Building):
     POPULATION_CAPACITY = 5
 
-    def __init__(self, x, y, settlement=None, sprite=None):
+    def __init__(self, x, y, settlement=None, sprite="ape_hut"):
         super().__init__(x, y, sprite=sprite, tags={"residential"})
         self.settlement = settlement
 
@@ -63,7 +63,7 @@ class MilitaryDistrict(Building):
     RECRUITMENT_INTERVAL = 30.0
     WARRIOR_CAPACITY = 5
 
-    def __init__(self, x, y, settlement=None, sprite=None):
+    def __init__(self, x, y, settlement=None, sprite="ape_fort"):
         super().__init__(x, y, sprite=sprite, tags={"military"})
         self.settlement = settlement
         self.recruitment_timer = self.RECRUITMENT_INTERVAL
@@ -147,7 +147,7 @@ class NavalDistrict(Building):
     RECRUITMENT_INTERVAL = 30.0
     SAILOR_CAPACITY = 5
 
-    def __init__(self, x, y, settlement=None, sprite=None):
+    def __init__(self, x, y, settlement=None, sprite="ape_harbor"):
         super().__init__(x, y, sprite=sprite, tags={"naval"})
         self.settlement = settlement
         self.recruitment_timer = self.RECRUITMENT_INTERVAL
@@ -239,7 +239,7 @@ class Ruins(Building):
     MIN_DECAY_INTERVAL = 300.0
     MAX_DECAY_INTERVAL = 480.0
 
-    def __init__(self, x, y, former_building_type=None, sprite=None):
+    def __init__(self, x, y, former_building_type=None, sprite="ruins"):
         super().__init__(x, y, sprite=sprite, tags={"ruins"})
         self.former_building_type = former_building_type
         self.decay_timer = random.uniform(
@@ -337,7 +337,7 @@ class WolfDen(Building):
     SPAWN_COOLDOWN = 2.0
     PREFERRED_VILLAGE_GAP = 2
 
-    def __init__(self, x, y, sprite=None, charges=0):
+    def __init__(self, x, y, sprite="den", charges=0):
         super().__init__(x, y, sprite=sprite, tags={"den", "wolf"})
         self.charges = charges
         self.spawn_timer = 0.0
@@ -438,8 +438,8 @@ class WolfDen(Building):
 
 
 class SpiderWeb(Building):
-    def __init__(self, x, y, world=None, charges=0):
-        super().__init__(x, y, tags={"web", "spider"})
+    def __init__(self, x, y, world=None, charges=0, sprite="web"):
+        super().__init__(x, y, sprite=sprite, tags={"web", "spider"})
         self.world = world
         self.charges = charges
         self.resident_spider_ids = set()
@@ -450,6 +450,38 @@ class SpiderWeb(Building):
 
     def add_resident(self, critter):
         self.resident_spider_ids.add(critter.id)
+
+    def update(self, game, dt):
+        from critter import MegaSpider
+        from entity_cleanup import remove_building_at_tile
+
+        owners = sorted(
+            (
+                critter
+                for critter in game.critters
+                if (
+                    isinstance(critter, MegaSpider)
+                    and critter.current_behavior != "dying"
+                    and getattr(critter, "home_building", None) is self
+                )
+            ),
+            key=lambda critter: critter.id,
+        )
+
+        if not owners:
+            tile = game.world.get_tile(self.x, self.y)
+            if tile is not None and tile.building is self:
+                remove_building_at_tile(
+                    game,
+                    tile,
+                    "it no longer had a living Mega Spider owner",
+                )
+            return
+
+        owner = owners[0]
+        for extra_owner in owners[1:]:
+            extra_owner.home_building = None
+        self.resident_spider_ids = {owner.id}
 
     def remove_resident(self, critter):
         self.resident_spider_ids.discard(critter.id)
