@@ -181,8 +181,7 @@ class ApeCavalry(ApeWarrior):
     PREDATOR_NAME = "Ape Cavalry"
     MOVE_COOLDOWN = 0.16
     COLOR = (180, 135, 80)
-    # Reuse warrior art until a dedicated cavalry sprite is available.
-    SPRITE = "ape_warrior"
+    SPRITE = "ape_cavalry"
 
     def __init__(self, x, y):
         super().__init__(x, y)

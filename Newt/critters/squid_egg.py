@@ -19,6 +19,9 @@ class SquidEgg(Critter):
     def try_reproduce(self, world):
         return None
 
+    def can_be_eaten_by(self, predator):
+        return False
+
     def hatch(self, game):
         from .squid import Squid
 

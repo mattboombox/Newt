@@ -24,21 +24,16 @@ class SeaScorpion(Critter):
 
     def get_hunt_prey_types(self):
         from .crab import Crab
-        from .squid import Squid
         from .fish import Fish
         from .trilobite import Trilobite
+        from .jelly_fish import Jellyfish
 
-        return (Crab, Trilobite, Squid, Fish)
+        return (Crab, Trilobite, Fish, Jellyfish)
 
     def get_scavenge_prey_types(self):
         return self.get_hunt_prey_types()
 
     def take_hungry_action(self, game):
-        from .squid import Squid
-
-        # Squid are their preferred coastal prey; other prey are a fallback.
-        if self.hunt_nearest_prey(game, (Squid,), self.get_predator_name()):
-            return
 
         if self.hunt_nearest_prey(
             game,

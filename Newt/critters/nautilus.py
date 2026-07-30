@@ -4,7 +4,7 @@ from .plankton import Plankton
 
 class Nautilus(Critter):
     ALLOWED_TERRAINS = AQUATIC_TERRAINS - {"lake"}
-    REPRODUCTION_MEAL_THRESHOLD = 5
+    REPRODUCTION_MEAL_THRESHOLD = 4
     HUNGER_INTERVAL = 55.0
     STARVATION_INTERVAL = 55.0
     HUNT_RANGE = 12

@@ -24,8 +24,9 @@ class SpermWhale(Whale):
         from .land_kraken import LandKraken
         from .squid import Squid
         from .sea_scorpion import SeaScorpion
+        from .ape_sailor import ApeSailor
 
-        return (Squid, LandKraken, SeaScorpion)
+        return (Squid, LandKraken, SeaScorpion, ApeSailor)
 
     def get_scavenge_prey_types(self):
         return self.get_hunt_prey_types()
@@ -55,6 +56,16 @@ class SpermWhale(Whale):
             self.get_hunt_prey_types(),
             self.get_predator_name(),
         )
+
+    def take_hungry_action(self, game):
+        # Keep searching while starving instead of becoming stationary when
+        # sonar cannot find reachable prey within the current hunt range.
+        if not self.hunt_nearest_prey(
+            game,
+            self.get_hunt_prey_types(),
+            self.get_predator_name(),
+        ):
+            self.try_wander(game.world, game)
 
     def spawn_death_remains(self, game, tile):
         return self.try_spawn_meal_based_plankton_remains(game, tile)

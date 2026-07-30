@@ -40,6 +40,7 @@ WEB_MIRROR_FPS = 5
 # Assets
 SPRITE_PATHS = {
     "ape": BASE_DIR / "critter_sprites" / "ape.png",
+    "ape_cavalry": BASE_DIR / "critter_sprites" / "ape_cavalry.png",
     "ape_sailor": BASE_DIR / "critter_sprites" / "ape_sailor.png",
     "ape_warrior": BASE_DIR / "critter_sprites" / "ape_warrior.png",
     "crab": BASE_DIR / "critter_sprites" / "crab.png",

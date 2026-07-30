@@ -456,15 +456,22 @@ class Critter:
     def can_be_hunted_by(self, predator):
         return True
 
+    def can_be_eaten_by(self, predator):
+        return True
+
     def is_valid_hunt_prey(self, critter, prey_types):
         return (
             isinstance(critter, prey_types)
             and critter.current_behavior != "dying"
             and critter.can_be_hunted_by(self)
+            and critter.can_be_eaten_by(self)
         )
 
     def is_valid_scavenge_prey(self, critter, prey_types):
-        return isinstance(critter, prey_types)
+        return (
+            isinstance(critter, prey_types)
+            and critter.can_be_eaten_by(self)
+        )
 
     def get_hunt_range(self):
         return self.HUNT_RANGE
@@ -764,7 +771,10 @@ class Critter:
         if self.should_attempt_shove_displacement(critter) and self.try_relocate_displaced_critter(world, critter):
             return True
 
-        if not self.should_remove_on_failed_displacement(critter):
+        if (
+            not self.should_remove_on_failed_displacement(critter)
+            or not critter.can_be_eaten_by(self)
+        ):
             return False
 
         self.remove_other_critter(game, critter)
