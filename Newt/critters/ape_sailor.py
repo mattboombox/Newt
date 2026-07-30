@@ -8,6 +8,8 @@ class ApeSailor(Ape):
     HUNGER_INTERVAL = 260.0
     STARVATION_INTERVAL = 220.0
     MINIMUM_RETURN_HAUL = 3
+    WAR_REFUGEE_FOUNDING_COOLDOWN = 60.0
+    WAR_REFUGEE_ORIGIN_EXCLUSION_RADIUS = 12
     PREDATOR_NAME = "Ape Sailor"
 
     def __init__(self, x, y):
@@ -16,6 +18,8 @@ class ApeSailor(Ape):
         self.sprite = "ape_sailor"
         self.allowed_terrains = set(self.ALLOWED_TERRAINS)
         self.configure_hunger(self.HUNGER_INTERVAL, self.STARVATION_INTERVAL)
+        self.war_refugee_founding_timer = 0.0
+        self.war_refugee_origin = None
 
     @classmethod
     def recruit(cls, ape, world, x, y):
@@ -34,6 +38,8 @@ class ApeSailor(Ape):
         ape.allowed_terrains = set(cls.ALLOWED_TERRAINS)
         ape.configure_hunger(cls.HUNGER_INTERVAL, cls.STARVATION_INTERVAL)
         ape.needs_habitat_relocation = False
+        ape.war_refugee_founding_timer = 0.0
+        ape.war_refugee_origin = None
         ape.set_behavior("recruited_sailor")
         world.get_tile(x, y).critter = ape
         return ape
@@ -73,6 +79,103 @@ class ApeSailor(Ape):
     def should_remove_on_failed_displacement(self, critter):
         # A shove that has nowhere to move its target should not become a kill.
         return False
+
+    def become_war_refugee(self, village):
+        self.war_refugee_founding_timer = self.WAR_REFUGEE_FOUNDING_COOLDOWN
+        self.war_refugee_origin = (village.x, village.y)
+        self.clear_settlement_path()
+        self.set_behavior("war_refugee")
+
+    def clear_war_refugee_status(self):
+        self.war_refugee_founding_timer = 0.0
+        self.war_refugee_origin = None
+
+    def ensure_home_village(self, game, allow_create=False):
+        village = super().ensure_home_village(
+            game,
+            allow_create=allow_create,
+        )
+        if village is not None and self.war_refugee_origin is not None:
+            self.clear_war_refugee_status()
+        return village
+
+    def find_accessible_village(self, world):
+        from building import NavalDistrict
+        from city import City
+
+        path = self.find_path_to_nearest_tile(
+            world,
+            lambda tile: (
+                isinstance(tile.building, NavalDistrict)
+                and isinstance(tile.building.settlement, City)
+                and tile.building.settlement.has_population_space()
+                and tile.building.settlement.is_connected_building(
+                    world,
+                    tile.building,
+                )
+            ),
+            allow_occupied_target=True,
+            max_search_distance=self.VILLAGE_CLAIM_RANGE,
+            path_tile_predicate=self.is_habitable_tile,
+        )
+        if path is None:
+            return None
+
+        tile = world.get_tile(self.x, self.y) if not path else world.get_tile(*path[-1])
+        if tile is None or not isinstance(tile.building, NavalDistrict):
+            return None
+        return tile.building.settlement
+
+    def can_found_village_on_tile(
+        self,
+        tile,
+        require_farm_site,
+        villages,
+    ):
+        from building import Ruins
+
+        if self.war_refugee_founding_timer > 0:
+            return False
+
+        if not super().can_found_village_on_tile(
+            tile,
+            require_farm_site,
+            villages,
+        ):
+            return False
+
+        if (
+            self.war_refugee_origin is not None
+            and self.get_tile_distance(
+                tile.world,
+                tile.x,
+                tile.y,
+                *self.war_refugee_origin,
+            )
+            <= self.WAR_REFUGEE_ORIGIN_EXCLUSION_RADIUS
+        ):
+            return False
+
+        return any(
+            neighbor.terrain == "shallows"
+            and (
+                neighbor.building is None
+                or isinstance(neighbor.building, Ruins)
+            )
+            and (
+                neighbor.critter is None
+                or neighbor.critter is self
+            )
+            for neighbor in tile.world.get_neighbors_cardinal(tile.x, tile.y)
+        )
+
+    def initialize_new_village(self, game, village):
+        super().initialize_new_village(game, village)
+        village.try_build_initial_naval_district(
+            game.world,
+            occupying_critter=self,
+        )
+        self.clear_war_refugee_status()
 
     def is_at_connected_settlement_building(self, world, village):
         from building import NavalDistrict
@@ -161,3 +264,10 @@ class ApeSailor(Ape):
 
     def should_return_carried_food(self):
         return self.carrying_food >= self.MINIMUM_RETURN_HAUL
+
+    def update(self, game, dt):
+        self.war_refugee_founding_timer = max(
+            0.0,
+            self.war_refugee_founding_timer - dt,
+        )
+        super().update(game, dt)

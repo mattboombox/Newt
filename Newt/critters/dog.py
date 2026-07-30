@@ -4,6 +4,8 @@ from .ape_warrior import ApeWarrior
 class Dog(ApeWarrior):
     """A domesticated wolf that lives and fights alongside village apes."""
 
+    COMBAT_POWER = 3
+    MAX_COMBAT_HEALTH = 2
     PREDATOR_NAME = "Dog"
     FERAL_INTERVAL = 60.0
 
@@ -28,6 +30,7 @@ class Dog(ApeWarrior):
         wolf.__class__ = cls
         wolf.color = (170, 125, 80)
         wolf.sprite = "dog"
+        wolf.configure_combat()
         wolf.allowed_terrains = set(cls.ALLOWED_TERRAINS)
         wolf.move_cooldown = 0.28
         wolf.carrying_food = 0
@@ -122,6 +125,7 @@ class Dog(ApeWarrior):
         self.carrying_den_charge = False
         self.meals_eaten = 0
         self.needs_habitat_relocation = False
+        self.configure_combat()
         self.configure_hunger(Wolf.HUNGER_INTERVAL, Wolf.STARVATION_INTERVAL)
         self.set_behavior("feral")
         return self

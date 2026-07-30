@@ -24,6 +24,12 @@ CARDINAL_DIRECTIONS = [
 class Critter:
     _next_id = 1
     DYING_INTERVAL = 12.0
+    COMBAT_CAPABLE = False
+    COMBAT_POWER = 1
+    MAX_COMBAT_HEALTH = 1
+    PASSIVE_HEAL_INTERVAL = 18.0
+    MEAL_HEAL_AMOUNT = 1
+    DAMAGE_FLASH_DURATION = 0.45
     # Critters may displace occupants from lower levels. Nutrition follows
     # the same scale by default, with +1 keeping level-zero prey valuable.
     DISPLACEMENT_LEVEL = 1
@@ -70,6 +76,7 @@ class Critter:
         self.dying_timer = None
         self.is_hungry = False
         self.meals_eaten = 0
+        self.configure_combat()
         self.home_building = None
         self.needs_habitat_relocation = False
         self.trapped_by_web = None
@@ -90,6 +97,55 @@ class Critter:
         self.hunger_interval = hunger_interval
         self.starvation_interval = starvation_interval
         self.reset_hunger()
+
+    def configure_combat(self):
+        self.combat_health = self.MAX_COMBAT_HEALTH
+        self.passive_heal_timer = self.PASSIVE_HEAL_INTERVAL
+        self.damage_flash_timer = 0.0
+        self.retaliation_target = None
+
+    def heal_combat_damage(self, amount):
+        if not self.COMBAT_CAPABLE or amount <= 0:
+            return 0
+
+        old_health = self.combat_health
+        self.combat_health = min(
+            self.MAX_COMBAT_HEALTH,
+            self.combat_health + amount,
+        )
+        return self.combat_health - old_health
+
+    def heal_from_meal(self):
+        return self.heal_combat_damage(self.MEAL_HEAL_AMOUNT)
+
+    def update_combat_state(self, dt):
+        self.damage_flash_timer = max(0.0, self.damage_flash_timer - dt)
+        if (
+            not self.COMBAT_CAPABLE
+            or self.current_behavior == "dying"
+            or self.combat_health >= self.MAX_COMBAT_HEALTH
+        ):
+            self.passive_heal_timer = self.PASSIVE_HEAL_INTERVAL
+            return
+
+        self.passive_heal_timer -= dt
+        while (
+            self.passive_heal_timer <= 0
+            and self.combat_health < self.MAX_COMBAT_HEALTH
+        ):
+            self.combat_health += 1
+            self.passive_heal_timer += self.PASSIVE_HEAL_INTERVAL
+
+    def take_combat_damage(self, amount=1, attacker=None):
+        if not self.COMBAT_CAPABLE or amount <= 0:
+            return False
+
+        self.combat_health = max(0, self.combat_health - amount)
+        self.passive_heal_timer = self.PASSIVE_HEAL_INTERVAL
+        self.damage_flash_timer = self.DAMAGE_FLASH_DURATION
+        if attacker is not None and attacker is not self:
+            self.retaliation_target = attacker
+        return self.combat_health <= 0
 
     def set_home_building(self, building):
         if self.home_building is building:
@@ -130,6 +186,7 @@ class Critter:
         self.meals_eaten += meal_points
         self.set_behavior("eat")
         self.reset_hunger()
+        self.heal_from_meal()
 
         if self.meals_eaten < self.REPRODUCTION_MEAL_THRESHOLD:
             return None
@@ -163,6 +220,8 @@ class Critter:
         return None
 
     def update(self, game, dt):
+        self.update_combat_state(dt)
+
         if self.current_behavior == "dying":
             self.update_dying(game, dt)
             return
@@ -198,6 +257,9 @@ class Critter:
             return
 
         if self.try_scavenge_nearby_corpse(game):
+            return
+
+        if self.try_handle_retaliation(game):
             return
 
         if self.try_handle_priority_behavior(game):
@@ -397,6 +459,7 @@ class Critter:
     def is_valid_hunt_prey(self, critter, prey_types):
         return (
             isinstance(critter, prey_types)
+            and critter.current_behavior != "dying"
             and critter.can_be_hunted_by(self)
         )
 
@@ -558,9 +621,121 @@ class Critter:
 
         remove_critter(game, critter, f"it was eaten by {predator_name} {self.id}")
 
-    def resolve_hunt_attack(self, game, prey, predator_name=None):
-        self.remove_other_critter(game, prey, predator_name)
+    def should_feed_on_hunt_target(self, prey):
         return True
+
+    def resolve_hunt_attack(self, game, prey, predator_name=None):
+        if self.COMBAT_CAPABLE and prey.COMBAT_CAPABLE:
+            return self.resolve_combat_attack(game, prey, predator_name)
+
+        return self.resolve_noncombat_hunt_attack(game, prey, predator_name)
+
+    def resolve_noncombat_hunt_attack(self, game, prey, predator_name=None):
+        if self.should_feed_on_hunt_target(prey):
+            self.remove_other_critter(game, prey, predator_name)
+        else:
+            from entity_cleanup import remove_critter
+
+            if predator_name is None:
+                predator_name = type(self).__name__
+            remove_critter(
+                game,
+                prey,
+                f"it was killed by {predator_name} {self.id}",
+            )
+        return True
+
+    def get_combat_hit_chance(self, defender):
+        combined_power = self.COMBAT_POWER + defender.COMBAT_POWER
+        if combined_power <= 0:
+            return 0.5
+        return min(0.8, max(0.2, self.COMBAT_POWER / combined_power))
+
+    def resolve_combat_attack(self, game, prey, predator_name=None):
+        if prey.current_behavior == "dying" or prey.combat_health <= 0:
+            return False
+
+        self.set_behavior("combat")
+        prey.set_behavior("combat")
+
+        if random.random() < self.get_combat_hit_chance(prey):
+            if prey.take_combat_damage(attacker=self):
+                return self.resolve_defeated_combat_target(
+                    game,
+                    prey,
+                    predator_name,
+                )
+            return False
+
+        if self.take_combat_damage(attacker=prey):
+            self.start_dying(game)
+        return False
+
+    def get_active_retaliation_target(self, game):
+        target = getattr(self, "retaliation_target", None)
+        if (
+            target is None
+            or target not in game.critters
+            or target.current_behavior == "dying"
+        ):
+            self.retaliation_target = None
+            return None
+
+        tile = game.world.get_tile(target.x, target.y)
+        if tile is None or tile.critter is not target:
+            self.retaliation_target = None
+            return None
+
+        return target
+
+    def try_handle_retaliation(self, game):
+        target = self.get_active_retaliation_target(game)
+        if target is None:
+            return False
+
+        path = self.find_path_to_nearest_tile(
+            game.world,
+            lambda tile: tile.critter is target and self.is_habitable_tile(tile),
+            allow_occupied_target=True,
+            max_search_distance=self.get_hunt_range(),
+        )
+        if not path:
+            self.retaliation_target = None
+            return False
+
+        target_x, target_y = path[0]
+        target_tile = game.world.get_tile(target_x, target_y)
+        if target_tile is None or target_tile.critter is not target:
+            self.retaliation_target = None
+            return False
+
+        self.set_behavior("retaliate")
+        should_feed = self.should_feed_on_hunt_target(target)
+        if self.resolve_hunt_attack(game, target, self.get_predator_name()):
+            self.move_to(game.world, target_x, target_y, game)
+            if should_feed:
+                self.handle_successful_meal(
+                    game,
+                    self.get_reproduction_meal_value(target),
+                )
+        return True
+
+    def resolve_defeated_combat_target(
+        self,
+        game,
+        prey,
+        predator_name=None,
+    ):
+        if self.is_hungry and self.should_feed_on_hunt_target(prey):
+            return self.resolve_noncombat_hunt_attack(
+                game,
+                prey,
+                predator_name,
+            )
+
+        prey.start_dying(game)
+        self.set_behavior("combat_victory")
+        return False
 
     def try_relocate_displaced_critter(self, world, critter):
         destinations = critter.get_neighbor_positions(world, critter.x, critter.y)
@@ -1006,9 +1181,11 @@ class Critter:
         ):
             prey = target_tile.critter
             prey_value = self.get_reproduction_meal_value(prey)
+            should_feed = self.should_feed_on_hunt_target(prey)
             if self.resolve_hunt_attack(game, prey, predator_name):
                 self.move_to(game.world, target_x, target_y, game)
-                self.handle_successful_meal(game, prey_value)
+                if should_feed:
+                    self.handle_successful_meal(game, prey_value)
             return True
 
         self.set_behavior("hunt")

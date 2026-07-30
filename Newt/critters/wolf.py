@@ -6,6 +6,9 @@ from .therapsid import Therapsid
 from .land_kraken import LandKraken
 
 class Wolf(Critter):
+    COMBAT_CAPABLE = True
+    COMBAT_POWER = 3
+    MAX_COMBAT_HEALTH = 3
     DISPLACEMENT_LEVEL = 2
     ALLOWED_TERRAINS = LAND_TERRAINS
     REPRODUCTION_MEAL_THRESHOLD = 10
@@ -37,6 +40,7 @@ class Wolf(Critter):
         self.meals_eaten += meal_points
         self.set_behavior("eat")
         self.reset_hunger()
+        self.heal_from_meal()
 
         if self.meals_eaten < self.REPRODUCTION_MEAL_THRESHOLD or self.carrying_den_charge:
             return None

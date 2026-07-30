@@ -7,6 +7,9 @@ class Lich(Critter):
     """A player-summoned necromancer that raises a protective undead army."""
 
     ALLOWED_TERRAINS = LAND_TERRAINS
+    COMBAT_CAPABLE = True
+    COMBAT_POWER = 4
+    MAX_COMBAT_HEALTH = 7
     DISPLACEMENT_LEVEL = 4
     HUNT_RANGE = 12
     PLAYER_SPAWN_ONLY = True
@@ -33,6 +36,7 @@ class Lich(Critter):
         from .giga_slug import GigaSlug
         from .land_kraken import LandKraken
         from .mega_spider import MegaSpider
+        from .messiah import Messiah
         from .sand_worm import SandWorm
         from .therapsid import Therapsid
         from .wolf import Wolf
@@ -53,6 +57,7 @@ class Lich(Critter):
                 GigaSlug,
                 LandKraken,
                 MegaSpider,
+                Messiah,
                 SandWorm,
                 Therapsid,
                 Wolf,
@@ -61,8 +66,9 @@ class Lich(Critter):
 
     def can_be_hunted_by(self, predator):
         from .ape_warrior import ApeWarrior
+        from .smasher import Smasher
 
-        return isinstance(predator, ApeWarrior)
+        return isinstance(predator, (ApeWarrior, Smasher))
 
     def can_displace_critter(self, critter):
         return True
@@ -70,20 +76,95 @@ class Lich(Critter):
     def should_remove_on_failed_displacement(self, critter):
         return False
 
-    def resolve_hunt_attack(self, game, prey, predator_name=None):
+    def get_raised_undead_type(self, critter):
         from .ape import Ape
         from .dog import Dog
 
-        undead_type = (
-            Undead
-            if isinstance(prey, Ape) and not isinstance(prey, Dog)
-            else UndeadBeast
+        if isinstance(critter, Ape) and not isinstance(critter, Dog):
+            return Undead
+        return UndeadBeast
+
+    def can_raise_dying_critter(self, game, critter):
+        if (
+            critter is self
+            or critter not in game.critters
+            or critter.current_behavior != "dying"
+            or isinstance(critter, (Lich, Undead, UndeadBeast))
+        ):
+            return False
+
+        tile = game.world.get_tile(critter.x, critter.y)
+        return (
+            tile is not None
+            and tile.critter is critter
+            and self.is_habitable_tile(tile)
         )
+
+    def raise_dying_critter(self, game, critter):
+        if not self.can_raise_dying_critter(game, critter):
+            return False
+
+        undead_type = self.get_raised_undead_type(critter)
+        undead_type.raise_from(game, critter, self)
+        self.set_behavior("raise_undead")
+        return True
+
+    def try_raise_dying_critter(self, game):
+        dying_critters = getattr(game, "dying_critters", ())
+        target_positions = {
+            (critter.x, critter.y)
+            for critter in dying_critters
+            if self.can_raise_dying_critter(game, critter)
+        }
+        if not target_positions:
+            return False
+
+        path = self.find_path_to_nearest_tile(
+            game.world,
+            lambda tile: (tile.x, tile.y) in target_positions,
+            allow_occupied_target=True,
+            max_search_distance=self.get_hunt_range(),
+        )
+        if not path:
+            return False
+
+        target_x, target_y = path[0]
+        target_tile = game.world.get_tile(target_x, target_y)
+        target = None if target_tile is None else target_tile.critter
+        if target is not None and self.raise_dying_critter(game, target):
+            return True
+
+        self.set_behavior("seek_dying")
+        self.move_to(game.world, target_x, target_y, game)
+        return True
+
+    def resolve_noncombat_hunt_attack(
+        self,
+        game,
+        prey,
+        predator_name=None,
+    ):
+        undead_type = self.get_raised_undead_type(prey)
         undead_type.raise_from(game, prey, self)
         self.set_behavior("raise_undead")
         return False
 
+    def resolve_defeated_combat_target(
+        self,
+        game,
+        prey,
+        predator_name=None,
+    ):
+        return self.resolve_noncombat_hunt_attack(
+            game,
+            prey,
+            predator_name,
+        )
+
     def try_handle_priority_behavior(self, game):
+        if self.try_raise_dying_critter(game):
+            return True
+
         return self.hunt_nearest_prey(
             game,
             self.get_hunt_prey_types(),
@@ -95,6 +176,9 @@ class UndeadFollower(Critter):
     """Shared roaming and ape-hunting behavior for a lich's converts."""
 
     ALLOWED_TERRAINS = LAND_TERRAINS
+    COMBAT_CAPABLE = True
+    COMBAT_POWER = 2
+    MAX_COMBAT_HEALTH = 2
     DISPLACEMENT_LEVEL = 2
     PROTECTION_RANGE = 12
     APE_ATTACK_CHANCE = 0.35
@@ -145,6 +229,7 @@ class UndeadFollower(Critter):
         critter.starvation_timer = None
         critter.dying_timer = None
         critter.meals_eaten = 0
+        critter.configure_combat()
         if hasattr(critter, "carrying_food"):
             del critter.carrying_food
         critter.set_behavior("raised_undead")
@@ -156,8 +241,9 @@ class UndeadFollower(Critter):
 
     def get_hunt_prey_types(self):
         from .ape import Ape
+        from .messiah import Messiah
 
-        return (Ape,)
+        return (Ape, Messiah)
 
     def get_scavenge_prey_types(self):
         return ()
@@ -190,6 +276,8 @@ class UndeadBeast(UndeadFollower):
     """A beast-derived member of a lich's undead guard."""
 
     COLOR = (95, 125, 90)
+    COMBAT_POWER = 3
+    MAX_COMBAT_HEALTH = 3
     MOVE_COOLDOWN = 0.30
     SPRITE = "undead_beast"
     PREDATOR_NAME = "Undead Beast"

@@ -7,6 +7,9 @@ from .therapsid import Therapsid
 class LandKraken(Critter):
     """A denless land predator descended from squid."""
 
+    COMBAT_CAPABLE = True
+    COMBAT_POWER = 3
+    MAX_COMBAT_HEALTH = 4
     DISPLACEMENT_LEVEL = 2
     ALLOWED_TERRAINS = LAND_TERRAINS
     REPRODUCTION_MEAL_THRESHOLD = 10

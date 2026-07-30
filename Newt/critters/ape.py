@@ -57,12 +57,24 @@ class Ape(Therapsid):
         return self.get_hunt_prey_types()
 
     def is_valid_hunt_prey(self, critter, prey_types):
-        if isinstance(critter, Ape):
+        if (
+            isinstance(critter, Ape)
+            or (
+                not self.COMBAT_CAPABLE
+                and critter.COMBAT_CAPABLE
+            )
+        ):
             return False
         return super().is_valid_hunt_prey(critter, prey_types)
 
     def is_valid_scavenge_prey(self, critter, prey_types):
-        if isinstance(critter, Ape):
+        if (
+            isinstance(critter, Ape)
+            or (
+                not self.COMBAT_CAPABLE
+                and critter.COMBAT_CAPABLE
+            )
+        ):
             return False
         return super().is_valid_scavenge_prey(critter, prey_types)
 
@@ -142,6 +154,23 @@ class Ape(Therapsid):
             return None
         return tile.building
 
+    def can_found_village_on_tile(
+        self,
+        tile,
+        require_farm_site,
+        villages,
+    ):
+        from city import City
+
+        return City.can_place_on_tile(
+            tile,
+            require_farm_site=require_farm_site,
+            villages=villages,
+        )
+
+    def initialize_new_village(self, game, village):
+        village.try_build_initial_farm(game.world)
+
     def create_home_village(self, game):
         from city import City
 
@@ -151,10 +180,10 @@ class Ape(Therapsid):
         for require_farm_site in (True, False):
             path = self.find_path_to_nearest_tile(
                 game.world,
-                lambda tile, require_farm_site=require_farm_site: City.can_place_on_tile(
+                lambda tile, require_farm_site=require_farm_site: self.can_found_village_on_tile(
                     tile,
-                    require_farm_site=require_farm_site,
-                    villages=existing_villages,
+                    require_farm_site,
+                    existing_villages,
                 ),
                 max_search_distance=self.VILLAGE_CLAIM_RANGE,
                 path_tile_predicate=self.is_habitable_tile,
@@ -166,25 +195,25 @@ class Ape(Therapsid):
             return None
 
         tile = game.world.get_tile(self.x, self.y) if not path else game.world.get_tile(*path[-1])
-        if not City.can_place_on_tile(
+        if not self.can_found_village_on_tile(
             tile,
-            require_farm_site=require_farm_site,
-            villages=existing_villages,
+            require_farm_site,
+            existing_villages,
         ):
             return None
 
         village = City(tile.x, tile.y, level="village", world=game.world)
         tile.building = village
-        village.try_build_initial_farm(game.world)
+        self.initialize_new_village(game, village)
         return village
 
-    def ensure_home_village(self, game):
+    def ensure_home_village(self, game, allow_create=False):
         village = self.get_home_village(game.world)
         if village is not None:
             return village
 
         village = self.find_accessible_village(game.world)
-        if village is None:
+        if village is None and allow_create:
             village = self.create_home_village(game)
 
         if village is not None and village.has_population_space():
@@ -195,6 +224,19 @@ class Ape(Therapsid):
         return None
 
     def handle_successful_meal(self, game, meal_points=None):
+        village = self.ensure_home_village(game)
+        if village is None:
+            # Before founding or joining a village, an ape feeds itself.
+            # This lets it earn its first reproduction without prematurely
+            # creating a settlement just to store the food.
+            if meal_points is None:
+                meal_points = 1
+            self.meals_eaten += meal_points
+            self.set_behavior("eat")
+            self.reset_hunger()
+            self.heal_from_meal()
+            return None
+
         # Ape prey becomes transportable settlement food. It must be deposited
         # at a connected building before any resident can consume it.
         if meal_points is None:
@@ -237,6 +279,7 @@ class Ape(Therapsid):
         village.food -= 1
         self.meals_eaten += 1
         self.reset_hunger()
+        self.heal_from_meal()
         self.set_behavior("eat_village_food")
         return True
 
@@ -339,8 +382,14 @@ class Ape(Therapsid):
 
     def handle_reproduction_priority(self, game, village):
         if village is None:
-            self.set_behavior("seek_village")
-            return False
+            village = self.ensure_home_village(game, allow_create=True)
+            if village is None:
+                self.set_behavior("seek_village")
+                return False
+
+        if not self.is_at_connected_settlement_building(game.world, village):
+            return self.try_return_to_settlement(game, "return_to_reproduce")
+
         return self.try_reproduce_in_village(game, village)
 
     def try_wander(self, world, game=None):

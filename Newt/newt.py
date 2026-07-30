@@ -28,11 +28,15 @@ from config import (
     WEB_MIRROR_PORT,
     WINDOW_TITLE,
 )
-from critter import CRITTER_ORDER
 from entity_cleanup import clear_stale_tile_critters, remove_stranded_critters
 from erosion import get_polar_depth
 from events import update_events
-from input import apply_active_tool, handle_input
+from input import (
+    ALT_CRITTER_ORDER,
+    REGULAR_CRITTER_ORDER,
+    apply_active_tool,
+    handle_input,
+)
 from render import render
 from tectonics import TRENCH_CARVABLE_TERRAINS, trigger_trench_event
 from webmirror import start_frame_mirror
@@ -94,9 +98,12 @@ class Game:
         self.hovered_tile = None
 
         self.current_terrain = DEFAULT_PAINT_TERRAIN
-        self.current_critter = CRITTER_ORDER[0]
+        self.current_critter = REGULAR_CRITTER_ORDER[0]
+        self.current_alt_critter = ALT_CRITTER_ORDER[0]
         self.current_building = "village"
         self.current_event = "meteor"
+        self.current_tools_action = "inspect"
+        self.current_spawning_tool = "critter"
         self.current_tool = "terrain"
         self.left_mouse_held = False
         self.brush_size = DEFAULT_BRUSH_SIZE

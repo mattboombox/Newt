@@ -1,5 +1,5 @@
 import pygame
-from brush import paint_radius, trigger_event_tool
+from brush import paint_radius, trigger_event_tool, trigger_evolution_tool
 from config import (
     CLOSE_UP_TILE_SIZE,
     OVERVIEW_TILE_SIZE,
@@ -8,7 +8,16 @@ from config import (
     ZOOMED_IN_TILE_SIZE,
 )
 from terrain import TERRAIN_DATA
-from critter import Ape, CRITTER_ORDER, CRITTER_TYPES
+from critter import (
+    Ape,
+    ApeSailor,
+    ApeWarrior,
+    CRITTER_ORDER,
+    CRITTER_TYPES,
+    SaintSmasher,
+    Undead,
+    UndeadBeast,
+)
 from city import City
 from building import (
     CritterPrinter,
@@ -20,9 +29,12 @@ from building import (
     WolfDen,
 )
 from entity_cleanup import remove_building_at_tile, remove_critter
+from evolution import get_evolution_result_types
 
 
-TOOL_MODE_ORDER = ["terrain", "critter", "building", "event", "inspect"]
+TOOL_CATEGORY_ORDER = ["terrain", "event", "spawning", "tools"]
+SPAWNING_TOOL_ORDER = ["critter", "alt_critter", "building"]
+TOOLS_ORDER = ["inspect", "evolve", "war"]
 BUILDING_ORDER = [
     "village",
     "farm",
@@ -32,8 +44,45 @@ BUILDING_ORDER = [
     "wolf_den",
     "critter_printer",
 ]
-EVENT_TOOL_ORDER = ["meteor", "mega_meteor", "comet", "tsunami", "tectonic_uplift", "island_uplift", "trench_event", "evolve"]
+EVENT_TOOL_ORDER = [
+    "meteor",
+    "mega_meteor",
+    "comet",
+    "tsunami",
+    "tectonic_uplift",
+    "island_uplift",
+    "trench_event",
+]
 EVENT_ONLY_TERRAINS = {"meteor", "comet", "tectonic_uplift", "tsunami"}
+EVOLUTION_RESULT_TYPES = get_evolution_result_types()
+MANUAL_ALT_CRITTER_TYPES = {
+    "ape_sailor": ApeSailor,
+    "ape_warrior": ApeWarrior,
+    "saint_smasher": SaintSmasher,
+    "undead": Undead,
+    "undead_beast": UndeadBeast,
+}
+SPAWN_CRITTER_TYPES = {
+    **CRITTER_TYPES,
+    **MANUAL_ALT_CRITTER_TYPES,
+}
+REGULAR_SPAWN_EXCEPTIONS = {"plankton"}
+REGULAR_CRITTER_ORDER = [
+    critter_name
+    for critter_name in CRITTER_ORDER
+    if (
+        CRITTER_TYPES[critter_name] in EVOLUTION_RESULT_TYPES
+        or critter_name in REGULAR_SPAWN_EXCEPTIONS
+    )
+]
+ALT_CRITTER_ORDER = [
+    critter_name
+    for critter_name in CRITTER_ORDER
+    if (
+        CRITTER_TYPES[critter_name] not in EVOLUTION_RESULT_TYPES
+        and critter_name not in REGULAR_SPAWN_EXCEPTIONS
+    )
+] + list(MANUAL_ALT_CRITTER_TYPES.keys())
 ZOOM_TILE_SIZES = (
     OVERVIEW_TILE_SIZE,
     TILE_SIZE,
@@ -55,10 +104,20 @@ def cycle_terrain(game, step):
 
 
 def cycle_critter(game, step):
-    current_index = CRITTER_ORDER.index(game.current_critter)
-    new_index = (current_index + step) % len(CRITTER_ORDER)
-    game.current_critter = CRITTER_ORDER[new_index]
-    print("Critter:", game.current_critter)
+    if game.current_tool == "alt_critter":
+        order = ALT_CRITTER_ORDER
+        attribute = "current_alt_critter"
+        label = "Alt critter"
+    else:
+        order = REGULAR_CRITTER_ORDER
+        attribute = "current_critter"
+        label = "Critter"
+
+    current_critter = getattr(game, attribute)
+    current_index = order.index(current_critter)
+    new_critter = order[(current_index + step) % len(order)]
+    setattr(game, attribute, new_critter)
+    print(f"{label}:", new_critter)
 
 
 def cycle_building(game, step):
@@ -75,11 +134,42 @@ def cycle_event_tool(game, step):
     print("Event:", game.current_event)
 
 
+def cycle_tools_action(game, step):
+    current_index = TOOLS_ORDER.index(game.current_tools_action)
+    new_index = (current_index + step) % len(TOOLS_ORDER)
+    game.current_tools_action = TOOLS_ORDER[new_index]
+    print("Tool:", game.current_tools_action)
+
+
+def get_tool_category(current_tool):
+    return "spawning" if current_tool in SPAWNING_TOOL_ORDER else current_tool
+
+
 def cycle_tool_mode(game):
-    current_index = TOOL_MODE_ORDER.index(game.current_tool)
-    new_index = (current_index + 1) % len(TOOL_MODE_ORDER)
-    game.current_tool = TOOL_MODE_ORDER[new_index]
+    current_category = get_tool_category(game.current_tool)
+    current_index = TOOL_CATEGORY_ORDER.index(current_category)
+    new_category = TOOL_CATEGORY_ORDER[
+        (current_index + 1) % len(TOOL_CATEGORY_ORDER)
+    ]
+    game.current_tool = (
+        game.current_spawning_tool
+        if new_category == "spawning"
+        else new_category
+    )
     print("Tool mode:", game.current_tool)
+
+
+def cycle_spawning_tool(game):
+    if game.current_tool not in SPAWNING_TOOL_ORDER:
+        return False
+
+    current_index = SPAWNING_TOOL_ORDER.index(game.current_tool)
+    game.current_tool = SPAWNING_TOOL_ORDER[
+        (current_index + 1) % len(SPAWNING_TOOL_ORDER)
+    ]
+    game.current_spawning_tool = game.current_tool
+    print("Spawning mode:", game.current_tool)
+    return True
 
 
 def reload_sprites_for_zoom(game):
@@ -118,15 +208,20 @@ def spawn_current_critter(game, tile):
     if tile is None:
         return False
 
-    critter_cls = CRITTER_TYPES[game.current_critter]
+    critter_name = (
+        game.current_alt_critter
+        if game.current_tool == "alt_critter"
+        else game.current_critter
+    )
+    critter_cls = SPAWN_CRITTER_TYPES[critter_name]
     if tile.terrain not in critter_cls.ALLOWED_TERRAINS:
         return False
 
     if tile.critter is not None:
-        remove_critter(game, tile.critter, f"it was replaced by a spawned {game.current_critter}")
+        remove_critter(game, tile.critter, f"it was replaced by a spawned {critter_name}")
 
     critter = critter_cls(tile.x, tile.y)
-    if isinstance(tile.building, WolfDen) and game.current_critter == "wolf":
+    if isinstance(tile.building, WolfDen) and critter_name == "wolf":
         critter.set_home_building(tile.building)
     elif (
         isinstance(tile.building, City)
@@ -142,10 +237,10 @@ def spawn_current_critter(game, tile):
         if tile.critter is critter:
             tile.critter = None
         game.critters.remove(critter)
-        print(f"Could not spawn {game.current_critter}: it needs more open habitat.")
+        print(f"Could not spawn {critter_name}: it needs more open habitat.")
         return False
 
-    print(f"Spawned {game.current_critter} {critter.id} at ({tile.x}, {tile.y})")
+    print(f"Spawned {critter_name} {critter.id} at ({tile.x}, {tile.y})")
     return True
 
 
@@ -246,11 +341,63 @@ def place_current_building(game, tile):
     return False
 
 
+def trigger_war_tool(game, tile):
+    if tile is None or not isinstance(tile.building, City):
+        print("The War tool must be used on a village.")
+        return False
+
+    attacker = tile.building
+    villages = City.get_villages(game.world)
+    for village in villages:
+        village.reconcile_residents(game)
+
+    if attacker.population == 0:
+        print("That village has no apes and cannot declare war.")
+        return False
+
+    candidates = [
+        village
+        for village in villages
+        if village is not attacker and village.population > 0
+    ]
+    if not candidates:
+        print("There is no other populated village to attack.")
+        return False
+
+    def distance_to(village):
+        dx = abs(attacker.x - village.x)
+        dx = min(dx, game.world.cols - dx)
+        return dx + abs(attacker.y - village.y)
+
+    defender = min(
+        candidates,
+        key=lambda village: (
+            distance_to(village),
+            village.x,
+            village.y,
+        ),
+    )
+    if not attacker.declare_war(defender, game.world):
+        return False
+
+    print(
+        f"War declared between villages at ({attacker.x}, {attacker.y}) "
+        f"and ({defender.x}, {defender.y})."
+    )
+    return True
+
+
 def apply_active_tool(game, tile):
     if tile is None:
         return False
 
-    if game.current_tool == "inspect":
+    if game.current_tool == "tools":
+        if game.current_tools_action == "war":
+            return trigger_war_tool(game, tile)
+
+        if game.current_tools_action == "evolve":
+            return trigger_evolution_tool(game, tile)
+
         game.selected_critter = tile.critter
         if tile.critter is None:
             game.selection_notice = None
@@ -264,7 +411,7 @@ def apply_active_tool(game, tile):
         game.follow_selected_critter()
         return True
 
-    if game.current_tool == "critter":
+    if game.current_tool in {"critter", "alt_critter"}:
         return spawn_current_critter(game, tile)
 
     if game.current_tool == "building":
@@ -307,7 +454,7 @@ def handle_input(game):
                 print("Paused" if game.paused else "Unpaused")
 
             elif event.key == pygame.K_a:
-                if game.current_tool == "critter":
+                if game.current_tool in {"critter", "alt_critter"}:
                     cycle_critter(game, -1)
                 elif game.current_tool == "building":
                     cycle_building(game, -1)
@@ -315,9 +462,11 @@ def handle_input(game):
                     cycle_event_tool(game, -1)
                 elif game.current_tool == "terrain":
                     cycle_terrain(game, -1)
+                elif game.current_tool == "tools":
+                    cycle_tools_action(game, -1)
 
             elif event.key == pygame.K_d:
-                if game.current_tool == "critter":
+                if game.current_tool in {"critter", "alt_critter"}:
                     cycle_critter(game, 1)
                 elif game.current_tool == "building":
                     cycle_building(game, 1)
@@ -325,14 +474,20 @@ def handle_input(game):
                     cycle_event_tool(game, 1)
                 elif game.current_tool == "terrain":
                     cycle_terrain(game, 1)
+                elif game.current_tool == "tools":
+                    cycle_tools_action(game, 1)
 
             elif event.key == pygame.K_q:
-                game.brush_size = max(0, game.brush_size - 1)
-                print("Brush size:", game.brush_size)
+                if game.current_tool == "terrain":
+                    game.brush_size = max(0, game.brush_size - 1)
+                    print("Brush size:", game.brush_size)
 
             elif event.key == pygame.K_e:
-                game.brush_size += 1
-                print("Brush size:", game.brush_size)
+                if game.current_tool == "terrain":
+                    game.brush_size += 1
+                    print("Brush size:", game.brush_size)
+                else:
+                    cycle_spawning_tool(game)
 
             elif event.key == pygame.K_PERIOD:
                 game.speed = min(16, game.speed * 2)
@@ -381,11 +536,17 @@ def handle_input(game):
             if event.button == 1:
                 apply_active_tool(game, tile)
 
-                if game.current_tool in {"terrain", "critter"}:
+                if game.current_tool in {"terrain", "critter", "alt_critter"}:
                     game.left_mouse_held = True
 
             elif event.button == 3:
-                remove_tile_occupant(game, tile)
+                if (
+                    game.current_tool == "tools"
+                    and game.current_tools_action == "evolve"
+                ):
+                    trigger_evolution_tool(game, tile, devolve=True)
+                else:
+                    remove_tile_occupant(game, tile)
 
         elif event.type == pygame.MOUSEBUTTONUP:
             if event.button == 1:

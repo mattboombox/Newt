@@ -44,6 +44,7 @@ class City(Building):
         self.food = 0
         self.resident_ape_ids = set()
         self.resident_dog_ids = set()
+        self.war_enemies = set()
         self.aux_buildings = []
         self._connected_buildings_cache = None
         self._connected_buildings_world = None
@@ -161,9 +162,106 @@ class City(Building):
             )
         }
 
+    def get_active_war_enemies(self, world):
+        self.war_enemies = {
+            enemy
+            for enemy in self.war_enemies
+            if (
+                world.get_tile(enemy.x, enemy.y) is not None
+                and world.get_tile(enemy.x, enemy.y).building is enemy
+            )
+        }
+        return tuple(
+            sorted(self.war_enemies, key=lambda village: (village.x, village.y))
+        )
+
+    def declare_war(self, enemy, world):
+        self_tile = world.get_tile(self.x, self.y)
+        enemy_tile = world.get_tile(enemy.x, enemy.y)
+        if (
+            enemy is self
+            or self_tile is None
+            or self_tile.building is not self
+            or enemy_tile is None
+            or enemy_tile.building is not enemy
+        ):
+            return False
+
+        # Wars are intentionally one-village-versus-one-village for now.
+        self.end_all_wars()
+        enemy.end_all_wars()
+        self.war_enemies.add(enemy)
+        enemy.war_enemies.add(self)
+        return True
+
+    def end_all_wars(self):
+        for enemy in tuple(self.war_enemies):
+            enemy.war_enemies.discard(self)
+        self.war_enemies.clear()
+
+    def get_surviving_war_enemy(self, game):
+        for enemy in self.get_active_war_enemies(game.world):
+            enemy.reconcile_residents(game)
+            if (
+                enemy.population > 0
+                and not enemy.has_only_sailor_residents(game)
+            ):
+                return enemy
+        return None
+
+    def transfer_food_to_war_winner(self, game):
+        winner = self.get_surviving_war_enemy(game)
+        if winner is None:
+            return None
+
+        transferred_food = self.food
+        winner.food += transferred_food
+        self.food = 0
+        if transferred_food > 0:
+            print(
+                f"Village at ({winner.x}, {winner.y}) captured "
+                f"{transferred_food} food from village at "
+                f"({self.x}, {self.y})."
+            )
+        return winner
+
+    def mark_war_refugee_sailors(self, game):
+        from critters.ape_sailor import ApeSailor
+
+        for critter in game.critters:
+            if (
+                isinstance(critter, ApeSailor)
+                and critter.home_building is self
+                and critter.current_behavior != "dying"
+            ):
+                critter.become_war_refugee(self)
+
+    def has_only_sailor_residents(self, game):
+        from critters.ape_sailor import ApeSailor
+
+        residents = [
+            critter
+            for critter in game.critters
+            if (
+                critter.id in self.resident_ape_ids
+                and critter.current_behavior != "dying"
+            )
+        ]
+        return bool(residents) and all(
+            isinstance(critter, ApeSailor)
+            for critter in residents
+        )
+
     def update(self, game, dt):
         self.reconcile_residents(game)
-        if self.population == 0:
+        is_at_war = bool(self.get_active_war_enemies(game.world))
+        if (
+            self.population == 0
+            or (
+                is_at_war
+                and self.has_only_sailor_residents(game)
+            )
+        ):
             self.abandon_to_ruins(game)
             return
 
@@ -197,6 +295,11 @@ class City(Building):
             self.remove_aux_building(building)
 
     def abandon_to_ruins(self, game):
+        was_at_war = bool(self.get_active_war_enemies(game.world))
+        if was_at_war:
+            self.mark_war_refugee_sailors(game)
+        self.transfer_food_to_war_winner(game)
+        self.end_all_wars()
         for critter in game.critters:
             if getattr(critter, "home_building", None) is self:
                 critter.home_building = None
@@ -327,6 +430,50 @@ class City(Building):
             return farm
 
         return None
+
+    def try_build_initial_naval_district(
+        self,
+        world,
+        occupying_critter=None,
+    ):
+        if self.get_connected_naval_district_count(world) > 0:
+            return None
+
+        candidates = [
+            tile
+            for tile in self.get_open_construction_tiles(world)
+            if tile.terrain == "shallows"
+        ]
+        if occupying_critter is not None:
+            occupied_tile = world.get_tile(
+                occupying_critter.x,
+                occupying_critter.y,
+            )
+            if (
+                occupied_tile is not None
+                and occupied_tile.terrain == "shallows"
+                and (
+                    occupied_tile.building is None
+                    or isinstance(occupied_tile.building, Ruins)
+                )
+                and any(
+                    neighbor.building in self.get_connected_buildings(world)
+                    for neighbor in world.get_neighbors_cardinal(
+                        occupied_tile.x,
+                        occupied_tile.y,
+                    )
+                )
+            ):
+                candidates.insert(0, occupied_tile)
+
+        if not candidates:
+            return None
+
+        tile = candidates[0]
+        district = NavalDistrict(tile.x, tile.y, settlement=self)
+        tile.building = district
+        self.add_aux_building(district)
+        return district
 
     def get_connected_farm_count(self, world):
         return sum(
@@ -489,6 +636,11 @@ class City(Building):
         return district
 
     def on_removed(self, game):
+        was_at_war = bool(self.get_active_war_enemies(game.world))
+        if was_at_war:
+            self.mark_war_refugee_sailors(game)
+        self.transfer_food_to_war_winner(game)
+        self.end_all_wars()
         for critter in game.critters:
             if getattr(critter, "home_building", None) is self:
                 critter.home_building = None

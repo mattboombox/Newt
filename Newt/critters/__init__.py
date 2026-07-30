@@ -1,6 +1,6 @@
 from .ape import Ape
 from .ape_sailor import ApeSailor
-from .ape_warrior import ApeWarrior
+from .ape_warrior import ApeCavalry, ApeWarrior
 from .crab import Crab
 from .critter import (
     AQUATIC_TERRAINS,
@@ -16,11 +16,13 @@ from .jelly_fish import Jellyfish
 from .land_kraken import LandKraken
 from .lich import Lich, Undead, UndeadBeast
 from .mega_spider import MegaSpider
+from .messiah import Messiah
 from .nautilus import Nautilus
 from .newt import Newt
 from .plankton import Plankton
 from .sand_worm import SandWorm
 from .snail import Snail
+from .smasher import SaintSmasher, Smasher
 from .sperm_whale import SpermWhale
 from .squid import Squid
 from .squid_egg import SquidEgg
@@ -41,12 +43,14 @@ CRITTER_TYPES = {
     "land_kraken": LandKraken,
     "lich": Lich,
     "mega_spider": MegaSpider,
+    "messiah": Messiah,
     "nautilus": Nautilus,
     "newt": Newt,
     "plankton": Plankton,
     "sand_worm": SandWorm,
     "sea_scorpion": SeaScorpion,
     "snail": Snail,
+    "smasher": Smasher,
     "sperm_whale": SpermWhale,
     "squid": Squid,
     "therapsid": Therapsid,
@@ -65,6 +69,7 @@ __all__ = [
     "Critter",
     "Ape",
     "ApeSailor",
+    "ApeCavalry",
     "ApeWarrior",
     "Crab",
     "Deer",
@@ -75,6 +80,7 @@ __all__ = [
     "LandKraken",
     "Lich",
     "MegaSpider",
+    "Messiah",
     "Nautilus",
     "Newt",
     "LAND_TERRAINS",
@@ -82,6 +88,8 @@ __all__ = [
     "SandWorm",
     "SeaScorpion",
     "Snail",
+    "SaintSmasher",
+    "Smasher",
     "SpermWhale",
     "Squid",
     "SquidEgg",

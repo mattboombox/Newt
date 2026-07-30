@@ -93,6 +93,34 @@ class ImpactWave:
             game.impact_waves.remove(self)
 
 
+class MiniMeteorWave(ImpactWave):
+    """A compact impact that leaves one lava tile and a radius-two blast."""
+
+    def __init__(self, x, y):
+        super().__init__(
+            x,
+            y,
+            core_radius=0,
+            burn_radius=2,
+            impact_type="mini_meteor",
+        )
+
+    def finish(self, game):
+        self.remove_from_game(game)
+
+
+def trigger_mini_meteor(game, x, y):
+    center_tile = game.world.get_tile(x, y)
+    if center_tile is None:
+        return False
+
+    wave = MiniMeteorWave(x, y)
+    game.impact_waves.append(wave)
+    wave.advance(game)
+    print(f"Mini Meteor impact at ({x}, {y})")
+    return True
+
+
 def trigger_impact_event(
     game,
     x=None,

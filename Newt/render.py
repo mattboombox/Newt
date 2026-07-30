@@ -41,22 +41,37 @@ def draw_hud(screen, game, background_color):
     critter_field = None
 
     status = "Paused" if game.paused else "Running"
-    active_tool = game.current_tool.title()
+    active_tool = (
+        "Spawning"
+        if game.current_tool in {"critter", "alt_critter", "building"}
+        else "Events"
+        if game.current_tool == "event"
+        else format_tool_name(game.current_tool)
+    )
     if game.current_tool == "critter":
         active_selection = f"Critter: {format_tool_name(game.current_critter)}"
+    elif game.current_tool == "alt_critter":
+        active_selection = (
+            f"Alt Critter: {format_tool_name(game.current_alt_critter)}"
+        )
     elif game.current_tool == "building":
         active_selection = f"Building Tool: {format_tool_name(game.current_building)}"
     elif game.current_tool == "event":
         active_selection = f"Event: {format_tool_name(game.current_event)}"
-    elif game.current_tool == "inspect":
+    elif game.current_tool == "tools":
         selected = game.selected_critter
-        active_selection = (
-            f"Selection: {game.selection_notice}"
-            if selected is None and game.selection_notice is not None
-            else "Selection: None"
-            if selected is None
-            else f"Selection: {type(selected).__name__} ID {selected.id}"
-        )
+        if game.current_tools_action == "inspect":
+            active_selection = (
+                f"Inspect: {game.selection_notice}"
+                if selected is None and game.selection_notice is not None
+                else "Inspect: None"
+                if selected is None
+                else f"Inspect: {type(selected).__name__} ID {selected.id}"
+            )
+        elif game.current_tools_action == "evolve":
+            active_selection = "Tool: Evolve (Right Click: De-evolve)"
+        else:
+            active_selection = "Tool: War (Click Village)"
     else:
         active_selection = f"Brush: {format_tool_name(game.current_terrain)}"
 
@@ -85,6 +100,11 @@ def draw_hud(screen, game, background_color):
             critter_parts = [
                 f"Critter: {type(tile.critter).__name__} ID {tile.critter.id}"
             ]
+            if tile.critter.COMBAT_CAPABLE:
+                critter_parts.append(
+                    f"Health: {tile.critter.combat_health}/"
+                    f"{tile.critter.MAX_COMBAT_HEALTH}"
+                )
             if hasattr(tile.critter, "body_positions"):
                 critter_parts.append(
                     f"Behavior: {format_tool_name(tile.critter.current_behavior)} "
@@ -114,10 +134,21 @@ def draw_hud(screen, game, background_color):
 
         if tile.building is not None:
             if isinstance(tile.building, City):
+                war_enemies = tile.building.get_active_war_enemies(game.world)
+                war_status = (
+                    ", War: "
+                    + ", ".join(
+                        f"({enemy.x}, {enemy.y})"
+                        for enemy in war_enemies
+                    )
+                    if war_enemies
+                    else ""
+                )
                 building_field = (
                     f"Building: {tile.building.level.title()} "
                     f"(Food: {tile.building.food}, Population: "
-                    f"{tile.building.population}/{tile.building.population_cap})"
+                    f"{tile.building.population}/{tile.building.population_cap}"
+                    f"{war_status})"
                 )
             elif isinstance(tile.building, Farm):
                 settlement = tile.building.settlement
@@ -209,6 +240,7 @@ def draw_hud(screen, game, background_color):
 
 def draw_critter(screen, game, critter, tile_size, sprites):
     sprite = sprites.get(critter.sprite)
+    damage_flashing = critter.damage_flash_timer > 0
 
     if sprite is not None:
         screen_position = get_screen_position(game, critter.x, critter.y)
@@ -216,6 +248,9 @@ def draw_critter(screen, game, critter, tile_size, sprites):
             return
         if critter.current_behavior == "dying":
             sprite = pygame.transform.flip(sprite, False, True)
+        if damage_flashing:
+            sprite = sprite.copy()
+            sprite.fill((110, 0, 0, 0), special_flags=pygame.BLEND_RGBA_ADD)
         screen.blit(sprite, screen_position)
     else:
         inset = max(2, tile_size // 4)
@@ -227,6 +262,12 @@ def draw_critter(screen, game, critter, tile_size, sprites):
             color = critter.color if index == 0 else tuple(
                 max(0, channel - 25) for channel in critter.color
             )
+            if damage_flashing:
+                color = (
+                    min(255, color[0] + 110),
+                    max(0, color[1] - 35),
+                    max(0, color[2] - 35),
+                )
             rect = pygame.Rect(
                 screen_position[0] + inset,
                 screen_position[1] + inset,

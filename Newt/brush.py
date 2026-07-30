@@ -1,5 +1,10 @@
 from entity_cleanup import clear_tile_occupants
-from evolution import get_evolution_options, replace_with_evolved_offspring
+from evolution import (
+    get_devolution_options,
+    get_evolution_options,
+    replace_with_devolved_offspring,
+    replace_with_evolved_offspring,
+)
 from impact import trigger_impact_event
 from tectonics import remove_volcano_at, sync_volcano_at_tile, trigger_island_uplift_event, trigger_trench_event, trigger_uplift_event
 from lake import convert_landlocked_ocean_to_lake
@@ -62,40 +67,50 @@ def trigger_event_tool(game, center_tile, event_name):
     if event_name == "tsunami":
         return spawn_tsunami(game, center_tile)
 
-    if event_name == "evolve":
-        parent = center_tile.critter
-        if parent is None:
-            return False
-
-        if not get_evolution_options(parent):
-            print("That critter has no evolutionary offspring.")
-            return False
-
-        # The manual evolution tool ignores parent and offspring terrain
-        # restrictions.  An evolved offspring can seek suitable habitat after
-        # it is born; the only hard limit is an occupied surrounding tile.
-        offspring = parent.try_spawn_adjacent_offspring(game.world)
-        if offspring is None:
-            print("That critter needs an open adjacent tile for its evolved offspring.")
-            return False
-
-        evolved_offspring = replace_with_evolved_offspring(parent, offspring, game.world)
-        if evolved_offspring is None:
-            offspring_tile = game.world.get_tile(offspring.x, offspring.y)
-            if offspring_tile is not None and offspring_tile.critter is offspring:
-                offspring_tile.critter = None
-            print("That critter could not create an evolved offspring.")
-            return False
-
-        game.critters.append(evolved_offspring)
-        print(
-            f"Evolved offspring of {type(parent).__name__} at "
-            f"({evolved_offspring.x}, {evolved_offspring.y}) into "
-            f"{type(evolved_offspring).__name__} {evolved_offspring.id}"
-        )
-        return True
-
     return False
+
+
+def trigger_evolution_tool(game, center_tile, devolve=False):
+    if center_tile is None or center_tile.critter is None:
+        return False
+
+    parent = center_tile.critter
+    get_options = get_devolution_options if devolve else get_evolution_options
+    replace_offspring = (
+        replace_with_devolved_offspring
+        if devolve
+        else replace_with_evolved_offspring
+    )
+    direction_name = "de-evolution" if devolve else "evolution"
+
+    if not get_options(parent):
+        print(f"That critter has no {direction_name} option.")
+        return False
+
+    # Manual evolution tools ignore terrain restrictions. The resulting
+    # offspring relocates itself if its inherited birthplace is unsuitable.
+    offspring = parent.try_spawn_adjacent_offspring(game.world)
+    if offspring is None:
+        print(f"That critter needs an open adjacent tile for {direction_name}.")
+        return False
+
+    transformed_offspring = replace_offspring(parent, offspring, game.world)
+    if transformed_offspring is None:
+        offspring_tile = game.world.get_tile(offspring.x, offspring.y)
+        if offspring_tile is not None and offspring_tile.critter is offspring:
+            offspring_tile.critter = None
+        print(f"That critter could not create a {direction_name} offspring.")
+        return False
+
+    game.critters.append(transformed_offspring)
+    action = "De-evolved" if devolve else "Evolved"
+    print(
+        f"{action} offspring of {type(parent).__name__} at "
+        f"({transformed_offspring.x}, {transformed_offspring.y}) into "
+        f"{type(transformed_offspring).__name__} "
+        f"{transformed_offspring.id}"
+    )
+    return True
 
 
 def paint_radius(game, center_tile, terrain_name, radius=0):
