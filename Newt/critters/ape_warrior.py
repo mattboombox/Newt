@@ -36,6 +36,11 @@ class ApeWarrior(Ape):
 
         return (LandKraken, Lich, MegaSpider, Undead, UndeadBeast, Wolf)
 
+    def get_priority_hunt_prey_types(self):
+        from .lich import Undead, UndeadBeast
+
+        return (Undead, UndeadBeast)
+
     def get_scavenge_prey_types(self):
         if self.carrying_food:
             return ()
@@ -57,4 +62,10 @@ class ApeWarrior(Ape):
         return super().resolve_hunt_attack(game, prey, predator_name)
 
     def try_handle_priority_behavior(self, game):
+        if self.hunt_nearest_prey(
+            game,
+            self.get_priority_hunt_prey_types(),
+            self.get_predator_name(),
+        ):
+            return True
         return self.try_handle_hunter_priority_behavior(game)

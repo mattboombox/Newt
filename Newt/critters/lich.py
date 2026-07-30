@@ -92,13 +92,12 @@ class Lich(Critter):
 
 
 class UndeadFollower(Critter):
-    """Shared following and protection behavior for a lich's converts."""
+    """Shared roaming and ape-hunting behavior for a lich's converts."""
 
     ALLOWED_TERRAINS = LAND_TERRAINS
     DISPLACEMENT_LEVEL = 2
-    FOLLOW_DISTANCE = 4
     PROTECTION_RANGE = 12
-    APE_ATTACK_CHANCE = 0.05
+    APE_ATTACK_CHANCE = 0.35
     PREDATOR_NAME = "Undead"
 
     COLOR = (115, 135, 105)
@@ -156,11 +155,6 @@ class UndeadFollower(Critter):
         return self.PROTECTION_RANGE
 
     def get_hunt_prey_types(self):
-        from .ape_warrior import ApeWarrior
-
-        return (ApeWarrior,)
-
-    def get_opportunistic_ape_prey_types(self):
         from .ape import Ape
 
         return (Ape,)
@@ -170,94 +164,22 @@ class UndeadFollower(Critter):
 
     def handle_successful_meal(self, game, meal_points=None):
         self.meals_eaten = 0
-        self.set_behavior("protect_lich")
+        self.set_behavior("attack_ape")
         return None
 
-    def get_active_master(self, game):
-        master = self.master_lich
-        if isinstance(master, Lich):
-            tile = game.world.get_tile(master.x, master.y)
-            if (
-                tile is not None
-                and tile.critter is master
-                and master.current_behavior != "dying"
-            ):
-                return master
-
-        liches = [
-            critter
-            for critter in game.critters
-            if (
-                isinstance(critter, Lich)
-                and critter.current_behavior != "dying"
-                and game.world.get_tile(critter.x, critter.y) is not None
-                and game.world.get_tile(critter.x, critter.y).critter is critter
-            )
-        ]
-        self.master_lich = min(
-            liches,
-            key=lambda lich: self.get_tile_distance(
-                game.world,
-                self.x,
-                self.y,
-                lich.x,
-                lich.y,
-            ),
-            default=None,
-        )
-        return self.master_lich
-
-    def follow_master(self, game, master):
-        if (
-            self.get_tile_distance(
-                game.world,
-                self.x,
-                self.y,
-                master.x,
-                master.y,
-            )
-            <= self.FOLLOW_DISTANCE
-        ):
-            self.set_behavior("guard_lich")
-            return False
-
-        path = self.find_path_to_nearest_position(
-            game.world,
-            {(master.x, master.y)},
-            allow_occupied_target=True,
-        )
-        if not path:
-            self.set_behavior("seek_lich")
-            return False
-
-        self.set_behavior("follow_lich")
-        next_x, next_y = path[0]
-        return self.move_to(game.world, next_x, next_y, game)
-
     def try_handle_priority_behavior(self, game):
-        master = self.get_active_master(game)
-        if master is None:
-            self.set_behavior("masterless")
-            return False
-
-        if self.hunt_nearest_prey(
-            game,
-            self.get_hunt_prey_types(),
-            self.get_predator_name(),
-        ):
-            return True
-
         if (
             random.random() < self.APE_ATTACK_CHANCE
             and self.hunt_nearest_prey(
                 game,
-                self.get_opportunistic_ape_prey_types(),
+                self.get_hunt_prey_types(),
                 self.get_predator_name(),
             )
         ):
             return True
 
-        return self.follow_master(game, master)
+        self.set_behavior("roam")
+        return False
 
 
 class Undead(UndeadFollower):

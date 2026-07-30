@@ -7,6 +7,7 @@ from .therapsid import Therapsid
 class Ape(Therapsid):
     """A broadly omnivorous land hunter descended from therapsids."""
 
+    DISPLACEMENT_LEVEL = 3
     PREDATOR_NAME = "Ape"
     REPRODUCTION_MEAL_THRESHOLD = 5
     REPRODUCTION_BLOCKS_SET_BEHAVIOR = False

@@ -62,7 +62,7 @@ class ResidentialDistrict(Building):
 
 
 class MilitaryDistrict(Building):
-    RECRUITMENT_COST = 5
+    RECRUITMENT_COST = 0
     RECRUITMENT_INTERVAL = 30.0
     WARRIOR_CAPACITY = 5
 
@@ -99,11 +99,7 @@ class MilitaryDistrict(Building):
         from critters.ape_warrior import ApeWarrior
 
         village = self.settlement
-        if (
-            village is None
-            or village.should_prioritize_farms(game.world)
-            or village.food < self.RECRUITMENT_COST
-        ):
+        if village is None:
             return None
 
         if len(self.get_village_warriors(game)) >= self.get_connected_military_capacity(game.world):
@@ -125,7 +121,6 @@ class MilitaryDistrict(Building):
             civilians,
             key=lambda ape: abs(ape.x - self.x) + abs(ape.y - self.y),
         )
-        village.food -= self.RECRUITMENT_COST
         return ApeWarrior.recruit(recruit)
 
     def update(self, game, dt):
@@ -146,7 +141,7 @@ class MilitaryDistrict(Building):
 
 
 class NavalDistrict(Building):
-    RECRUITMENT_COST = 5
+    RECRUITMENT_COST = 0
     RECRUITMENT_INTERVAL = 30.0
     SAILOR_CAPACITY = 5
 
@@ -189,8 +184,6 @@ class NavalDistrict(Building):
         tile = game.world.get_tile(self.x, self.y)
         if (
             village is None
-            or village.should_prioritize_farms(game.world)
-            or village.food < self.RECRUITMENT_COST
             or tile is None
             or tile.building is not self
             or tile.critter is not None
@@ -216,7 +209,6 @@ class NavalDistrict(Building):
             civilians,
             key=lambda ape: abs(ape.x - self.x) + abs(ape.y - self.y),
         )
-        village.food -= self.RECRUITMENT_COST
         return ApeSailor.recruit(
             recruit,
             game.world,

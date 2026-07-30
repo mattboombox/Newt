@@ -2,6 +2,9 @@ from .whale import Whale
 
 
 class SpermWhale(Whale):
+    # Sperm whales are the largest movers in the simulation and can shove
+    # every lower-level critter, including sailors and liches.
+    DISPLACEMENT_LEVEL = 5
     ALLOWED_TERRAINS = Whale.ALLOWED_TERRAINS
     REPRODUCTION_MEAL_THRESHOLD = Whale.REPRODUCTION_MEAL_THRESHOLD
     HUNGER_INTERVAL = Whale.HUNGER_INTERVAL
@@ -26,6 +29,14 @@ class SpermWhale(Whale):
 
     def get_scavenge_prey_types(self):
         return self.get_hunt_prey_types()
+
+    def can_displace_critter(self, critter):
+        return critter is not self
+
+    def should_remove_on_failed_displacement(self, critter):
+        # Shoving an occupant should never turn into an incidental kill when
+        # there is no valid neighboring tile available.
+        return False
 
     def try_scavenge_corpse(self, game):
         # A hungry whale must use its sonar to hunt live prey instead of
