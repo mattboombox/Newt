@@ -22,6 +22,12 @@ class Building:
         pass
 
     def can_remain_on_tile(self, tile):
+        settlement = getattr(self, "settlement", None)
+        if (
+            settlement is not None
+            and getattr(settlement, "faction", None) == "merfolk"
+        ):
+            return settlement.is_valid_auxiliary_tile(tile)
         return tile is not None and not tile.has_tag("water")
 
 class Farm(Building):
@@ -54,6 +60,64 @@ class ResidentialDistrict(Building):
     def __init__(self, x, y, settlement=None, sprite="ape_hut"):
         super().__init__(x, y, sprite=sprite, tags={"residential"})
         self.settlement = settlement
+
+    def on_removed(self, game):
+        if self.settlement is not None:
+            self.settlement.remove_aux_building(self)
+            self.settlement = None
+
+
+class Church(Building):
+    RECRUITMENT_INTERVAL = 30.0
+
+    def __init__(self, x, y, settlement=None, sprite="church"):
+        super().__init__(x, y, sprite=sprite, tags={"religious"})
+        self.settlement = settlement
+        self.recruitment_timer = self.RECRUITMENT_INTERVAL
+        self.has_recruited = False
+
+    def try_recruit(self, game):
+        from critters.ape import Ape
+        from critters.messiah import Messiah
+
+        if self.has_recruited or self.settlement is None:
+            return None
+
+        civilians = [
+            critter
+            for critter in game.critters
+            if (
+                Ape.is_recruitable_civilian(critter)
+                and critter.home_building is self.settlement
+                and critter.current_behavior != "dying"
+            )
+        ]
+        if len(civilians) <= 1:
+            return None
+
+        recruit = min(
+            civilians,
+            key=lambda ape: abs(ape.x - self.x) + abs(ape.y - self.y),
+        )
+        messiah = Messiah.recruit(recruit)
+        if messiah is not None:
+            self.has_recruited = True
+        return messiah
+
+    def update(self, game, dt):
+        if (
+            self.has_recruited
+            or self.settlement is None
+            or not self.settlement.is_connected_building(game.world, self)
+        ):
+            return
+
+        self.recruitment_timer -= dt
+        if self.recruitment_timer > 0:
+            return
+
+        self.recruitment_timer += self.RECRUITMENT_INTERVAL
+        self.try_recruit(game)
 
     def on_removed(self, game):
         if self.settlement is not None:
@@ -95,9 +159,6 @@ class MilitaryDistrict(Building):
         )
 
     def try_recruit(self, game):
-        from critters.ape import Ape
-        from critters.ape_warrior import ApeWarrior
-
         village = self.settlement
         if village is None:
             return None
@@ -109,7 +170,7 @@ class MilitaryDistrict(Building):
             critter
             for critter in game.critters
             if (
-                Ape.is_recruitable_civilian(critter)
+                village.is_recruitable_civilian(critter)
                 and critter.home_building is village
                 and critter.current_behavior != "dying"
             )
@@ -121,7 +182,7 @@ class MilitaryDistrict(Building):
             civilians,
             key=lambda ape: abs(ape.x - self.x) + abs(ape.y - self.y),
         )
-        return ApeWarrior.recruit(recruit)
+        return village.get_warrior_type().recruit(recruit)
 
     def update(self, game, dt):
         if self.settlement is None or not self.settlement.is_connected_building(game.world, self):
@@ -143,7 +204,7 @@ class MilitaryDistrict(Building):
 class NavalDistrict(Building):
     RECRUITMENT_COST = 0
     RECRUITMENT_INTERVAL = 30.0
-    SAILOR_CAPACITY = 5
+    SAILOR_CAPACITY = 4
 
     def __init__(self, x, y, settlement=None, sprite="ape_harbor"):
         super().__init__(x, y, sprite=sprite, tags={"naval"})
@@ -234,7 +295,9 @@ class NavalDistrict(Building):
 
 
 class Ruins(Building):
-    def __init__(self, x, y, former_building_type=None, sprite="ruins"):
+    def __init__(self, x, y, former_building_type=None, sprite=None):
+        if sprite is None:
+            sprite = f"ruin_{random.randint(1, 6)}"
         super().__init__(x, y, sprite=sprite, tags={"ruins"})
         self.former_building_type = former_building_type
 

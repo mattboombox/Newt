@@ -12,6 +12,7 @@ class ApeWarrior(Ape):
     DEER_TAMING_CHANCE = 0.20
     PREDATOR_NAME = "Ape Warrior"
     STARVATION_INTERVAL = 120.0
+    CAN_CROSS_TERRAIN_DURING_WAR = True
 
     def __init__(self, x, y):
         super().__init__(x, y)
@@ -36,16 +37,39 @@ class ApeWarrior(Ape):
 
     def get_hunt_prey_types(self):
         from .land_kraken import LandKraken
-        from .lich import Lich, Undead, UndeadBeast
+        from .lich import Lich, UndeadFollower
         from .mega_spider import MegaSpider
         from .wolf import Wolf
 
-        return (LandKraken, Lich, MegaSpider, Undead, UndeadBeast, Wolf)
+        return (LandKraken, Lich, MegaSpider, UndeadFollower, Wolf)
 
     def get_priority_hunt_prey_types(self):
-        from .lich import Undead, UndeadBeast
+        from .lich import UndeadFollower
 
-        return (Undead, UndeadBeast)
+        return (UndeadFollower,)
+
+    def has_active_village_war(self):
+        from city import City
+
+        return (
+            self.CAN_CROSS_TERRAIN_DURING_WAR
+            and isinstance(self.home_building, City)
+            and bool(self.home_building.war_enemies)
+        )
+
+    def is_habitable_tile(self, tile):
+        if self.has_active_village_war():
+            return tile is not None
+        return super().is_habitable_tile(tile)
+
+    def update(self, game, dt):
+        tile = game.world.get_tile(self.x, self.y)
+        if (
+            not self.has_active_village_war()
+            and not super().is_habitable_tile(tile)
+        ):
+            self.needs_habitat_relocation = True
+        super().update(game, dt)
 
     def get_scavenge_prey_types(self):
         if self.carrying_food:

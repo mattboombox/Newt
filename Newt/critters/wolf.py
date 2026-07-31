@@ -91,6 +91,11 @@ class Wolf(Critter):
 
         self.try_wander(game.world, game)
 
+    def get_hunt_prey_types(self):
+        from .herrera import Herrera
+
+        return self.HUNT_PREY_TYPES + (Herrera,)
+
     def find_accessible_home_den(self, world, max_search_distance=None):
         from building import WolfDen
 

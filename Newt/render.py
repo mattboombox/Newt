@@ -1,5 +1,6 @@
 import pygame
 from building import (
+    Church,
     CritterPrinter,
     Farm,
     MilitaryDistrict,
@@ -144,8 +145,9 @@ def draw_hud(screen, game, background_color):
                     if war_enemies
                     else ""
                 )
+                faction_name = tile.building.faction.replace("_", " ").title()
                 building_field = (
-                    f"Building: {tile.building.level.title()} "
+                    f"Building: {faction_name} {tile.building.level.title()} "
                     f"(Food: {tile.building.food}, Population: "
                     f"{tile.building.population}/{tile.building.population_cap}"
                     f"{war_status})"
@@ -172,6 +174,13 @@ def draw_hud(screen, game, background_color):
                     f"(Warriors: {len(warriors)}/{capacity}, Food: {food}, "
                     f"Recruitment: {max(0, tile.building.recruitment_timer):.0f}s)"
                 )
+            elif isinstance(tile.building, Church):
+                status = (
+                    "Messiah recruited"
+                    if tile.building.has_recruited
+                    else f"Recruitment: {max(0, tile.building.recruitment_timer):.0f}s"
+                )
+                building_field = f"Building: Church ({status})"
             elif isinstance(tile.building, NavalDistrict):
                 settlement = tile.building.settlement
                 food = 0 if settlement is None else settlement.food

@@ -8,6 +8,7 @@ class Dog(ApeWarrior):
     MAX_COMBAT_HEALTH = 2
     PREDATOR_NAME = "Dog"
     FERAL_INTERVAL = 60.0
+    CAN_CROSS_TERRAIN_DURING_WAR = False
 
     def __init__(self, x, y):
         super().__init__(x, y)
@@ -53,7 +54,7 @@ class Dog(ApeWarrior):
             world,
             lambda tile: (
                 isinstance(tile.building, City)
-                and tile.building.has_population_space()
+                and tile.building.faction == "ape"
                 and tile.building.has_dog_space()
             ),
             allow_occupied_target=True,
@@ -77,11 +78,12 @@ class Dog(ApeWarrior):
         village = self.find_accessible_village(game.world)
         if (
             village is not None
-            and village.has_population_space()
+            and village.faction == "ape"
             and village.has_dog_space()
         ):
             self.set_home_building(village)
             self.feral_timer = self.FERAL_INTERVAL
+            self.set_behavior("join_village")
             return village
         return None
 
@@ -102,7 +104,7 @@ class Dog(ApeWarrior):
             super().update(game, dt)
             return
 
-        if self.get_home_village(game.world) is not None:
+        if self.ensure_home_village(game) is not None:
             self.feral_timer = self.FERAL_INTERVAL
         else:
             self.feral_timer -= dt

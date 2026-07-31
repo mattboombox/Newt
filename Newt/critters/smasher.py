@@ -30,9 +30,9 @@ class Smasher(Critter):
 
     def get_hunt_prey_types(self):
         from .ape import Ape
-        from .lich import Lich, Undead, UndeadBeast
+        from .lich import Lich, UndeadFollower
 
-        return (Ape, Lich, Undead, UndeadBeast)
+        return (Ape, Lich, UndeadFollower)
 
     def get_scavenge_prey_types(self):
         return ()
@@ -124,6 +124,6 @@ class SaintSmasher(Smasher):
         return critter
 
     def get_hunt_prey_types(self):
-        from .lich import Undead, UndeadBeast
+        from .lich import UndeadFollower
 
-        return (Undead, UndeadBeast)
+        return (UndeadFollower,)

@@ -23,6 +23,7 @@ class City(Building):
     NAVAL_DISTRICT_MIN_FOOD = 5
     NAVAL_DISTRICT_MIN_POPULATION = 5
     POPULATION_PER_NAVAL_DISTRICT = 25
+    MAX_NAVAL_DISTRICTS = 3
     RESIDENTIAL_COST = 5
     MIN_VILLAGE_DISTANCE = 12
     APES_PER_DOG = 4
@@ -36,10 +37,12 @@ class City(Building):
         world=None,
         sprite="ape_village",
         tags=None,
+        faction="ape",
     ):
         settlement_tags = set(tags or ()) | {"settlement", level}
         super().__init__(x, y, sprite=sprite, tags=settlement_tags)
         self.level = level
+        self.faction = faction
         self.world = world
         self.food = 0
         self.resident_ape_ids = set()
@@ -94,14 +97,29 @@ class City(Building):
         return True
 
     @classmethod
-    def can_place_on_tile(cls, tile, require_farm_site=False, villages=None):
+    def can_place_on_tile(
+        cls,
+        tile,
+        require_farm_site=False,
+        villages=None,
+        faction="ape",
+    ):
+        valid_terrains = (
+            {"shallows"}
+            if faction == "merfolk"
+            else None
+        )
         if (
             tile is None
             or (
                 tile.building is not None
                 and not isinstance(tile.building, Ruins)
             )
-            or not tile.has_tag("land")
+            or (
+                tile.terrain not in valid_terrains
+                if valid_terrains is not None
+                else not tile.has_tag("land")
+            )
         ):
             return False
 
@@ -122,16 +140,58 @@ class City(Building):
                 or isinstance(neighbor.building, Ruins)
             )
             and neighbor.critter is None
-            and neighbor.terrain == "grass"
+            and (
+                neighbor.terrain in valid_terrains
+                if valid_terrains is not None
+                else neighbor.terrain == "grass"
+            )
             for neighbor in tile.world.get_neighbors_cardinal(tile.x, tile.y)
         )
+
+    def accepts_resident(self, critter):
+        return getattr(critter, "VILLAGE_FACTION", None) == self.faction
+
+    def is_recruitable_civilian(self, critter):
+        if not self.accepts_resident(critter):
+            return False
+        if self.faction == "merfolk":
+            from critters.merfolk import Merfolk
+
+            return Merfolk.is_recruitable_civilian(critter)
+
+        from critters.ape import Ape
+
+        return Ape.is_recruitable_civilian(critter)
+
+    def get_warrior_type(self):
+        if self.faction == "merfolk":
+            from critters.merfolk_warrior import MerfolkWarrior
+
+            return MerfolkWarrior
+
+        from critters.ape_warrior import ApeWarrior
+
+        return ApeWarrior
+
+    def is_valid_auxiliary_tile(self, tile):
+        if self.faction == "merfolk":
+            return tile is not None and tile.terrain == "shallows"
+        return tile is not None and tile.has_tag("land")
+
+    def is_valid_farm_tile(self, tile):
+        if self.faction == "merfolk":
+            return self.is_valid_auxiliary_tile(tile)
+        return tile is not None and tile.terrain == "grass"
+
+    def can_remain_on_tile(self, tile):
+        return self.is_valid_auxiliary_tile(tile)
 
     def add_resident(self, critter):
         from critters.dog import Dog
 
         if isinstance(critter, Dog):
             self.resident_dog_ids.add(critter.id)
-        else:
+        elif self.accepts_resident(critter):
             self.resident_ape_ids.add(critter.id)
 
     def remove_resident(self, critter):
@@ -139,15 +199,14 @@ class City(Building):
         self.resident_dog_ids.discard(critter.id)
 
     def reconcile_residents(self, game):
-        from critters.ape import Ape
         from critters.dog import Dog
 
         self.resident_ape_ids = {
             critter.id
             for critter in game.critters
             if (
-                isinstance(critter, Ape)
-                and not isinstance(critter, Dog)
+                not isinstance(critter, Dog)
+                and self.accepts_resident(critter)
                 and critter.home_building is self
                 and critter.current_behavior != "dying"
             )
@@ -258,7 +317,8 @@ class City(Building):
         if (
             self.population == 0
             or (
-                is_at_war
+                self.faction == "ape"
+                and is_at_war
                 and self.has_only_sailor_residents(game)
             )
         ):
@@ -267,7 +327,8 @@ class City(Building):
 
         self.ruin_disconnected_aux_buildings(game)
         self.try_expand_farms(game.world)
-        self.try_expand_naval_districts(game.world)
+        if self.faction == "ape":
+            self.try_expand_naval_districts(game.world)
         self.try_expand_military_districts(game.world)
 
     def replace_building_with_ruins(self, game, building):
@@ -319,6 +380,8 @@ class City(Building):
 
     @property
     def dog_capacity(self):
+        if self.faction != "ape":
+            return 0
         return self.population // self.APES_PER_DOG
 
     def has_dog_space(self):
@@ -422,7 +485,7 @@ class City(Building):
             return None
 
         for tile in self.get_open_construction_tiles(world):
-            if tile.terrain != "grass":
+            if not self.is_valid_farm_tile(tile):
                 continue
             farm = Farm(tile.x, tile.y, settlement=self)
             tile.building = farm
@@ -436,6 +499,9 @@ class City(Building):
         world,
         occupying_critter=None,
     ):
+        if self.faction != "ape":
+            return None
+
         if self.get_connected_naval_district_count(world) > 0:
             return None
 
@@ -488,7 +554,7 @@ class City(Building):
         candidates = [
             tile
             for tile in self.get_open_construction_tiles(world)
-            if tile.terrain == "grass"
+            if self.is_valid_farm_tile(tile)
         ]
         if not candidates:
             return None
@@ -536,7 +602,7 @@ class City(Building):
         candidates = [
             tile
             for tile in self.get_open_construction_tiles(world)
-            if tile.has_tag("land")
+            if self.is_valid_auxiliary_tile(tile)
         ]
         candidates.sort(key=lambda tile: tile.terrain == "grass")
         if not candidates:
@@ -571,11 +637,17 @@ class City(Building):
 
     def has_possible_connected_farm_site(self, world):
         return any(
-            tile.terrain == "grass"
+            self.is_valid_farm_tile(tile)
             for tile in self.get_open_construction_tiles(world)
         )
 
     def try_build_naval_district(self, world):
+        if self.faction != "ape":
+            return None
+
+        if self.get_connected_naval_district_count(world) >= self.MAX_NAVAL_DISTRICTS:
+            return None
+
         if self.food < self.NAVAL_DISTRICT_MIN_FOOD:
             return None
 
@@ -595,6 +667,9 @@ class City(Building):
         return district
 
     def try_expand_naval_districts(self, world):
+        if self.faction != "ape":
+            return None
+
         has_no_farm_option = (
             self.get_connected_farm_count(world) == 0
             and not self.has_possible_connected_farm_site(world)
@@ -605,10 +680,13 @@ class City(Building):
         ):
             return None
 
-        target_district_count = max(
-            1,
-            (self.population + self.POPULATION_PER_NAVAL_DISTRICT - 1)
-            // self.POPULATION_PER_NAVAL_DISTRICT,
+        target_district_count = min(
+            self.MAX_NAVAL_DISTRICTS,
+            max(
+                1,
+                (self.population + self.POPULATION_PER_NAVAL_DISTRICT - 1)
+                // self.POPULATION_PER_NAVAL_DISTRICT,
+            ),
         )
         if self.get_connected_naval_district_count(world) >= target_district_count:
             return None
@@ -622,7 +700,7 @@ class City(Building):
         candidates = [
             tile
             for tile in self.get_open_construction_tiles(world)
-            if tile.has_tag("land")
+            if self.is_valid_auxiliary_tile(tile)
         ]
         candidates.sort(key=lambda tile: tile.terrain == "grass")
         if not candidates:

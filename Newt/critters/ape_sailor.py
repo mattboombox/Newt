@@ -1,3 +1,5 @@
+import random
+
 from .ape import Ape
 
 
@@ -8,6 +10,7 @@ class ApeSailor(Ape):
     HUNGER_INTERVAL = 260.0
     STARVATION_INTERVAL = 220.0
     MINIMUM_RETURN_HAUL = 3
+    RETURN_HAUL_CHANCE = 0.30
     WAR_REFUGEE_FOUNDING_COOLDOWN = 60.0
     WAR_REFUGEE_ORIGIN_EXCLUSION_RADIUS = 12
     PREDATOR_NAME = "Ape Sailor"
@@ -263,6 +266,19 @@ class ApeSailor(Ape):
 
     def try_handle_priority_behavior(self, game):
         return self.try_handle_hunter_priority_behavior(game)
+
+    def handle_successful_meal(self, game, meal_points=None):
+        super().handle_successful_meal(game, meal_points)
+
+        if self.carrying_food < self.MINIMUM_RETURN_HAUL:
+            return
+
+        village = self.get_home_village(game.world)
+        if village is None or random.random() < self.RETURN_HAUL_CHANCE:
+            return
+
+        self.deposit_carried_food(village)
+        self.set_behavior("send_food_home")
 
     def should_return_carried_food(self):
         return self.carrying_food >= self.MINIMUM_RETURN_HAUL

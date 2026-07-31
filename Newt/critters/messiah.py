@@ -22,6 +22,31 @@ class Messiah(Critter):
             sprite="messiah",
         )
 
+    @classmethod
+    def recruit(cls, ape):
+        from .ape import Ape
+
+        if not Ape.is_recruitable_civilian(ape):
+            return None
+
+        ape.clear_home_building()
+        ape.__class__ = cls
+        ape.color = (240, 230, 170)
+        ape.sprite = "messiah"
+        ape.allowed_terrains = set(cls.ALLOWED_TERRAINS)
+        ape.required_tags = set()
+        ape.move_cooldown = 0.34
+        ape.move_timer = 0.0
+        ape.is_hungry = False
+        ape.hunger_interval = None
+        ape.starvation_interval = None
+        ape.hunger_timer = None
+        ape.starvation_timer = None
+        ape.meals_eaten = 0
+        ape.configure_combat()
+        ape.set_behavior("recruited_messiah")
+        return ape
+
     def get_hunt_prey_types(self):
         from .smasher import Smasher
 

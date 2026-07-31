@@ -15,6 +15,8 @@ class Ape(Therapsid):
     VILLAGE_CLAIM_RANGE = 28
     VILLAGE_ROAM_RANGE = 16
     WOLF_TAMING_CHANCE = 0.05
+    RETURN_FOOD_CHANCE = 0.30
+    VILLAGE_FACTION = "ape"
 
     def __init__(self, x, y):
         Critter.__init__(
@@ -141,6 +143,7 @@ class Ape(Therapsid):
             lambda tile: (
                 isinstance(tile.building, City)
                 and tile.building.has_population_space()
+                and tile.building.accepts_resident(self)
             ),
             allow_occupied_target=True,
             max_search_distance=self.VILLAGE_CLAIM_RANGE,
@@ -166,6 +169,7 @@ class Ape(Therapsid):
             tile,
             require_farm_site=require_farm_site,
             villages=villages,
+            faction=self.VILLAGE_FACTION,
         )
 
     def initialize_new_village(self, game, village):
@@ -202,7 +206,13 @@ class Ape(Therapsid):
         ):
             return None
 
-        village = City(tile.x, tile.y, level="village", world=game.world)
+        village = City(
+            tile.x,
+            tile.y,
+            level="village",
+            world=game.world,
+            faction=self.VILLAGE_FACTION,
+        )
         tile.building = village
         self.initialize_new_village(game, village)
         return village
@@ -216,7 +226,11 @@ class Ape(Therapsid):
         if village is None and allow_create:
             village = self.create_home_village(game)
 
-        if village is not None and village.has_population_space():
+        if (
+            village is not None
+            and village.has_population_space()
+            and village.accepts_resident(self)
+        ):
             self.set_home_building(village)
             village.try_build_initial_farm(game.world)
             return village
@@ -242,6 +256,12 @@ class Ape(Therapsid):
         if meal_points is None:
             meal_points = 1
         self.carrying_food += meal_points
+
+        if type(self) is Ape and random.random() >= self.RETURN_FOOD_CHANCE:
+            self.deposit_carried_food(village)
+            self.set_behavior("send_food_home")
+            return None
+
         self.set_behavior("return_food")
         return None
 

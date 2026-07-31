@@ -39,11 +39,12 @@ class Lich(Critter):
         from .messiah import Messiah
         from .sand_worm import SandWorm
         from .therapsid import Therapsid
+        from .tyrannosaurus import Tyrannosaurus
         from .wolf import Wolf
 
         if (
             critter.current_behavior == "dying"
-            or isinstance(critter, (Lich, Undead, UndeadBeast))
+            or isinstance(critter, (Lich, UndeadFollower))
         ):
             return False
 
@@ -60,6 +61,7 @@ class Lich(Critter):
                 Messiah,
                 SandWorm,
                 Therapsid,
+                Tyrannosaurus,
                 Wolf,
             ),
         )
@@ -78,8 +80,14 @@ class Lich(Critter):
 
     def get_raised_undead_type(self, critter):
         from .ape import Ape
+        from .ape_warrior import ApeCavalry
         from .dog import Dog
+        from .tyrannosaurus import Tyrannosaurus
 
+        if isinstance(critter, Tyrannosaurus):
+            return UndeadTrex
+        if isinstance(critter, ApeCavalry):
+            return UndeadCavalry
         if isinstance(critter, Ape) and not isinstance(critter, Dog):
             return Undead
         return UndeadBeast
@@ -89,7 +97,7 @@ class Lich(Critter):
             critter is self
             or critter not in game.critters
             or critter.current_behavior != "dying"
-            or isinstance(critter, (Lich, Undead, UndeadBeast))
+            or isinstance(critter, (Lich, UndeadFollower))
         ):
             return False
 
@@ -200,6 +208,10 @@ class UndeadFollower(Critter):
         self.master_lich = master_lich
 
     @classmethod
+    def get_raised_sprite(cls):
+        return cls.SPRITE
+
+    @classmethod
     def raise_from(cls, game, critter, master_lich):
         occupied_positions = tuple(critter.get_occupied_positions())
         critter.clear_home_building()
@@ -213,7 +225,7 @@ class UndeadFollower(Critter):
 
         critter.__class__ = cls
         critter.color = cls.COLOR
-        critter.sprite = cls.SPRITE
+        critter.sprite = cls.get_raised_sprite()
         critter.allowed_terrains = set(cls.ALLOWED_TERRAINS)
         critter.required_tags = set()
         critter.move_cooldown = cls.MOVE_COOLDOWN
@@ -271,6 +283,26 @@ class UndeadFollower(Critter):
 class Undead(UndeadFollower):
     """An ape-derived member of a lich's undead guard."""
 
+    def try_mount_adjacent_undead_beast(self, game):
+        if type(self) is not Undead:
+            return False
+
+        for x, y in self.get_neighbor_positions(game.world, self.x, self.y):
+            tile = game.world.get_tile(x, y)
+            beast = None if tile is None else tile.critter
+            if (
+                type(beast) is UndeadBeast
+                and beast.current_behavior != "dying"
+            ):
+                return UndeadCavalry.mount(self, beast, game) is not None
+
+        return False
+
+    def try_handle_priority_behavior(self, game):
+        if self.try_mount_adjacent_undead_beast(game):
+            return True
+        return super().try_handle_priority_behavior(game)
+
 
 class UndeadBeast(UndeadFollower):
     """A beast-derived member of a lich's undead guard."""
@@ -281,3 +313,55 @@ class UndeadBeast(UndeadFollower):
     MOVE_COOLDOWN = 0.30
     SPRITE = "undead_beast"
     PREDATOR_NAME = "Undead Beast"
+
+
+class UndeadTrex(UndeadBeast):
+    """A Tyrannosaurus raised with its apex strength intact."""
+
+    COLOR = (85, 110, 75)
+    COMBAT_POWER = 5
+    MAX_COMBAT_HEALTH = 7
+    DISPLACEMENT_LEVEL = 4
+    MOVE_COOLDOWN = 0.30
+    SPRITE = "undead_trex"
+    PREDATOR_NAME = "Undead T-Rex"
+
+    @classmethod
+    def get_raised_sprite(cls):
+        return random.choice(("undead_trex", "undead_trex2"))
+
+
+class UndeadCavalry(Undead):
+    """A fast undead warrior mounted on an undead beast."""
+
+    COLOR = (105, 115, 80)
+    COMBAT_POWER = 3
+    MAX_COMBAT_HEALTH = 3
+    MOVE_COOLDOWN = 0.16
+    SPRITE = "undead_cavalry"
+    PREDATOR_NAME = "Undead Cavalry"
+
+    @classmethod
+    def mount(cls, undead, beast, game):
+        from entity_cleanup import remove_critter
+
+        if (
+            type(undead) is not Undead
+            or type(beast) is not UndeadBeast
+            or beast.current_behavior == "dying"
+        ):
+            return None
+
+        remove_critter(
+            game,
+            beast,
+            f"it became the mount of Undead {undead.id}",
+        )
+        undead.__class__ = cls
+        undead.color = cls.COLOR
+        undead.sprite = cls.SPRITE
+        undead.move_cooldown = cls.MOVE_COOLDOWN
+        undead.move_timer = 0.0
+        undead.configure_combat()
+        undead.set_behavior("mount_undead_beast")
+        return undead

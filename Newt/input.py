@@ -14,12 +14,17 @@ from critter import (
     ApeWarrior,
     CRITTER_ORDER,
     CRITTER_TYPES,
+    Dog,
+    Eagle,
+    Merfolk,
+    MerfolkWarrior,
     SaintSmasher,
     Undead,
     UndeadBeast,
 )
 from city import City
 from building import (
+    Church,
     CritterPrinter,
     Farm,
     MilitaryDistrict,
@@ -39,6 +44,7 @@ BUILDING_ORDER = [
     "village",
     "farm",
     "residential_district",
+    "church",
     "naval_district",
     "military_district",
     "wolf_den",
@@ -56,6 +62,9 @@ EVENT_TOOL_ORDER = [
 EVENT_ONLY_TERRAINS = {"meteor", "comet", "tectonic_uplift", "tsunami"}
 EVOLUTION_RESULT_TYPES = get_evolution_result_types()
 MANUAL_ALT_CRITTER_TYPES = {
+    "eagle": Eagle,
+    "merfolk": Merfolk,
+    "merfolk_warrior": MerfolkWarrior,
     "ape_sailor": ApeSailor,
     "ape_warrior": ApeWarrior,
     "saint_smasher": SaintSmasher,
@@ -214,7 +223,8 @@ def spawn_current_critter(game, tile):
         else game.current_critter
     )
     critter_cls = SPAWN_CRITTER_TYPES[critter_name]
-    if tile.terrain not in critter_cls.ALLOWED_TERRAINS:
+    allowed_terrains = critter_cls.ALLOWED_TERRAINS
+    if allowed_terrains is not None and tile.terrain not in allowed_terrains:
         return False
 
     if tile.critter is not None:
@@ -225,8 +235,15 @@ def spawn_current_critter(game, tile):
         critter.set_home_building(tile.building)
     elif (
         isinstance(tile.building, City)
+        and isinstance(critter, Dog)
+        and tile.building.has_dog_space()
+    ):
+        critter.set_home_building(tile.building)
+    elif (
+        isinstance(tile.building, City)
         and isinstance(critter, Ape)
         and tile.building.has_population_space()
+        and tile.building.accepts_resident(critter)
     ):
         critter.set_home_building(tile.building)
     tile.critter = critter
@@ -263,12 +280,9 @@ def place_current_building(game, tile):
         print(f"Placed village at ({tile.x}, {tile.y})")
         return True
 
-    if (
-        game.current_building == "farm"
-        and tile.terrain == "grass"
-    ):
+    if game.current_building == "farm":
         village = City.find_connectable_village(game.world, tile)
-        if village is None:
+        if village is None or not village.is_valid_farm_tile(tile):
             return False
 
         farm = Farm(tile.x, tile.y, settlement=village)
@@ -277,12 +291,9 @@ def place_current_building(game, tile):
         print(f"Placed farm for village at ({village.x}, {village.y})")
         return True
 
-    if (
-        game.current_building == "residential_district"
-        and tile.has_tag("land")
-    ):
+    if game.current_building == "residential_district":
         village = City.find_connectable_village(game.world, tile)
-        if village is None:
+        if village is None or not village.is_valid_auxiliary_tile(tile):
             return False
 
         district = ResidentialDistrict(tile.x, tile.y, settlement=village)
@@ -295,11 +306,22 @@ def place_current_building(game, tile):
         return True
 
     if (
-        game.current_building == "military_district"
+        game.current_building == "church"
         and tile.has_tag("land")
     ):
         village = City.find_connectable_village(game.world, tile)
         if village is None:
+            return False
+
+        church = Church(tile.x, tile.y, settlement=village)
+        tile.building = church
+        village.add_aux_building(church)
+        print(f"Placed church for village at ({village.x}, {village.y})")
+        return True
+
+    if game.current_building == "military_district":
+        village = City.find_connectable_village(game.world, tile)
+        if village is None or not village.is_valid_auxiliary_tile(tile):
             return False
 
         district = MilitaryDistrict(tile.x, tile.y, settlement=village)
@@ -316,7 +338,7 @@ def place_current_building(game, tile):
         and tile.terrain == "shallows"
     ):
         village = City.find_connectable_village(game.world, tile)
-        if village is None:
+        if village is None or village.faction != "ape":
             return False
 
         district = NavalDistrict(tile.x, tile.y, settlement=village)
@@ -352,7 +374,7 @@ def trigger_war_tool(game, tile):
         village.reconcile_residents(game)
 
     if attacker.population == 0:
-        print("That village has no apes and cannot declare war.")
+        print("That village has no residents and cannot declare war.")
         return False
 
     candidates = [
