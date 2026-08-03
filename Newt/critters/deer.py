@@ -4,7 +4,8 @@ from .critter import Critter, LAND_TERRAINS
 
 
 class Deer(Critter):
-    DISPLACEMENT_LEVEL = 2
+    CRITTER_TAGS = frozenset({"animal", "terrestrial", "vertebrate", "herbivore"})
+    BODY_SIZE = 2
     ALLOWED_TERRAINS = LAND_TERRAINS
     HUNGER_INTERVAL = 40.0
     STARVATION_INTERVAL = 40.0
@@ -33,7 +34,14 @@ class Deer(Critter):
                 tile.set_terrain("sand")
             self.handle_successful_meal(game)
 
-        self.feed_on_nearest_terrain(game, {"grass"}, "seek_grass", eat_grass, require_empty_target=True)
+        if not self.feed_on_nearest_terrain(
+            game,
+            {"grass"},
+            "seek_grass",
+            eat_grass,
+            require_empty_target=True,
+        ):
+            self.explore_while_hungry(game)
 
     def spawn_death_remains(self, game, tile):
         return self.try_spawn_grass_remains(game, tile)

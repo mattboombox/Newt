@@ -8,7 +8,7 @@ from config import (
     ZOOMED_IN_TILE_SIZE,
 )
 from terrain import TERRAIN_DATA
-from critter import (
+from critters import (
     Ape,
     ApeSailor,
     ApeWarrior,
@@ -39,7 +39,8 @@ from evolution import get_evolution_result_types
 
 TOOL_CATEGORY_ORDER = ["terrain", "event", "spawning", "tools"]
 SPAWNING_TOOL_ORDER = ["critter", "alt_critter", "building"]
-TOOLS_ORDER = ["inspect", "evolve", "war"]
+TOOLS_ORDER = ["inspect", "evolve", "evolution_rate", "war"]
+EVOLUTION_RATE_STEP = 0.005
 BUILDING_ORDER = [
     "village",
     "farm",
@@ -148,6 +149,16 @@ def cycle_tools_action(game, step):
     new_index = (current_index + step) % len(TOOLS_ORDER)
     game.current_tools_action = TOOLS_ORDER[new_index]
     print("Tool:", game.current_tools_action)
+
+
+def adjust_evolution_rate(game, step):
+    game.evolution_chance = round(
+        min(1.0, max(0.0, game.evolution_chance + step * EVOLUTION_RATE_STEP)),
+        3,
+    )
+    percentage = game.evolution_chance * 100
+    print(f"Evolution rate: {percentage:g}% chance per reproduction")
+    return True
 
 
 def get_tool_category(current_tool):
@@ -410,6 +421,12 @@ def trigger_war_tool(game, tile):
 
 
 def apply_active_tool(game, tile):
+    if (
+        game.current_tool == "tools"
+        and game.current_tools_action == "evolution_rate"
+    ):
+        return False
+
     if tile is None:
         return False
 
@@ -503,11 +520,21 @@ def handle_input(game):
                 if game.current_tool == "terrain":
                     game.brush_size = max(0, game.brush_size - 1)
                     print("Brush size:", game.brush_size)
+                elif (
+                    game.current_tool == "tools"
+                    and game.current_tools_action == "evolution_rate"
+                ):
+                    adjust_evolution_rate(game, -1)
 
             elif event.key == pygame.K_e:
                 if game.current_tool == "terrain":
                     game.brush_size += 1
                     print("Brush size:", game.brush_size)
+                elif (
+                    game.current_tool == "tools"
+                    and game.current_tools_action == "evolution_rate"
+                ):
+                    adjust_evolution_rate(game, 1)
                 else:
                     cycle_spawning_tool(game)
 
@@ -567,6 +594,11 @@ def handle_input(game):
                     and game.current_tools_action == "evolve"
                 ):
                     trigger_evolution_tool(game, tile, devolve=True)
+                elif (
+                    game.current_tool == "tools"
+                    and game.current_tools_action == "evolution_rate"
+                ):
+                    pass
                 else:
                     remove_tile_occupant(game, tile)
 

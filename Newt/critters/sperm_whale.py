@@ -1,10 +1,18 @@
+from .critter import PreyRule
 from .whale import Whale
 
 
 class SpermWhale(Whale):
+    CRITTER_TAGS = frozenset({"animal", "aquatic", "vertebrate", "predator", "apex"})
+    HUNT_PREY_RULE = PreyRule(
+        required_tags={"animal", "aquatic", "predator"},
+        excluded_tags={"protected"},
+        max_body_size=4,
+    )
+    SCAVENGE_PREY_RULE = HUNT_PREY_RULE
     # Sperm whales are the largest movers in the simulation and can shove
-    # every lower-level critter, including sailors and liches.
-    DISPLACEMENT_LEVEL = 5
+    # every smaller critter, including sailors and liches.
+    BODY_SIZE = 5
     ALLOWED_TERRAINS = Whale.ALLOWED_TERRAINS
     REPRODUCTION_MEAL_THRESHOLD = Whale.REPRODUCTION_MEAL_THRESHOLD
     HUNGER_INTERVAL = Whale.HUNGER_INTERVAL
@@ -20,16 +28,10 @@ class SpermWhale(Whale):
         self.sprite = "sperm_whale"
         self.configure_hunger(SpermWhale.HUNGER_INTERVAL, SpermWhale.STARVATION_INTERVAL)
 
-    def get_hunt_prey_types(self):
-        from .land_kraken import LandKraken
+    def get_priority_prey_types(self):
         from .squid import Squid
-        from .sea_scorpion import SeaScorpion
-        from .ape_sailor import ApeSailor
 
-        return (Squid, LandKraken, SeaScorpion, ApeSailor)
-
-    def get_scavenge_prey_types(self):
-        return self.get_hunt_prey_types()
+        return (Squid,)
 
     def can_displace_critter(self, critter):
         return critter is not self
@@ -56,16 +58,6 @@ class SpermWhale(Whale):
             self.get_hunt_prey_types(),
             self.get_predator_name(),
         )
-
-    def take_hungry_action(self, game):
-        # Keep searching while starving instead of becoming stationary when
-        # sonar cannot find reachable prey within the current hunt range.
-        if not self.hunt_nearest_prey(
-            game,
-            self.get_hunt_prey_types(),
-            self.get_predator_name(),
-        ):
-            self.try_wander(game.world, game)
 
     def spawn_death_remains(self, game, tile):
         return self.try_spawn_meal_based_plankton_remains(game, tile)

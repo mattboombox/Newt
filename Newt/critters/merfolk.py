@@ -2,6 +2,7 @@ from .ape import Ape
 
 
 class Merfolk(Ape):
+    CRITTER_TAGS = frozenset({"animal", "aquatic", "vertebrate", "sapient"})
     """An aquatic civilization-builder with ape-like settlement behavior."""
 
     ALLOWED_TERRAINS = {"ocean", "trench", "shallows", "beach"}

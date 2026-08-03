@@ -1,11 +1,17 @@
-from .critter import Critter, LAND_TERRAINS
+from .critter import Critter, LAND_TERRAINS, PreyRule
 
 
 class MegaSpider(Critter):
+    CRITTER_TAGS = frozenset({"animal", "terrestrial", "invertebrate", "predator"})
+    HUNT_PREY_RULE = PreyRule(
+        required_tags={"animal", "terrestrial"},
+        excluded_tags={"protected"},
+    )
+    SCAVENGE_PREY_RULE = HUNT_PREY_RULE
     COMBAT_CAPABLE = True
     COMBAT_POWER = 3
     MAX_COMBAT_HEALTH = 3
-    DISPLACEMENT_LEVEL = 2
+    BODY_SIZE = 2
     ALLOWED_TERRAINS = LAND_TERRAINS
     REPRODUCTION_MEAL_THRESHOLD = 8
     HUNGER_INTERVAL = 70.0
@@ -39,14 +45,6 @@ class MegaSpider(Critter):
             return None
 
         return web
-
-    def get_hunt_prey_types(self):
-        from . import CRITTER_TYPES, SquidEgg
-
-        return tuple(CRITTER_TYPES.values()) + (SquidEgg,)
-
-    def get_scavenge_prey_types(self):
-        return self.get_hunt_prey_types()
 
     def create_home_web(self, game):
         from building import SpiderWeb
@@ -190,15 +188,7 @@ class MegaSpider(Critter):
         return False
 
     def take_hungry_action(self, game):
-        web = self.get_home_web(game.world)
-        if web is not None and web.charges > 0:
-            self.set_behavior("return_web")
-            return
-
-        if self.hunt_nearest_prey(game, self.get_hunt_prey_types(), self.get_predator_name()):
-            return
-
-        self.try_wander(game.world, game)
+        self.hunt_or_explore(game)
 
     def spawn_death_remains(self, game, tile):
         return self.try_spawn_grass_remains(game, tile)

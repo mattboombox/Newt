@@ -330,7 +330,7 @@ class CritterPrinter(Building):
         return [tile for tile in candidates if tile.critter is None]
 
     def try_print_critter(self, game):
-        from critter import CRITTER_TYPES
+        from critters import CRITTER_TYPES
         from entity_cleanup import remove_critter
 
         spawn_tiles = self.get_open_spawn_tiles(game.world)
@@ -430,12 +430,15 @@ class WolfDen(Building):
         self.resident_wolf_ids.clear()
 
     def has_adjacent_wolf_prey(self, world):
-        from critter import Wolf
+        from critters import Wolf
 
-        prey_types = Wolf.HUNT_PREY_TYPES
+        prey_selector = Wolf.HUNT_PREY_RULE
 
         for tile in world.get_neighbors_all(self.x, self.y):
-            if tile.critter is not None and isinstance(tile.critter, prey_types):
+            if (
+                tile.critter is not None
+                and Wolf.matches_prey_selector(tile.critter, prey_selector)
+            ):
                 return True
         return False
 
@@ -454,7 +457,7 @@ class WolfDen(Building):
         return None
 
     def update(self, game, dt):
-        from critter import Wolf
+        from critters import Wolf
         from entity_cleanup import remove_building_at_tile
 
         tile = game.world.get_tile(self.x, self.y)
@@ -500,7 +503,7 @@ class SpiderWeb(Building):
         self.resident_spider_ids.add(critter.id)
 
     def update(self, game, dt):
-        from critter import MegaSpider
+        from critters import MegaSpider
         from entity_cleanup import remove_building_at_tile
 
         owners = sorted(
@@ -545,7 +548,7 @@ class SpiderWeb(Building):
         tile.building = None
 
     def trap_critter(self, critter):
-        from critter import MegaSpider
+        from critters import MegaSpider
 
         if isinstance(critter, MegaSpider):
             return

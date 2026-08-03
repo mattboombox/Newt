@@ -71,6 +71,12 @@ def draw_hud(screen, game, background_color):
             )
         elif game.current_tools_action == "evolve":
             active_selection = "Tool: Evolve (Right Click: De-evolve)"
+        elif game.current_tools_action == "evolution_rate":
+            evolution_percent = game.evolution_chance * 100
+            active_selection = (
+                f"Evolution: {evolution_percent:g}% chance per reproduction "
+                "(Q: -0.5%, E: +0.5%)"
+            )
         else:
             active_selection = "Tool: War (Click Village)"
     else:

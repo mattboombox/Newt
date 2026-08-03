@@ -2,6 +2,7 @@ from .critter import Critter, LAND_TERRAINS
 
 
 class Newt(Critter):
+    CRITTER_TAGS = frozenset({"animal", "aquatic", "terrestrial", "vertebrate"})
     ALLOWED_TERRAINS = LAND_TERRAINS | {"lake"}
     FEED_TERRAINS = {"lake"}
     HUNGER_INTERVAL = 24.0
@@ -31,7 +32,13 @@ class Newt(Critter):
         return self.fail_reproduction_attempt(reset_meals=True)
 
     def take_hungry_action(self, game):
-        self.feed_on_nearest_terrain(game, Newt.FEED_TERRAINS, "seek_lake", require_empty_target=True)
+        if not self.feed_on_nearest_terrain(
+            game,
+            Newt.FEED_TERRAINS,
+            "seek_lake",
+            require_empty_target=True,
+        ):
+            self.explore_while_hungry(game)
 
     def spawn_death_remains(self, game, tile):
         return self.try_spawn_grass_remains(game, tile)

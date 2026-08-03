@@ -2,13 +2,14 @@ from .critter import Critter, LAND_TERRAINS
 
 
 class Smasher(Critter):
+    CRITTER_TAGS = frozenset({"construct", "terrestrial", "protected"})
     """A player-controlled titan that crushes supernatural and ape armies."""
 
     ALLOWED_TERRAINS = LAND_TERRAINS
     COMBAT_CAPABLE = True
     COMBAT_POWER = 5
     MAX_COMBAT_HEALTH = 9
-    DISPLACEMENT_LEVEL = 5
+    BODY_SIZE = 5
     HUNT_RANGE = 12
     METEOR_RANGE = 10
     METEOR_BLAST_RADIUS = 2
@@ -100,6 +101,7 @@ class Smasher(Critter):
 
 
 class SaintSmasher(Smasher):
+    CRITTER_TAGS = frozenset({"construct", "terrestrial", "divine", "protected"})
     """A Smasher sanctified by Messiah to hunt only undead."""
 
     PREDATOR_NAME = "Saint Smasher"

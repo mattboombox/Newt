@@ -1,19 +1,24 @@
-from .ape import Ape
-from .critter import Critter
+from .critter import Critter, PreyRule
 from .fish import Fish
 from .newt import Newt
 
 
 class Eagle(Critter):
+    CRITTER_TAGS = frozenset({"animal", "terrestrial", "flying", "vertebrate", "predator"})
     """A fast, terrain-independent aerial predator."""
 
     ALLOWED_TERRAINS = None
-    DISPLACEMENT_LEVEL = 5
+    BODY_SIZE = 5
     REPRODUCTION_MEAL_THRESHOLD = 8
     HUNGER_INTERVAL = 20.0
     STARVATION_INTERVAL = 240.0
     HUNT_RANGE = 24
-    HUNT_PREY_TYPES = (Ape, Fish, Newt)
+    HUNT_PREY_RULE = PreyRule(
+        required_tags={"animal"},
+        excluded_tags={"micro_food", "protected", "undead"},
+        max_body_size=3,
+    )
+    PRIORITY_PREY_TYPES = (Fish, Newt)
     PREDATOR_NAME = "Eagle"
     MOVE_COOLDOWN = 0.06
 
@@ -30,13 +35,3 @@ class Eagle(Critter):
 
     def can_be_hunted_by(self, predator):
         return False
-
-    def take_hungry_action(self, game):
-        if self.hunt_nearest_prey(
-            game,
-            self.get_hunt_prey_types(),
-            self.get_predator_name(),
-        ):
-            return
-
-        self.try_wander(game.world, game)

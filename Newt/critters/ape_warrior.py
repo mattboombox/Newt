@@ -6,6 +6,7 @@ from .ape import Ape
 class ApeWarrior(Ape):
     """A village defender recruited to hunt threats to ape settlements."""
 
+    CRITTER_TAGS = frozenset({"animal", "terrestrial", "vertebrate", "sapient", "warrior"})
     COMBAT_CAPABLE = True
     COMBAT_POWER = 3
     MAX_COMBAT_HEALTH = 3
@@ -40,8 +41,11 @@ class ApeWarrior(Ape):
         from .lich import Lich, UndeadFollower
         from .mega_spider import MegaSpider
         from .wolf import Wolf
+        from .tyrannosaurus import Tyrannosaurus
+        from .herrera import Herrera
+        from .smasher import Smasher
 
-        return (LandKraken, Lich, MegaSpider, UndeadFollower, Wolf)
+        return (LandKraken, Lich, MegaSpider, UndeadFollower, Wolf, Tyrannosaurus, Herrera, Smasher)
 
     def get_priority_hunt_prey_types(self):
         from .lich import UndeadFollower
@@ -200,6 +204,7 @@ class ApeWarrior(Ape):
 
 
 class ApeCavalry(ApeWarrior):
+    CRITTER_TAGS = frozenset({"animal", "terrestrial", "vertebrate", "sapient", "warrior"})
     """A fast warrior mounted on a deer tamed in the field."""
 
     PREDATOR_NAME = "Ape Cavalry"

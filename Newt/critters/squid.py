@@ -1,20 +1,24 @@
-from .crab import Crab
-from .critter import AQUATIC_TERRAINS, Critter
+from .critter import AQUATIC_TERRAINS, Critter, PreyRule
 from .fish import Fish
-from .nautilus import Nautilus
-from .trilobite import Trilobite
 
 
 class Squid(Critter):
-    DISPLACEMENT_LEVEL = 2
+    CRITTER_TAGS = frozenset({"animal", "aquatic", "invertebrate", "predator"})
+    BODY_SIZE = 2
     ALLOWED_TERRAINS = AQUATIC_TERRAINS
     REPRODUCTION_MEAL_THRESHOLD = 10
     HUNGER_INTERVAL = 200.0
-    STARVATION_INTERVAL = 120.0
-    MOVE_COOLDOWN = 0.48
+    STARVATION_INTERVAL = 300.0
+    # Fish move every 0.18 seconds. Squid need a clear pursuit advantage or
+    # fleeing fish can keep them at range until they starve.
+    MOVE_COOLDOWN = 0.12
     HUNT_RANGE = 8
-    HUNT_PREY_TYPES = (Fish, Crab, Nautilus, Trilobite)
-    SCAVENGE_PREY_TYPES = (Fish, Crab, Nautilus, Trilobite)
+    HUNT_PREY_RULE = PreyRule(
+        required_tags={"animal", "aquatic"},
+        excluded_tags={"micro_food", "protected"},
+        max_body_size=1,
+    )
+    PRIORITY_PREY_TYPES = (Fish,)
     PREDATOR_NAME = "Squid"
     REPRODUCTION_BLOCKS_SET_BEHAVIOR = True
     REPRODUCTION_BLOCKS_RESET_MEALS = True
@@ -35,16 +39,15 @@ class Squid(Critter):
         return SquidEgg(x, y)
 
     def get_scavenge_prey_types(self):
-        return super().get_scavenge_prey_types() + (Squid,)
+        return PreyRule(
+            required_tags={"animal", "aquatic"},
+            excluded_tags={"micro_food", "protected"},
+            included_types=(Squid,),
+            max_body_size=1,
+        )
 
     def get_scavenge_range(self):
         return self.get_hunt_range()
-
-    def take_hungry_action(self, game):
-        if self.hunt_nearest_prey(game, (Fish, Nautilus, Trilobite), self.get_predator_name()):
-            return
-
-        self.try_wander(game.world, game)
 
     def get_reproduction_blocking_types(self):
         return (Squid,)

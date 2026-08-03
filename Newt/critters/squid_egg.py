@@ -3,7 +3,8 @@ from .plankton import Plankton
 
 
 class SquidEgg(Critter):
-    DISPLACEMENT_LEVEL = 0
+    CRITTER_TAGS = frozenset({"animal", "aquatic", "egg", "protected"})
+    BODY_SIZE = 0
     ALLOWED_TERRAINS = AQUATIC_TERRAINS
     MOVE_COOLDOWN = Plankton.MOVE_COOLDOWN
 
@@ -20,7 +21,9 @@ class SquidEgg(Critter):
         return None
 
     def can_be_eaten_by(self, predator):
-        return False
+        from .jelly_fish import Jellyfish
+
+        return isinstance(predator, Jellyfish)
 
     def hatch(self, game):
         from .squid import Squid
@@ -43,7 +46,7 @@ class SquidEgg(Critter):
 
         nearby_hatch_trigger = self.find_nearby_critters(
             game.world,
-            Squid.HUNT_PREY_TYPES,
+            Squid.HUNT_PREY_RULE,
             1,
         )
         if nearby_hatch_trigger:

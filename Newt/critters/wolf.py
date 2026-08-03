@@ -1,22 +1,25 @@
-from .ape import Ape
-from .crab import Crab
-from .critter import Critter, LAND_TERRAINS
+from .critter import Critter, LAND_TERRAINS, PreyRule
 from .deer import Deer
-from .therapsid import Therapsid
-from .land_kraken import LandKraken
+from .giga_slug import GigaSlug
 
 class Wolf(Critter):
+    CRITTER_TAGS = frozenset({"animal", "terrestrial", "vertebrate", "predator"})
     COMBAT_CAPABLE = True
     COMBAT_POWER = 3
     MAX_COMBAT_HEALTH = 3
-    DISPLACEMENT_LEVEL = 2
+    BODY_SIZE = 2
     ALLOWED_TERRAINS = LAND_TERRAINS
     REPRODUCTION_MEAL_THRESHOLD = 10
     HUNGER_INTERVAL = 260.0
     STARVATION_INTERVAL = 120.0
     HUNT_RANGE = 8
-    HUNT_PREY_TYPES = (Ape, Deer, Therapsid, LandKraken, Crab)
-    SCAVENGE_PREY_TYPES = (Ape, Deer, Therapsid, LandKraken, Crab)
+    HUNT_PREY_RULE = PreyRule(
+        required_tags={"animal", "terrestrial"},
+        excluded_tags={"protected", "undead"},
+        max_body_size=3,
+    )
+    SCAVENGE_PREY_RULE = HUNT_PREY_RULE
+    PRIORITY_PREY_TYPES = (Deer, GigaSlug)
     PREDATOR_NAME = "Wolf"
     REPRODUCTION_BLOCKS_SET_BEHAVIOR = True
     REPRODUCTION_BLOCKS_RESET_MEALS = True
@@ -84,17 +87,6 @@ class Wolf(Critter):
             return True
 
         return super().can_path_through_tile(tile)
-
-    def take_hungry_action(self, game):
-        if self.hunt_nearest_prey(game, self.get_hunt_prey_types(), self.get_predator_name()):
-            return
-
-        self.try_wander(game.world, game)
-
-    def get_hunt_prey_types(self):
-        from .herrera import Herrera
-
-        return self.HUNT_PREY_TYPES + (Herrera,)
 
     def find_accessible_home_den(self, world, max_search_distance=None):
         from building import WolfDen

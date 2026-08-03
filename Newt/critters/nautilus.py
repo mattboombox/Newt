@@ -1,14 +1,16 @@
-from .critter import AQUATIC_TERRAINS, Critter
+from .critter import AQUATIC_TERRAINS, Critter, PreyRule
 from .plankton import Plankton
 
 
 class Nautilus(Critter):
+    CRITTER_TAGS = frozenset({"animal", "aquatic", "invertebrate", "predator"})
     ALLOWED_TERRAINS = AQUATIC_TERRAINS - {"lake"}
     REPRODUCTION_MEAL_THRESHOLD = 4
     HUNGER_INTERVAL = 55.0
     STARVATION_INTERVAL = 55.0
     HUNT_RANGE = 12
-    HUNT_PREY_TYPES = (Plankton,)
+    HUNT_PREY_RULE = PreyRule(required_tags={"micro_food"})
+    PRIORITY_PREY_TYPES = (Plankton,)
     PREDATOR_NAME = "Nautilus"
 
     def __init__(self, x, y):

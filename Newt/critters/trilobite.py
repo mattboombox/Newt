@@ -3,6 +3,7 @@ from .critter import AQUATIC_TERRAINS, Critter
 class Trilobite(Critter):
     """An early seafloor arthropod that survives by scavenging carrion."""
 
+    CRITTER_TAGS = frozenset({"animal", "aquatic", "invertebrate"})
     ALLOWED_TERRAINS = AQUATIC_TERRAINS
     FEED_TERRAINS = {"shallows"}
     REPRODUCTION_MEAL_THRESHOLD = 5
@@ -25,11 +26,17 @@ class Trilobite(Critter):
         self.configure_hunger(Trilobite.HUNGER_INTERVAL, Trilobite.STARVATION_INTERVAL)
 
     def take_hungry_action(self, game):
-        self.feed_on_nearest_terrain(
+        if self.feed_on_nearest_terrain(
             game,
             Trilobite.FEED_TERRAINS,
             "seek_detritus",
-        )
+        ):
+            return
+
+        # Carrion is checked before every hungry action. When no shallows are
+        # reachable, wandering lets the trilobite discover new feeding areas
+        # and scavenging opportunities instead of waiting in place.
+        self.explore_while_hungry(game)
 
     def get_scavenge_prey_types(self):
         # Deferred imports avoid the Squid → Trilobite module cycle at startup.

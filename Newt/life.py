@@ -50,7 +50,7 @@ def try_spawn_plankton(world, tile):
     if random.random() >= PLANKTON_GROWTH_CHANCE:
         return None
 
-    from critter import Plankton
+    from critters import Plankton
 
     plankton = Plankton(tile.x, tile.y)
     tile.critter = plankton

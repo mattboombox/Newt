@@ -21,6 +21,44 @@ CARDINAL_DIRECTIONS = [
 ]
 
 
+class PreyRule:
+    """Data-driven description of the critters a predator considers food."""
+
+    def __init__(
+        self,
+        required_tags=None,
+        any_tags=None,
+        excluded_tags=None,
+        included_types=None,
+        min_body_size=None,
+        max_body_size=None,
+    ):
+        self.required_tags = frozenset(required_tags or ())
+        self.any_tags = frozenset(any_tags or ())
+        self.excluded_tags = frozenset(excluded_tags or ())
+        self.included_types = tuple(included_types or ())
+        self.min_body_size = min_body_size
+        self.max_body_size = max_body_size
+
+    def matches(self, critter_or_type):
+        critter_type = (
+            critter_or_type
+            if isinstance(critter_or_type, type)
+            else type(critter_or_type)
+        )
+        tags = frozenset(getattr(critter_type, "CRITTER_TAGS", ()))
+        body_size = getattr(critter_type, "BODY_SIZE", 1)
+        if self.included_types and issubclass(critter_type, self.included_types):
+            return True
+        return (
+            self.required_tags.issubset(tags)
+            and (not self.any_tags or bool(self.any_tags & tags))
+            and not self.excluded_tags.intersection(tags)
+            and (self.min_body_size is None or body_size >= self.min_body_size)
+            and (self.max_body_size is None or body_size <= self.max_body_size)
+        )
+
+
 class Critter:
     _next_id = 1
     DYING_INTERVAL = 12.0
@@ -30,9 +68,11 @@ class Critter:
     PASSIVE_HEAL_INTERVAL = 18.0
     MEAL_HEAL_AMOUNT = 1
     DAMAGE_FLASH_DURATION = 0.45
-    # Critters may displace occupants from lower levels. Nutrition follows
-    # the same scale by default, with +1 keeping level-zero prey valuable.
-    DISPLACEMENT_LEVEL = 1
+    # Body size controls both displacement and default nutrition. Keeping one
+    # scale makes ordinary critters easy to define; exceptional species can
+    # still override the related methods independently.
+    BODY_SIZE = 1
+    CRITTER_TAGS = frozenset({"animal"})
     FOOD_VALUE = None
     REPRODUCTION_MEAL_THRESHOLD = 5
     FLEE_DETECTION_RADIUS = 0
@@ -41,8 +81,9 @@ class Critter:
     HUNT_RANGE = 12
     SCAVENGE_RANGE = None
     FORAGE_RANGE = 12
-    HUNT_PREY_TYPES = ()
-    SCAVENGE_PREY_TYPES = ()
+    HUNT_PREY_RULE = None
+    SCAVENGE_PREY_RULE = None
+    PRIORITY_PREY_TYPES = ()
     PREDATOR_NAME = None
     REPRODUCTION_BLOCKS_SET_BEHAVIOR = False
     REPRODUCTION_BLOCKS_RESET_MEALS = False
@@ -177,7 +218,7 @@ class Critter:
     def get_food_value(self):
         if self.FOOD_VALUE is not None:
             return self.FOOD_VALUE
-        return self.DISPLACEMENT_LEVEL + 1
+        return self.BODY_SIZE + 1
 
     def handle_successful_meal(self, game, meal_points=None):
         if meal_points is None:
@@ -381,7 +422,7 @@ class Critter:
         return True
 
     def can_displace_critter(self, critter):
-        return self.DISPLACEMENT_LEVEL > critter.DISPLACEMENT_LEVEL
+        return self.BODY_SIZE > critter.BODY_SIZE
 
     def get_flee_predator_types(self):
         return ()
@@ -445,10 +486,19 @@ class Critter:
         return self.PREDATOR_NAME or type(self).__name__
 
     def get_hunt_prey_types(self):
-        return self.HUNT_PREY_TYPES
+        return self.HUNT_PREY_RULE or ()
 
     def get_scavenge_prey_types(self):
-        return self.SCAVENGE_PREY_TYPES
+        return self.SCAVENGE_PREY_RULE or ()
+
+    def get_hunt_prey_selector(self):
+        return self.get_hunt_prey_types()
+
+    def get_scavenge_prey_selector(self):
+        return self.get_scavenge_prey_types()
+
+    def get_priority_prey_types(self):
+        return self.PRIORITY_PREY_TYPES
 
     def get_scavenge_predator_name(self):
         return self.get_predator_name()
@@ -459,17 +509,25 @@ class Critter:
     def can_be_eaten_by(self, predator):
         return True
 
-    def is_valid_hunt_prey(self, critter, prey_types):
+    @staticmethod
+    def matches_prey_selector(critter, prey_selector):
+        if isinstance(prey_selector, PreyRule):
+            return prey_selector.matches(critter)
+        if not isinstance(prey_selector, tuple):
+            prey_selector = (prey_selector,)
+        return bool(prey_selector) and isinstance(critter, prey_selector)
+
+    def is_valid_hunt_prey(self, critter, prey_selector):
         return (
-            isinstance(critter, prey_types)
+            self.matches_prey_selector(critter, prey_selector)
             and critter.current_behavior != "dying"
             and critter.can_be_hunted_by(self)
             and critter.can_be_eaten_by(self)
         )
 
-    def is_valid_scavenge_prey(self, critter, prey_types):
+    def is_valid_scavenge_prey(self, critter, prey_selector):
         return (
-            isinstance(critter, prey_types)
+            self.matches_prey_selector(critter, prey_selector)
             and critter.can_be_eaten_by(self)
         )
 
@@ -514,11 +572,11 @@ class Critter:
         return False
 
     def try_scavenge_nearby_corpse(self, game):
-        prey_types = self.get_scavenge_prey_types()
+        prey_types = self.get_scavenge_prey_selector()
         if not prey_types:
             return False
 
-        if not isinstance(prey_types, tuple):
+        if not isinstance(prey_types, (tuple, PreyRule)):
             prey_types = (prey_types,)
 
         destinations = self.get_neighbor_positions(game.world, self.x, self.y)
@@ -545,7 +603,7 @@ class Critter:
         return False
 
     def try_scavenge_corpse(self, game):
-        prey_types = self.get_scavenge_prey_types()
+        prey_types = self.get_scavenge_prey_selector()
         if not prey_types:
             return False
 
@@ -553,7 +611,7 @@ class Critter:
         if not dying_critters:
             return False
 
-        if not isinstance(prey_types, tuple):
+        if not isinstance(prey_types, (tuple, PreyRule)):
             prey_types = (prey_types,)
 
         scavenge_range = self.get_scavenge_range()
@@ -831,8 +889,9 @@ class Critter:
             tile.building.trap_critter(self)
         return True
 
-    def try_wander(self, world, game=None):
-        self.set_behavior("wander")
+    def try_wander(self, world, game=None, behavior="wander"):
+        if behavior is not None:
+            self.set_behavior(behavior)
         directions = CARDINAL_DIRECTIONS[:]
         random.shuffle(directions)
 
@@ -843,7 +902,23 @@ class Critter:
             tile = world.get_tile(nx, ny)
             if self.can_enter_tile(tile):
                 self.move_to(world, nx, ny, game)
-                return
+                return True
+        return False
+
+    def explore_while_hungry(self, game):
+        """Explore for food without displaying the ordinary wander state."""
+        return self.try_wander(game.world, game, behavior="hungry")
+
+    def hunt_or_explore(self, game, prey_selector=None):
+        if prey_selector is None:
+            prey_selector = self.get_hunt_prey_selector()
+        if prey_selector and self.hunt_nearest_prey(
+            game,
+            prey_selector,
+            self.get_predator_name(),
+        ):
+            return True
+        return self.explore_while_hungry(game)
 
     def try_relocate_to_habitat(self, game):
         path = self.find_path_to_nearest_tile(
@@ -916,7 +991,7 @@ class Critter:
         if not critter_types or radius <= 0:
             return []
 
-        if not isinstance(critter_types, tuple):
+        if not isinstance(critter_types, (tuple, PreyRule)):
             critter_types = (critter_types,)
 
         threats = []
@@ -938,7 +1013,7 @@ class Critter:
                 if tile.critter.current_behavior == "dying":
                     continue
 
-                if isinstance(tile.critter, critter_types):
+                if self.matches_prey_selector(tile.critter, critter_types):
                     threats.append((nx, ny))
 
         return threats
@@ -1135,20 +1210,20 @@ class Critter:
 
         self.set_behavior(seek_behavior)
         next_x, next_y = path[0]
-        self.move_to(game.world, next_x, next_y, game)
+        moved = self.move_to(game.world, next_x, next_y, game)
 
         current_tile = game.world.get_tile(self.x, self.y)
         if current_tile is not None and current_tile_predicate(current_tile):
             on_feed(current_tile)
             return True
 
-        return False
+        return moved
 
     def feed_on_nearest_terrain(self, game, feed_terrains, seek_behavior, on_feed=None, require_empty_target=False):
         if on_feed is None:
             on_feed = lambda tile: self.handle_successful_meal(game)
 
-        self.forage_nearest_tile(
+        return self.forage_nearest_tile(
             game,
             lambda tile: tile.terrain in feed_terrains,
             lambda tile: tile.terrain in feed_terrains and (not require_empty_target or tile.critter is None),
@@ -1156,9 +1231,31 @@ class Critter:
             on_feed,
         )
 
-    def hunt_nearest_prey(self, game, prey_types, predator_name=None):
-        if not isinstance(prey_types, tuple):
+    def hunt_nearest_prey(
+        self,
+        game,
+        prey_types=None,
+        predator_name=None,
+        prefer_priority=True,
+    ):
+        if prey_types is None:
+            prey_types = self.get_hunt_prey_selector()
+        if not isinstance(prey_types, (tuple, PreyRule)):
             prey_types = (prey_types,)
+
+        priority_types = self.get_priority_prey_types()
+        if (
+            prefer_priority
+            and priority_types
+            and prey_types is self.get_hunt_prey_selector()
+            and self.hunt_nearest_prey(
+                game,
+                priority_types,
+                predator_name,
+                prefer_priority=False,
+            )
+        ):
+            return True
 
         if not self.has_indexed_hunt_candidate(game, prey_types):
             self.set_behavior("hungry")
@@ -1209,7 +1306,11 @@ class Critter:
 
         hunt_range = self.get_hunt_range()
         for critter_type, candidates in critter_type_index.items():
-            if not issubclass(critter_type, prey_types):
+            if isinstance(prey_types, PreyRule):
+                type_matches = prey_types.matches(critter_type)
+            else:
+                type_matches = issubclass(critter_type, prey_types)
+            if not type_matches:
                 continue
 
             for candidate in candidates:
@@ -1244,9 +1345,4 @@ class Critter:
         return False
 
     def take_hungry_action(self, game):
-        prey_types = self.get_hunt_prey_types()
-        if prey_types:
-            self.hunt_nearest_prey(game, prey_types, self.get_predator_name())
-            return
-
-        self.set_behavior("hungry")
+        self.hunt_or_explore(game)

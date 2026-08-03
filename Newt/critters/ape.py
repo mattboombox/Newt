@@ -5,9 +5,10 @@ from .therapsid import Therapsid
 
 
 class Ape(Therapsid):
+    CRITTER_TAGS = frozenset({"animal", "terrestrial", "vertebrate", "sapient"})
     """A broadly omnivorous land hunter descended from therapsids."""
 
-    DISPLACEMENT_LEVEL = 3
+    BODY_SIZE = 3
     PREDATOR_NAME = "Ape"
     REPRODUCTION_MEAL_THRESHOLD = 5
     REPRODUCTION_BLOCKS_SET_BEHAVIOR = False
@@ -412,12 +413,13 @@ class Ape(Therapsid):
 
         return self.try_reproduce_in_village(game, village)
 
-    def try_wander(self, world, game=None):
+    def try_wander(self, world, game=None, behavior="wander"):
         village = self.get_home_village(world)
         if village is None:
-            return super().try_wander(world, game)
+            return super().try_wander(world, game, behavior=behavior)
 
-        self.set_behavior("wander")
+        if behavior is not None:
+            self.set_behavior(behavior)
         current_distance = self.get_tile_distance(
             world,
             self.x,
@@ -541,7 +543,4 @@ class Ape(Therapsid):
         if village is not None and self.consume_village_food(game, village):
             return
 
-        if self.hunt_nearest_prey(game, self.get_hunt_prey_types(), self.get_predator_name()):
-            return
-
-        self.try_wander(game.world, game)
+        self.hunt_or_explore(game, self.get_hunt_prey_types())

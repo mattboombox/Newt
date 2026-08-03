@@ -1,10 +1,17 @@
-from .critter import AQUATIC_TERRAINS, Critter
+from .critter import AQUATIC_TERRAINS, Critter, PreyRule
 
 
 class SeaScorpion(Critter):
     """A swift coastal predator descended from the trilobite branch."""
 
-    DISPLACEMENT_LEVEL = 2
+    CRITTER_TAGS = frozenset({"animal", "aquatic", "invertebrate", "predator"})
+    HUNT_PREY_RULE = PreyRule(
+        required_tags={"animal", "aquatic"},
+        excluded_tags={"micro_food", "protected"},
+        max_body_size=2,
+    )
+    SCAVENGE_PREY_RULE = HUNT_PREY_RULE
+    BODY_SIZE = 2
     ALLOWED_TERRAINS = AQUATIC_TERRAINS - {"lake", "trench"}
     REPRODUCTION_MEAL_THRESHOLD = 8
     HUNGER_INTERVAL = 110.0
@@ -21,26 +28,6 @@ class SeaScorpion(Critter):
             sprite="sea_scorpion",
         )
         self.configure_hunger(SeaScorpion.HUNGER_INTERVAL, SeaScorpion.STARVATION_INTERVAL)
-
-    def get_hunt_prey_types(self):
-        from .crab import Crab
-        from .fish import Fish
-        from .trilobite import Trilobite
-        from .jelly_fish import Jellyfish
-
-        return (Crab, Trilobite, Fish, Jellyfish)
-
-    def get_scavenge_prey_types(self):
-        return self.get_hunt_prey_types()
-
-    def take_hungry_action(self, game):
-
-        if self.hunt_nearest_prey(
-            game,
-            self.get_hunt_prey_types(),
-            self.get_predator_name(),
-        ):
-            return
 
     def try_reproduce(self, world):
         current_tile = world.get_tile(self.x, self.y)

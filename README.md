@@ -52,6 +52,8 @@ Finally, choose the world type, which sets its default terrain:
   no critter is present; when stacked, two clicks remove them in that order
 - `A` / `D`: cycle the active terrain, critter, building, event, or tool selection
 - `Q` / `E` in terrain mode: decrease or increase brush size
+- `Q` / `E` with the Evolution Rate tool: decrease or increase the evolution
+  chance per successful reproduction by half a percentage point
 - `E` in spawning mode: cycle Critters, Alt Critters, and Buildings
 - `,` / `.`: slow down or speed up the simulation
 - `P`: pause or unpause
@@ -75,7 +77,8 @@ Finally, choose the world type, which sets its default terrain:
 - Alt Critters contains species that cannot be reached as an evolution
   result, plus manually spawnable specialists such as Ape Sailors, Ape
   Warriors, Saint Smashers, Undead, and Undead Beasts. Tools contains
-  Inspect, Evolve, and War.
+  Inspect, Evolve, Evolution Rate, and War. The Evolution Rate tool displays
+  the current percentage chance applied to each successful reproduction.
 
 ## Settlements and Specialists
 

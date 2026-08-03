@@ -4,13 +4,14 @@ from .critter import Critter, LAND_TERRAINS
 
 
 class Lich(Critter):
+    CRITTER_TAGS = frozenset({"undead", "terrestrial", "sapient", "protected"})
     """A player-summoned necromancer that raises a protective undead army."""
 
     ALLOWED_TERRAINS = LAND_TERRAINS
     COMBAT_CAPABLE = True
     COMBAT_POWER = 4
     MAX_COMBAT_HEALTH = 7
-    DISPLACEMENT_LEVEL = 4
+    BODY_SIZE = 4
     HUNT_RANGE = 12
     PLAYER_SPAWN_ONLY = True
     PREDATOR_NAME = "Lich"
@@ -181,13 +182,14 @@ class Lich(Critter):
 
 
 class UndeadFollower(Critter):
+    CRITTER_TAGS = frozenset({"undead", "terrestrial", "protected"})
     """Shared roaming and ape-hunting behavior for a lich's converts."""
 
     ALLOWED_TERRAINS = LAND_TERRAINS
     COMBAT_CAPABLE = True
     COMBAT_POWER = 2
     MAX_COMBAT_HEALTH = 2
-    DISPLACEMENT_LEVEL = 2
+    BODY_SIZE = 2
     PROTECTION_RANGE = 12
     APE_ATTACK_CHANCE = 0.35
     PREDATOR_NAME = "Undead"
@@ -281,6 +283,7 @@ class UndeadFollower(Critter):
 
 
 class Undead(UndeadFollower):
+    CRITTER_TAGS = frozenset({"undead", "terrestrial", "sapient", "protected"})
     """An ape-derived member of a lich's undead guard."""
 
     def try_mount_adjacent_undead_beast(self, game):
@@ -305,6 +308,7 @@ class Undead(UndeadFollower):
 
 
 class UndeadBeast(UndeadFollower):
+    CRITTER_TAGS = frozenset({"undead", "terrestrial", "protected"})
     """A beast-derived member of a lich's undead guard."""
 
     COLOR = (95, 125, 90)
@@ -316,12 +320,13 @@ class UndeadBeast(UndeadFollower):
 
 
 class UndeadTrex(UndeadBeast):
+    CRITTER_TAGS = frozenset({"undead", "terrestrial", "apex", "protected"})
     """A Tyrannosaurus raised with its apex strength intact."""
 
     COLOR = (85, 110, 75)
     COMBAT_POWER = 5
     MAX_COMBAT_HEALTH = 7
-    DISPLACEMENT_LEVEL = 4
+    BODY_SIZE = 4
     MOVE_COOLDOWN = 0.30
     SPRITE = "undead_trex"
     PREDATOR_NAME = "Undead T-Rex"
@@ -332,6 +337,7 @@ class UndeadTrex(UndeadBeast):
 
 
 class UndeadCavalry(Undead):
+    CRITTER_TAGS = frozenset({"undead", "terrestrial", "sapient", "warrior", "protected"})
     """A fast undead warrior mounted on an undead beast."""
 
     COLOR = (105, 115, 80)

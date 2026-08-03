@@ -2,6 +2,7 @@ from .ape_warrior import ApeWarrior
 
 
 class Dog(ApeWarrior):
+    CRITTER_TAGS = frozenset({"animal", "terrestrial", "vertebrate", "warrior"})
     """A domesticated wolf that lives and fights alongside village apes."""
 
     COMBAT_POWER = 3

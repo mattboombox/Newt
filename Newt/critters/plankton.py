@@ -2,7 +2,8 @@ from .critter import AQUATIC_TERRAINS, Critter
 
 
 class Plankton(Critter):
-    DISPLACEMENT_LEVEL = 0
+    CRITTER_TAGS = frozenset({"animal", "aquatic", "micro_food"})
+    BODY_SIZE = 0
     ALLOWED_TERRAINS = AQUATIC_TERRAINS - {"lake"}
     HUNGER_INTERVAL = 15.0
     STARVATION_INTERVAL = 8.0

@@ -2,13 +2,14 @@ from .critter import Critter, LAND_TERRAINS
 
 
 class Messiah(Critter):
+    CRITTER_TAGS = frozenset({"divine", "terrestrial", "sapient", "protected"})
     """An immortal land wanderer who sanctifies hostile Smashers."""
 
     ALLOWED_TERRAINS = LAND_TERRAINS
     COMBAT_CAPABLE = True
     COMBAT_POWER = 1
     MAX_COMBAT_HEALTH = 999
-    DISPLACEMENT_LEVEL = 4
+    BODY_SIZE = 4
     HUNT_RANGE = 12
     PREDATOR_NAME = "Messiah"
 

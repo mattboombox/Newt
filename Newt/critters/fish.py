@@ -1,9 +1,8 @@
-from .crab import Crab
-from .critter import AQUATIC_TERRAINS, Critter
-from .plankton import Plankton
+from .critter import AQUATIC_TERRAINS, Critter, PreyRule
 
 
 class Fish(Critter):
+    CRITTER_TAGS = frozenset({"animal", "aquatic", "vertebrate", "predator"})
     ALLOWED_TERRAINS = AQUATIC_TERRAINS - {"trench"}
     REPRODUCTION_MEAL_THRESHOLD = 3
     HUNGER_INTERVAL = 40.0
@@ -13,8 +12,8 @@ class Fish(Critter):
     # moves.  Food farther away is reconsidered on the next decision tick.
     HUNT_RANGE = 12
     SCAVENGE_RANGE = 12
-    HUNT_PREY_TYPES = (Plankton)
-    SCAVENGE_PREY_TYPES = (Plankton, Crab)
+    HUNT_PREY_RULE = PreyRule(required_tags={"micro_food"})
+    SCAVENGE_PREY_RULE = HUNT_PREY_RULE
     PREDATOR_NAME = "Fish"
 
     def __init__(self, x, y):
@@ -32,13 +31,6 @@ class Fish(Critter):
         from .sea_scorpion import SeaScorpion
 
         return (Squid, SeaScorpion)
-
-    def get_hunt_prey_types(self):
-
-        return (Plankton, Crab,)
-
-    def get_scavenge_prey_types(self):
-        return self.get_hunt_prey_types()
 
     def spawn_death_remains(self, game, tile):
         return self.try_spawn_meal_based_plankton_remains(game, tile)

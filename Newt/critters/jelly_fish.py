@@ -5,7 +5,8 @@ from .plankton import Plankton
 class Jellyfish(Critter):
     """A passive drifting predator that feeds only through collisions."""
 
-    DISPLACEMENT_LEVEL = 2
+    CRITTER_TAGS = frozenset({"animal", "aquatic", "invertebrate", "predator"})
+    BODY_SIZE = 2
     ALLOWED_TERRAINS = AQUATIC_TERRAINS - {"lake"}
     REPRODUCTION_MEAL_THRESHOLD = 8
     HUNGER_INTERVAL = 120.0
@@ -31,15 +32,7 @@ class Jellyfish(Critter):
     def is_collision_prey(critter):
         from .squid_egg import SquidEgg
 
-        if isinstance(critter, SquidEgg):
-            return False
-
-        allowed_terrains = getattr(critter, "allowed_terrains", set()) or set()
-        is_ocean_dweller = bool({"ocean", "trench"} & set(allowed_terrains))
-        return (
-            is_ocean_dweller
-            and critter.DISPLACEMENT_LEVEL in {0, 1}
-        )
+        return isinstance(critter, (Plankton, SquidEgg))
 
     def can_displace_critter(self, critter):
         return self.is_collision_prey(critter)
@@ -53,7 +46,7 @@ class Jellyfish(Critter):
         return None
 
     def take_hungry_action(self, game):
-        self.try_wander(game.world, game)
+        self.explore_while_hungry(game)
 
     def get_reproduction_blocking_types(self):
         return (Jellyfish,)

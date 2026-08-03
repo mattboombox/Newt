@@ -22,7 +22,9 @@ DEFAULT_BRUSH_SIZE = 0
 # Simulation timing, in seconds
 EROSION_INTERVAL = 0.10
 LIFE_INTERVAL = 0.35
-EVOLUTION_CHANCE = 0.25
+# Chance that a successful reproduction produces the parent's next
+# evolutionary form instead of an ordinary offspring.
+EVOLUTION_CHANCE = 0.005
 IMPACT_INTERVAL = 5.0
 IMPACT_CHANCE = 0.001
 TECTONIC_INTERVAL = 5.0

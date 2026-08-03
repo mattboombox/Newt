@@ -6,6 +6,7 @@ from .ape import Ape
 class ApeSailor(Ape):
     """A naval ape recruited to hunt valuable ocean prey."""
 
+    CRITTER_TAGS = frozenset({"animal", "aquatic", "terrestrial", "vertebrate", "sapient"})
     ALLOWED_TERRAINS = {"ocean", "shallows", "beach"}
     HUNGER_INTERVAL = 260.0
     STARVATION_INTERVAL = 220.0
@@ -13,6 +14,8 @@ class ApeSailor(Ape):
     RETURN_HAUL_CHANCE = 0.30
     WAR_REFUGEE_FOUNDING_COOLDOWN = 60.0
     WAR_REFUGEE_ORIGIN_EXCLUSION_RADIUS = 12
+    RETURN_HOME_TIMEOUT = 30.0
+    RETURN_HOME_BEHAVIORS = frozenset({"return_food", "return_to_reproduce"})
     PREDATOR_NAME = "Ape Sailor"
 
     def __init__(self, x, y):
@@ -23,6 +26,7 @@ class ApeSailor(Ape):
         self.configure_hunger(self.HUNGER_INTERVAL, self.STARVATION_INTERVAL)
         self.war_refugee_founding_timer = 0.0
         self.war_refugee_origin = None
+        self.return_home_timer = 0.0
 
     @classmethod
     def recruit(cls, ape, world, x, y):
@@ -43,6 +47,7 @@ class ApeSailor(Ape):
         ape.needs_habitat_relocation = False
         ape.war_refugee_founding_timer = 0.0
         ape.war_refugee_origin = None
+        ape.return_home_timer = 0.0
         ape.set_behavior("recruited_sailor")
         world.get_tile(x, y).critter = ape
         return ape
@@ -73,13 +78,10 @@ class ApeSailor(Ape):
             prey_types,
         )
 
-    def is_habitable_tile(self, tile):
-        return super().is_habitable_tile(tile)
-
     def can_displace_critter(self, critter):
         # Sailors may clear lower-priority sea life from a coastal chokepoint,
         # but no longer shove equal- or higher-level residents.
-        return self.DISPLACEMENT_LEVEL > critter.DISPLACEMENT_LEVEL
+        return self.BODY_SIZE > critter.BODY_SIZE
 
     def should_remove_on_failed_displacement(self, critter):
         # A shove that has nowhere to move its target should not become a kill.
@@ -283,9 +285,36 @@ class ApeSailor(Ape):
     def should_return_carried_food(self):
         return self.carrying_food >= self.MINIMUM_RETURN_HAUL
 
+    def update_return_home_timer(self, game, dt):
+        if self.current_behavior not in self.RETURN_HOME_BEHAVIORS:
+            self.return_home_timer = 0.0
+            return False
+
+        self.return_home_timer += dt
+        if self.return_home_timer < self.RETURN_HOME_TIMEOUT:
+            return False
+
+        self.return_home_timer = 0.0
+        self.clear_settlement_path()
+        village = self.get_home_village(game.world)
+        if village is not None and self.carrying_food:
+            self.deposit_carried_food(village)
+        elif self.carrying_food:
+            # Cargo with no reachable home must be abandoned or it immediately
+            # forces the sailor back into the same return loop.
+            self.carrying_food = 0
+
+        if self.meals_eaten >= self.REPRODUCTION_MEAL_THRESHOLD:
+            self.meals_eaten = self.REPRODUCTION_MEAL_THRESHOLD - 1
+
+        self.try_recover_stranded(game)
+        self.set_behavior("return_timeout")
+        return True
+
     def update(self, game, dt):
         self.war_refugee_founding_timer = max(
             0.0,
             self.war_refugee_founding_timer - dt,
         )
         super().update(game, dt)
+        self.update_return_home_timer(game, dt)

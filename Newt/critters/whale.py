@@ -1,16 +1,18 @@
-from .critter import AQUATIC_TERRAINS, Critter
+from .critter import AQUATIC_TERRAINS, Critter, PreyRule
 from .plankton import Plankton
 
 
 class Whale(Critter):
-    DISPLACEMENT_LEVEL = 3
+    CRITTER_TAGS = frozenset({"animal", "aquatic", "vertebrate", "filter_feeder"})
+    BODY_SIZE = 3
     ALLOWED_TERRAINS = AQUATIC_TERRAINS - {"lake"}
     REPRODUCTION_MEAL_THRESHOLD = 15
     HUNGER_INTERVAL = 18.0
     STARVATION_INTERVAL = 90.0
     # Sonar gives whales a much longer—but still finite—prey search range.
     HUNT_RANGE = 24
-    HUNT_PREY_TYPES = (Plankton,)
+    HUNT_PREY_RULE = PreyRule(required_tags={"micro_food"})
+    PRIORITY_PREY_TYPES = (Plankton,)
     PREDATOR_NAME = "Whale"
 
     def __init__(self, x, y):

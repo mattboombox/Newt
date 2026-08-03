@@ -8,6 +8,7 @@ from .critter import (
     CARDINAL_DIRECTIONS,
     Critter,
     LAND_TERRAINS,
+    PreyRule,
 )
 from .deer import Deer
 from .dog import Dog
@@ -78,6 +79,7 @@ __all__ = [
     "CRITTER_ORDER",
     "CRITTER_TYPES",
     "Critter",
+    "PreyRule",
     "Ape",
     "ApeSailor",
     "ApeCavalry",

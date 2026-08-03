@@ -1,6 +1,6 @@
 import random
 
-from critter import Ape, Archosaur, Crab, Deer, Fish, GigaSlug, Herrera, Jellyfish, LandKraken, MegaSpider, Nautilus, Newt, Plankton, SeaScorpion, Snail, SpermWhale, Squid, Stegosaurus, Therapsid, Trilobite, Tyrannosaurus, Whale, Wolf
+from critters import Ape, Archosaur, Crab, Deer, Fish, GigaSlug, Herrera, Jellyfish, LandKraken, MegaSpider, Nautilus, Newt, Plankton, SeaScorpion, Snail, SpermWhale, Squid, Stegosaurus, Therapsid, Trilobite, Tyrannosaurus, Whale, Wolf
 
 EVOLUTION_TREE = {
     Plankton: (

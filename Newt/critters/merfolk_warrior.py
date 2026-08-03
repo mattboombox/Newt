@@ -3,6 +3,7 @@ from .merfolk import Merfolk
 
 
 class MerfolkWarrior(ApeWarrior):
+    CRITTER_TAGS = frozenset({"animal", "aquatic", "vertebrate", "sapient", "warrior"})
     """A military defender recruited by a Merfolk settlement."""
 
     ALLOWED_TERRAINS = Merfolk.ALLOWED_TERRAINS
@@ -35,4 +36,3 @@ class MerfolkWarrior(ApeWarrior):
 
     def try_tame_adjacent_deer(self, game):
         return False
-

@@ -2,6 +2,7 @@ from .critter import Critter, LAND_TERRAINS
 
 
 class Snail(Critter):
+    CRITTER_TAGS = frozenset({"animal", "aquatic", "terrestrial", "invertebrate"})
     """A lake-feeding mollusk descended from nautilus in shallow water."""
 
     ALLOWED_TERRAINS = LAND_TERRAINS | {"lake"}
@@ -34,4 +35,10 @@ class Snail(Critter):
         return self.fail_reproduction_attempt(reset_meals=True)
 
     def take_hungry_action(self, game):
-        self.feed_on_nearest_terrain(game, Snail.FEED_TERRAINS, "seek_lake", require_empty_target=True)
+        if not self.feed_on_nearest_terrain(
+            game,
+            Snail.FEED_TERRAINS,
+            "seek_lake",
+            require_empty_target=True,
+        ):
+            self.explore_while_hungry(game)
