@@ -15,7 +15,6 @@ from critters import (
     CRITTER_ORDER,
     CRITTER_TYPES,
     Dog,
-    Eagle,
     Merfolk,
     MerfolkWarrior,
     SaintSmasher,
@@ -63,7 +62,6 @@ EVENT_TOOL_ORDER = [
 EVENT_ONLY_TERRAINS = {"meteor", "comet", "tectonic_uplift", "tsunami"}
 EVOLUTION_RESULT_TYPES = get_evolution_result_types()
 MANUAL_ALT_CRITTER_TYPES = {
-    "eagle": Eagle,
     "merfolk": Merfolk,
     "merfolk_warrior": MerfolkWarrior,
     "ape_sailor": ApeSailor,

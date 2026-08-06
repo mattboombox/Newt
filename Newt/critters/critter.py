@@ -73,8 +73,17 @@ class Critter:
     # still override the related methods independently.
     BODY_SIZE = 1
     CRITTER_TAGS = frozenset({"animal"})
+    # Nutrition is deliberately separate from BODY_SIZE. Body size determines
+    # displacement and prey selection; nutrition determines how much energy a
+    # kill contributes toward reproduction and fat reserves.
+    NUTRITION_BY_BODY_SIZE = {0: 1, 1: 1, 2: 2, 3: 4, 4: 6, 5: 10}
     FOOD_VALUE = None
     REPRODUCTION_MEAL_THRESHOLD = 5
+    REPRODUCTION_LIMIT_RANGE = (6, 10)
+    PREDATOR_REPRODUCTION_LIMIT_RANGE = (3, 5)
+    SENESCENT_MOVE_COOLDOWN_MULTIPLIER = 2.0
+    STARVATION_RESERVE_FRACTION = 0.5
+    AQUATIC_PLANKTON_REMAINS_CHANCE = 0.25
     FLEE_DETECTION_RADIUS = 0
     # Finite by default so new predator species cannot accidentally scan the
     # whole map.  Whales explicitly override this for global prey searches.
@@ -117,6 +126,12 @@ class Critter:
         self.dying_timer = None
         self.is_hungry = False
         self.meals_eaten = 0
+        reproduction_limit_range = self.REPRODUCTION_LIMIT_RANGE
+        if "predator" in self.CRITTER_TAGS:
+            reproduction_limit_range = self.PREDATOR_REPRODUCTION_LIMIT_RANGE
+        self.reproduction_limit = random.randint(*reproduction_limit_range)
+        self.reproductions_completed = 0
+        self.is_senescent = False
         self.configure_combat()
         self.home_building = None
         self.needs_habitat_relocation = False
@@ -218,7 +233,23 @@ class Critter:
     def get_food_value(self):
         if self.FOOD_VALUE is not None:
             return self.FOOD_VALUE
-        return self.BODY_SIZE + 1
+        if self.BODY_SIZE in self.NUTRITION_BY_BODY_SIZE:
+            return self.NUTRITION_BY_BODY_SIZE[self.BODY_SIZE]
+        return max(self.NUTRITION_BY_BODY_SIZE.values()) + (self.BODY_SIZE - 5) * 2
+
+    def enter_senescence(self):
+        if self.is_senescent:
+            return
+        self.is_senescent = True
+        self.move_cooldown *= self.SENESCENT_MOVE_COOLDOWN_MULTIPLIER
+
+    def can_reproduce_again(self):
+        return self.reproductions_completed < self.reproduction_limit
+
+    def record_reproduction(self):
+        self.reproductions_completed += 1
+        if not self.can_reproduce_again():
+            self.enter_senescence()
 
     def handle_successful_meal(self, game, meal_points=None):
         if meal_points is None:
@@ -236,6 +267,9 @@ class Critter:
         return offspring
 
     def complete_reproduction(self, game):
+        if not self.can_reproduce_again():
+            self.enter_senescence()
+            return None
         offspring = self.try_reproduce(game.world)
         if offspring is None:
             return None
@@ -321,6 +355,14 @@ class Critter:
         if self.is_hungry:
             self.starvation_timer -= dt
             if self.starvation_timer <= 0:
+                if self.meals_eaten > 0:
+                    self.meals_eaten -= 1
+                    self.starvation_timer = max(
+                        dt,
+                        self.starvation_interval * self.STARVATION_RESERVE_FRACTION,
+                    )
+                    self.set_behavior("living_on_reserves")
+                    return True
                 self.start_dying(game)
                 return False
             return True
@@ -359,6 +401,9 @@ class Critter:
         tile = game.world.get_tile(self.x, self.y)
         removed = remove_critter(game, self, "its corpse decayed away")
         if removed:
+            if self.can_leave_plankton_remains(tile):
+                self.try_spawn_fixed_aquatic_plankton_remains(game, tile)
+                return
             self.spawn_death_remains(game, tile)
 
     def spawn_death_remains(self, game, tile):
@@ -382,6 +427,23 @@ class Critter:
         tile.critter = plankton
         game.critters.append(plankton)
         return True
+
+    def can_leave_plankton_remains(self, tile):
+        from .plankton import Plankton
+
+        return (
+            "aquatic" in self.CRITTER_TAGS
+            and tile is not None
+            and tile.critter is None
+            and tile.terrain in Plankton.ALLOWED_TERRAINS
+        )
+
+    def try_spawn_fixed_aquatic_plankton_remains(self, game, tile):
+        if not self.can_leave_plankton_remains(tile):
+            return False
+        if random.random() >= self.AQUATIC_PLANKTON_REMAINS_CHANCE:
+            return False
+        return self.try_spawn_plankton_remains(game, tile)
 
     def get_meal_based_remains_chance(self):
         if self.meals_eaten <= 0 or self.REPRODUCTION_MEAL_THRESHOLD <= 0:
@@ -934,6 +996,9 @@ class Critter:
         return self.move_to(game.world, next_x, next_y, game)
 
     def try_spawn_adjacent_offspring(self, world, tile_predicate=None):
+        if not self.can_reproduce_again():
+            self.enter_senescence()
+            return None
         directions = CARDINAL_DIRECTIONS[:]
         random.shuffle(directions)
 
@@ -950,6 +1015,7 @@ class Critter:
 
             offspring = self.create_offspring(nx, ny)
             tile.critter = offspring
+            self.record_reproduction()
             self.set_behavior("reproduce")
             return offspring
 

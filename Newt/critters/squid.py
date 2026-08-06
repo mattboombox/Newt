@@ -1,23 +1,23 @@
 from .critter import AQUATIC_TERRAINS, Critter, PreyRule
+from .crab import Crab
 from .fish import Fish
+from .nautilus import Nautilus
+from .trilobite import Trilobite
 
 
 class Squid(Critter):
     CRITTER_TAGS = frozenset({"animal", "aquatic", "invertebrate", "predator"})
     BODY_SIZE = 2
     ALLOWED_TERRAINS = AQUATIC_TERRAINS
-    REPRODUCTION_MEAL_THRESHOLD = 10
+    REPRODUCTION_MEAL_THRESHOLD = 5
     HUNGER_INTERVAL = 200.0
     STARVATION_INTERVAL = 300.0
     # Fish move every 0.18 seconds. Squid need a clear pursuit advantage or
     # fleeing fish can keep them at range until they starve.
     MOVE_COOLDOWN = 0.12
     HUNT_RANGE = 8
-    HUNT_PREY_RULE = PreyRule(
-        required_tags={"animal", "aquatic"},
-        excluded_tags={"micro_food", "protected"},
-        max_body_size=1,
-    )
+    HUNT_PREY_RULE = (Fish, Nautilus, Trilobite, Crab)
+    SCAVENGE_PREY_RULE = HUNT_PREY_RULE
     PRIORITY_PREY_TYPES = (Fish,)
     PREDATOR_NAME = "Squid"
     REPRODUCTION_BLOCKS_SET_BEHAVIOR = True
@@ -37,14 +37,6 @@ class Squid(Critter):
         from .squid_egg import SquidEgg
 
         return SquidEgg(x, y)
-
-    def get_scavenge_prey_types(self):
-        return PreyRule(
-            required_tags={"animal", "aquatic"},
-            excluded_tags={"micro_food", "protected"},
-            included_types=(Squid,),
-            max_body_size=1,
-        )
 
     def get_scavenge_range(self):
         return self.get_hunt_range()

@@ -27,10 +27,11 @@ class Fish(Critter):
         self.configure_hunger(Fish.HUNGER_INTERVAL, Fish.STARVATION_INTERVAL)
 
     def get_flee_predator_types(self):
+        from .shark import Shark
         from .squid import Squid
         from .sea_scorpion import SeaScorpion
 
-        return (Squid, SeaScorpion)
+        return (Shark, Squid, SeaScorpion)
 
     def spawn_death_remains(self, game, tile):
         return self.try_spawn_meal_based_plankton_remains(game, tile)

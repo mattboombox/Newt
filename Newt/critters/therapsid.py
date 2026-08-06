@@ -1,3 +1,5 @@
+import random
+
 from .critter import Critter, LAND_TERRAINS, PreyRule
 from .crab import Crab
 from .newt import Newt
@@ -8,8 +10,9 @@ class Therapsid(Critter):
     BODY_SIZE = 2
     ALLOWED_TERRAINS = LAND_TERRAINS
     HUNGER_INTERVAL = 34.0
-    STARVATION_INTERVAL = 40.0
+    STARVATION_INTERVAL = 120.0
     HUNT_RANGE = 18
+    FORAGE_RANGE = 18
     HUNT_PREY_RULE = PreyRule(
         required_tags={"animal"},
         excluded_tags={"micro_food", "protected"},
@@ -23,6 +26,8 @@ class Therapsid(Critter):
     REPRODUCTION_BLOCKS_SET_BEHAVIOR = True
     REPRODUCTION_BLOCKS_RESET_MEALS = True
     REPRODUCTION_MEAL_THRESHOLD = 4
+    GRAZE_CHANCE = 0.5
+    GRASS_CONSUME_CHANCE = 0.10
 
     def __init__(self, x, y):
         super().__init__(
@@ -36,6 +41,25 @@ class Therapsid(Critter):
 
     def get_reproduction_blocking_types(self):
         return (Therapsid,)
+
+    def take_hungry_action(self, game):
+        if random.random() >= self.GRAZE_CHANCE:
+            self.hunt_or_explore(game)
+            return
+
+        def graze(tile):
+            if random.random() < self.GRASS_CONSUME_CHANCE:
+                tile.set_terrain("sand")
+            self.handle_successful_meal(game)
+
+        if not self.feed_on_nearest_terrain(
+            game,
+            {"grass"},
+            "graze",
+            graze,
+            require_empty_target=True,
+        ):
+            self.explore_while_hungry(game)
 
     def spawn_death_remains(self, game, tile):
         return self.try_spawn_grass_remains(game, tile)

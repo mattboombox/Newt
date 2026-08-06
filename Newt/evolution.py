@@ -1,6 +1,6 @@
 import random
 
-from critters import Ape, Archosaur, Crab, Deer, Fish, GigaSlug, Herrera, Jellyfish, LandKraken, MegaSpider, Nautilus, Newt, Plankton, SeaScorpion, Snail, SpermWhale, Squid, Stegosaurus, Therapsid, Trilobite, Tyrannosaurus, Whale, Wolf
+from critters import Ape, Crab, Deer, Fish, GigaSlug, Jellyfish, LandKraken, MegaSpider, Nautilus, Newt, Plankton, SeaScorpion, Shark, Snail, SpermWhale, Squid, Therapsid, Trilobite, Whale, Wolf
 
 EVOLUTION_TREE = {
     Plankton: (
@@ -24,6 +24,10 @@ EVOLUTION_TREE = {
     Fish: (
         {
             "result_type": Newt,
+            "weight": 1.0,
+        },
+        {
+            "result_type": Shark,
             "weight": 1.0,
         },
     ),
@@ -56,26 +60,6 @@ EVOLUTION_TREE = {
     Newt: (
         {
             "result_type": Therapsid,
-            "weight": 1.0,
-        },
-        {
-            "result_type": Archosaur,
-            "weight": 1.0,
-        },
-    ),
-    Archosaur: (
-        {
-            "result_type": Herrera,
-            "weight": 1.0,
-        },
-        {
-            "result_type": Stegosaurus,
-            "weight": 1.0,
-        },
-    ),
-    Herrera: (
-        {
-            "result_type": Tyrannosaurus,
             "weight": 1.0,
         },
     ),

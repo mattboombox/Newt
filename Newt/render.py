@@ -125,6 +125,12 @@ def draw_hud(screen, game, background_color):
                     f"(Meals: {tile.critter.meals_eaten}/"
                     f"{tile.critter.REPRODUCTION_MEAL_THRESHOLD})"
                 )
+                life_stage = "Old" if tile.critter.is_senescent else "Adult"
+                critter_parts.append(
+                    f"Nutrition: {tile.critter.get_food_value()} | "
+                    f"Reproductions: {tile.critter.reproductions_completed}/"
+                    f"{tile.critter.reproduction_limit} ({life_stage})"
+                )
                 if hasattr(tile.critter, "carrying_food"):
                     village = tile.critter.home_building
                     home_status = "None"

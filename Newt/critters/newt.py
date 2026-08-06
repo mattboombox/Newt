@@ -1,10 +1,13 @@
+import random
+
 from .critter import Critter, LAND_TERRAINS
 
 
 class Newt(Critter):
     CRITTER_TAGS = frozenset({"animal", "aquatic", "terrestrial", "vertebrate"})
     ALLOWED_TERRAINS = LAND_TERRAINS | {"lake"}
-    FEED_TERRAINS = {"lake"}
+    FEED_TERRAINS = {"lake", "grass"}
+    GRASS_CONSUME_CHANCE = 0.04
     HUNGER_INTERVAL = 24.0
     STARVATION_INTERVAL = 28.0
     MOVE_COOLDOWN = 0.64
@@ -32,10 +35,16 @@ class Newt(Critter):
         return self.fail_reproduction_attempt(reset_meals=True)
 
     def take_hungry_action(self, game):
+        def graze(tile):
+            if tile.terrain == "grass" and random.random() < self.GRASS_CONSUME_CHANCE:
+                tile.set_terrain("sand")
+            self.handle_successful_meal(game)
+
         if not self.feed_on_nearest_terrain(
             game,
             Newt.FEED_TERRAINS,
-            "seek_lake",
+            "seek_food",
+            graze,
             require_empty_target=True,
         ):
             self.explore_while_hungry(game)

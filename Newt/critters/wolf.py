@@ -48,6 +48,9 @@ class Wolf(Critter):
         if self.meals_eaten < self.REPRODUCTION_MEAL_THRESHOLD or self.carrying_den_charge:
             return None
 
+        if not self.can_reproduce_again():
+            self.enter_senescence()
+            return None
         self.carrying_den_charge = True
         self.meals_eaten -= self.REPRODUCTION_MEAL_THRESHOLD
         self.set_behavior("return_home")
@@ -176,6 +179,7 @@ class Wolf(Critter):
             return False
 
         self.home_building.charges += 1
+        self.record_reproduction()
         self.carrying_den_charge = False
         self.set_behavior("reproduce")
         return True

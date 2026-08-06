@@ -41,11 +41,9 @@ class ApeWarrior(Ape):
         from .lich import Lich, UndeadFollower
         from .mega_spider import MegaSpider
         from .wolf import Wolf
-        from .tyrannosaurus import Tyrannosaurus
-        from .herrera import Herrera
         from .smasher import Smasher
 
-        return (LandKraken, Lich, MegaSpider, UndeadFollower, Wolf, Tyrannosaurus, Herrera, Smasher)
+        return (LandKraken, Lich, MegaSpider, UndeadFollower, Wolf, Smasher)
 
     def get_priority_hunt_prey_types(self):
         from .lich import UndeadFollower

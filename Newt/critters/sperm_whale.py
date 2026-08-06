@@ -4,12 +4,6 @@ from .whale import Whale
 
 class SpermWhale(Whale):
     CRITTER_TAGS = frozenset({"animal", "aquatic", "vertebrate", "predator", "apex"})
-    HUNT_PREY_RULE = PreyRule(
-        required_tags={"animal", "aquatic", "predator"},
-        excluded_tags={"protected"},
-        max_body_size=4,
-    )
-    SCAVENGE_PREY_RULE = HUNT_PREY_RULE
     # Sperm whales are the largest movers in the simulation and can shove
     # every smaller critter, including sailors and liches.
     BODY_SIZE = 5
@@ -32,6 +26,21 @@ class SpermWhale(Whale):
         from .squid import Squid
 
         return (Squid,)
+
+    def get_hunt_prey_types(self):
+        from .ape_sailor import ApeSailor
+        from .sea_scorpion import SeaScorpion
+        from .squid import Squid
+
+        return PreyRule(
+            required_tags={"animal"},
+            excluded_tags={"protected"},
+            included_types=(Squid, SeaScorpion, ApeSailor),
+            min_body_size=3,
+        )
+
+    def get_scavenge_prey_types(self):
+        return self.get_hunt_prey_types()
 
     def can_displace_critter(self, critter):
         return critter is not self

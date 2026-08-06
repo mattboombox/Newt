@@ -1,3 +1,5 @@
+import random
+
 from .critter import Critter, LAND_TERRAINS
 
 
@@ -6,7 +8,8 @@ class Snail(Critter):
     """A lake-feeding mollusk descended from nautilus in shallow water."""
 
     ALLOWED_TERRAINS = LAND_TERRAINS | {"lake"}
-    FEED_TERRAINS = {"lake"}
+    FEED_TERRAINS = {"lake", "grass"}
+    GRASS_CONSUME_CHANCE = 0.03
     HUNGER_INTERVAL = 28.0
     STARVATION_INTERVAL = 32.0
     MOVE_COOLDOWN = 0.56
@@ -35,10 +38,16 @@ class Snail(Critter):
         return self.fail_reproduction_attempt(reset_meals=True)
 
     def take_hungry_action(self, game):
+        def graze(tile):
+            if tile.terrain == "grass" and random.random() < self.GRASS_CONSUME_CHANCE:
+                tile.set_terrain("sand")
+            self.handle_successful_meal(game)
+
         if not self.feed_on_nearest_terrain(
             game,
             Snail.FEED_TERRAINS,
-            "seek_lake",
+            "seek_food",
+            graze,
             require_empty_target=True,
         ):
             self.explore_while_hungry(game)

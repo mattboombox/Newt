@@ -40,7 +40,6 @@ class Lich(Critter):
         from .messiah import Messiah
         from .sand_worm import SandWorm
         from .therapsid import Therapsid
-        from .tyrannosaurus import Tyrannosaurus
         from .wolf import Wolf
 
         if (
@@ -62,7 +61,6 @@ class Lich(Critter):
                 Messiah,
                 SandWorm,
                 Therapsid,
-                Tyrannosaurus,
                 Wolf,
             ),
         )
@@ -83,10 +81,7 @@ class Lich(Critter):
         from .ape import Ape
         from .ape_warrior import ApeCavalry
         from .dog import Dog
-        from .tyrannosaurus import Tyrannosaurus
 
-        if isinstance(critter, Tyrannosaurus):
-            return UndeadTrex
         if isinstance(critter, ApeCavalry):
             return UndeadCavalry
         if isinstance(critter, Ape) and not isinstance(critter, Dog):
@@ -317,23 +312,6 @@ class UndeadBeast(UndeadFollower):
     MOVE_COOLDOWN = 0.30
     SPRITE = "undead_beast"
     PREDATOR_NAME = "Undead Beast"
-
-
-class UndeadTrex(UndeadBeast):
-    CRITTER_TAGS = frozenset({"undead", "terrestrial", "apex", "protected"})
-    """A Tyrannosaurus raised with its apex strength intact."""
-
-    COLOR = (85, 110, 75)
-    COMBAT_POWER = 5
-    MAX_COMBAT_HEALTH = 7
-    BODY_SIZE = 4
-    MOVE_COOLDOWN = 0.30
-    SPRITE = "undead_trex"
-    PREDATOR_NAME = "Undead T-Rex"
-
-    @classmethod
-    def get_raised_sprite(cls):
-        return random.choice(("undead_trex", "undead_trex2"))
 
 
 class UndeadCavalry(Undead):

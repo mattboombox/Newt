@@ -24,7 +24,7 @@ EROSION_INTERVAL = 0.10
 LIFE_INTERVAL = 0.35
 # Chance that a successful reproduction produces the parent's next
 # evolutionary form instead of an ordinary offspring.
-EVOLUTION_CHANCE = 0.005
+EVOLUTION_CHANCE = 0.05
 IMPACT_INTERVAL = 5.0
 IMPACT_CHANCE = 0.001
 TECTONIC_INTERVAL = 5.0
@@ -45,14 +45,11 @@ SPRITE_PATHS = {
     "ape_cavalry": BASE_DIR / "critter_sprites" / "ape_cavalry.png",
     "ape_sailor": BASE_DIR / "critter_sprites" / "ape_sailor.png",
     "ape_warrior": BASE_DIR / "critter_sprites" / "ape_warrior.png",
-    "archosaur": BASE_DIR / "critter_sprites" / "archosaur.png",
     "crab": BASE_DIR / "critter_sprites" / "crab.png",
     "deer": BASE_DIR / "critter_sprites" / "deer.png",
     "dog": BASE_DIR / "critter_sprites" / "dog.png",
-    "eagle": BASE_DIR / "critter_sprites" / "eagle.png",
     "fish": BASE_DIR / "critter_sprites" / "fish.png",
     "giga_slug": BASE_DIR / "critter_sprites" / "mega_slug.png",
-    "herrera": BASE_DIR / "critter_sprites" / "Herrera.png",
     "jelly_fish": BASE_DIR / "critter_sprites" / "jelly_fish.png",
     "land_kraken": BASE_DIR / "critter_sprites" / "land_kraken.png",
     "lich": BASE_DIR / "critter_sprites" / "lich.png",
@@ -64,21 +61,18 @@ SPRITE_PATHS = {
     "newt": BASE_DIR / "critter_sprites" / "newt.png",
     "plankton": BASE_DIR / "critter_sprites" / "plankton.png",
     "sea_scorpion": BASE_DIR / "critter_sprites" / "sea_scorpion.png",
+    "shark": BASE_DIR / "critter_sprites" / "shark.png",
     "snail": BASE_DIR / "critter_sprites" / "snail.png",
     "saint_smasher": BASE_DIR / "critter_sprites" / "saint_smasher.png",
     "smasher": BASE_DIR / "critter_sprites" / "Smasher.png",
     "sperm_whale": BASE_DIR / "critter_sprites" / "sperm_whale.png",
-    "stegosaurus": BASE_DIR / "critter_sprites" / "stegosaurus.png",
     "squid": BASE_DIR / "critter_sprites" / "squid.png",
     "squid_egg": BASE_DIR / "critter_sprites" / "squid_egg.png",
     "therapsid": BASE_DIR / "critter_sprites" / "therapsid.png",
     "trilobite": BASE_DIR / "critter_sprites" / "trilobite.png",
-    "tyrannosaurus": BASE_DIR / "critter_sprites" / "tyrannosaurus.png",
     "undead": BASE_DIR / "critter_sprites" / "undead.png",
     "undead_beast": BASE_DIR / "critter_sprites" / "undead_beast.png",
     "undead_cavalry": BASE_DIR / "critter_sprites" / "undead_cavalry.png",
-    "undead_trex": BASE_DIR / "critter_sprites" / "undead_trex.png",
-    "undead_trex2": BASE_DIR / "critter_sprites" / "undead_trex2.png",
     "whale": BASE_DIR / "critter_sprites" / "whale.png",
     "wolf": BASE_DIR / "critter_sprites" / "wolf.png",
     "ape_farm": BASE_DIR / "building_sprites" / "ape_farm.png",
@@ -88,12 +82,6 @@ SPRITE_PATHS = {
     "ape_village": BASE_DIR / "building_sprites" / "ape_village.png",
     "church": BASE_DIR / "building_sprites" / "church.png",
     "den": BASE_DIR / "building_sprites" / "den.png",
-    "ruin_1": BASE_DIR / "building_sprites" / "ruin_1.png",
-    "ruin_2": BASE_DIR / "building_sprites" / "ruin_2.png",
-    "ruin_3": BASE_DIR / "building_sprites" / "ruin_3.png",
-    "ruin_4": BASE_DIR / "building_sprites" / "ruin_4.png",
-    "ruin_5": BASE_DIR / "building_sprites" / "ruin_5.png",
-    "ruin_6": BASE_DIR / "building_sprites" / "ruin_6.png",
     "web": BASE_DIR / "building_sprites" / "web.png",
 }
 

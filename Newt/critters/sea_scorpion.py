@@ -1,19 +1,19 @@
-from .critter import AQUATIC_TERRAINS, Critter, PreyRule
+from .critter import AQUATIC_TERRAINS, Critter
+from .crab import Crab
+from .fish import Fish
+from .nautilus import Nautilus
+from .trilobite import Trilobite
 
 
 class SeaScorpion(Critter):
     """A swift coastal predator descended from the trilobite branch."""
 
     CRITTER_TAGS = frozenset({"animal", "aquatic", "invertebrate", "predator"})
-    HUNT_PREY_RULE = PreyRule(
-        required_tags={"animal", "aquatic"},
-        excluded_tags={"micro_food", "protected"},
-        max_body_size=2,
-    )
+    HUNT_PREY_RULE = (Fish, Nautilus, Trilobite, Crab)
     SCAVENGE_PREY_RULE = HUNT_PREY_RULE
     BODY_SIZE = 2
     ALLOWED_TERRAINS = AQUATIC_TERRAINS - {"lake", "trench"}
-    REPRODUCTION_MEAL_THRESHOLD = 8
+    REPRODUCTION_MEAL_THRESHOLD = 5
     HUNGER_INTERVAL = 110.0
     STARVATION_INTERVAL = 120.0
     HUNT_RANGE = 4
