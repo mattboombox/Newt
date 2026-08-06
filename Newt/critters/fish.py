@@ -1,4 +1,6 @@
-from .critter import AQUATIC_TERRAINS, Critter, PreyRule
+from .critter import AQUATIC_TERRAINS, Critter
+from .crab import Crab
+from .plankton import Plankton
 
 
 class Fish(Critter):
@@ -12,8 +14,8 @@ class Fish(Critter):
     # moves.  Food farther away is reconsidered on the next decision tick.
     HUNT_RANGE = 12
     SCAVENGE_RANGE = 12
-    HUNT_PREY_RULE = PreyRule(required_tags={"micro_food"})
-    SCAVENGE_PREY_RULE = HUNT_PREY_RULE
+    HUNT_PREY_TYPES = (Plankton, Crab)
+    SCAVENGE_PREY_TYPES = HUNT_PREY_TYPES
     PREDATOR_NAME = "Fish"
 
     def __init__(self, x, y):

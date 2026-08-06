@@ -1,8 +1,7 @@
-from .critter import AQUATIC_TERRAINS, Critter, PreyRule
+from .critter import AQUATIC_TERRAINS, Critter
 from .crab import Crab
 from .fish import Fish
 from .nautilus import Nautilus
-from .trilobite import Trilobite
 
 
 class Squid(Critter):
@@ -16,8 +15,8 @@ class Squid(Critter):
     # fleeing fish can keep them at range until they starve.
     MOVE_COOLDOWN = 0.12
     HUNT_RANGE = 8
-    HUNT_PREY_RULE = (Fish, Nautilus, Trilobite, Crab)
-    SCAVENGE_PREY_RULE = HUNT_PREY_RULE
+    HUNT_PREY_TYPES = (Fish, Nautilus, Crab)
+    SCAVENGE_PREY_TYPES = HUNT_PREY_TYPES
     PRIORITY_PREY_TYPES = (Fish,)
     PREDATOR_NAME = "Squid"
     REPRODUCTION_BLOCKS_SET_BEHAVIOR = True

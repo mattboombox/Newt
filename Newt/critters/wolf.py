@@ -1,4 +1,9 @@
-from .critter import Critter, LAND_TERRAINS, PreyRule
+from .critter import Critter, LAND_TERRAINS
+from .ape import Ape
+from .crab import Crab
+from .deer import Deer
+from .land_kraken import LandKraken
+from .therapsid import Therapsid
 from .deer import Deer
 from .giga_slug import GigaSlug
 
@@ -13,12 +18,8 @@ class Wolf(Critter):
     HUNGER_INTERVAL = 260.0
     STARVATION_INTERVAL = 120.0
     HUNT_RANGE = 8
-    HUNT_PREY_RULE = PreyRule(
-        required_tags={"animal", "terrestrial"},
-        excluded_tags={"protected", "undead"},
-        max_body_size=3,
-    )
-    SCAVENGE_PREY_RULE = HUNT_PREY_RULE
+    HUNT_PREY_TYPES = (Ape, Deer, Therapsid, LandKraken, Crab)
+    SCAVENGE_PREY_TYPES = HUNT_PREY_TYPES
     PRIORITY_PREY_TYPES = (Deer, GigaSlug)
     PREDATOR_NAME = "Wolf"
     REPRODUCTION_BLOCKS_SET_BEHAVIOR = True

@@ -1,4 +1,5 @@
-from .critter import AQUATIC_TERRAINS, Critter, PreyRule
+from .critter import AQUATIC_TERRAINS, Critter
+from .plankton import Plankton
 from .plankton import Plankton
 
 
@@ -11,7 +12,7 @@ class Whale(Critter):
     STARVATION_INTERVAL = 90.0
     # Sonar gives whales a much longer—but still finite—prey search range.
     HUNT_RANGE = 24
-    HUNT_PREY_RULE = PreyRule(required_tags={"micro_food"})
+    HUNT_PREY_TYPES = (Plankton,)
     PRIORITY_PREY_TYPES = (Plankton,)
     PREDATOR_NAME = "Whale"
 

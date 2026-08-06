@@ -2,11 +2,19 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from critters import ApeSailor, Crab, Fish, Jellyfish, Nautilus, Newt, Plankton, SeaScorpion, Shark, Snail, SpermWhale, Squid, Therapsid, Trilobite
+from critters import ApeSailor, Crab, Fish, Jellyfish, MegaSpider, Nautilus, Newt, Plankton, SeaScorpion, Shark, Snail, SpermWhale, Squid, Therapsid, Trilobite, Wolf
 from world import World
 
 
 class EcologyTests(unittest.TestCase):
+    def test_mega_spider_is_combat_capable_and_hunts_other_predators(self):
+        spider = MegaSpider(0, 0)
+        wolf = Wolf(1, 0)
+
+        self.assertTrue(spider.COMBAT_CAPABLE)
+        self.assertTrue(wolf.COMBAT_CAPABLE)
+        self.assertTrue(spider.is_valid_hunt_prey(wolf, spider.get_hunt_prey_types()))
+
     def test_therapsid_splits_hungry_actions_between_grazing_and_hunting(self):
         game = SimpleNamespace()
 
@@ -41,7 +49,7 @@ class EcologyTests(unittest.TestCase):
             with self.subTest(predator_type=predator_type.__name__):
                 predator = predator_type(0, 0)
                 self.assertEqual(predator.REPRODUCTION_MEAL_THRESHOLD, 5)
-                for prey_type in (Fish, Nautilus, Trilobite, Crab):
+                for prey_type in (Fish, Nautilus, Crab):
                     self.assertTrue(
                         predator.matches_prey_selector(
                             prey_type(0, 0), predator.get_hunt_prey_selector()
@@ -52,6 +60,23 @@ class EcologyTests(unittest.TestCase):
                         Jellyfish(0, 0), predator.get_hunt_prey_selector()
                     )
                 )
+
+    def test_only_sea_scorpions_can_eat_trilobites(self):
+        trilobite = Trilobite(0, 0)
+
+        self.assertTrue(trilobite.can_be_eaten_by(SeaScorpion(1, 0)))
+        for predator_type in (Shark, Squid, SpermWhale, ApeSailor):
+            with self.subTest(predator_type=predator_type.__name__):
+                self.assertFalse(trilobite.can_be_eaten_by(predator_type(1, 0)))
+
+    def test_shark_has_very_long_hunger_interval_and_hunts_large_sea_predators(self):
+        shark = Shark(0, 0)
+        prey = shark.get_hunt_prey_selector()
+
+        self.assertEqual(shark.hunger_interval, 1200.0)
+        for prey_type in (Squid, SeaScorpion):
+            with self.subTest(prey_type=prey_type.__name__):
+                self.assertTrue(shark.matches_prey_selector(prey_type(0, 0), prey))
 
     def test_sperm_whale_diet_excludes_jellyfish(self):
         whale = SpermWhale(0, 0)

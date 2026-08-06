@@ -21,44 +21,6 @@ CARDINAL_DIRECTIONS = [
 ]
 
 
-class PreyRule:
-    """Data-driven description of the critters a predator considers food."""
-
-    def __init__(
-        self,
-        required_tags=None,
-        any_tags=None,
-        excluded_tags=None,
-        included_types=None,
-        min_body_size=None,
-        max_body_size=None,
-    ):
-        self.required_tags = frozenset(required_tags or ())
-        self.any_tags = frozenset(any_tags or ())
-        self.excluded_tags = frozenset(excluded_tags or ())
-        self.included_types = tuple(included_types or ())
-        self.min_body_size = min_body_size
-        self.max_body_size = max_body_size
-
-    def matches(self, critter_or_type):
-        critter_type = (
-            critter_or_type
-            if isinstance(critter_or_type, type)
-            else type(critter_or_type)
-        )
-        tags = frozenset(getattr(critter_type, "CRITTER_TAGS", ()))
-        body_size = getattr(critter_type, "BODY_SIZE", 1)
-        if self.included_types and issubclass(critter_type, self.included_types):
-            return True
-        return (
-            self.required_tags.issubset(tags)
-            and (not self.any_tags or bool(self.any_tags & tags))
-            and not self.excluded_tags.intersection(tags)
-            and (self.min_body_size is None or body_size >= self.min_body_size)
-            and (self.max_body_size is None or body_size <= self.max_body_size)
-        )
-
-
 class Critter:
     _next_id = 1
     DYING_INTERVAL = 12.0
@@ -90,8 +52,8 @@ class Critter:
     HUNT_RANGE = 12
     SCAVENGE_RANGE = None
     FORAGE_RANGE = 12
-    HUNT_PREY_RULE = None
-    SCAVENGE_PREY_RULE = None
+    HUNT_PREY_TYPES = ()
+    SCAVENGE_PREY_TYPES = ()
     PRIORITY_PREY_TYPES = ()
     PREDATOR_NAME = None
     REPRODUCTION_BLOCKS_SET_BEHAVIOR = False
@@ -548,10 +510,10 @@ class Critter:
         return self.PREDATOR_NAME or type(self).__name__
 
     def get_hunt_prey_types(self):
-        return self.HUNT_PREY_RULE or ()
+        return self.HUNT_PREY_TYPES
 
     def get_scavenge_prey_types(self):
-        return self.SCAVENGE_PREY_RULE or ()
+        return self.SCAVENGE_PREY_TYPES
 
     def get_hunt_prey_selector(self):
         return self.get_hunt_prey_types()
@@ -573,11 +535,13 @@ class Critter:
 
     @staticmethod
     def matches_prey_selector(critter, prey_selector):
-        if isinstance(prey_selector, PreyRule):
-            return prey_selector.matches(critter)
         if not isinstance(prey_selector, tuple):
             prey_selector = (prey_selector,)
-        return bool(prey_selector) and isinstance(critter, prey_selector)
+        if not prey_selector:
+            return False
+        if isinstance(critter, type):
+            return issubclass(critter, prey_selector)
+        return isinstance(critter, prey_selector)
 
     def is_valid_hunt_prey(self, critter, prey_selector):
         return (
@@ -638,7 +602,7 @@ class Critter:
         if not prey_types:
             return False
 
-        if not isinstance(prey_types, (tuple, PreyRule)):
+        if not isinstance(prey_types, tuple):
             prey_types = (prey_types,)
 
         destinations = self.get_neighbor_positions(game.world, self.x, self.y)
@@ -673,7 +637,7 @@ class Critter:
         if not dying_critters:
             return False
 
-        if not isinstance(prey_types, (tuple, PreyRule)):
+        if not isinstance(prey_types, tuple):
             prey_types = (prey_types,)
 
         scavenge_range = self.get_scavenge_range()
@@ -1057,7 +1021,7 @@ class Critter:
         if not critter_types or radius <= 0:
             return []
 
-        if not isinstance(critter_types, (tuple, PreyRule)):
+        if not isinstance(critter_types, tuple):
             critter_types = (critter_types,)
 
         threats = []
@@ -1306,7 +1270,7 @@ class Critter:
     ):
         if prey_types is None:
             prey_types = self.get_hunt_prey_selector()
-        if not isinstance(prey_types, (tuple, PreyRule)):
+        if not isinstance(prey_types, tuple):
             prey_types = (prey_types,)
 
         priority_types = self.get_priority_prey_types()
@@ -1372,10 +1336,7 @@ class Critter:
 
         hunt_range = self.get_hunt_range()
         for critter_type, candidates in critter_type_index.items():
-            if isinstance(prey_types, PreyRule):
-                type_matches = prey_types.matches(critter_type)
-            else:
-                type_matches = issubclass(critter_type, prey_types)
+            type_matches = issubclass(critter_type, prey_types)
             if not type_matches:
                 continue
 

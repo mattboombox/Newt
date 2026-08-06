@@ -1,4 +1,4 @@
-from .critter import AQUATIC_TERRAINS, Critter, PreyRule
+from .critter import AQUATIC_TERRAINS, Critter
 from .plankton import Plankton
 
 
@@ -9,7 +9,7 @@ class Nautilus(Critter):
     HUNGER_INTERVAL = 55.0
     STARVATION_INTERVAL = 55.0
     HUNT_RANGE = 12
-    HUNT_PREY_RULE = PreyRule(required_tags={"micro_food"})
+    HUNT_PREY_TYPES = (Plankton,)
     PRIORITY_PREY_TYPES = (Plankton,)
     PREDATOR_NAME = "Nautilus"
 

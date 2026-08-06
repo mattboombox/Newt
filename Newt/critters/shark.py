@@ -2,7 +2,8 @@ from .critter import AQUATIC_TERRAINS, Critter
 from .crab import Crab
 from .fish import Fish
 from .nautilus import Nautilus
-from .trilobite import Trilobite
+from .sea_scorpion import SeaScorpion
+from .squid import Squid
 
 
 class Shark(Critter):
@@ -12,12 +13,12 @@ class Shark(Critter):
     BODY_SIZE = 2
     ALLOWED_TERRAINS = AQUATIC_TERRAINS
     REPRODUCTION_MEAL_THRESHOLD = 5
-    HUNGER_INTERVAL = 200.0
+    HUNGER_INTERVAL = 1200.0
     STARVATION_INTERVAL = 300.0
     MOVE_COOLDOWN = 0.12
     HUNT_RANGE = 8
-    HUNT_PREY_RULE = (Fish, Nautilus, Trilobite, Crab)
-    SCAVENGE_PREY_RULE = HUNT_PREY_RULE
+    HUNT_PREY_TYPES = (Fish, Nautilus, Crab, Squid, SeaScorpion)
+    SCAVENGE_PREY_TYPES = HUNT_PREY_TYPES
     PRIORITY_PREY_TYPES = (Fish,)
     PREDATOR_NAME = "Shark"
     REPRODUCTION_BLOCKS_SET_BEHAVIOR = True

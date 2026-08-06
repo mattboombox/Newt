@@ -1,13 +1,12 @@
-from .critter import Critter, LAND_TERRAINS, PreyRule
+from .critter import Critter, LAND_TERRAINS
 
 
 class MegaSpider(Critter):
     CRITTER_TAGS = frozenset({"animal", "terrestrial", "invertebrate", "predator"})
-    HUNT_PREY_RULE = PreyRule(
-        required_tags={"animal", "terrestrial"},
-        excluded_tags={"protected"},
-    )
-    SCAVENGE_PREY_RULE = HUNT_PREY_RULE
+    # Apex predator: every critter is valid prey, including combat-capable
+    # predators. Combat resolution still gives armed prey a chance to fight.
+    HUNT_PREY_TYPES = (Critter,)
+    SCAVENGE_PREY_TYPES = HUNT_PREY_TYPES
     COMBAT_CAPABLE = True
     COMBAT_POWER = 3
     MAX_COMBAT_HEALTH = 3

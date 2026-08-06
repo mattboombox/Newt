@@ -26,7 +26,6 @@ class Merfolk(Ape):
         from .nautilus import Nautilus
         from .sea_scorpion import SeaScorpion
         from .squid import Squid
-        from .trilobite import Trilobite
 
         return (
             Crab,
@@ -35,7 +34,6 @@ class Merfolk(Ape):
             Nautilus,
             SeaScorpion,
             Squid,
-            Trilobite,
         )
 
     def try_tame_adjacent_wolf(self, game):

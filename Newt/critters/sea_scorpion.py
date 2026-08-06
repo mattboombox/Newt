@@ -9,8 +9,8 @@ class SeaScorpion(Critter):
     """A swift coastal predator descended from the trilobite branch."""
 
     CRITTER_TAGS = frozenset({"animal", "aquatic", "invertebrate", "predator"})
-    HUNT_PREY_RULE = (Fish, Nautilus, Trilobite, Crab)
-    SCAVENGE_PREY_RULE = HUNT_PREY_RULE
+    HUNT_PREY_TYPES = (Fish, Nautilus, Trilobite, Crab)
+    SCAVENGE_PREY_TYPES = HUNT_PREY_TYPES
     BODY_SIZE = 2
     ALLOWED_TERRAINS = AQUATIC_TERRAINS - {"lake", "trench"}
     REPRODUCTION_MEAL_THRESHOLD = 5

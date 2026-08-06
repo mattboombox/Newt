@@ -432,7 +432,7 @@ class WolfDen(Building):
     def has_adjacent_wolf_prey(self, world):
         from critters import Wolf
 
-        prey_selector = Wolf.HUNT_PREY_RULE
+        prey_selector = Wolf.HUNT_PREY_TYPES
 
         for tile in world.get_neighbors_all(self.x, self.y):
             if (

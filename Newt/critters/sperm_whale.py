@@ -1,4 +1,3 @@
-from .critter import PreyRule
 from .whale import Whale
 
 
@@ -32,12 +31,9 @@ class SpermWhale(Whale):
         from .sea_scorpion import SeaScorpion
         from .squid import Squid
 
-        return PreyRule(
-            required_tags={"animal"},
-            excluded_tags={"protected"},
-            included_types=(Squid, SeaScorpion, ApeSailor),
-            min_body_size=3,
-        )
+        from .land_kraken import LandKraken
+
+        return (Squid, LandKraken, SeaScorpion, ApeSailor)
 
     def get_scavenge_prey_types(self):
         return self.get_hunt_prey_types()

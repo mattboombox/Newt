@@ -1,9 +1,11 @@
 import random
 
-from .critter import Critter, LAND_TERRAINS, PreyRule
+from .critter import Critter, LAND_TERRAINS
 from .crab import Crab
+from .fish import Fish
 from .newt import Newt
 from .snail import Snail
+from .trilobite import Trilobite
 
 class Therapsid(Critter):
     CRITTER_TAGS = frozenset({"animal", "terrestrial", "vertebrate", "predator"})
@@ -13,15 +15,8 @@ class Therapsid(Critter):
     STARVATION_INTERVAL = 120.0
     HUNT_RANGE = 18
     FORAGE_RANGE = 18
-    HUNT_PREY_RULE = PreyRule(
-        required_tags={"animal"},
-        excluded_tags={"micro_food", "protected"},
-        max_body_size=1,
-    )
-    SCAVENGE_PREY_RULE = PreyRule(
-        required_tags={"animal"},
-        excluded_tags={"protected"},
-    )
+    HUNT_PREY_TYPES = (Crab, Newt, Snail, Trilobite, Fish)
+    SCAVENGE_PREY_TYPES = (Critter,)
     PRIORITY_PREY_TYPES = (Crab, Newt, Snail)
     REPRODUCTION_BLOCKS_SET_BEHAVIOR = True
     REPRODUCTION_BLOCKS_RESET_MEALS = True

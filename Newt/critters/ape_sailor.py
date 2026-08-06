@@ -58,9 +58,8 @@ class ApeSailor(Ape):
         from .squid import Squid
         from .whale import Whale
         from .jelly_fish import Jellyfish
-        from .trilobite import Trilobite
 
-        return (Fish, SeaScorpion, Squid, Whale, Jellyfish, Trilobite)
+        return (Fish, SeaScorpion, Squid, Whale, Jellyfish)
 
     def is_valid_hunt_prey(self, critter, prey_types):
         from .sperm_whale import SpermWhale

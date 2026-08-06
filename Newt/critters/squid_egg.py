@@ -46,7 +46,7 @@ class SquidEgg(Critter):
 
         nearby_hatch_trigger = self.find_nearby_critters(
             game.world,
-            Squid.HUNT_PREY_RULE,
+            Squid.HUNT_PREY_TYPES,
             1,
         )
         if nearby_hatch_trigger:

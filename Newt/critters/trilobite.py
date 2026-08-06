@@ -47,5 +47,10 @@ class Trilobite(Critter):
     def get_reproduction_blocking_types(self):
         return (Trilobite,)
 
+    def can_be_eaten_by(self, predator):
+        from .sea_scorpion import SeaScorpion
+
+        return isinstance(predator, SeaScorpion)
+
     def spawn_death_remains(self, game, tile):
         return self.try_spawn_meal_based_plankton_remains(game, tile)
