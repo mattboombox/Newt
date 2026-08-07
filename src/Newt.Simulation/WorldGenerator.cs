@@ -39,7 +39,104 @@ public static class WorldGenerator
         }
 
         TerrainClassifier.RebuildAll(world);
+        StartNaturalSprings(world, options.Seed);
         return world;
+    }
+
+    private static void StartNaturalSprings(SimulationWorld world, ulong seed)
+    {
+        var candidates = new List<GridPosition>();
+        for (var y = 0; y < world.Height; y++)
+        {
+            for (var x = 0; x < world.Width; x++)
+            {
+                var position = new GridPosition(x, y);
+                if (IsSnowmeltSource(world, position))
+                {
+                    candidates.Add(position);
+                }
+            }
+        }
+
+        var random = new GeneratorRandom(seed ^ 0xD1B54A32D192ED03UL);
+        Shuffle(candidates, ref random);
+        var targetCount = Math.Clamp(world.Width * world.Height / 5_000 + 1, 2, 6);
+        var minimumDistance = Math.Max(6, Math.Min(world.Width, world.Height) / 8);
+        var selected = new List<GridPosition>(targetCount);
+
+        foreach (var candidate in candidates)
+        {
+            if (selected.Any(source => WrappedDistanceSquared(world, source, candidate) <
+                minimumDistance * minimumDistance))
+            {
+                continue;
+            }
+
+            if (Hydrology.StartSpring(world, candidate).Termination is SpringTermination.Flowing)
+            {
+                selected.Add(candidate);
+                if (selected.Count >= targetCount)
+                {
+                    break;
+                }
+            }
+        }
+    }
+
+    private static bool IsSnowmeltSource(SimulationWorld world, GridPosition position)
+    {
+        if (world.GetTerrain(position) is not Terrain.Mountain ||
+            world.GetBiome(position) is Biome.Arctic)
+        {
+            return false;
+        }
+
+        for (var offsetY = -1; offsetY <= 1; offsetY++)
+        {
+            var y = position.Y + offsetY;
+            if (y < 0 || y >= world.Height)
+            {
+                continue;
+            }
+
+            for (var offsetX = -1; offsetX <= 1; offsetX++)
+            {
+                if (offsetX == 0 && offsetY == 0)
+                {
+                    continue;
+                }
+
+                var x = Mod(position.X + offsetX, world.Width);
+                var neighbor = new GridPosition(x, y);
+                if (world.GetTerrain(neighbor) is Terrain.Mountain &&
+                    world.GetBiome(neighbor) is Biome.Arctic)
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private static int WrappedDistanceSquared(
+        SimulationWorld world,
+        GridPosition first,
+        GridPosition second)
+    {
+        var distanceX = Math.Abs(first.X - second.X);
+        distanceX = Math.Min(distanceX, world.Width - distanceX);
+        var distanceY = first.Y - second.Y;
+        return distanceX * distanceX + distanceY * distanceY;
+    }
+
+    private static void Shuffle<T>(IList<T> values, ref GeneratorRandom random)
+    {
+        for (var index = values.Count - 1; index > 0; index--)
+        {
+            var replacement = random.NextInt(index + 1);
+            (values[index], values[replacement]) = (values[replacement], values[index]);
+        }
     }
 
     private static void AddLandMass(
@@ -108,5 +205,11 @@ public static class WorldGenerator
             _state ^= _state >> 7;
             _state ^= _state << 17;
         }
+    }
+
+    private static int Mod(int value, int modulus)
+    {
+        var result = value % modulus;
+        return result < 0 ? result + modulus : result;
     }
 }

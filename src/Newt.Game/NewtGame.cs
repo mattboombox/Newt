@@ -9,6 +9,8 @@ namespace Newt.Game;
 public sealed class NewtGame : Microsoft.Xna.Framework.Game
 {
     private static readonly int[] ZoomLevels = [2, 4, 8, 16, 24];
+    private static readonly ToolCategory[] ToolCategoryOrder = [ToolCategory.Terrain];
+    private static readonly WorldTool[] TerrainToolOrder = [WorldTool.Elevation, WorldTool.River];
     private static readonly TimeSpan SimulationStep = TimeSpan.FromSeconds(1d / SimulationWorld.TicksPerSecond);
     private readonly GraphicsDeviceManager _graphics;
     private SimulationWorld _world = null!;
@@ -22,6 +24,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private int _cameraX;
     private int _cameraY;
     private int _zoomIndex = 2;
+    private int _toolCategoryIndex;
+    private int _toolIndex;
 
     public NewtGame()
     {
@@ -56,6 +60,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         }
 
         HandleWorldShortcuts(keyboard, mouse);
+        HandleActiveTool(mouse);
         HandleCamera(keyboard, mouse);
         UpdateWindowTitle(mouse);
 
@@ -151,18 +156,22 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             _preset = WorldPreset.Ring;
             GenerateWorld();
         }
+        else if (WasPressed(keyboard, Keys.Q))
+        {
+            CycleTool(-1);
+        }
+        else if (WasPressed(keyboard, Keys.E))
+        {
+            CycleTool(1);
+        }
         else if (WasPressed(keyboard, Keys.R))
+        {
+            CycleToolCategory(1);
+        }
+        else if (WasPressed(keyboard, Keys.N))
         {
             _seed++;
             GenerateWorld();
-        }
-        else if (WasPressed(keyboard, Keys.U))
-        {
-            var position = ScreenToWorld(mouse.X, mouse.Y);
-            if (position is not null)
-            {
-                Geology.ApplyRadialUplift(_world, position.Value, radius: 7, strength: 0.36f);
-            }
         }
         else if (WasPressed(keyboard, Keys.F))
         {
@@ -173,6 +182,62 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             }
         }
     }
+
+    private void HandleActiveTool(MouseState mouse)
+    {
+        var primaryPressed = mouse.LeftButton is ButtonState.Pressed &&
+            _previousMouse.LeftButton is ButtonState.Released;
+        var secondaryPressed = mouse.RightButton is ButtonState.Pressed &&
+            _previousMouse.RightButton is ButtonState.Released;
+        if (!primaryPressed && !secondaryPressed)
+        {
+            return;
+        }
+
+        var position = ScreenToWorld(mouse.X, mouse.Y);
+        if (position is null)
+        {
+            return;
+        }
+
+        switch (CurrentTool)
+        {
+            case WorldTool.Elevation when primaryPressed:
+                Geology.ApplyRadialUplift(_world, position.Value, radius: 7, strength: 0.36f);
+                break;
+            case WorldTool.Elevation:
+                Geology.ApplyRadialLowering(_world, position.Value, radius: 7, strength: 0.36f);
+                break;
+            case WorldTool.River when primaryPressed:
+                Hydrology.StartSpring(_world, position.Value);
+                break;
+            case WorldTool.River:
+                Hydrology.RemoveFreshwaterAt(_world, position.Value);
+                break;
+        }
+    }
+
+    private ToolCategory CurrentToolCategory => ToolCategoryOrder[_toolCategoryIndex];
+
+    private WorldTool CurrentTool => GetTools(CurrentToolCategory)[_toolIndex];
+
+    private void CycleToolCategory(int step)
+    {
+        _toolCategoryIndex = Mod(_toolCategoryIndex + step, ToolCategoryOrder.Length);
+        _toolIndex = 0;
+    }
+
+    private void CycleTool(int step)
+    {
+        var tools = GetTools(CurrentToolCategory);
+        _toolIndex = Mod(_toolIndex + step, tools.Length);
+    }
+
+    private static WorldTool[] GetTools(ToolCategory category) => category switch
+    {
+        ToolCategory.Terrain => TerrainToolOrder,
+        _ => throw new ArgumentOutOfRangeException(nameof(category)),
+    };
 
     private void HandleCamera(KeyboardState keyboard, MouseState mouse)
     {
@@ -219,7 +284,9 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             : _world.LastCompletedSpring is { } completed
                 ? $"spring {completed.Termination}, {completed.RiverTileCount} tiles"
                 : "no spring traced";
-        Window.Title = $"Newt | {_preset.Name} {_world.Width}x{_world.Height} | seed {_seed} | tick {_world.Tick} | {inspected} | {hydrology}";
+        Window.Title = $"Newt | {_preset.Name} {_world.Width}x{_world.Height} | seed {_seed} | " +
+            $"tool {CurrentToolCategory} > {CurrentTool} ({GetToolHint(CurrentTool)}) | " +
+            $"tick {_world.Tick} | {inspected} | {hydrology}";
     }
 
     private GridPosition? ScreenToWorld(int screenX, int screenY)
@@ -337,7 +404,11 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             return;
         }
 
-        var color = GetSurfaceWaterColor(water);
+        var color = water is SurfaceWaterKind.FreshwaterLake
+            ? GetLakeColor(
+                _world.GetWaterDepth(worldPosition),
+                _world.GetBiome(worldPosition) is Biome.Arctic)
+            : GetSurfaceWaterColor(water);
         var originX = screenX * TileSize;
         var originY = screenY * TileSize;
         if (water is SurfaceWaterKind.FreshwaterLake)
@@ -494,4 +565,33 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         SurfaceWaterKind.FreshwaterLake => new Color(50, 135, 205),
         _ => Color.Magenta,
     };
+
+    private static Color GetLakeColor(float depth, bool frozen)
+    {
+        if (frozen)
+        {
+            return new Color(165, 220, 235);
+        }
+
+        var depthShade = Math.Clamp(depth / 0.15f, 0f, 1f);
+        return ScaleColor(new Color(50, 135, 205), 1f - 0.15f * depthShade);
+    }
+
+    private static string GetToolHint(WorldTool tool) => tool switch
+    {
+        WorldTool.Elevation => "left raise, right lower",
+        WorldTool.River => "left spawn, right remove",
+        _ => string.Empty,
+    };
+
+    private enum ToolCategory
+    {
+        Terrain,
+    }
+
+    private enum WorldTool
+    {
+        Elevation,
+        River,
+    }
 }

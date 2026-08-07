@@ -46,6 +46,19 @@ public sealed class LakeTests
         Assert.Equal(SurfaceWaterKind.None, world.GetSurfaceWater(new GridPosition(7, 4)));
     }
 
+    [Fact]
+    public void RemovingLakeAlsoRemovesItsRiverSource()
+    {
+        var world = CreateBasinWorld();
+        var sink = new GridPosition(4, 4);
+        Hydrology.TraceSpring(world, sink);
+
+        Assert.True(Hydrology.RemoveFreshwaterAt(world, sink));
+
+        Assert.Equal(SurfaceWaterKind.None, world.GetSurfaceWater(sink));
+        Assert.Empty(world.SpringSources);
+    }
+
     private static SimulationWorld CreateBasinWorld()
     {
         var world = new SimulationWorld(9, 9, Terrain.Ocean);

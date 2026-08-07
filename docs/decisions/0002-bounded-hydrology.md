@@ -27,10 +27,13 @@ Newt will not initially model:
 - Sediment transport.
 - Natural meandering produced by erosion.
 - Detailed rainfall, evaporation, or seasonal discharge.
+- Conservation or redistribution of lake water when a basin changes.
 
 Geological tools and discrete erosion events may still alter a river's terrain.
-Hydrology can then be recalculated explicitly rather than continuously reshaping
-the map every tick.
+When such an event adjusts an occupied freshwater tile, registered spring sources
+are retraced immediately. River and lake tiles are derived state; the initial
+player-created spring animation remains tile-by-tile. Hydrology is not otherwise
+recalculated continuously every tick.
 
 ## Basin sizing
 

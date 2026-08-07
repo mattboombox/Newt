@@ -7,6 +7,14 @@ public static class TerrainClassifier
     public static void RebuildAll(SimulationWorld world)
     {
         ArgumentNullException.ThrowIfNull(world);
+        RebuildLandforms(world);
+        ClimateSystem.RebuildMoistureAndBiomes(world);
+    }
+
+    /// <summary>Rebuilds physical terrain without using the current freshwater layout.</summary>
+    internal static void RebuildLandforms(SimulationWorld world)
+    {
+        ArgumentNullException.ThrowIfNull(world);
         ClimateSystem.RebuildTemperature(world);
 
         for (var y = 0; y < world.Height; y++)
@@ -21,7 +29,6 @@ public static class TerrainClassifier
         }
 
         AddCoasts(world);
-        ClimateSystem.RebuildMoistureAndBiomes(world);
     }
 
     private static Terrain ClassifyLandform(float elevation, float temperature)

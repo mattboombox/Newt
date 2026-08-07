@@ -30,7 +30,7 @@ Press Escape to exit.
 
 The current prototype supports deterministic generated worlds, camera movement,
 zoom, and tile inspection. See [world generation](docs/world-generation.md) for
-controls and algorithm notes. Live elevation editing and planned water flow are
+controls and algorithm notes. Live elevation editing and animated freshwater are
 described in [geology and hydrology](docs/geology.md).
 
 The implemented temperature, moisture, Arctic, tundra, taiga, bog, grassland,

@@ -4,12 +4,18 @@ Newt treats terrain as a visible classification derived from persistent elevatio
 Geological operations change elevation first; terrain is then rebuilt from the
 new physical state.
 
-## First live operation: radial uplift
+## First live operation: elevation tool
 
-Hover a world tile and press `U`. A circular region rises with a smooth falloff:
-the center receives the full uplift while the edge receives almost none. World X
-coordinates wrap, so an uplift at the left edge continues naturally at the right
-edge. Terrain and coastlines are reclassified immediately.
+The initial tool category is Terrain and its first selection is Elevation. Left
+click a world tile to raise a circular region, or right click to lower it. Both
+directions use a smooth falloff: the center receives the full change while the
+edge receives almost none. World X coordinates wrap, so a change at the left edge
+continues naturally at the right edge. Terrain and coastlines are reclassified
+immediately.
+
+`Q` and `E` cycle between the Elevation and River selections within the Terrain
+category. `R` cycles tool categories. The selection structure is ready for later
+event, spawning, and inspection categories.
 
 This is a deliberately small primitive. Tectonic ridges, island chains, and
 volcanic cones can later be composed from sequences of localized uplifts.
@@ -54,6 +60,23 @@ neighbor and stops when it:
 The result and river length appear in the window title. If the bounded outlet
 search cannot escape a depression, it becomes a terminal inland lake.
 
+Completed springs retain their source tile as persistent state. If an uplift
+changes a tile occupied by a river or lake, freshwater is cleared and every
+retained source is retraced immediately against the new elevation. The original
+player-created spring still grows one tile per tick; only this response to geology
+is instantaneous. A retraced river may divert, and its terminal lake may shrink,
+expand, or move to a different basin.
+
+New worlds also begin with a few animated snowmelt springs. Their sources are
+seeded, suitably spaced non-Arctic mountain tiles adjacent to Arctic mountains.
+They obey the same tracing, basin filling, and persistent-source rules as springs
+created by the player.
+
+With the River tool selected, left click valid land to start an animated spring.
+Right click any freshwater tile to remove its connected river and lake system.
+If tributaries have joined, every registered source feeding that connected system
+is removed together; unrelated freshwater is redrawn and remains in the world.
+
 Every river tile stores directional connections to the preceding and following
 tiles. Rendering draws those connections through tile edges and corners, producing
 one unbroken channel even when flow moves diagonally. Connectivity is simulation
@@ -88,12 +111,17 @@ while rivers and lakes are fresh. At a river mouth, the final river tile remains
 freshwater and the adjacent ocean tile remains saltwater; later estuary rules can
 model the mixing zone without corrupting either terrain type.
 
+Freshwater lakes over Arctic biomes render with the same ice color as frozen sea
+water. This is currently a visual treatment only: the lake retains its freshwater
+identity, basin shape, depth, and moisture influence.
+
 ## Deliberate limits
 
 Rivers remain single-tile connected channels. We are not adding discharge tiers,
 variable widths, continuous bank erosion, sediment transport, or erosion-driven
-meandering. Those mechanisms are interesting but would turn a supporting world
-system into the game's dominant simulation.
+meandering. Lake changes do not conserve or redistribute a previous lake's water
+volume. Those mechanisms are interesting but would turn a supporting world system
+into the game's dominant simulation.
 
 Terrain can still change through explicit tectonic, volcanic, painting, or
 discrete erosion events. Hydrology may be recalculated after those events rather

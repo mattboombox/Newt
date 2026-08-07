@@ -13,18 +13,38 @@ public static class Geology
         int radius,
         float strength)
     {
+        ValidateStrength(strength);
+        return ApplyRadialElevationChange(world, center, radius, strength);
+    }
+
+    /// <summary>
+    /// Lowers a soft circular region and returns the number of affected tiles.
+    /// Horizontal distance follows the world's wrapping geometry.
+    /// </summary>
+    public static int ApplyRadialLowering(
+        SimulationWorld world,
+        GridPosition center,
+        int radius,
+        float strength)
+    {
+        ValidateStrength(strength);
+        return ApplyRadialElevationChange(world, center, radius, -strength);
+    }
+
+    private static int ApplyRadialElevationChange(
+        SimulationWorld world,
+        GridPosition center,
+        int radius,
+        float strength)
+    {
         ArgumentNullException.ThrowIfNull(world);
         if (!world.Contains(center))
         {
             throw new ArgumentOutOfRangeException(nameof(center));
         }
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(radius);
-        if (strength <= 0 || !float.IsFinite(strength))
-        {
-            throw new ArgumentOutOfRangeException(nameof(strength));
-        }
-
         var affectedTiles = 0;
+        var freshwaterTouched = false;
         var radiusSquared = radius * radius;
         for (var offsetY = -radius; offsetY <= radius; offsetY++)
         {
@@ -46,14 +66,32 @@ public static class Geology
                 var position = new GridPosition(x, y);
                 var normalizedDistance = distanceSquared / (float)radiusSquared;
                 var falloff = 1 - normalizedDistance;
-                var uplift = strength * falloff * falloff;
-                world.SetElevation(position, world.GetElevation(position) + uplift);
+                var elevationChange = strength * falloff * falloff;
+                freshwaterTouched |= elevationChange != 0 &&
+                    world.GetSurfaceWater(position) is not SurfaceWaterKind.None;
+                world.SetElevation(position, world.GetElevation(position) + elevationChange);
                 affectedTiles++;
             }
         }
 
-        TerrainClassifier.RebuildAll(world);
+        TerrainClassifier.RebuildLandforms(world);
+        if (freshwaterTouched)
+        {
+            Hydrology.RebuildFreshwater(world);
+        }
+        else
+        {
+            ClimateSystem.RebuildMoistureAndBiomes(world);
+        }
         return affectedTiles;
+    }
+
+    private static void ValidateStrength(float strength)
+    {
+        if (strength <= 0 || !float.IsFinite(strength))
+        {
+            throw new ArgumentOutOfRangeException(nameof(strength));
+        }
     }
 
     private static int Mod(int value, int modulus)

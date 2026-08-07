@@ -13,6 +13,8 @@ fraction. Identical options produce identical terrain.
 6. Build moisture from saltwater distance, freshwater, elevation, and seeded
    regional variation.
 7. Classify biomes and choose the visible lowland surface.
+8. Select a small, spaced set of non-Arctic mountain tiles beside Arctic
+   mountains and start animated snowmelt springs from them.
 
 Elevation remains part of world state after generation. It is stored as a signed
 value relative to sea level: zero is the shoreline threshold, negative values are
@@ -24,6 +26,11 @@ the Arctic biome on land and sea ice over saltwater without erasing landform.
 This is intentionally not a recreation of the Python generator. It establishes a
 deterministic foundation that can later accept tectonic plates, erosion, mineral
 deposits, and geological history.
+
+Natural spring selection is seeded and scales from two requested sources on a
+Micro world to at most six on a Large world. Fewer are used when the generated
+snow line does not contain enough suitably spaced candidates. These springs use
+the same tile-by-tile travel animation as springs created with `F`.
 
 ## Presets
 
@@ -37,8 +44,12 @@ deposits, and geological history.
 ## Prototype controls
 
 - `1`–`4`: generate the corresponding preset with the current seed.
-- `R`: increment the seed and generate a new world.
-- `U`: uplift a soft circular region centered on the hovered tile.
+- `N`: increment the seed and generate a new world.
+- `Q` / `E`: cycle backward or forward through tools in the current category.
+- `R`: cycle tool categories.
+- Elevation tool: left click raises terrain and right click lowers it.
+- River tool: left click starts a spring and right click removes the connected
+  river and lake system under the pointer.
 - `F`: create a spring on the hovered land tile and trace it downhill.
 - Arrow keys or `WASD`: move the camera.
 - Hold Shift while moving: pan four times faster.

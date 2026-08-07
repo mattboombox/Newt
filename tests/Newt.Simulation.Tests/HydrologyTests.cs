@@ -84,6 +84,32 @@ public sealed class HydrologyTests
                 world.GetRiverConnections(position) is not RiverConnection.None);
     }
 
+    [Fact]
+    public void RemovingConnectedFreshwaterRemovesEverySourceFeedingIt()
+    {
+        var world = CreateJoinedRivers();
+        Hydrology.TraceSpring(world, new GridPosition(4, 2));
+        Hydrology.TraceSpring(world, new GridPosition(3, 2));
+
+        Assert.Equal(2, world.SpringSources.Count);
+
+        var removed = Hydrology.RemoveFreshwaterAt(world, new GridPosition(4, 5));
+
+        Assert.True(removed);
+        Assert.Empty(world.SpringSources);
+        Assert.DoesNotContain(
+            AllPositions(world),
+            position => world.GetSurfaceWater(position) is not SurfaceWaterKind.None);
+    }
+
+    [Fact]
+    public void RemovingFreshwaterFromDryLandDoesNothing()
+    {
+        var world = CreateDescendingValley();
+
+        Assert.False(Hydrology.RemoveFreshwaterAt(world, new GridPosition(0, 0)));
+    }
+
     private static SimulationWorld CreateDescendingValley()
     {
         var world = new SimulationWorld(21, 20, Terrain.Ocean);
@@ -94,6 +120,25 @@ public sealed class HydrologyTests
             {
                 world.SetElevation(new GridPosition(x, y), elevation);
             }
+        }
+
+        TerrainClassifier.RebuildAll(world);
+        return world;
+    }
+
+    private static SimulationWorld CreateJoinedRivers()
+    {
+        var world = new SimulationWorld(9, 11, Terrain.Ocean);
+        for (var y = 1; y <= 9; y++)
+        {
+            for (var x = 2; x <= 6; x++)
+            {
+                world.SetElevation(new GridPosition(x, y), 0.9f);
+            }
+
+            var channelElevation = 0.9f - y * 0.07f;
+            world.SetElevation(new GridPosition(3, y), channelElevation);
+            world.SetElevation(new GridPosition(4, y), channelElevation);
         }
 
         TerrainClassifier.RebuildAll(world);

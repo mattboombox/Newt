@@ -35,7 +35,7 @@ public static class Hydrology
     {
         ArgumentNullException.ThrowIfNull(world);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumLength);
-        if (!world.Contains(source) || IsOcean(world.GetTerrain(source)) || world.GetElevation(source) <= 0)
+        if (!IsValidSource(world, source))
         {
             var invalid = new SpringResult(SpringTermination.InvalidSource, 0, source);
             world.LastCompletedSpring = invalid;
@@ -51,6 +51,7 @@ public static class Hydrology
 
         world.SetSurfaceWater(source, SurfaceWaterKind.River);
         world.SetWaterSurfaceElevation(source, null);
+        world.RegisterSpringSource(source, maximumLength);
         world.ActiveSprings.Add(new ActiveSpring(source, maximumLength));
         return new SpringResult(SpringTermination.Flowing, 1, source);
     }
@@ -73,6 +74,55 @@ public static class Hydrology
         }
 
         return world.LastCompletedSpring ?? started;
+    }
+
+    /// <summary>
+    /// Instantly redraws all freshwater from its persistent sources after landforms change.
+    /// </summary>
+    public static void RebuildFreshwater(SimulationWorld world)
+    {
+        ArgumentNullException.ThrowIfNull(world);
+        var sources = world.SpringSources.ToArray();
+        world.ClearFreshwater();
+        world.LastCompletedSpring = null;
+
+        foreach (var source in sources)
+        {
+            if (!IsValidSource(world, source.Position) ||
+                world.GetSurfaceWater(source.Position) is not SurfaceWaterKind.None)
+            {
+                continue;
+            }
+
+            world.SetSurfaceWater(source.Position, SurfaceWaterKind.River);
+            var spring = new ActiveSpring(source.Position, source.MaximumLength);
+            SpringResult? result;
+            do
+            {
+                result = AdvanceSpring(world, spring);
+            }
+            while (result is null);
+
+            world.LastCompletedSpring = result;
+        }
+
+        ClimateSystem.RebuildMoistureAndBiomes(world);
+    }
+
+    /// <summary>Removes the connected river and lake system at a freshwater tile.</summary>
+    public static bool RemoveFreshwaterAt(SimulationWorld world, GridPosition position)
+    {
+        ArgumentNullException.ThrowIfNull(world);
+        if (!world.Contains(position) ||
+            world.GetSurfaceWater(position) is SurfaceWaterKind.None)
+        {
+            return false;
+        }
+
+        var connectedWater = FindConnectedFreshwater(world, position);
+        world.RemoveSpringSources(connectedWater);
+        RebuildFreshwater(world);
+        return true;
     }
 
     internal static void AdvanceSprings(SimulationWorld world)
@@ -249,6 +299,45 @@ public static class Hydrology
         return null;
     }
 
+    private static HashSet<GridPosition> FindConnectedFreshwater(
+        SimulationWorld world,
+        GridPosition start)
+    {
+        var connected = new HashSet<GridPosition> { start };
+        var frontier = new Queue<GridPosition>();
+        frontier.Enqueue(start);
+
+        while (frontier.TryDequeue(out var current))
+        {
+            var currentWater = world.GetSurfaceWater(current);
+            var riverConnections = world.GetRiverConnections(current);
+            foreach (var direction in FlowDirections)
+            {
+                var neighbor = GetNeighbor(world, current, direction);
+                if (neighbor is null || connected.Contains(neighbor.Value) ||
+                    world.GetSurfaceWater(neighbor.Value) is SurfaceWaterKind.None)
+                {
+                    continue;
+                }
+
+                var followsChannel = (riverConnections &
+                    ToConnection(direction.X, direction.Y)) != 0;
+                var joinsLake = currentWater is SurfaceWaterKind.FreshwaterLake &&
+                    world.GetSurfaceWater(neighbor.Value) is SurfaceWaterKind.FreshwaterLake &&
+                    (direction.X == 0 || direction.Y == 0);
+                if (!followsChannel && !joinsLake)
+                {
+                    continue;
+                }
+
+                connected.Add(neighbor.Value);
+                frontier.Enqueue(neighbor.Value);
+            }
+        }
+
+        return connected;
+    }
+
     private static SpringResult Completed(SpringTermination termination, ActiveSpring spring) =>
         new(termination, spring.Visited.Count, spring.Current);
 
@@ -367,4 +456,7 @@ public static class Hydrology
         var result = value % modulus;
         return result < 0 ? result + modulus : result;
     }
+
+    private static bool IsValidSource(SimulationWorld world, GridPosition source) =>
+        world.Contains(source) && !IsOcean(world.GetTerrain(source)) && world.GetElevation(source) > 0;
 }

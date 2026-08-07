@@ -25,6 +25,7 @@ public sealed class SimulationWorld
     private readonly float[] _waterSurfaceElevations;
     private readonly RiverConnection[] _riverConnections;
     private readonly List<ActiveSpring> _activeSprings = [];
+    private readonly List<SpringSource> _springSources = [];
     private readonly int[] _occupants;
     private readonly CritterSpecies[] _species;
     private readonly GridPosition[] _positions;
@@ -139,6 +140,27 @@ public sealed class SimulationWorld
         _riverConnections[GetIndex(position)] |= connection;
 
     internal List<ActiveSpring> ActiveSprings => _activeSprings;
+
+    internal IReadOnlyList<SpringSource> SpringSources => _springSources;
+
+    internal void RegisterSpringSource(GridPosition position, int maximumLength)
+    {
+        if (_springSources.All(source => source.Position != position))
+        {
+            _springSources.Add(new SpringSource(position, maximumLength));
+        }
+    }
+
+    internal void RemoveSpringSources(IReadOnlySet<GridPosition> positions) =>
+        _springSources.RemoveAll(source => positions.Contains(source.Position));
+
+    internal void ClearFreshwater()
+    {
+        Array.Clear(_surfaceWater);
+        Array.Fill(_waterSurfaceElevations, float.NaN);
+        Array.Clear(_riverConnections);
+        _activeSprings.Clear();
+    }
 
     public CritterId AddCritter(CritterSpecies species, GridPosition position)
     {
