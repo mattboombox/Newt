@@ -246,9 +246,39 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         var depth = water is SurfaceWaterKind.FreshwaterLake
             ? $", depth {_world.GetWaterDepth(position):0.000}"
             : string.Empty;
-        return $"{position}: {terrain}, {GetEnvironmentLabel(position, terrain)}, {water}, " +
-            $"elevation {elevation:+0.000;-0.000;0.000}, temperature {_world.GetTemperature(position):0.000}, " +
-            $"moisture {_world.GetMoisture(position):0.000}{depth}";
+        var environment = GetEnvironmentLabel(position, terrain);
+        var identity = terrain is Terrain.Plains or Terrain.Hills or Terrain.Mountain
+            ? environment
+            : $"{terrain}, {environment}";
+        return $"{position}: {identity}, {water}, " +
+            $"elevation {elevation:+0.000;-0.000;0.000} ({GetElevationLabel(terrain, elevation)}), " +
+            $"temperature {_world.GetTemperature(position):0.000} ({_world.GetTemperatureBand(position)}), " +
+            $"moisture {_world.GetMoisture(position):0.000} ({_world.GetMoistureBand(position)}){depth}";
+    }
+
+    private static string GetElevationLabel(Terrain terrain, float elevation)
+    {
+        if (terrain is Terrain.DeepOcean)
+        {
+            return "Deep Ocean";
+        }
+
+        if (terrain is Terrain.Shallows)
+        {
+            return "Shallows";
+        }
+
+        if (terrain is Terrain.Ocean or Terrain.Ice)
+        {
+            return "Ocean";
+        }
+
+        if (elevation > 0.58f)
+        {
+            return "Mountain";
+        }
+
+        return elevation > 0.34f ? "Hills" : "Plains";
     }
 
     private string GetEnvironmentLabel(GridPosition position, Terrain terrain)

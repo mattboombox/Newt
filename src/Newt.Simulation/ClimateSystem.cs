@@ -8,6 +8,8 @@ public static class ClimateSystem
     internal const float FreezingThreshold = 0.18f;
     internal const float ColdThreshold = 0.33f;
     internal const float HotThreshold = 0.67f;
+    internal const float DryThreshold = 0.33f;
+    internal const float WetThreshold = 0.67f;
 
     /// <summary>
     /// Rebuilds temperature from latitude, elevation, and broad seeded variation.
@@ -69,6 +71,7 @@ public static class ClimateSystem
     internal static Biome ClassifyBiome(float temperature, float moisture)
     {
         var temperatureBand = ClassifyTemperature(temperature);
+        var moistureBand = ClassifyMoisture(moisture);
         if (temperatureBand is TemperatureBand.Freezing)
         {
             return Biome.Arctic;
@@ -76,30 +79,30 @@ public static class ClimateSystem
 
         if (temperatureBand is TemperatureBand.Cold)
         {
-            if (moisture < 0.33f)
+            return moistureBand switch
             {
-                return Biome.Tundra;
-            }
-
-            return moisture >= 0.67f ? Biome.Bog : Biome.Taiga;
+                MoistureBand.Dry => Biome.Tundra,
+                MoistureBand.Wet => Biome.Bog,
+                _ => Biome.Taiga,
+            };
         }
 
         if (temperatureBand is TemperatureBand.Temperate)
         {
-            if (moisture < 0.33f)
+            return moistureBand switch
             {
-                return Biome.Grassland;
-            }
-
-            return moisture >= 0.67f ? Biome.Swamp : Biome.Forest;
+                MoistureBand.Dry => Biome.Grassland,
+                MoistureBand.Wet => Biome.Swamp,
+                _ => Biome.Forest,
+            };
         }
 
-        if (moisture < 0.33f)
+        return moistureBand switch
         {
-            return Biome.Desert;
-        }
-
-        return moisture >= 0.67f ? Biome.Jungle : Biome.Arid;
+            MoistureBand.Dry => Biome.Desert,
+            MoistureBand.Wet => Biome.Jungle,
+            _ => Biome.Arid,
+        };
     }
 
     internal static TemperatureBand ClassifyTemperature(float temperature)
@@ -115,6 +118,16 @@ public static class ClimateSystem
         }
 
         return temperature < HotThreshold ? TemperatureBand.Temperate : TemperatureBand.Hot;
+    }
+
+    internal static MoistureBand ClassifyMoisture(float moisture)
+    {
+        if (moisture < DryThreshold)
+        {
+            return MoistureBand.Dry;
+        }
+
+        return moisture < WetThreshold ? MoistureBand.Normal : MoistureBand.Wet;
     }
 
     private static int[] CalculateDistances(SimulationWorld world, DistanceSource source)

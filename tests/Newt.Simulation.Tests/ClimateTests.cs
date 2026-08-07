@@ -141,6 +141,18 @@ public sealed class ClimateTests
         Assert.Equal(expected, ClimateSystem.ClassifyTemperature(temperature));
     }
 
+    [Theory]
+    [InlineData(0.00f, MoistureBand.Dry)]
+    [InlineData(0.32f, MoistureBand.Dry)]
+    [InlineData(0.33f, MoistureBand.Normal)]
+    [InlineData(0.66f, MoistureBand.Normal)]
+    [InlineData(0.67f, MoistureBand.Wet)]
+    [InlineData(1.00f, MoistureBand.Wet)]
+    public void SharedMoistureThresholdsMatchBiomeClassification(float moisture, MoistureBand expected)
+    {
+        Assert.Equal(expected, ClimateSystem.ClassifyMoisture(moisture));
+    }
+
     private static SimulationWorld CreateFlatLand(int width, int height, ulong seed)
     {
         var world = new SimulationWorld(width, height, Terrain.Plains, seed);

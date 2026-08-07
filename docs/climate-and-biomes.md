@@ -101,6 +101,17 @@ species.
 Inspection does not repeat the word "ocean": examples are `Shallows, Hot`,
 `Ocean, Cold`, `DeepOcean, Temperate`, and `Ice, Freezing`.
 
+The numeric inspection values also include their bands, such as
+`temperature 0.524 (Temperate), moisture 0.281 (Dry)`.
+
+Elevation uses the same readable treatment: `elevation +0.412 (Hills)`. Ocean
+tiles report Deep Ocean, Ocean, or Shallows; beaches report their underlying
+land elevation stage.
+
+For ordinary land, inspection shows the biome once and leaves Plains, Hills, or
+Mountain beside the elevation value. Ocean, beach, and ice terrain labels remain
+visible because they describe more than land elevation.
+
 ## Moisture
 
 Initial moisture is determined by:
@@ -119,6 +130,14 @@ moisture = baseline
 - Lakes create wider moist regions.
 - High exposed terrain receives a modest penalty.
 - Smooth seeded variation produces broad wet and dry regions.
+
+All systems share these moisture thresholds:
+
+| Value | Moisture band |
+| --- | --- |
+| `< 0.33` | Dry |
+| `0.33-0.67` | Normal |
+| `>= 0.67` | Wet |
 
 A simple static rain-shadow approximation may be added after the current climate
 field is evaluated. It would inspect terrain upwind during climate generation;

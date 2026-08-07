@@ -89,6 +89,9 @@ public sealed class SimulationWorld
     /// <summary>Returns normalized moisture, from zero (arid) to one (saturated).</summary>
     public float GetMoisture(GridPosition position) => _moisture[GetIndex(position)];
 
+    public MoistureBand GetMoistureBand(GridPosition position) =>
+        ClimateSystem.ClassifyMoisture(GetMoisture(position));
+
     public Biome GetBiome(GridPosition position) => _biomes[GetIndex(position)];
 
     public SurfaceWaterKind GetSurfaceWater(GridPosition position) =>
