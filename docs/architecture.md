@@ -32,6 +32,7 @@ therefore run without opening a window.
 - Critters use stable handles; gameplay code does not retain collection indexes.
 - One tile has at most one ordinary critter occupant.
 - World X coordinates wrap; Y coordinates do not.
+- World generation is a pure deterministic operation over explicit options.
 
 ## Data layout
 

@@ -1,0 +1,237 @@
+namespace Newt.Simulation;
+
+/// <summary>Builds deterministic, normalized temperature and moisture fields.</summary>
+public static class ClimateSystem
+{
+    private const int Unreachable = int.MaxValue;
+    internal const float SeaIceThreshold = 0.12f;
+    internal const float FreezingThreshold = 0.18f;
+    internal const float ColdThreshold = 0.33f;
+    internal const float HotThreshold = 0.67f;
+
+    /// <summary>
+    /// Rebuilds temperature from latitude, elevation, and broad seeded variation.
+    /// This is a static climate normal, not moment-to-moment weather.
+    /// </summary>
+    public static void RebuildTemperature(SimulationWorld world)
+    {
+        ArgumentNullException.ThrowIfNull(world);
+
+        for (var y = 0; y < world.Height; y++)
+        {
+            var latitude = Math.Abs((y + 0.5f) / world.Height * 2 - 1);
+            var latitudeWarmth = 1 - latitude;
+            for (var x = 0; x < world.Width; x++)
+            {
+                var position = new GridPosition(x, y);
+                var elevationCooling = Math.Max(0, world.GetElevation(position)) * 0.48f;
+                var variation = (FractalNoise(world, x, y, world.Seed ^ 0xA0761D6478BD642FUL) - 0.5f) * 0.18f;
+                var temperature = 0.06f + latitudeWarmth * 0.98f - elevationCooling + variation;
+                world.SetTemperature(position, temperature);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Rebuilds moisture and biome after physical terrain and surface water are known.
+    /// </summary>
+    public static void RebuildMoistureAndBiomes(SimulationWorld world)
+    {
+        ArgumentNullException.ThrowIfNull(world);
+
+        var oceanDistance = CalculateDistances(world, DistanceSource.Saltwater);
+        var riverDistance = CalculateDistances(world, DistanceSource.River);
+        var lakeDistance = CalculateDistances(world, DistanceSource.Lake);
+
+        for (var y = 0; y < world.Height; y++)
+        {
+            for (var x = 0; x < world.Width; x++)
+            {
+                var position = new GridPosition(x, y);
+                var index = y * world.Width + x;
+                var oceanInfluence = DistanceInfluence(oceanDistance[index], strength: 0.54f, reach: 11f);
+                var riverInfluence = DistanceInfluence(riverDistance[index], strength: 0.35f, reach: 3.5f);
+                var lakeInfluence = DistanceInfluence(lakeDistance[index], strength: 0.45f, reach: 6f);
+                var elevationPenalty = Math.Max(0, world.GetElevation(position)) * 0.18f;
+                var variation = (FractalNoise(world, x, y, world.Seed ^ 0xE7037ED1A0B428DBUL) - 0.5f) * 0.28f;
+                var moisture = 0.08f + oceanInfluence + riverInfluence + lakeInfluence + variation - elevationPenalty;
+                world.SetMoisture(position, moisture);
+
+                var terrain = world.GetTerrain(position);
+                var biome = IsSubmerged(terrain)
+                    ? Biome.None
+                    : ClassifyBiome(world.GetTemperature(position), world.GetMoisture(position));
+                world.SetBiome(position, biome);
+            }
+        }
+    }
+
+    internal static Biome ClassifyBiome(float temperature, float moisture)
+    {
+        var temperatureBand = ClassifyTemperature(temperature);
+        if (temperatureBand is TemperatureBand.Freezing)
+        {
+            return Biome.Arctic;
+        }
+
+        if (temperatureBand is TemperatureBand.Cold)
+        {
+            if (moisture < 0.33f)
+            {
+                return Biome.Tundra;
+            }
+
+            return moisture >= 0.67f ? Biome.Bog : Biome.Taiga;
+        }
+
+        if (temperatureBand is TemperatureBand.Temperate)
+        {
+            if (moisture < 0.33f)
+            {
+                return Biome.Grassland;
+            }
+
+            return moisture >= 0.67f ? Biome.Swamp : Biome.Forest;
+        }
+
+        if (moisture < 0.33f)
+        {
+            return Biome.Desert;
+        }
+
+        return moisture >= 0.67f ? Biome.Jungle : Biome.Arid;
+    }
+
+    internal static TemperatureBand ClassifyTemperature(float temperature)
+    {
+        if (temperature < FreezingThreshold)
+        {
+            return TemperatureBand.Freezing;
+        }
+
+        if (temperature < ColdThreshold)
+        {
+            return TemperatureBand.Cold;
+        }
+
+        return temperature < HotThreshold ? TemperatureBand.Temperate : TemperatureBand.Hot;
+    }
+
+    private static int[] CalculateDistances(SimulationWorld world, DistanceSource source)
+    {
+        var distances = new int[checked(world.Width * world.Height)];
+        Array.Fill(distances, Unreachable);
+        var frontier = new Queue<int>();
+
+        for (var y = 0; y < world.Height; y++)
+        {
+            for (var x = 0; x < world.Width; x++)
+            {
+                var position = new GridPosition(x, y);
+                if (!IsSource(world, position, source))
+                {
+                    continue;
+                }
+
+                var index = y * world.Width + x;
+                distances[index] = 0;
+                frontier.Enqueue(index);
+            }
+        }
+
+        while (frontier.TryDequeue(out var index))
+        {
+            var x = index % world.Width;
+            var y = index / world.Width;
+            TryVisit((x + 1) % world.Width, y);
+            TryVisit((x - 1 + world.Width) % world.Width, y);
+            if (y > 0)
+            {
+                TryVisit(x, y - 1);
+            }
+            if (y + 1 < world.Height)
+            {
+                TryVisit(x, y + 1);
+            }
+
+            void TryVisit(int neighborX, int neighborY)
+            {
+                var neighborIndex = neighborY * world.Width + neighborX;
+                if (distances[neighborIndex] != Unreachable)
+                {
+                    return;
+                }
+
+                distances[neighborIndex] = distances[index] + 1;
+                frontier.Enqueue(neighborIndex);
+            }
+        }
+
+        return distances;
+    }
+
+    private static bool IsSource(SimulationWorld world, GridPosition position, DistanceSource source) => source switch
+    {
+        DistanceSource.Saltwater => world.GetTerrain(position) is
+            Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows or Terrain.Ice,
+        DistanceSource.River => world.GetSurfaceWater(position) is SurfaceWaterKind.River,
+        DistanceSource.Lake => world.GetSurfaceWater(position) is SurfaceWaterKind.FreshwaterLake,
+        _ => false,
+    };
+
+    private static float DistanceInfluence(int distance, float strength, float reach) =>
+        distance == Unreachable ? 0 : strength * MathF.Exp(-distance / reach);
+
+    private static bool IsSubmerged(Terrain terrain) => terrain is
+        Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows or Terrain.Ice;
+
+    private static float FractalNoise(SimulationWorld world, int x, int y, ulong seed)
+    {
+        var broad = ValueNoise(world.Width, x, y, seed, scale: 32);
+        var regional = ValueNoise(world.Width, x, y, seed ^ 0x8EBC6AF09C88C6E3UL, scale: 13);
+        return broad * 0.68f + regional * 0.32f;
+    }
+
+    private static float ValueNoise(int worldWidth, int x, int y, ulong seed, int scale)
+    {
+        var horizontalCells = Math.Max(1, (int)Math.Ceiling(worldWidth / (double)scale));
+        var continuousX = x * horizontalCells / (float)worldWidth;
+        var cellX = (int)MathF.Floor(continuousX);
+        var cellY = y / scale;
+        var fractionX = Smooth(continuousX - cellX);
+        var fractionY = Smooth((y % scale) / (float)scale);
+        var nextCellX = (cellX + 1) % horizontalCells;
+
+        var northWest = HashToUnit(seed, cellX, cellY);
+        var northEast = HashToUnit(seed, nextCellX, cellY);
+        var southWest = HashToUnit(seed, cellX, cellY + 1);
+        var southEast = HashToUnit(seed, nextCellX, cellY + 1);
+        var north = Lerp(northWest, northEast, fractionX);
+        var south = Lerp(southWest, southEast, fractionX);
+        return Lerp(north, south, fractionY);
+    }
+
+    private static float HashToUnit(ulong seed, int x, int y)
+    {
+        var value = seed;
+        value ^= (ulong)(uint)x * 0x9E3779B185EBCA87UL;
+        value ^= (ulong)(uint)y * 0xC2B2AE3D27D4EB4FUL;
+        value ^= value >> 30;
+        value *= 0xBF58476D1CE4E5B9UL;
+        value ^= value >> 27;
+        value *= 0x94D049BB133111EBUL;
+        value ^= value >> 31;
+        return (value >> 40) * (1f / (1 << 24));
+    }
+
+    private static float Smooth(float value) => value * value * (3 - 2 * value);
+
+    private static float Lerp(float start, float end, float amount) => start + (end - start) * amount;
+
+    private enum DistanceSource : byte
+    {
+        Saltwater,
+        River,
+        Lake,
+    }
+}

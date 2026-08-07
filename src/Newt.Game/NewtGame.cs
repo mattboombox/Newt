@@ -8,23 +8,35 @@ namespace Newt.Game;
 /// <summary>MonoGame host responsible only for input, timing, and presentation.</summary>
 public sealed class NewtGame : Microsoft.Xna.Framework.Game
 {
-    private const int TileSize = 8;
+    private static readonly int[] ZoomLevels = [2, 4, 8, 16, 24];
     private static readonly TimeSpan SimulationStep = TimeSpan.FromSeconds(1d / SimulationWorld.TicksPerSecond);
     private readonly GraphicsDeviceManager _graphics;
-    private readonly SimulationWorld _world;
+    private SimulationWorld _world = null!;
+    private WorldPreset _preset = WorldPreset.Standard;
+    private ulong _seed = 20260806;
     private SpriteBatch? _spriteBatch;
     private Texture2D? _pixel;
     private TimeSpan _accumulator;
+    private KeyboardState _previousKeyboard;
+    private MouseState _previousMouse;
+    private int _cameraX;
+    private int _cameraY;
+    private int _zoomIndex = 2;
 
     public NewtGame()
     {
-        _graphics = new GraphicsDeviceManager(this);
+        _graphics = new GraphicsDeviceManager(this)
+        {
+            PreferredBackBufferWidth = 960,
+            PreferredBackBufferHeight = 640,
+        };
         Content.RootDirectory = "Content";
         IsMouseVisible = true;
-        _world = CreateDemonstrationWorld();
-        _graphics.PreferredBackBufferWidth = _world.Width * TileSize;
-        _graphics.PreferredBackBufferHeight = _world.Height * TileSize;
+        Window.AllowUserResizing = true;
+        GenerateWorld();
     }
+
+    private int TileSize => ZoomLevels[_zoomIndex];
 
     protected override void LoadContent()
     {
@@ -35,12 +47,17 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
 
     protected override void Update(GameTime gameTime)
     {
-        if (GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed ||
-            Keyboard.GetState().IsKeyDown(Keys.Escape))
+        var keyboard = Keyboard.GetState();
+        var mouse = Mouse.GetState();
+        if (GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed || keyboard.IsKeyDown(Keys.Escape))
         {
             Exit();
             return;
         }
+
+        HandleWorldShortcuts(keyboard, mouse);
+        HandleCamera(keyboard, mouse);
+        UpdateWindowTitle(mouse);
 
         _accumulator += gameTime.ElapsedGameTime;
         while (_accumulator >= SimulationStep)
@@ -49,6 +66,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             _accumulator -= SimulationStep;
         }
 
+        _previousKeyboard = keyboard;
+        _previousMouse = mouse;
         base.Update(gameTime);
     }
 
@@ -60,22 +79,49 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             return;
         }
 
+        var visibleColumns = GraphicsDevice.Viewport.Width / TileSize + 2;
+        var visibleRows = GraphicsDevice.Viewport.Height / TileSize + 2;
         _spriteBatch.Begin(samplerState: SamplerState.PointClamp);
-        for (var y = 0; y < _world.Height; y++)
+        for (var screenY = 0; screenY < visibleRows; screenY++)
         {
-            for (var x = 0; x < _world.Width; x++)
+            var worldY = _cameraY + screenY;
+            if (worldY >= _world.Height)
             {
-                var terrain = _world.GetTerrain(new GridPosition(x, y));
-                _spriteBatch.Draw(_pixel, new Rectangle(x * TileSize, y * TileSize, TileSize, TileSize), GetTerrainColor(terrain));
+                break;
+            }
+
+            for (var screenX = 0; screenX < visibleColumns; screenX++)
+            {
+                var worldX = (_cameraX + screenX) % _world.Width;
+                var position = new GridPosition(worldX, worldY);
+                var terrain = _world.GetTerrain(position);
+                var biome = _world.GetBiome(position);
+                var temperatureBand = _world.GetTemperatureBand(position);
+                _spriteBatch.Draw(
+                    _pixel,
+                    new Rectangle(screenX * TileSize, screenY * TileSize, TileSize, TileSize),
+                    GetTerrainColor(terrain, biome, temperatureBand));
+                var water = _world.GetSurfaceWater(position);
+                if (water is not SurfaceWaterKind.None)
+                {
+                    DrawSurfaceWater(screenX, screenY, position, water);
+                }
             }
         }
 
         for (var index = 0; index < _world.CritterCount; index++)
         {
             var critter = _world.GetCritter(index);
+            var screenX = WrappedScreenX(critter.Position.X);
+            var screenY = critter.Position.Y - _cameraY;
+            if (screenX < 0 || screenX >= visibleColumns || screenY < 0 || screenY >= visibleRows)
+            {
+                continue;
+            }
+
             _spriteBatch.Draw(
                 _pixel,
-                new Rectangle(critter.Position.X * TileSize, critter.Position.Y * TileSize, TileSize, TileSize),
+                new Rectangle(screenX * TileSize, screenY * TileSize, TileSize, TileSize),
                 GetCritterColor(critter.Species));
         }
 
@@ -83,43 +129,339 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         base.Draw(gameTime);
     }
 
-    private static SimulationWorld CreateDemonstrationWorld()
+    private void HandleWorldShortcuts(KeyboardState keyboard, MouseState mouse)
     {
-        var world = new SimulationWorld(80, 48, Terrain.Ocean, seed: 20260805);
-        for (var y = 0; y < world.Height; y++)
+        if (WasPressed(keyboard, Keys.D1))
         {
-            for (var x = 0; x < world.Width; x++)
+            _preset = WorldPreset.Micro;
+            GenerateWorld();
+        }
+        else if (WasPressed(keyboard, Keys.D2))
+        {
+            _preset = WorldPreset.Standard;
+            GenerateWorld();
+        }
+        else if (WasPressed(keyboard, Keys.D3))
+        {
+            _preset = WorldPreset.Large;
+            GenerateWorld();
+        }
+        else if (WasPressed(keyboard, Keys.D4))
+        {
+            _preset = WorldPreset.Ring;
+            GenerateWorld();
+        }
+        else if (WasPressed(keyboard, Keys.R))
+        {
+            _seed++;
+            GenerateWorld();
+        }
+        else if (WasPressed(keyboard, Keys.U))
+        {
+            var position = ScreenToWorld(mouse.X, mouse.Y);
+            if (position is not null)
             {
-                if (y > 27)
+                Geology.ApplyRadialUplift(_world, position.Value, radius: 7, strength: 0.36f);
+            }
+        }
+        else if (WasPressed(keyboard, Keys.F))
+        {
+            var position = ScreenToWorld(mouse.X, mouse.Y);
+            if (position is not null)
+            {
+                Hydrology.StartSpring(_world, position.Value);
+            }
+        }
+    }
+
+    private void HandleCamera(KeyboardState keyboard, MouseState mouse)
+    {
+        var panStep = keyboard.IsKeyDown(Keys.LeftShift) || keyboard.IsKeyDown(Keys.RightShift) ? 4 : 1;
+        if (keyboard.IsKeyDown(Keys.A) || keyboard.IsKeyDown(Keys.Left))
+        {
+            _cameraX -= panStep;
+        }
+        if (keyboard.IsKeyDown(Keys.D) || keyboard.IsKeyDown(Keys.Right))
+        {
+            _cameraX += panStep;
+        }
+        if (keyboard.IsKeyDown(Keys.W) || keyboard.IsKeyDown(Keys.Up))
+        {
+            _cameraY -= panStep;
+        }
+        if (keyboard.IsKeyDown(Keys.S) || keyboard.IsKeyDown(Keys.Down))
+        {
+            _cameraY += panStep;
+        }
+
+        if (mouse.ScrollWheelValue > _previousMouse.ScrollWheelValue)
+        {
+            _zoomIndex = Math.Min(_zoomIndex + 1, ZoomLevels.Length - 1);
+        }
+        else if (mouse.ScrollWheelValue < _previousMouse.ScrollWheelValue)
+        {
+            _zoomIndex = Math.Max(_zoomIndex - 1, 0);
+        }
+
+        _cameraX = Mod(_cameraX, _world.Width);
+        var visibleRows = Math.Max(1, GraphicsDevice.Viewport.Height / TileSize);
+        _cameraY = Math.Clamp(_cameraY, 0, Math.Max(0, _world.Height - visibleRows));
+    }
+
+    private void UpdateWindowTitle(MouseState mouse)
+    {
+        var position = ScreenToWorld(mouse.X, mouse.Y);
+        var inspected = position is null
+            ? "outside world"
+            : FormatInspection(position.Value);
+        var hydrology = _world.ActiveSpringCount > 0
+            ? $"{_world.ActiveSpringCount} spring(s) flowing"
+            : _world.LastCompletedSpring is { } completed
+                ? $"spring {completed.Termination}, {completed.RiverTileCount} tiles"
+                : "no spring traced";
+        Window.Title = $"Newt | {_preset.Name} {_world.Width}x{_world.Height} | seed {_seed} | tick {_world.Tick} | {inspected} | {hydrology}";
+    }
+
+    private GridPosition? ScreenToWorld(int screenX, int screenY)
+    {
+        if (screenX < 0 || screenY < 0)
+        {
+            return null;
+        }
+
+        var y = _cameraY + screenY / TileSize;
+        if (y >= _world.Height)
+        {
+            return null;
+        }
+
+        return new GridPosition(Mod(_cameraX + screenX / TileSize, _world.Width), y);
+    }
+
+    private string FormatInspection(GridPosition position)
+    {
+        var elevation = _world.GetElevation(position);
+        var terrain = _world.GetTerrain(position);
+        var water = _world.GetSurfaceWater(position);
+        var depth = water is SurfaceWaterKind.FreshwaterLake
+            ? $", depth {_world.GetWaterDepth(position):0.000}"
+            : string.Empty;
+        return $"{position}: {terrain}, {GetEnvironmentLabel(position, terrain)}, {water}, " +
+            $"elevation {elevation:+0.000;-0.000;0.000}, temperature {_world.GetTemperature(position):0.000}, " +
+            $"moisture {_world.GetMoisture(position):0.000}{depth}";
+    }
+
+    private string GetEnvironmentLabel(GridPosition position, Terrain terrain)
+    {
+        if (terrain is Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows or Terrain.Ice)
+        {
+            return _world.GetTemperatureBand(position).ToString();
+        }
+
+        return _world.GetBiome(position).ToString();
+    }
+
+    private void GenerateWorld()
+    {
+        _world = WorldGenerator.Generate(new WorldGenerationOptions(_preset, _seed));
+        _cameraX = 0;
+        _cameraY = 0;
+        _accumulator = TimeSpan.Zero;
+        AddFirstCritter(CritterSpecies.Plankton, Terrain.Ocean, Terrain.DeepOcean);
+        AddFirstCritter(CritterSpecies.Crab, Terrain.Shallows, Terrain.Beach);
+        AddFirstCritter(CritterSpecies.Ape, Terrain.Plains, Terrain.Beach);
+    }
+
+    private void AddFirstCritter(CritterSpecies species, params Terrain[] allowedTerrains)
+    {
+        for (var y = 0; y < _world.Height; y++)
+        {
+            for (var x = 0; x < _world.Width; x++)
+            {
+                var position = new GridPosition(x, y);
+                if (!_world.IsOccupied(position) && allowedTerrains.Contains(_world.GetTerrain(position)))
                 {
-                    world.SetTerrain(new GridPosition(x, y), Terrain.Grass);
-                }
-                else if (y is 26 or 27)
-                {
-                    world.SetTerrain(new GridPosition(x, y), Terrain.Shallows);
+                    _world.AddCritter(species, position);
+                    return;
                 }
             }
         }
-
-        world.AddCritter(CritterSpecies.Plankton, new GridPosition(20, 12));
-        world.AddCritter(CritterSpecies.Crab, new GridPosition(30, 26));
-        world.AddCritter(CritterSpecies.Ape, new GridPosition(40, 36));
-        return world;
     }
 
-    private static Color GetTerrainColor(Terrain terrain) => terrain switch
+    private bool WasPressed(KeyboardState current, Keys key) => current.IsKeyDown(key) && _previousKeyboard.IsKeyUp(key);
+
+    private int WrappedScreenX(int worldX)
     {
-        Terrain.Ocean => new Color(24, 68, 128),
-        Terrain.Shallows => new Color(66, 145, 180),
-        Terrain.Grass => new Color(55, 130, 70),
+        var difference = Mod(worldX - _cameraX, _world.Width);
+        return difference;
+    }
+
+    private void DrawSurfaceWater(
+        int screenX,
+        int screenY,
+        GridPosition worldPosition,
+        SurfaceWaterKind water)
+    {
+        if (_spriteBatch is null || _pixel is null)
+        {
+            return;
+        }
+
+        var color = GetSurfaceWaterColor(water);
+        var originX = screenX * TileSize;
+        var originY = screenY * TileSize;
+        if (water is SurfaceWaterKind.FreshwaterLake)
+        {
+            _spriteBatch.Draw(_pixel, new Rectangle(originX, originY, TileSize, TileSize), color);
+            return;
+        }
+
+        var width = Math.Max(1, TileSize / 3);
+        var centerX = originX + TileSize / 2;
+        var centerY = originY + TileSize / 2;
+        _spriteBatch.Draw(_pixel, new Rectangle(centerX - width / 2, centerY - width / 2, width, width), color);
+
+        var connections = _world.GetRiverConnections(worldPosition);
+        DrawRiverConnections(connections, originX, originY, centerX, centerY, width, color);
+    }
+
+    private void DrawRiverConnections(
+        RiverConnection connections,
+        int originX,
+        int originY,
+        int centerX,
+        int centerY,
+        int width,
+        Color color)
+    {
+        if (_spriteBatch is null || _pixel is null)
+        {
+            return;
+        }
+
+        if ((connections & RiverConnection.North) != 0)
+        {
+            _spriteBatch.Draw(_pixel, new Rectangle(centerX - width / 2, originY, width, centerY - originY + 1), color);
+        }
+        if ((connections & RiverConnection.East) != 0)
+        {
+            _spriteBatch.Draw(_pixel, new Rectangle(centerX, centerY - width / 2, originX + TileSize - centerX, width), color);
+        }
+        if ((connections & RiverConnection.South) != 0)
+        {
+            _spriteBatch.Draw(_pixel, new Rectangle(centerX - width / 2, centerY, width, originY + TileSize - centerY), color);
+        }
+        if ((connections & RiverConnection.West) != 0)
+        {
+            _spriteBatch.Draw(_pixel, new Rectangle(originX, centerY - width / 2, centerX - originX + 1, width), color);
+        }
+        if ((connections & RiverConnection.NorthEast) != 0)
+        {
+            _spriteBatch.Draw(_pixel, new Rectangle(centerX, centerY - width / 2, originX + TileSize - centerX, width), color);
+            _spriteBatch.Draw(_pixel, new Rectangle(originX + TileSize - width, originY, width, centerY - originY + 1), color);
+        }
+        if ((connections & RiverConnection.SouthEast) != 0)
+        {
+            _spriteBatch.Draw(_pixel, new Rectangle(centerX, centerY - width / 2, originX + TileSize - centerX, width), color);
+            _spriteBatch.Draw(_pixel, new Rectangle(originX + TileSize - width, centerY, width, originY + TileSize - centerY), color);
+        }
+        if ((connections & RiverConnection.SouthWest) != 0)
+        {
+            _spriteBatch.Draw(_pixel, new Rectangle(originX, centerY - width / 2, centerX - originX + 1, width), color);
+            _spriteBatch.Draw(_pixel, new Rectangle(originX, centerY, width, originY + TileSize - centerY), color);
+        }
+        if ((connections & RiverConnection.NorthWest) != 0)
+        {
+            _spriteBatch.Draw(_pixel, new Rectangle(originX, centerY - width / 2, centerX - originX + 1, width), color);
+            _spriteBatch.Draw(_pixel, new Rectangle(originX, originY, width, centerY - originY + 1), color);
+        }
+    }
+
+    private static int Mod(int value, int modulus)
+    {
+        var result = value % modulus;
+        return result < 0 ? result + modulus : result;
+    }
+
+    private static Color GetTerrainColor(
+        Terrain terrain,
+        Biome biome,
+        TemperatureBand temperatureBand) => terrain switch
+    {
+        Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows => GetOceanColor(terrain, temperatureBand),
+        Terrain.Beach => new Color(215, 195, 135),
+        Terrain.Plains => biome switch
+        {
+            Biome.Arctic => new Color(224, 233, 232),
+            Biome.Tundra => new Color(137, 147, 124),
+            Biome.Taiga => new Color(51, 92, 68),
+            Biome.Bog => new Color(65, 82, 70),
+            Biome.Grassland => new Color(112, 145, 68),
+            Biome.Forest => new Color(42, 112, 62),
+            Biome.Swamp => new Color(35, 91, 67),
+            Biome.Desert => new Color(205, 172, 94),
+            Biome.Arid => new Color(168, 145, 74),
+            Biome.Jungle => new Color(25, 105, 53),
+            _ => new Color(110, 110, 100),
+        },
+        Terrain.Hills => biome switch
+        {
+            Biome.Arctic => new Color(205, 218, 218),
+            Biome.Tundra => new Color(112, 121, 105),
+            Biome.Taiga => new Color(45, 76, 60),
+            Biome.Bog => new Color(57, 70, 62),
+            Biome.Grassland => new Color(91, 117, 65),
+            Biome.Forest => new Color(45, 91, 56),
+            Biome.Swamp => new Color(42, 78, 62),
+            Biome.Desert => new Color(148, 122, 77),
+            Biome.Arid => new Color(129, 112, 67),
+            Biome.Jungle => new Color(35, 82, 48),
+            _ => new Color(115, 115, 105),
+        },
+        Terrain.Mountain => biome is Biome.Arctic
+            ? new Color(210, 222, 225)
+            : new Color(78, 72, 68),
+        Terrain.Ice => new Color(165, 220, 235),
         _ => Color.Magenta,
     };
+
+    private static Color GetOceanColor(Terrain terrain, TemperatureBand temperatureBand)
+    {
+        var baseColor = terrain switch
+        {
+            Terrain.DeepOcean => new Color(10, 37, 83),
+            Terrain.Ocean => new Color(24, 68, 128),
+            Terrain.Shallows => new Color(66, 145, 180),
+            _ => Color.Magenta,
+        };
+
+        var brightness = temperatureBand switch
+        {
+            TemperatureBand.Freezing => 0.90f,
+            TemperatureBand.Cold => 0.95f,
+            TemperatureBand.Hot => 1.06f,
+            _ => 1f,
+        };
+        return ScaleColor(baseColor, brightness);
+    }
+
+    private static Color ScaleColor(Color color, float brightness) => new(
+        Math.Clamp((int)MathF.Round(color.R * brightness), 0, 255),
+        Math.Clamp((int)MathF.Round(color.G * brightness), 0, 255),
+        Math.Clamp((int)MathF.Round(color.B * brightness), 0, 255));
 
     private static Color GetCritterColor(CritterSpecies species) => species switch
     {
         CritterSpecies.Plankton => new Color(160, 255, 180),
         CritterSpecies.Crab => new Color(255, 80, 80),
         CritterSpecies.Ape => new Color(145, 105, 70),
+        _ => Color.Magenta,
+    };
+
+    private static Color GetSurfaceWaterColor(SurfaceWaterKind water) => water switch
+    {
+        SurfaceWaterKind.River => new Color(65, 175, 235),
+        SurfaceWaterKind.FreshwaterLake => new Color(50, 135, 205),
         _ => Color.Magenta,
     };
 }
