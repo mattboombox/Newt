@@ -17,30 +17,84 @@ public static class TerrainClassifier
         ArgumentNullException.ThrowIfNull(world);
         ClimateSystem.RebuildTemperature(world);
 
+        var ocean = FindOceanConnectedTiles(world);
+
         for (var y = 0; y < world.Height; y++)
         {
             for (var x = 0; x < world.Width; x++)
             {
                 var position = new GridPosition(x, y);
-                world.SetTerrain(position, ClassifyLandform(
-                    world.GetElevation(position),
-                    world.GetTemperature(position)));
+                var index = y * world.Width + x;
+                world.SetTerrain(position, ocean[index]
+                    ? ClassifyOcean(world.SeaLevel - world.GetElevation(position), world.GetTemperature(position))
+                    : ClassifyDryLand(world.GetElevation(position)));
             }
         }
 
         AddCoasts(world);
     }
 
-    private static Terrain ClassifyLandform(float elevation, float temperature)
+    private static bool[] FindOceanConnectedTiles(SimulationWorld world)
     {
-        if (elevation < -0.20)
+        var connected = new bool[checked(world.Width * world.Height)];
+        var frontier = new Queue<GridPosition>();
+
+        TryVisit(world.OceanSeed.X, world.OceanSeed.Y);
+
+        while (frontier.TryDequeue(out var current))
+        {
+            TryVisit((current.X + 1) % world.Width, current.Y);
+            TryVisit((current.X - 1 + world.Width) % world.Width, current.Y);
+            if (current.Y > 0)
+            {
+                TryVisit(current.X, current.Y - 1);
+            }
+            if (current.Y + 1 < world.Height)
+            {
+                TryVisit(current.X, current.Y + 1);
+            }
+        }
+
+        return connected;
+
+        void TryVisit(int x, int y)
+        {
+            var index = y * world.Width + x;
+            if (connected[index] || world.GetElevation(new GridPosition(x, y)) > world.SeaLevel)
+            {
+                return;
+            }
+
+            connected[index] = true;
+            frontier.Enqueue(new GridPosition(x, y));
+        }
+    }
+
+    private static Terrain ClassifyOcean(float depth, float temperature)
+    {
+        if (depth > 0.20f)
         {
             return Terrain.DeepOcean;
         }
 
+        return temperature < ClimateSystem.SeaIceThreshold ? Terrain.Ice : Terrain.Ocean;
+    }
+
+    private static Terrain ClassifyDryLand(float elevation)
+    {
+        if (elevation < -0.45f)
+        {
+            return Terrain.Trench;
+        }
+
+        if (elevation < -0.20f)
+        {
+            return Terrain.Canyon;
+        }
+
         if (elevation <= 0)
         {
-            return temperature < ClimateSystem.SeaIceThreshold ? Terrain.Ice : Terrain.Ocean;
+            return Terrain.Lowlands;
         }
 
         if (elevation > 0.58)
@@ -110,5 +164,6 @@ public static class TerrainClassifier
     }
 
     private static bool IsLand(Terrain terrain) => terrain is
-        Terrain.Plains or Terrain.Hills or Terrain.Mountain or Terrain.Beach;
+        Terrain.Plains or Terrain.Hills or Terrain.Mountain or Terrain.Beach or
+        Terrain.Lowlands or Terrain.Canyon or Terrain.Trench;
 }

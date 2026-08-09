@@ -3,6 +3,7 @@ namespace Newt.Simulation;
 /// <summary>Builds deterministic, normalized temperature and moisture fields.</summary>
 public static class ClimateSystem
 {
+    public const float GlobalClimateEditStep = 0.05f;
     private const int Unreachable = int.MaxValue;
     internal const float SeaIceThreshold = 0.12f;
     internal const float FreezingThreshold = 0.18f;
@@ -28,7 +29,8 @@ public static class ClimateSystem
                 var position = new GridPosition(x, y);
                 var elevationCooling = Math.Max(0, world.GetElevation(position)) * 0.48f;
                 var variation = (FractalNoise(world, x, y, world.Seed ^ 0xA0761D6478BD642FUL) - 0.5f) * 0.18f;
-                var temperature = 0.06f + latitudeWarmth * 0.98f - elevationCooling + variation;
+                var temperature = 0.06f + latitudeWarmth * 0.98f - elevationCooling + variation +
+                    world.GlobalTemperatureOffset;
                 world.SetTemperature(position, temperature);
             }
         }
@@ -56,7 +58,8 @@ public static class ClimateSystem
                 var lakeInfluence = DistanceInfluence(lakeDistance[index], strength: 0.45f, reach: 6f);
                 var elevationPenalty = Math.Max(0, world.GetElevation(position)) * 0.18f;
                 var variation = (FractalNoise(world, x, y, world.Seed ^ 0xE7037ED1A0B428DBUL) - 0.5f) * 0.28f;
-                var moisture = 0.08f + oceanInfluence + riverInfluence + lakeInfluence + variation - elevationPenalty;
+                var moisture = 0.08f + oceanInfluence + riverInfluence + lakeInfluence + variation - elevationPenalty +
+                    world.GlobalMoistureOffset;
                 world.SetMoisture(position, moisture);
 
                 var terrain = world.GetTerrain(position);
@@ -128,6 +131,35 @@ public static class ClimateSystem
         }
 
         return moisture < WetThreshold ? MoistureBand.Normal : MoistureBand.Wet;
+    }
+
+    public static void AdjustGlobalTemperature(SimulationWorld world, float amount)
+    {
+        ValidateGlobalAdjustment(world, amount);
+        world.GlobalTemperatureOffset = Math.Clamp(
+            world.GlobalTemperatureOffset + amount,
+            SimulationWorld.MinimumGlobalClimateOffset,
+            SimulationWorld.MaximumGlobalClimateOffset);
+        TerrainClassifier.RebuildAll(world);
+    }
+
+    public static void AdjustGlobalMoisture(SimulationWorld world, float amount)
+    {
+        ValidateGlobalAdjustment(world, amount);
+        world.GlobalMoistureOffset = Math.Clamp(
+            world.GlobalMoistureOffset + amount,
+            SimulationWorld.MinimumGlobalClimateOffset,
+            SimulationWorld.MaximumGlobalClimateOffset);
+        RebuildMoistureAndBiomes(world);
+    }
+
+    private static void ValidateGlobalAdjustment(SimulationWorld world, float amount)
+    {
+        ArgumentNullException.ThrowIfNull(world);
+        if (amount == 0 || !float.IsFinite(amount))
+        {
+            throw new ArgumentOutOfRangeException(nameof(amount));
+        }
     }
 
     private static int[] CalculateDistances(SimulationWorld world, DistanceSource source)

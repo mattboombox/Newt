@@ -13,12 +13,90 @@ edge receives almost none. World X coordinates wrap, so a change at the left edg
 continues naturally at the right edge. Terrain and coastlines are reclassified
 immediately.
 
-`Q` and `E` cycle between the Elevation and River selections within the Terrain
+`Q` and `E` cycle between Elevation, SeaLevel, OceanSeed, Temperature,
+Moisture, Volcano, and River within the Terrain
 category. `R` cycles tool categories. The selection structure is ready for later
 event, spawning, and inspection categories.
 
-This is a deliberately small primitive. Tectonic ridges, island chains, and
-volcanic cones can later be composed from sequences of localized uplifts.
+Temperature and Moisture are global climate tools. Left click adds 0.05 and right
+click subtracts 0.05 from the corresponding world-wide climate offset. Each
+offset is capped to the range -1.00 through +1.00, while final per-tile climate
+values remain normalized from zero to one. Temperature changes can create or melt
+sea ice; both tools immediately rebuild biome classifications.
+
+Elevation, SeaLevel, Temperature, and Moisture may also be adjusted continuously
+by holding the corresponding mouse button. Repetition starts after a short delay;
+River and OceanSeed remain deliberate single-click actions.
+
+## Sea-level tool
+
+The SeaLevel tool uses the same mouse buttons as Elevation: left click raises the
+global sea surface by 0.01 and right click lowers it by 0.01. Ground elevation is
+not changed. Each world has one persistent saltwater seed, initially at the map
+center. Sea water flood-fills outward from that tile wherever ground is at or
+below sea level. The OceanSeed tool moves it to the clicked tile and immediately
+rebuilds saltwater and freshwater. If the seed itself is above sea level there is
+no ocean until the sea rises above it or the seed is moved. East and west wrap,
+matching the world geometry.
+
+Exposed seabed keeps its elevation and becomes Lowlands, Canyon, or Trench as it
+gets progressively deeper below the original zero datum. Existing biome rules are
+used on these dry landforms. Lakes are not created from rainfall or automatically
+filled merely because a depression is below sea level.
+
+Sea level is limited to the range -1.0 through +1.0. Ground elevation is limited
+to -1.0 through +2.0. The mountain ceiling is high enough for elevation cooling to produce
+Arctic mountain climate even at the equator.
+
+Closed river basins form bounded terminal lakes instead of falling back to a
+single wet tile. A terminal lake can cover at most 128 tiles and rise no more than
+0.12 elevation units above its sink. This also applies below sea level, allowing
+deep landlocked freshwater lakes without letting one spring instantly fill a
+continent-sized depression.
+
+Freshwater lake rendering darkens strongly with local depth. The lake remains one
+water body and biome influence; the gradient is a visual depth cue rather than a
+separate shallow/deep freshwater terrain classification.
+
+## Volcanism and surface recovery
+
+Volcanic material is a temporary surface-cover layer rather than a biome or
+landform replacement in simulation state:
+
+```text
+tile
+  elevation: +0.412
+  terrain: Hills
+  biome: Forest
+  surface cover: Lava
+```
+
+Lava visually and ecologically covers the biome, raises ground elevation by a
+small randomized amount, then cools to Stone. Stone eventually clears to reveal
+the climate-derived biome that remained underneath. No separate soil or pioneer
+stage is modeled. Exposed Stone retains its landform label and shading, producing
+names such as `Stone Plains`, `Stone Hills`, `Stone Canyon`, and `Stone Trench`.
+Deeper landforms use progressively darker gray. Stone on a mountain uses the
+normal Mountain or Snowy Mountain presentation because `Stone Mountain` would be
+redundant.
+
+An eruption combines one to three animated directional flow lobes with one to
+three immediate airborne chunks. Each lobe advances one tile every five ticks,
+preferring low ground while retaining directional momentum and a small random
+turning chance. This approximates downhill lava without a world-scale fluid
+solver. Airborne chunks land farther from the vent and create small irregular
+outcrops. Deposits on submerged terrain cool three times faster.
+
+Active volcanoes erupt periodically and eventually become Dormant. Dormant vents
+can reawaken or become extinct. Extinction removes the volcano entity and leaves
+a mountain at its former vent. Before removal it has a chance to spawn a new
+Active vent on an adjacent tile, continuing its preferred direction and gradually
+building a mountain ridge. Only active lava, stone, volcanoes, and flow fronts are
+processed each tick; the system does not scan unaffected world tiles.
+
+Warm, wet stone recovers faster than cold, dry stone. A river on or beside Stone
+accelerates its remaining recovery approximately fourfold. Lava and Stone block
+critter occupation until the underlying biome is exposed again.
 
 ## Basin-shaped lakes
 
@@ -57,8 +135,8 @@ neighbor and stops when it:
 - Encounters a closed basin.
 - Reaches its safety length limit.
 
-The result and river length appear in the window title. If the bounded outlet
-search cannot escape a depression, it becomes a terminal inland lake.
+If the bounded outlet search cannot escape a depression, it becomes a terminal
+inland lake.
 
 Completed springs retain their source tile as persistent state. If an uplift
 changes a tile occupied by a river or lake, freshwater is cleared and every

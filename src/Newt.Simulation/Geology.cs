@@ -3,6 +3,39 @@ namespace Newt.Simulation;
 /// <summary>Elevation-changing geological operations used by tools and events.</summary>
 public static class Geology
 {
+    public const float SeaLevelEditStep = 0.01f;
+
+    /// <summary>Moves the global ocean surface and rebuilds ocean connectivity and freshwater.</summary>
+    public static void ChangeSeaLevel(SimulationWorld world, float amount)
+    {
+        ArgumentNullException.ThrowIfNull(world);
+        if (amount == 0 || !float.IsFinite(amount))
+        {
+            throw new ArgumentOutOfRangeException(nameof(amount));
+        }
+
+        world.SeaLevel = Math.Clamp(
+            world.SeaLevel + amount,
+            SimulationWorld.MinimumSeaLevel,
+            SimulationWorld.MaximumSeaLevel);
+        TerrainClassifier.RebuildLandforms(world);
+        Hydrology.RebuildFreshwater(world);
+    }
+
+    /// <summary>Moves the world's single saltwater source and rebuilds water connectivity.</summary>
+    public static void MoveOceanSeed(SimulationWorld world, GridPosition position)
+    {
+        ArgumentNullException.ThrowIfNull(world);
+        if (!world.Contains(position))
+        {
+            throw new ArgumentOutOfRangeException(nameof(position));
+        }
+
+        world.OceanSeed = position;
+        TerrainClassifier.RebuildLandforms(world);
+        Hydrology.RebuildFreshwater(world);
+    }
+
     /// <summary>
     /// Raises a soft circular region and returns the number of affected tiles.
     /// Horizontal distance follows the world's wrapping geometry.

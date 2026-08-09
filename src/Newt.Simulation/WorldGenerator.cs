@@ -3,6 +3,12 @@ namespace Newt.Simulation;
 /// <summary>Creates deterministic, horizontally wrapping terrarium worlds.</summary>
 public static class WorldGenerator
 {
+    private static readonly GridPosition[] ChainDirections =
+    [
+        new(1, 0), new(1, 1), new(0, 1), new(-1, 1),
+        new(-1, 0), new(-1, -1), new(0, -1), new(1, -1),
+    ];
+
     public static SimulationWorld Generate(WorldGenerationOptions options)
     {
         if (options.LandFraction is < 0.15 or > 0.75)
@@ -15,16 +21,11 @@ public static class WorldGenerator
         var elevation = new double[checked(preset.Width * preset.Height)];
         var random = new GeneratorRandom(options.Seed);
         var area = preset.Width * preset.Height;
-        var landMasses = Math.Max(5, area / 1_350);
+        var volcanicChains = Math.Max(5, area / 1_800);
 
-        for (var mass = 0; mass < landMasses; mass++)
+        for (var chain = 0; chain < volcanicChains; chain++)
         {
-            var centerX = random.NextInt(preset.Width);
-            var centerY = random.NextInt(preset.Height);
-            var radiusX = random.NextDouble(preset.Width * 0.045, preset.Width * 0.16);
-            var radiusY = random.NextDouble(preset.Height * 0.08, preset.Height * 0.24);
-            var strength = random.NextDouble(0.65, 1.15);
-            AddLandMass(elevation, preset.Width, preset.Height, centerX, centerY, radiusX, radiusY, strength);
+            AddVolcanicChain(elevation, preset.Width, preset.Height, ref random);
         }
 
         var threshold = FindLandThreshold(elevation, options.LandFraction);
@@ -38,9 +39,51 @@ public static class WorldGenerator
             }
         }
 
+        CarveCentralOcean(world);
+
         TerrainClassifier.RebuildAll(world);
+        SeedNaturalVolcanoes(world, options.Seed);
         StartNaturalSprings(world, options.Seed);
         return world;
+    }
+
+    private static void SeedNaturalVolcanoes(SimulationWorld world, ulong seed)
+    {
+        var candidates = new List<GridPosition>();
+        for (var y = 0; y < world.Height; y++)
+        {
+            for (var x = 0; x < world.Width; x++)
+            {
+                var position = new GridPosition(x, y);
+                if (world.GetTerrain(position) is Terrain.Mountain && !world.IsOccupied(position))
+                {
+                    candidates.Add(position);
+                }
+            }
+        }
+
+        var random = new GeneratorRandom(seed ^ 0x94D049BB133111EBUL);
+        Shuffle(candidates, ref random);
+        var targetCount = Math.Clamp(world.Width * world.Height / 12_000 + 1, 1, 5);
+        var minimumDistance = Math.Max(8, Math.Min(world.Width, world.Height) / 5);
+        var selected = new List<GridPosition>(targetCount);
+        foreach (var candidate in candidates)
+        {
+            if (selected.Any(existing => WrappedDistanceSquared(world, existing, candidate) <
+                minimumDistance * minimumDistance))
+            {
+                continue;
+            }
+
+            if (Volcanism.SpawnVolcano(world, candidate))
+            {
+                selected.Add(candidate);
+                if (selected.Count >= targetCount)
+                {
+                    break;
+                }
+            }
+        }
     }
 
     private static void StartNaturalSprings(SimulationWorld world, ulong seed)
@@ -86,6 +129,7 @@ public static class WorldGenerator
     private static bool IsSnowmeltSource(SimulationWorld world, GridPosition position)
     {
         if (world.GetTerrain(position) is not Terrain.Mountain ||
+            world.GetSurfaceCover(position) is not SurfaceCover.None ||
             world.GetBiome(position) is Biome.Arctic)
         {
             return false;
@@ -139,7 +183,51 @@ public static class WorldGenerator
         }
     }
 
-    private static void AddLandMass(
+    private static void AddVolcanicChain(
+        double[] elevation,
+        int width,
+        int height,
+        ref GeneratorRandom random)
+    {
+        var x = random.NextInt(width);
+        var y = random.NextInt(height);
+        var directionIndex = random.NextInt(ChainDirections.Length);
+        var length = random.NextInt(8) + 4;
+        for (var step = 0; step < length; step++)
+        {
+            // Very wide worlds need more shields, not horizontally stretched shields.
+            // The height cap preserves the existing proportions of ordinary presets.
+            var maximumRadiusX = Math.Min(
+                Math.Max(3, width * 0.055),
+                Math.Max(3, height * 0.11));
+            var radiusX = random.NextDouble(
+                Math.Min(Math.Max(2, width * 0.018), maximumRadiusX),
+                maximumRadiusX);
+            var radiusY = random.NextDouble(Math.Max(2, height * 0.025), Math.Max(3, height * 0.075));
+            var strength = random.NextDouble(0.28, 0.72);
+            AddVolcanicShield(elevation, width, height, x, y, radiusX, radiusY, strength);
+
+            var roll = random.NextInt(100);
+            if (roll < 18)
+            {
+                directionIndex = Mod(directionIndex - 1, ChainDirections.Length);
+            }
+            else if (roll >= 82)
+            {
+                directionIndex = Mod(directionIndex + 1, ChainDirections.Length);
+            }
+
+            var direction = ChainDirections[directionIndex];
+            x = Mod(x + direction.X * (random.NextInt(3) + 1), width);
+            y += direction.Y * (random.NextInt(2) + 1);
+            if (y < 0 || y >= height)
+            {
+                break;
+            }
+        }
+    }
+
+    private static void AddVolcanicShield(
         double[] elevation,
         int width,
         int height,
@@ -165,6 +253,37 @@ public static class WorldGenerator
 
                 var influence = 1 - distanceSquared;
                 elevation[y * width + x] += influence * influence * strength;
+            }
+        }
+    }
+
+    private static void CarveCentralOcean(SimulationWorld world)
+    {
+        var center = world.OceanSeed;
+        var radiusY = Math.Max(2, world.Height / 18);
+        var radiusX = Math.Min(
+            Math.Max(2, world.Width / 25),
+            Math.Max(2, world.Height / 9));
+        for (var offsetY = -radiusY; offsetY <= radiusY; offsetY++)
+        {
+            var y = center.Y + offsetY;
+            if (y < 0 || y >= world.Height)
+            {
+                continue;
+            }
+
+            for (var offsetX = -radiusX; offsetX <= radiusX; offsetX++)
+            {
+                var distance = offsetX * offsetX / (float)(radiusX * radiusX) +
+                    offsetY * offsetY / (float)(radiusY * radiusY);
+                if (distance > 1)
+                {
+                    continue;
+                }
+
+                var position = new GridPosition(Mod(center.X + offsetX, world.Width), y);
+                var target = -0.06f - (1 - distance) * 0.28f;
+                world.SetElevation(position, Math.Min(world.GetElevation(position), target));
             }
         }
     }

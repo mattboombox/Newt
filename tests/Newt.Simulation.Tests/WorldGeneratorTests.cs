@@ -20,11 +20,17 @@ public sealed class WorldGeneratorTests
                 Assert.Equal(first.GetTemperature(position), second.GetTemperature(position));
                 Assert.Equal(first.GetMoisture(position), second.GetMoisture(position));
                 Assert.Equal(first.GetBiome(position), second.GetBiome(position));
+                Assert.Equal(first.GetSurfaceCover(position), second.GetSurfaceCover(position));
                 Assert.Equal(first.GetSurfaceWater(position), second.GetSurfaceWater(position));
             }
         }
 
         Assert.Equal(first.ActiveSpringCount, second.ActiveSpringCount);
+        Assert.Equal(first.VolcanoCount, second.VolcanoCount);
+        for (var index = 0; index < first.VolcanoCount; index++)
+        {
+            Assert.Equal(first.GetVolcano(index), second.GetVolcano(index));
+        }
     }
 
     [Fact]
@@ -37,6 +43,18 @@ public sealed class WorldGeneratorTests
         Assert.True(terrains[Terrain.Ocean] + terrains[Terrain.DeepOcean] > 0);
         Assert.True(terrains[Terrain.Shallows] > 0);
         Assert.True(terrains[Terrain.Beach] > 0);
+        Assert.True(world.VolcanoCount > 0);
+        Assert.Contains(AllPositions(world), position => world.GetSurfaceCover(position) is SurfaceCover.Lava);
+    }
+
+    [Fact]
+    public void DefaultGameWorldStartsWithOceanAtItsCenterSeed()
+    {
+        var world = WorldGenerator.Generate(new WorldGenerationOptions(WorldPreset.Standard, Seed: 20260806));
+
+        Assert.Equal(new GridPosition(world.Width / 2, world.Height / 2), world.OceanSeed);
+        Assert.True(world.GetTerrain(world.OceanSeed) is
+            Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows or Terrain.Ice);
     }
 
     [Fact]
@@ -50,6 +68,18 @@ public sealed class WorldGeneratorTests
             Assert.Equal(preset.Height, world.Height);
             Assert.InRange(world.ActiveSpringCount, 1, 6);
         }
+    }
+
+    [Fact]
+    public void RingWorldIsLongWithoutScalingItsLocalFeaturesByFullWidth()
+    {
+        Assert.Equal(504, WorldPreset.Ring.Width);
+        Assert.Equal(40, WorldPreset.Ring.Height);
+        Assert.True(WorldPreset.Ring.Width >= WorldPreset.Large.Width * 2);
+
+        var world = WorldGenerator.Generate(new WorldGenerationOptions(WorldPreset.Ring, Seed: 9));
+        Assert.Equal(WorldPreset.Ring.Width, world.Width);
+        Assert.Equal(WorldPreset.Ring.Height, world.Height);
     }
 
     [Fact]

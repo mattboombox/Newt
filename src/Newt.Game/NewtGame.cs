@@ -8,9 +8,16 @@ namespace Newt.Game;
 /// <summary>MonoGame host responsible only for input, timing, and presentation.</summary>
 public sealed class NewtGame : Microsoft.Xna.Framework.Game
 {
+    private const int HudHeight = 156;
+    private const int HudPadding = 12;
+    private const double ToolRepeatDelaySeconds = 0.25;
+    private const double ToolRepeatIntervalSeconds = 0.075;
     private static readonly int[] ZoomLevels = [2, 4, 8, 16, 24];
     private static readonly ToolCategory[] ToolCategoryOrder = [ToolCategory.Terrain];
-    private static readonly WorldTool[] TerrainToolOrder = [WorldTool.Elevation, WorldTool.River];
+    private static readonly WorldTool[] TerrainToolOrder =
+        [WorldTool.Elevation, WorldTool.SeaLevel, WorldTool.OceanSeed,
+            WorldTool.Temperature, WorldTool.Moisture, WorldTool.Volcano, WorldTool.Meteor,
+            WorldTool.River];
     private static readonly TimeSpan SimulationStep = TimeSpan.FromSeconds(1d / SimulationWorld.TicksPerSecond);
     private readonly GraphicsDeviceManager _graphics;
     private SimulationWorld _world = null!;
@@ -18,6 +25,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private ulong _seed = 20260806;
     private SpriteBatch? _spriteBatch;
     private Texture2D? _pixel;
+    private SpriteFont? _hudFont;
     private TimeSpan _accumulator;
     private KeyboardState _previousKeyboard;
     private MouseState _previousMouse;
@@ -26,6 +34,11 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private int _zoomIndex = 2;
     private int _toolCategoryIndex;
     private int _toolIndex;
+    private WorldTool? _repeatingTool;
+    private int _repeatingButton;
+    private double _toolHoldSeconds;
+    private double _nextToolRepeatSeconds;
+    private int _meteorMagnitudeIndex = 3;
 
     public NewtGame()
     {
@@ -37,6 +50,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         Content.RootDirectory = "Content";
         IsMouseVisible = true;
         Window.AllowUserResizing = true;
+        Window.Title = "Newt";
         GenerateWorld();
     }
 
@@ -47,6 +61,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         _spriteBatch = new SpriteBatch(GraphicsDevice);
         _pixel = new Texture2D(GraphicsDevice, 1, 1);
         _pixel.SetData([Color.White]);
+        _hudFont = Content.Load<SpriteFont>("HudFont");
     }
 
     protected override void Update(GameTime gameTime)
@@ -60,9 +75,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         }
 
         HandleWorldShortcuts(keyboard, mouse);
-        HandleActiveTool(mouse);
+        HandleActiveTool(mouse, gameTime.ElapsedGameTime.TotalSeconds);
         HandleCamera(keyboard, mouse);
-        UpdateWindowTitle(mouse);
 
         _accumulator += gameTime.ElapsedGameTime;
         while (_accumulator >= SimulationStep)
@@ -85,7 +99,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         }
 
         var visibleColumns = GraphicsDevice.Viewport.Width / TileSize + 2;
-        var visibleRows = GraphicsDevice.Viewport.Height / TileSize + 2;
+        var visibleRows = MapViewportHeight / TileSize + 2;
         _spriteBatch.Begin(samplerState: SamplerState.PointClamp);
         for (var screenY = 0; screenY < visibleRows; screenY++)
         {
@@ -105,12 +119,14 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 _spriteBatch.Draw(
                     _pixel,
                     new Rectangle(screenX * TileSize, screenY * TileSize, TileSize, TileSize),
-                    GetTerrainColor(terrain, biome, temperatureBand));
+                    GetTileColor(position, terrain, biome, temperatureBand));
                 var water = _world.GetSurfaceWater(position);
                 if (water is not SurfaceWaterKind.None)
                 {
                     DrawSurfaceWater(screenX, screenY, position, water);
                 }
+                DrawVolcanoVent(screenX, screenY, position);
+                DrawImpactWave(screenX, screenY, position);
             }
         }
 
@@ -129,6 +145,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 new Rectangle(screenX * TileSize, screenY * TileSize, TileSize, TileSize),
                 GetCritterColor(critter.Species));
         }
+
+        DrawHud();
 
         _spriteBatch.End();
         base.Draw(gameTime);
@@ -183,13 +201,51 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         }
     }
 
-    private void HandleActiveTool(MouseState mouse)
+    private void HandleActiveTool(MouseState mouse, double elapsedSeconds)
     {
         var primaryPressed = mouse.LeftButton is ButtonState.Pressed &&
             _previousMouse.LeftButton is ButtonState.Released;
         var secondaryPressed = mouse.RightButton is ButtonState.Pressed &&
             _previousMouse.RightButton is ButtonState.Released;
-        if (!primaryPressed && !secondaryPressed)
+        var primaryActivated = primaryPressed;
+        var secondaryActivated = secondaryPressed;
+        if (IsContinuousTool(CurrentTool))
+        {
+            var heldButton = mouse.LeftButton is ButtonState.Pressed &&
+                mouse.RightButton is ButtonState.Released
+                    ? 1
+                    : mouse.RightButton is ButtonState.Pressed &&
+                        mouse.LeftButton is ButtonState.Released
+                        ? -1
+                        : 0;
+            if (heldButton == 0)
+            {
+                ResetToolRepeat();
+            }
+            else if (_repeatingTool != CurrentTool || _repeatingButton != heldButton)
+            {
+                _repeatingTool = CurrentTool;
+                _repeatingButton = heldButton;
+                _toolHoldSeconds = 0;
+                _nextToolRepeatSeconds = ToolRepeatDelaySeconds;
+            }
+            else
+            {
+                _toolHoldSeconds += elapsedSeconds;
+                if (_toolHoldSeconds >= _nextToolRepeatSeconds)
+                {
+                    primaryActivated |= heldButton > 0;
+                    secondaryActivated |= heldButton < 0;
+                    _nextToolRepeatSeconds += ToolRepeatIntervalSeconds;
+                }
+            }
+        }
+        else
+        {
+            ResetToolRepeat();
+        }
+
+        if (!primaryActivated && !secondaryActivated)
         {
             return;
         }
@@ -202,19 +258,60 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
 
         switch (CurrentTool)
         {
-            case WorldTool.Elevation when primaryPressed:
+            case WorldTool.Elevation when primaryActivated:
                 Geology.ApplyRadialUplift(_world, position.Value, radius: 7, strength: 0.36f);
                 break;
             case WorldTool.Elevation:
                 Geology.ApplyRadialLowering(_world, position.Value, radius: 7, strength: 0.36f);
                 break;
-            case WorldTool.River when primaryPressed:
+            case WorldTool.SeaLevel when primaryActivated:
+                Geology.ChangeSeaLevel(_world, Geology.SeaLevelEditStep);
+                break;
+            case WorldTool.SeaLevel:
+                Geology.ChangeSeaLevel(_world, -Geology.SeaLevelEditStep);
+                break;
+            case WorldTool.OceanSeed:
+                Geology.MoveOceanSeed(_world, position.Value);
+                break;
+            case WorldTool.Temperature when primaryActivated:
+                ClimateSystem.AdjustGlobalTemperature(_world, ClimateSystem.GlobalClimateEditStep);
+                break;
+            case WorldTool.Temperature:
+                ClimateSystem.AdjustGlobalTemperature(_world, -ClimateSystem.GlobalClimateEditStep);
+                break;
+            case WorldTool.Moisture when primaryActivated:
+                ClimateSystem.AdjustGlobalMoisture(_world, ClimateSystem.GlobalClimateEditStep);
+                break;
+            case WorldTool.Moisture:
+                ClimateSystem.AdjustGlobalMoisture(_world, -ClimateSystem.GlobalClimateEditStep);
+                break;
+            case WorldTool.Volcano when primaryActivated:
+                Volcanism.SpawnVolcano(_world, position.Value);
+                break;
+            case WorldTool.Meteor when primaryActivated:
+                Impacts.CreateMeteorImpact(_world, position.Value, _meteorMagnitudeIndex / 10f);
+                break;
+            case WorldTool.Meteor:
+                _meteorMagnitudeIndex = (_meteorMagnitudeIndex + 1) % 11;
+                break;
+            case WorldTool.River when primaryActivated:
                 Hydrology.StartSpring(_world, position.Value);
                 break;
             case WorldTool.River:
                 Hydrology.RemoveFreshwaterAt(_world, position.Value);
                 break;
         }
+    }
+
+    private static bool IsContinuousTool(WorldTool tool) => tool is
+        WorldTool.Elevation or WorldTool.SeaLevel or WorldTool.Temperature or WorldTool.Moisture;
+
+    private void ResetToolRepeat()
+    {
+        _repeatingTool = null;
+        _repeatingButton = 0;
+        _toolHoldSeconds = 0;
+        _nextToolRepeatSeconds = 0;
     }
 
     private ToolCategory CurrentToolCategory => ToolCategoryOrder[_toolCategoryIndex];
@@ -269,29 +366,157 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         }
 
         _cameraX = Mod(_cameraX, _world.Width);
-        var visibleRows = Math.Max(1, GraphicsDevice.Viewport.Height / TileSize);
+        var visibleRows = Math.Max(1, MapViewportHeight / TileSize);
         _cameraY = Math.Clamp(_cameraY, 0, Math.Max(0, _world.Height - visibleRows));
     }
 
-    private void UpdateWindowTitle(MouseState mouse)
+    private int MapViewportHeight => Math.Max(1, GraphicsDevice.Viewport.Height - HudHeight);
+
+    private void DrawHud()
     {
+        if (_spriteBatch is null || _pixel is null || _hudFont is null)
+        {
+            return;
+        }
+
+        var mouse = Mouse.GetState();
+        var hudY = MapViewportHeight;
+        var width = GraphicsDevice.Viewport.Width;
+        _spriteBatch.Draw(_pixel, new Rectangle(0, hudY, width, HudHeight), new Color(16, 19, 22));
+        _spriteBatch.Draw(_pixel, new Rectangle(0, hudY, width, 2), new Color(76, 91, 102));
+
+        var worldWidth = Math.Max(220, width / 4);
+        var toolWidth = Math.Max(190, width / 5);
+        var toolX = worldWidth;
+        var tileX = Math.Min(width - 1, toolX + toolWidth);
+        DrawHudDivider(toolX, hudY);
+        DrawHudDivider(tileX, hudY);
+
+        DrawHudLines(HudPadding, hudY + 8,
+            "WORLD",
+            $"{_preset.Name}  {_world.Width} x {_world.Height}",
+            $"Seed {_seed}   Tick {_world.Tick}",
+            $"Sea {_world.SeaLevel:+0.00;-0.00;0.00}   Seed POS ({_world.OceanSeed.X}, {_world.OceanSeed.Y})",
+            $"Temperature {_world.GlobalTemperatureOffset:+0.00;-0.00;0.00}",
+            $"Moisture {_world.GlobalMoistureOffset:+0.00;-0.00;0.00}");
+
+        DrawHudLines(toolX + HudPadding, hudY + 8,
+            "ACTIVE TOOL",
+            CurrentTool.ToString(),
+            GetToolHint(CurrentTool),
+            "Q / E  cycle tools",
+            "R  cycle categories",
+            "Wheel  zoom",
+            "WASD / arrows  pan");
+
         var position = ScreenToWorld(mouse.X, mouse.Y);
-        var inspected = position is null
-            ? "outside world"
-            : FormatInspection(position.Value);
-        var hydrology = _world.ActiveSpringCount > 0
-            ? $"{_world.ActiveSpringCount} spring(s) flowing"
-            : _world.LastCompletedSpring is { } completed
-                ? $"spring {completed.Termination}, {completed.RiverTileCount} tiles"
-                : "no spring traced";
-        Window.Title = $"Newt | {_preset.Name} {_world.Width}x{_world.Height} | seed {_seed} | " +
-            $"tool {CurrentToolCategory} > {CurrentTool} ({GetToolHint(CurrentTool)}) | " +
-            $"tick {_world.Tick} | {inspected} | {hydrology}";
+        DrawHudLines(tileX + HudPadding, hudY + 8,
+            position is null ? ["TILE", "Move the pointer over the map"] : GetInspectionLines(position.Value));
+    }
+
+    private void DrawHudDivider(int x, int hudY)
+    {
+        if (_spriteBatch is not null && _pixel is not null && x > 0 && x < GraphicsDevice.Viewport.Width)
+        {
+            _spriteBatch.Draw(_pixel, new Rectangle(x, hudY + 8, 1, HudHeight - 16), new Color(54, 63, 70));
+        }
+    }
+
+    private void DrawHudLines(int x, int y, params string[] lines)
+    {
+        if (_spriteBatch is null || _hudFont is null)
+        {
+            return;
+        }
+
+        for (var index = 0; index < lines.Length; index++)
+        {
+            var color = index == 0 ? new Color(126, 190, 213) : new Color(220, 225, 228);
+            _spriteBatch.DrawString(_hudFont, lines[index], new Vector2(x, y + index * 19), color);
+        }
+    }
+
+    private string[] GetInspectionLines(GridPosition position)
+    {
+        var elevation = _world.GetElevation(position);
+        var terrain = _world.GetTerrain(position);
+        var water = _world.GetSurfaceWater(position);
+        var waterText = water is SurfaceWaterKind.FreshwaterLake
+            ? _world.GetBiome(position) is Biome.Arctic
+                ? $"Frozen Lake   Depth {_world.GetWaterDepth(position):0.000}"
+                : $"Freshwater Lake   Depth {_world.GetWaterDepth(position):0.000}"
+            : water is SurfaceWaterKind.River
+                ? $"River   Connections {_world.GetRiverConnections(position)}"
+                : water.ToString();
+        return
+        [
+            $"TILE {position}",
+            GetTileIdentity(position, terrain),
+            $"Elevation {elevation:+0.000;-0.000;0.000}",
+            $"Temperature {_world.GetTemperature(position):0.000}   {_world.GetTemperatureBand(position)}",
+            $"Moisture {_world.GetMoisture(position):0.000}   {_world.GetMoistureBand(position)}",
+            $"Water {waterText}",
+            GetEntityInspection(position),
+        ];
+    }
+
+    private string GetTileIdentity(GridPosition position, Terrain terrain)
+    {
+        var biome = _world.GetBiome(position);
+        var temperature = _world.GetTemperatureBand(position);
+        var cover = _world.GetSurfaceCover(position);
+        if (cover is SurfaceCover.Lava)
+        {
+            return terrain is Terrain.Mountain ? "Lava Mountain" : "Lava";
+        }
+        if (cover is SurfaceCover.Stone && terrain is not Terrain.Mountain &&
+            !IsSaltwaterTerrain(terrain))
+        {
+            return $"Stone {GetTerrainDisplayName(terrain)}";
+        }
+        return terrain switch
+        {
+            Terrain.Ice => "Ice Sheet",
+            Terrain.Mountain => biome is Biome.Arctic ? "Snowy Mountain" : "Mountain",
+            Terrain.DeepOcean => $"{temperature} Deep Ocean",
+            Terrain.Ocean => $"{temperature} Ocean",
+            Terrain.Shallows => $"{temperature} Shallows",
+            Terrain.Beach => $"{temperature} Beach",
+            _ when biome is not Biome.None => $"{biome} {GetTerrainDisplayName(terrain)}",
+            _ => GetTerrainDisplayName(terrain),
+        };
+    }
+
+    private static string GetTerrainDisplayName(Terrain terrain) => terrain switch
+    {
+        Terrain.DeepOcean => "Deep Ocean",
+        Terrain.Ice => "Ice Sheet",
+        _ => terrain.ToString(),
+    };
+
+    private string GetEntityInspection(GridPosition position)
+    {
+        var entities = new List<string>();
+        if (_world.GetVolcanoState(position) is { } volcanoState)
+        {
+            entities.Add($"{volcanoState} Volcano");
+        }
+        for (var index = 0; index < _world.CritterCount; index++)
+        {
+            var critter = _world.GetCritter(index);
+            if (critter.Position == position)
+            {
+                entities.Add(critter.Species.ToString());
+                break;
+            }
+        }
+
+        return entities.Count == 0 ? "Entities None" : $"Entities {string.Join(", ", entities)}";
     }
 
     private GridPosition? ScreenToWorld(int screenX, int screenY)
     {
-        if (screenX < 0 || screenY < 0)
+        if (screenX < 0 || screenY < 0 || screenY >= MapViewportHeight)
         {
             return null;
         }
@@ -303,59 +528,6 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         }
 
         return new GridPosition(Mod(_cameraX + screenX / TileSize, _world.Width), y);
-    }
-
-    private string FormatInspection(GridPosition position)
-    {
-        var elevation = _world.GetElevation(position);
-        var terrain = _world.GetTerrain(position);
-        var water = _world.GetSurfaceWater(position);
-        var depth = water is SurfaceWaterKind.FreshwaterLake
-            ? $", depth {_world.GetWaterDepth(position):0.000}"
-            : string.Empty;
-        var environment = GetEnvironmentLabel(position, terrain);
-        var identity = terrain is Terrain.Plains or Terrain.Hills or Terrain.Mountain
-            ? environment
-            : $"{terrain}, {environment}";
-        return $"{position}: {identity}, {water}, " +
-            $"elevation {elevation:+0.000;-0.000;0.000} ({GetElevationLabel(terrain, elevation)}), " +
-            $"temperature {_world.GetTemperature(position):0.000} ({_world.GetTemperatureBand(position)}), " +
-            $"moisture {_world.GetMoisture(position):0.000} ({_world.GetMoistureBand(position)}){depth}";
-    }
-
-    private static string GetElevationLabel(Terrain terrain, float elevation)
-    {
-        if (terrain is Terrain.DeepOcean)
-        {
-            return "Deep Ocean";
-        }
-
-        if (terrain is Terrain.Shallows)
-        {
-            return "Shallows";
-        }
-
-        if (terrain is Terrain.Ocean or Terrain.Ice)
-        {
-            return "Ocean";
-        }
-
-        if (elevation > 0.58f)
-        {
-            return "Mountain";
-        }
-
-        return elevation > 0.34f ? "Hills" : "Plains";
-    }
-
-    private string GetEnvironmentLabel(GridPosition position, Terrain terrain)
-    {
-        if (terrain is Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows or Terrain.Ice)
-        {
-            return _world.GetTemperatureBand(position).ToString();
-        }
-
-        return _world.GetBiome(position).ToString();
     }
 
     private void GenerateWorld()
@@ -378,8 +550,11 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 var position = new GridPosition(x, y);
                 if (!_world.IsOccupied(position) && allowedTerrains.Contains(_world.GetTerrain(position)))
                 {
-                    _world.AddCritter(species, position);
-                    return;
+                    if (_world.GetSurfaceCover(position) is SurfaceCover.None)
+                    {
+                        _world.AddCritter(species, position);
+                        return;
+                    }
                 }
             }
         }
@@ -424,6 +599,54 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
 
         var connections = _world.GetRiverConnections(worldPosition);
         DrawRiverConnections(connections, originX, originY, centerX, centerY, width, color);
+    }
+
+    private void DrawVolcanoVent(int screenX, int screenY, GridPosition position)
+    {
+        if (_spriteBatch is null || _pixel is null ||
+            _world.GetVolcanoState(position) is not { } state ||
+            state is VolcanoState.Extinct)
+        {
+            return;
+        }
+
+        var size = Math.Max(1, TileSize / 2);
+        var inset = (TileSize - size) / 2;
+        var color = state is VolcanoState.Active
+            ? new Color(255, 208, 45)
+            : new Color(92, 70, 66);
+        _spriteBatch.Draw(
+            _pixel,
+            new Rectangle(screenX * TileSize + inset, screenY * TileSize + inset, size, size),
+            color);
+    }
+
+    private void DrawImpactWave(int screenX, int screenY, GridPosition position)
+    {
+        if (_spriteBatch is null || _pixel is null)
+        {
+            return;
+        }
+
+        for (var index = 0; index < _world.ActiveImpactWaveCount; index++)
+        {
+            var wave = _world.GetImpactWave(index);
+            if (!Impacts.IsOnShockFront(_world, position, wave))
+            {
+                continue;
+            }
+
+            var inset = Math.Max(0, TileSize / 5);
+            _spriteBatch.Draw(
+                _pixel,
+                new Rectangle(
+                    screenX * TileSize + inset,
+                    screenY * TileSize + inset,
+                    Math.Max(1, TileSize - inset * 2),
+                    Math.Max(1, TileSize - inset * 2)),
+                new Color(255, 222, 145, 185));
+            return;
+        }
     }
 
     private void DrawRiverConnections(
@@ -484,27 +707,37 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         return result < 0 ? result + modulus : result;
     }
 
+    private Color GetTileColor(
+        GridPosition position,
+        Terrain terrain,
+        Biome biome,
+        TemperatureBand temperatureBand)
+    {
+        var cover = _world.GetSurfaceCover(position);
+        if (cover is SurfaceCover.Lava)
+        {
+            var glow = ((_world.Tick + position.X * 3L + position.Y * 5L) / 5) % 2 == 0;
+            return glow ? new Color(245, 72, 20) : new Color(190, 35, 15);
+        }
+        if (cover is SurfaceCover.Stone && terrain is not Terrain.Mountain &&
+            !IsSaltwaterTerrain(terrain))
+        {
+            return GetStoneColor(terrain);
+        }
+        return GetTerrainColor(terrain, biome, temperatureBand);
+    }
+
     private static Color GetTerrainColor(
         Terrain terrain,
         Biome biome,
         TemperatureBand temperatureBand) => terrain switch
     {
         Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows => GetOceanColor(terrain, temperatureBand),
-        Terrain.Beach => new Color(215, 195, 135),
-        Terrain.Plains => biome switch
-        {
-            Biome.Arctic => new Color(224, 233, 232),
-            Biome.Tundra => new Color(137, 147, 124),
-            Biome.Taiga => new Color(51, 92, 68),
-            Biome.Bog => new Color(65, 82, 70),
-            Biome.Grassland => new Color(112, 145, 68),
-            Biome.Forest => new Color(42, 112, 62),
-            Biome.Swamp => new Color(35, 91, 67),
-            Biome.Desert => new Color(205, 172, 94),
-            Biome.Arid => new Color(168, 145, 74),
-            Biome.Jungle => new Color(25, 105, 53),
-            _ => new Color(110, 110, 100),
-        },
+        Terrain.Beach => GetBeachColor(temperatureBand),
+        Terrain.Plains => GetBiomeLandColor(biome),
+        Terrain.Lowlands => ScaleColor(GetBiomeLandColor(biome), 0.82f),
+        Terrain.Canyon => ScaleColor(GetBiomeLandColor(biome), 0.65f),
+        Terrain.Trench => ScaleColor(GetBiomeLandColor(biome), 0.50f),
         Terrain.Hills => biome switch
         {
             Biome.Arctic => new Color(205, 218, 218),
@@ -526,6 +759,20 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         _ => Color.Magenta,
     };
 
+    private static Color GetStoneColor(Terrain terrain) => terrain switch
+    {
+        Terrain.Beach => new Color(132, 129, 122),
+        Terrain.Plains => new Color(122, 119, 113),
+        Terrain.Lowlands => new Color(108, 106, 101),
+        Terrain.Hills => new Color(101, 98, 93),
+        Terrain.Canyon => new Color(82, 80, 77),
+        Terrain.Trench => new Color(62, 61, 59),
+        _ => new Color(104, 101, 96),
+    };
+
+    private static bool IsSaltwaterTerrain(Terrain terrain) => terrain is
+        Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows or Terrain.Ice;
+
     private static Color GetOceanColor(Terrain terrain, TemperatureBand temperatureBand)
     {
         var baseColor = terrain switch
@@ -545,6 +792,29 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         };
         return ScaleColor(baseColor, brightness);
     }
+
+    private static Color GetBeachColor(TemperatureBand temperatureBand) => temperatureBand switch
+    {
+        TemperatureBand.Freezing => new Color(220, 224, 214),
+        TemperatureBand.Cold => new Color(204, 198, 169),
+        TemperatureBand.Hot => new Color(226, 181, 103),
+        _ => new Color(215, 195, 135),
+    };
+
+    private static Color GetBiomeLandColor(Biome biome) => biome switch
+    {
+        Biome.Arctic => new Color(224, 233, 232),
+        Biome.Tundra => new Color(137, 147, 124),
+        Biome.Taiga => new Color(51, 92, 68),
+        Biome.Bog => new Color(65, 82, 70),
+        Biome.Grassland => new Color(112, 145, 68),
+        Biome.Forest => new Color(42, 112, 62),
+        Biome.Swamp => new Color(35, 91, 67),
+        Biome.Desert => new Color(205, 172, 94),
+        Biome.Arid => new Color(168, 145, 74),
+        Biome.Jungle => new Color(25, 105, 53),
+        _ => new Color(110, 110, 100),
+    };
 
     private static Color ScaleColor(Color color, float brightness) => new(
         Math.Clamp((int)MathF.Round(color.R * brightness), 0, 255),
@@ -573,13 +843,19 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             return new Color(165, 220, 235);
         }
 
-        var depthShade = Math.Clamp(depth / 0.15f, 0f, 1f);
-        return ScaleColor(new Color(50, 135, 205), 1f - 0.15f * depthShade);
+        var depthShade = Math.Clamp(depth / 0.20f, 0f, 1f);
+        return ScaleColor(new Color(50, 135, 205), 1f - 0.45f * depthShade);
     }
 
-    private static string GetToolHint(WorldTool tool) => tool switch
+    private string GetToolHint(WorldTool tool) => tool switch
     {
         WorldTool.Elevation => "left raise, right lower",
+        WorldTool.SeaLevel => "left raise, right lower",
+        WorldTool.OceanSeed => "click move seed",
+        WorldTool.Temperature => "left warmer, right cooler",
+        WorldTool.Moisture => "left wetter, right drier",
+        WorldTool.Volcano => "left spawn active vent",
+        WorldTool.Meteor => $"left impact, right magnitude {_meteorMagnitudeIndex / 10f:0.0}",
         WorldTool.River => "left spawn, right remove",
         _ => string.Empty,
     };
@@ -592,6 +868,12 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private enum WorldTool
     {
         Elevation,
+        SeaLevel,
+        OceanSeed,
+        Temperature,
+        Moisture,
+        Volcano,
+        Meteor,
         River,
     }
 }

@@ -5,6 +5,34 @@ namespace Newt.Simulation.Tests;
 public sealed class ClimateTests
 {
     [Fact]
+    public void GlobalClimateToolsAdjustFieldsAndStopAtReasonableCaps()
+    {
+        var world = CreateFlatLand(width: 21, height: 21, seed: 11);
+        var position = new GridPosition(10, 5);
+        TerrainClassifier.RebuildAll(world);
+        var originalTemperature = world.GetTemperature(position);
+        var originalMoisture = world.GetMoisture(position);
+
+        ClimateSystem.AdjustGlobalTemperature(world, ClimateSystem.GlobalClimateEditStep);
+        ClimateSystem.AdjustGlobalMoisture(world, ClimateSystem.GlobalClimateEditStep);
+
+        Assert.True(world.GetTemperature(position) > originalTemperature);
+        Assert.True(world.GetMoisture(position) > originalMoisture);
+
+        ClimateSystem.AdjustGlobalTemperature(world, 10f);
+        ClimateSystem.AdjustGlobalMoisture(world, 10f);
+        Assert.Equal(1f, SimulationWorld.MaximumGlobalClimateOffset);
+        Assert.Equal(SimulationWorld.MaximumGlobalClimateOffset, world.GlobalTemperatureOffset);
+        Assert.Equal(SimulationWorld.MaximumGlobalClimateOffset, world.GlobalMoistureOffset);
+
+        ClimateSystem.AdjustGlobalTemperature(world, -10f);
+        ClimateSystem.AdjustGlobalMoisture(world, -10f);
+        Assert.Equal(-1f, SimulationWorld.MinimumGlobalClimateOffset);
+        Assert.Equal(SimulationWorld.MinimumGlobalClimateOffset, world.GlobalTemperatureOffset);
+        Assert.Equal(SimulationWorld.MinimumGlobalClimateOffset, world.GlobalMoistureOffset);
+    }
+
+    [Fact]
     public void EquatorialLowlandIsWarmerThanPolarLowland()
     {
         var world = CreateFlatLand(width: 41, height: 41, seed: 17);
@@ -26,6 +54,8 @@ public sealed class ClimateTests
             lowland.SetElevation(new GridPosition(0, y), -0.3f);
             highland.SetElevation(new GridPosition(0, y), -0.3f);
         }
+        lowland.OceanSeed = new GridPosition(0, lowland.Height / 2);
+        highland.OceanSeed = new GridPosition(0, highland.Height / 2);
 
         var position = new GridPosition(2, 20);
         highland.SetElevation(position, 0.4f);

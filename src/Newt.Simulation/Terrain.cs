@@ -11,4 +11,7 @@ public enum Terrain : byte
     Hills,
     Mountain,
     Ice,
+    Lowlands,
+    Canyon,
+    Trench,
 }

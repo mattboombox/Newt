@@ -53,6 +53,39 @@ public sealed class HydrologyTests
     }
 
     [Fact]
+    public void RiverFormsBoundedMultiTileLakeInBroadBelowSeaLevelBasin()
+    {
+        var world = new SimulationWorld(20, 20, Terrain.Plains);
+        for (var y = 0; y < world.Height; y++)
+        {
+            for (var x = 0; x < world.Width; x++)
+            {
+                world.SetElevation(new GridPosition(x, y), 0.5f);
+            }
+        }
+
+        for (var y = 2; y <= 17; y++)
+        {
+            for (var x = 2; x <= 17; x++)
+            {
+                world.SetElevation(new GridPosition(x, y), -0.3f);
+            }
+        }
+
+        var source = new GridPosition(10, 1);
+        world.OceanSeed = new GridPosition(0, 0);
+        world.SetElevation(source, 0.6f);
+        TerrainClassifier.RebuildAll(world);
+
+        var result = Hydrology.TraceSpring(world, source);
+        var lakeTiles = AllPositions(world).Count(position =>
+            world.GetSurfaceWater(position) is SurfaceWaterKind.FreshwaterLake);
+
+        Assert.Equal(SpringTermination.FormedLake, result.Termination);
+        Assert.InRange(lakeTiles, 2, 128);
+    }
+
+    [Fact]
     public void ActiveSpringExtendsByOneTilePerSimulationTick()
     {
         var world = CreateDescendingValley();
@@ -113,6 +146,7 @@ public sealed class HydrologyTests
     private static SimulationWorld CreateDescendingValley()
     {
         var world = new SimulationWorld(21, 20, Terrain.Ocean);
+        world.OceanSeed = new GridPosition(10, 19);
         for (var y = 1; y < 18; y++)
         {
             var elevation = 0.85f - y * 0.045f;

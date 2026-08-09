@@ -62,6 +62,7 @@ public sealed class LakeTests
     private static SimulationWorld CreateBasinWorld()
     {
         var world = new SimulationWorld(9, 9, Terrain.Ocean);
+        world.OceanSeed = new GridPosition(0, 0);
         for (var y = 0; y < world.Height; y++)
         {
             for (var x = 0; x < world.Width; x++)

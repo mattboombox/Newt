@@ -6,6 +6,8 @@ public static class Hydrology
     private const float ElevationTolerance = 0.000_001f;
     private const int DefaultBasinSearchBudget = 4_096;
     private const int DefaultLakeTileBudget = 2_048;
+    private const int TerminalLakeTileBudget = 128;
+    private const float MaximumTerminalLakeDepth = 0.12f;
 
     private static readonly GridPosition[] FlowDirections =
     [
@@ -212,7 +214,7 @@ public static class Hydrology
 
         if (exit is null)
         {
-            return CreateTerminalLake(world, sink);
+            return CreateTerminalLake(world, sink, Math.Min(lakeTileBudget, TerminalLakeTileBudget));
         }
 
         var spillElevation = bestSpill[exit.Value];
@@ -229,7 +231,7 @@ public static class Hydrology
         var lakeTiles = FindLakeTiles(world, sink, spillElevation, lakeTileBudget);
         if (lakeTiles is null || lakeTiles.Count == 0)
         {
-            return CreateTerminalLake(world, sink);
+            return CreateTerminalLake(world, sink, Math.Min(lakeTileBudget, TerminalLakeTileBudget));
         }
 
         foreach (var position in lakeTiles)
@@ -341,12 +343,55 @@ public static class Hydrology
     private static SpringResult Completed(SpringTermination termination, ActiveSpring spring) =>
         new(termination, spring.Visited.Count, spring.Current);
 
-    private static LakeFillResult CreateTerminalLake(SimulationWorld world, GridPosition sink)
+    private static LakeFillResult CreateTerminalLake(
+        SimulationWorld world,
+        GridPosition sink,
+        int tileBudget = TerminalLakeTileBudget)
     {
-        var surface = world.GetElevation(sink) + 0.001f;
-        world.SetSurfaceWater(sink, SurfaceWaterKind.FreshwaterLake);
-        world.SetWaterSurfaceElevation(sink, surface);
-        return new LakeFillResult(true, 1, surface, null, null);
+        var surface = world.GetElevation(sink) + MaximumTerminalLakeDepth;
+        var lakeTiles = FindBoundedTerminalLakeTiles(world, sink, surface, tileBudget);
+        foreach (var position in lakeTiles)
+        {
+            world.SetSurfaceWater(position, SurfaceWaterKind.FreshwaterLake);
+            world.SetWaterSurfaceElevation(position, surface);
+        }
+
+        return new LakeFillResult(true, lakeTiles.Count, surface, null, null);
+    }
+
+    private static List<GridPosition> FindBoundedTerminalLakeTiles(
+        SimulationWorld world,
+        GridPosition sink,
+        float surfaceElevation,
+        int tileBudget)
+    {
+        var lake = new List<GridPosition>(tileBudget);
+        var visited = new HashSet<GridPosition> { sink };
+        var queue = new Queue<GridPosition>();
+        queue.Enqueue(sink);
+
+        while (queue.TryDequeue(out var current) && lake.Count < tileBudget)
+        {
+            if (current != sink && world.GetElevation(current) >= surfaceElevation - ElevationTolerance)
+            {
+                continue;
+            }
+
+            lake.Add(current);
+            foreach (var direction in BasinDirections)
+            {
+                var neighbor = GetNeighbor(world, current, direction);
+                if (neighbor is null || !visited.Add(neighbor.Value) ||
+                    IsOcean(world.GetTerrain(neighbor.Value)))
+                {
+                    continue;
+                }
+
+                queue.Enqueue(neighbor.Value);
+            }
+        }
+
+        return lake;
     }
 
     private static List<GridPosition> ReconstructPath(

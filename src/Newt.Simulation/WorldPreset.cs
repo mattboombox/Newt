@@ -9,5 +9,5 @@ public readonly record struct WorldPreset(string Name, int Width, int Height)
 
     public static WorldPreset Large => new("Large", 252, 130);
 
-    public static WorldPreset Ring => new("Ring World", 252, 40);
+    public static WorldPreset Ring => new("Ring World", 504, 40);
 }
