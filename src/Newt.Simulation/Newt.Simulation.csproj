@@ -6,4 +6,10 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="earth-elevation-240x120.bin" LogicalName="Newt.Simulation.EarthElevation" />
+    <EmbeddedResource Include="mars-elevation-240x120.bin" LogicalName="Newt.Simulation.MarsElevation" />
+    <EmbeddedResource Include="moon-elevation-240x120.bin" LogicalName="Newt.Simulation.MoonElevation" />
+  </ItemGroup>
+
 </Project>

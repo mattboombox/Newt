@@ -37,6 +37,11 @@ public static class TerrainClassifier
     private static bool[] FindOceanConnectedTiles(SimulationWorld world)
     {
         var connected = new bool[checked(world.Width * world.Height)];
+        if (!world.HasOceans)
+        {
+            return connected;
+        }
+
         var frontier = new Queue<GridPosition>();
 
         TryVisit(world.OceanSeed.X, world.OceanSeed.Y);

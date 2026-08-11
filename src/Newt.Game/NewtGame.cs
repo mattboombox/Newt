@@ -180,6 +180,21 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             _preset = WorldPreset.Ring;
             GenerateWorld();
         }
+        else if (WasPressed(keyboard, Keys.D5))
+        {
+            _preset = WorldPreset.Earth;
+            GenerateWorld();
+        }
+        else if (WasPressed(keyboard, Keys.D6))
+        {
+            _preset = WorldPreset.Moon;
+            GenerateWorld();
+        }
+        else if (WasPressed(keyboard, Keys.D7))
+        {
+            _preset = WorldPreset.Mars;
+            GenerateWorld();
+        }
         else if (WasPressed(keyboard, Keys.Q))
         {
             CycleTool(-1);
@@ -281,6 +296,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 break;
             case WorldTool.Elevation:
                 Geology.ApplyRadialLowering(_world, position.Value, radius: 7, strength: 0.36f);
+                break;
+            case WorldTool.SeaLevel when !_world.HasOceans:
                 break;
             case WorldTool.SeaLevel when primaryActivated:
                 Geology.ChangeSeaLevel(_world, Geology.SeaLevelEditStep);
@@ -420,7 +437,9 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             "WORLD",
             $"{_preset.Name}  {_world.Width} x {_world.Height}",
             $"Seed {_seed}   Tick {_world.Tick}   Year {_world.Year}   {GetSimulationRateText()}",
-            $"Sea {_world.SeaLevel:+0.00;-0.00;0.00}   Seed POS ({_world.OceanSeed.X}, {_world.OceanSeed.Y})",
+            _world.HasOceans
+                ? $"Sea {_world.SeaLevel:+0.00;-0.00;0.00}   Seed POS ({_world.OceanSeed.X}, {_world.OceanSeed.Y})"
+                : $"Datum {_world.SeaLevel:+0.00;-0.00;0.00}   No oceans",
             $"Temperature {_world.GlobalTemperatureOffset:+0.00;-0.00;0.00}",
             $"Moisture {_world.GlobalMoistureOffset:+0.00;-0.00;0.00}",
             GetWorldSeasonLine());
@@ -761,7 +780,47 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         {
             return GetStoneColor(terrain);
         }
+        if (_world.Body is WorldBody.Mars)
+        {
+            return GetMarsColor(position, temperatureBand);
+        }
+        if (_world.Body is WorldBody.Moon)
+        {
+            return GetMoonColor(position);
+        }
         return GetTerrainColor(terrain, biome, temperatureBand);
+    }
+
+    private Color GetMoonColor(GridPosition position) => _world.GetElevation(position) switch
+    {
+        < -0.70f => new Color(43, 44, 47),
+        < -0.40f => new Color(65, 66, 70),
+        < -0.15f => new Color(88, 89, 92),
+        < 0.10f => new Color(112, 112, 113),
+        < 0.34f => new Color(137, 136, 133),
+        < 0.58f => new Color(161, 159, 154),
+        < 1.0f => new Color(187, 184, 176),
+        _ => new Color(216, 212, 202),
+    };
+
+    private Color GetMarsColor(GridPosition position, TemperatureBand temperatureBand)
+    {
+        var latitude = Math.Abs((position.Y + 0.5f) / _world.Height * 2 - 1);
+        if (latitude > 0.86f && temperatureBand is TemperatureBand.Freezing)
+        {
+            return new Color(224, 211, 185);
+        }
+
+        return _world.GetElevation(position) switch
+        {
+            < -0.55f => new Color(72, 31, 27),
+            < -0.25f => new Color(104, 43, 31),
+            < 0f => new Color(137, 57, 36),
+            < 0.34f => new Color(168, 77, 43),
+            < 0.58f => new Color(188, 101, 58),
+            < 1.0f => new Color(205, 130, 78),
+            _ => new Color(224, 164, 108),
+        };
     }
 
     private static Color GetTerrainColor(
@@ -887,7 +946,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private string GetToolHint(WorldTool tool) => tool switch
     {
         WorldTool.Elevation => "left raise, right lower",
-        WorldTool.SeaLevel => "left raise, right lower",
+        WorldTool.SeaLevel => _world.HasOceans ? "left raise, right lower" : "no oceans on this world",
         WorldTool.OceanSeed => "click move seed",
         WorldTool.Temperature => "left warmer, right cooler",
         WorldTool.Moisture => "left wetter, right drier",

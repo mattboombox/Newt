@@ -80,6 +80,10 @@ public sealed class SimulationWorld
 
     public ulong Seed { get; }
 
+    public WorldBody Body { get; internal set; }
+
+    public bool HasOceans { get; internal set; } = true;
+
     public long Tick { get; private set; }
 
     public long SeasonTick { get; internal set; }

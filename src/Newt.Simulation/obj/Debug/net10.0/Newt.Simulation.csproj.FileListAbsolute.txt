@@ -28,3 +28,12 @@ C:\Users\1Matt\Desktop\Newt\.tmp-speed-build\Newt.Simulation.pdb
 C:\Users\1Matt\Desktop\Newt\.tmp-year-build\Newt.Simulation.deps.json
 C:\Users\1Matt\Desktop\Newt\.tmp-year-build\Newt.Simulation.dll
 C:\Users\1Matt\Desktop\Newt\.tmp-year-build\Newt.Simulation.pdb
+C:\Users\1Matt\Desktop\Newt\.tmp-earth-build\Newt.Simulation.deps.json
+C:\Users\1Matt\Desktop\Newt\.tmp-earth-build\Newt.Simulation.dll
+C:\Users\1Matt\Desktop\Newt\.tmp-earth-build\Newt.Simulation.pdb
+C:\Users\1Matt\Desktop\Newt\.tmp-mars-build\Newt.Simulation.deps.json
+C:\Users\1Matt\Desktop\Newt\.tmp-mars-build\Newt.Simulation.dll
+C:\Users\1Matt\Desktop\Newt\.tmp-mars-build\Newt.Simulation.pdb
+C:\Users\1Matt\Desktop\Newt\.tmp-moon-build\Newt.Simulation.deps.json
+C:\Users\1Matt\Desktop\Newt\.tmp-moon-build\Newt.Simulation.dll
+C:\Users\1Matt\Desktop\Newt\.tmp-moon-build\Newt.Simulation.pdb

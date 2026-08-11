@@ -58,6 +58,22 @@ the same tile-by-tile travel animation as springs created with `F`.
 - Ocean-seed tool: click a tile to move the world's single saltwater source.
 - Temperature tool: left click warms globally and right click cools globally.
 - Moisture tool: left click makes the world wetter and right click makes it drier.
+
+Press `5` to generate the 240 by 120 Earth preset (`1` through `4` retain the
+procedural presets). Its elevation and bathymetry
+come from a downsampled NOAA ETOPO 2022 ice-surface grid, with sea level preserved.
+The source data are public domain under CC0-1.0. Land and ocean heights use separate
+display scaling so both mountain ranges and ocean basins remain readable at tile scale.
+
+Press `6` to generate the 240 by 120 Moon preset from NASA/PDS Lunar Orbiter Laser
+Altimeter (LOLA) global topography. Lunar elevations are relative to the 1,737.4 km
+reference radius and use a grayscale palette that separates maria, basins, and highlands.
+The Moon has no simulated oceans.
+
+Press `7` to generate the 240 by 120 Mars preset from NASA/PDS Mars Orbiter Laser
+Altimeter (MOLA) MEGDR topography. Martian elevation is measured relative to the
+areoid, but negative terrain remains dry rather than becoming ocean. Mars uses a
+dedicated rust-colored relief palette with seasonally cold polar frost.
 - Volcano tool: left click spawns a new active volcano on an unoccupied tile.
 - Meteor tool: left click strikes the pointed tile; right click cycles magnitude
   from `0.0` through `1.0` in `0.1` steps. The active magnitude appears in the HUD.

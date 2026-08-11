@@ -16,6 +16,21 @@ public static class WorldGenerator
             throw new ArgumentOutOfRangeException(nameof(options), "Land fraction must be between 0.15 and 0.75.");
         }
 
+        if (options.Preset == WorldPreset.Earth)
+        {
+            return GenerateEarth(options);
+        }
+
+        if (options.Preset == WorldPreset.Mars)
+        {
+            return GenerateMars(options);
+        }
+
+        if (options.Preset == WorldPreset.Moon)
+        {
+            return GenerateMoon(options);
+        }
+
         var preset = options.Preset;
         var world = new SimulationWorld(preset.Width, preset.Height, Terrain.DeepOcean, options.Seed);
         var elevation = new double[checked(preset.Width * preset.Height)];
@@ -44,6 +59,82 @@ public static class WorldGenerator
         TerrainClassifier.RebuildAll(world);
         SeedNaturalVolcanoes(world, options.Seed);
         StartNaturalSprings(world, options.Seed);
+        return world;
+    }
+
+    private static SimulationWorld GenerateMars(WorldGenerationOptions options)
+    {
+        var preset = WorldPreset.Mars;
+        var world = new SimulationWorld(preset.Width, preset.Height, Terrain.Plains, options.Seed)
+        {
+            Body = WorldBody.Mars,
+            HasOceans = false,
+        };
+        using var stream = typeof(WorldGenerator).Assembly.GetManifestResourceStream(
+            "Newt.Simulation.MarsElevation") ??
+            throw new InvalidOperationException("The embedded Mars elevation grid is missing.");
+        using var reader = new BinaryReader(stream);
+
+        for (var y = 0; y < preset.Height; y++)
+        {
+            for (var x = 0; x < preset.Width; x++)
+            {
+                world.SetElevation(new GridPosition(x, y), reader.ReadInt16() / 10_000f);
+            }
+        }
+
+        TerrainClassifier.RebuildAll(world);
+        return world;
+    }
+
+    private static SimulationWorld GenerateMoon(WorldGenerationOptions options)
+    {
+        var preset = WorldPreset.Moon;
+        var world = new SimulationWorld(preset.Width, preset.Height, Terrain.Plains, options.Seed)
+        {
+            Body = WorldBody.Moon,
+            HasOceans = false,
+        };
+        using var stream = typeof(WorldGenerator).Assembly.GetManifestResourceStream(
+            "Newt.Simulation.MoonElevation") ??
+            throw new InvalidOperationException("The embedded Moon elevation grid is missing.");
+        using var reader = new BinaryReader(stream);
+
+        for (var y = 0; y < preset.Height; y++)
+        {
+            for (var x = 0; x < preset.Width; x++)
+            {
+                world.SetElevation(new GridPosition(x, y), reader.ReadInt16() / 6_000f);
+            }
+        }
+
+        TerrainClassifier.RebuildAll(world);
+        return world;
+    }
+
+    private static SimulationWorld GenerateEarth(WorldGenerationOptions options)
+    {
+        var preset = WorldPreset.Earth;
+        var world = new SimulationWorld(preset.Width, preset.Height, Terrain.DeepOcean, options.Seed)
+        {
+            Body = WorldBody.Earth,
+        };
+        using var stream = typeof(WorldGenerator).Assembly.GetManifestResourceStream(
+            "Newt.Simulation.EarthElevation") ??
+            throw new InvalidOperationException("The embedded Earth elevation grid is missing.");
+        using var reader = new BinaryReader(stream);
+
+        for (var y = 0; y < preset.Height; y++)
+        {
+            for (var x = 0; x < preset.Width; x++)
+            {
+                var meters = reader.ReadInt16();
+                var elevation = meters >= 0 ? meters / 5_000f : meters / 10_000f;
+                world.SetElevation(new GridPosition(x, y), elevation);
+            }
+        }
+
+        TerrainClassifier.RebuildAll(world);
         return world;
     }
 

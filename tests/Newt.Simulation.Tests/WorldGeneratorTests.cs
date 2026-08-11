@@ -60,14 +60,56 @@ public sealed class WorldGeneratorTests
     [Fact]
     public void PresetsProduceTheirDocumentedDimensions()
     {
-        WorldPreset[] presets = [WorldPreset.Micro, WorldPreset.Standard, WorldPreset.Large, WorldPreset.Ring];
+        WorldPreset[] presets = [WorldPreset.Micro, WorldPreset.Standard, WorldPreset.Large, WorldPreset.Ring, WorldPreset.Earth, WorldPreset.Mars, WorldPreset.Moon];
         foreach (var preset in presets)
         {
             var world = WorldGenerator.Generate(new WorldGenerationOptions(preset, Seed: 9));
             Assert.Equal(preset.Width, world.Width);
             Assert.Equal(preset.Height, world.Height);
-            Assert.InRange(world.ActiveSpringCount, 1, 6);
+            if (preset != WorldPreset.Earth && preset != WorldPreset.Mars && preset != WorldPreset.Moon)
+            {
+                Assert.InRange(world.ActiveSpringCount, 1, 6);
+            }
         }
+    }
+
+    [Fact]
+    public void MoonPresetUsesLolaReliefWithoutCreatingOceans()
+    {
+        var world = WorldGenerator.Generate(new WorldGenerationOptions(WorldPreset.Moon, Seed: 9));
+
+        Assert.Equal(WorldBody.Moon, world.Body);
+        Assert.False(world.HasOceans);
+        Assert.Contains(AllPositions(world), position => world.GetElevation(position) > 0.58f);
+        Assert.Contains(AllPositions(world), position => world.GetElevation(position) < -0.58f);
+        Assert.DoesNotContain(AllPositions(world), position => world.GetTerrain(position) is
+            Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows or Terrain.Beach);
+    }
+
+    [Fact]
+    public void MarsPresetUsesMolaReliefWithoutCreatingOceans()
+    {
+        var world = WorldGenerator.Generate(new WorldGenerationOptions(WorldPreset.Mars, Seed: 9));
+
+        Assert.Equal(WorldBody.Mars, world.Body);
+        Assert.False(world.HasOceans);
+        Assert.Contains(AllPositions(world), position => world.GetElevation(position) > 1f);
+        Assert.Contains(AllPositions(world), position => world.GetElevation(position) < -0.5f);
+        Assert.DoesNotContain(AllPositions(world), position => world.GetTerrain(position) is
+            Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows or Terrain.Beach);
+    }
+
+    [Fact]
+    public void EarthPresetUsesRecognizableRealWorldRelief()
+    {
+        var world = WorldGenerator.Generate(new WorldGenerationOptions(WorldPreset.Earth, Seed: 9));
+
+        Assert.Equal(240, world.Width);
+        Assert.Equal(120, world.Height);
+        Assert.Equal(WorldBody.Earth, world.Body);
+        Assert.True(world.GetElevation(new GridPosition(174, 39)) > 0.58f); // Himalayas
+        Assert.True(world.GetElevation(new GridPosition(20, 60)) < -0.20f); // Pacific
+        Assert.True(world.GetElevation(new GridPosition(120, 60)) < 0); // Gulf of Guinea
     }
 
     [Fact]
