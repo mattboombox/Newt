@@ -59,8 +59,14 @@ temperature = latitude warmth - elevation lapse + broad seeded variation
 - Higher elevation is colder than nearby lowlands.
 - Smooth seeded variation prevents perfectly uniform climate bands.
 
-Temperature is clamped to `0.0–1.0`. The initial model does not simulate seasons,
-daily temperature, air masses, or atmospheric heat transport. Ocean moderation
+Temperature is clamped to `0.0–1.0`. A six-minute seasonal cycle adds a gentle, smooth
+temperature offset in opposite directions in the northern and southern hemispheres.
+The offset tapers to zero through the equatorial band, whose tiles display
+`PermanentSummer`. Seasons currently change temperature, but not moisture. The
+Seasons tool can disable the cycle and immediately restore baseline temperatures.
+One complete seasonal cycle advances the displayed year by one. Disabling seasons
+also pauses this seasonal calendar while ordinary simulation ticks continue.
+The model does not simulate daily temperature, air masses, or atmospheric heat transport. Ocean moderation
 can be considered later only if the simpler field proves visually insufficient.
 
 All systems share these temperature thresholds:

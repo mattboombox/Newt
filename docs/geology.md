@@ -14,9 +14,13 @@ continues naturally at the right edge. Terrain and coastlines are reclassified
 immediately.
 
 `Q` and `E` cycle between Elevation, SeaLevel, OceanSeed, Temperature,
-Moisture, Volcano, and River within the Terrain
+Moisture, Seasons, Volcano, Meteor, and River within the Terrain
 category. `R` cycles tool categories. The selection structure is ready for later
 event, spawning, and inspection categories.
+
+`<` and `>` step the simulation rate through 0.25x, 0.5x, 1x, 2x, 4x,
+8x, and 16x. `P` pauses or resumes simulation time without disabling tools or
+camera controls. The current rate and pause state appear beside the world tick.
 
 Temperature and Moisture are global climate tools. Left click adds 0.05 and right
 click subtracts 0.05 from the corresponding world-wide climate offset. Each
@@ -27,6 +31,11 @@ sea ice; both tools immediately rebuild biome classifications.
 Elevation, SeaLevel, Temperature, and Moisture may also be adjusted continuously
 by holding the corresponding mouse button. Repetition starts after a short delay;
 River and OceanSeed remain deliberate single-click actions.
+
+The Seasons tool enables the hemisphere-opposed seasonal temperature cycle with
+left click and disables it with right click. Disabling seasons immediately restores
+the baseline temperatures for the current climate offset. Equatorial tiles are
+unaffected by the seasonal temperature change.
 
 ## Sea-level tool
 

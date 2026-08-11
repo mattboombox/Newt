@@ -13,10 +13,11 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private const double ToolRepeatDelaySeconds = 0.25;
     private const double ToolRepeatIntervalSeconds = 0.075;
     private static readonly int[] ZoomLevels = [2, 4, 8, 16, 24];
+    private static readonly double[] SimulationRates = [0.25, 0.5, 1, 2, 4, 8, 16];
     private static readonly ToolCategory[] ToolCategoryOrder = [ToolCategory.Terrain];
     private static readonly WorldTool[] TerrainToolOrder =
         [WorldTool.Elevation, WorldTool.SeaLevel, WorldTool.OceanSeed,
-            WorldTool.Temperature, WorldTool.Moisture, WorldTool.Volcano, WorldTool.Meteor,
+            WorldTool.Temperature, WorldTool.Moisture, WorldTool.Seasons, WorldTool.Volcano, WorldTool.Meteor,
             WorldTool.River];
     private static readonly TimeSpan SimulationStep = TimeSpan.FromSeconds(1d / SimulationWorld.TicksPerSecond);
     private readonly GraphicsDeviceManager _graphics;
@@ -39,6 +40,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private double _toolHoldSeconds;
     private double _nextToolRepeatSeconds;
     private int _meteorMagnitudeIndex = 3;
+    private int _simulationRateIndex = 2;
+    private bool _paused;
 
     public NewtGame()
     {
@@ -78,11 +81,14 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         HandleActiveTool(mouse, gameTime.ElapsedGameTime.TotalSeconds);
         HandleCamera(keyboard, mouse);
 
-        _accumulator += gameTime.ElapsedGameTime;
-        while (_accumulator >= SimulationStep)
+        if (!_paused)
         {
-            _world.AdvanceOneTick();
-            _accumulator -= SimulationStep;
+            _accumulator += gameTime.ElapsedGameTime * SimulationRates[_simulationRateIndex];
+            while (_accumulator >= SimulationStep)
+            {
+                _world.AdvanceOneTick();
+                _accumulator -= SimulationStep;
+            }
         }
 
         _previousKeyboard = keyboard;
@@ -199,6 +205,18 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 Hydrology.StartSpring(_world, position.Value);
             }
         }
+        else if (WasPressed(keyboard, Keys.OemComma))
+        {
+            _simulationRateIndex = Math.Max(0, _simulationRateIndex - 1);
+        }
+        else if (WasPressed(keyboard, Keys.OemPeriod))
+        {
+            _simulationRateIndex = Math.Min(SimulationRates.Length - 1, _simulationRateIndex + 1);
+        }
+        else if (WasPressed(keyboard, Keys.P))
+        {
+            _paused = !_paused;
+        }
     }
 
     private void HandleActiveTool(MouseState mouse, double elapsedSeconds)
@@ -284,6 +302,12 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 break;
             case WorldTool.Moisture:
                 ClimateSystem.AdjustGlobalMoisture(_world, -ClimateSystem.GlobalClimateEditStep);
+                break;
+            case WorldTool.Seasons when primaryActivated:
+                SeasonSystem.SetEnabled(_world, true);
+                break;
+            case WorldTool.Seasons:
+                SeasonSystem.SetEnabled(_world, false);
                 break;
             case WorldTool.Volcano when primaryActivated:
                 Volcanism.SpawnVolcano(_world, position.Value);
@@ -395,10 +419,11 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         DrawHudLines(HudPadding, hudY + 8,
             "WORLD",
             $"{_preset.Name}  {_world.Width} x {_world.Height}",
-            $"Seed {_seed}   Tick {_world.Tick}",
+            $"Seed {_seed}   Tick {_world.Tick}   Year {_world.Year}   {GetSimulationRateText()}",
             $"Sea {_world.SeaLevel:+0.00;-0.00;0.00}   Seed POS ({_world.OceanSeed.X}, {_world.OceanSeed.Y})",
             $"Temperature {_world.GlobalTemperatureOffset:+0.00;-0.00;0.00}",
-            $"Moisture {_world.GlobalMoistureOffset:+0.00;-0.00;0.00}");
+            $"Moisture {_world.GlobalMoistureOffset:+0.00;-0.00;0.00}",
+            GetWorldSeasonLine());
 
         DrawHudLines(toolX + HudPadding, hudY + 8,
             "ACTIVE TOOL",
@@ -406,6 +431,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             GetToolHint(CurrentTool),
             "Q / E  cycle tools",
             "R  cycle categories",
+            "< / >  speed   P  pause",
             "Wheel  zoom",
             "WASD / arrows  pan");
 
@@ -422,6 +448,14 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         }
     }
 
+    private string GetWorldSeasonLine() => _world.SeasonsEnabled
+        ? $"Seasons N {SeasonSystem.GetSeason(_world, new GridPosition(0, 0))} / S {SeasonSystem.GetSeason(_world, new GridPosition(0, _world.Height - 1))}"
+        : "Seasons disabled";
+
+    private string GetSimulationRateText() => _paused
+        ? $"Paused ({SimulationRates[_simulationRateIndex]:0.##}x)"
+        : $"{SimulationRates[_simulationRateIndex]:0.##}x";
+
     private void DrawHudLines(int x, int y, params string[] lines)
     {
         if (_spriteBatch is null || _hudFont is null)
@@ -432,7 +466,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         for (var index = 0; index < lines.Length; index++)
         {
             var color = index == 0 ? new Color(126, 190, 213) : new Color(220, 225, 228);
-            _spriteBatch.DrawString(_hudFont, lines[index], new Vector2(x, y + index * 19), color);
+            _spriteBatch.DrawString(_hudFont, lines[index], new Vector2(x, y + index * 17), color);
         }
     }
 
@@ -453,8 +487,11 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             $"TILE {position}",
             GetTileIdentity(position, terrain),
             $"Elevation {elevation:+0.000;-0.000;0.000}",
-            $"Temperature {_world.GetTemperature(position):0.000}   {_world.GetTemperatureBand(position)}",
-            $"Moisture {_world.GetMoisture(position):0.000}   {_world.GetMoistureBand(position)}",
+            _world.SeasonsEnabled
+                ? $"Season {SeasonSystem.GetSeason(_world, position)}"
+                : "Season disabled",
+            $"Temperature {_world.GetTemperature(position):0.000} ({SeasonSystem.GetTemperatureChange(_world, position):+0.000;-0.000;0.000} season)   {_world.GetTemperatureBand(position)}",
+            $"Moisture {_world.GetMoisture(position):0.000} ({SeasonSystem.GetMoistureChange(_world, position):+0.000;-0.000;0.000} season)   {_world.GetMoistureBand(position)}",
             $"Water {waterText}",
             GetEntityInspection(position),
         ];
@@ -854,6 +891,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         WorldTool.OceanSeed => "click move seed",
         WorldTool.Temperature => "left warmer, right cooler",
         WorldTool.Moisture => "left wetter, right drier",
+        WorldTool.Seasons => "left enable, right disable",
         WorldTool.Volcano => "left spawn active vent",
         WorldTool.Meteor => $"left impact, right magnitude {_meteorMagnitudeIndex / 10f:0.0}",
         WorldTool.River => "left spawn, right remove",
@@ -872,6 +910,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         OceanSeed,
         Temperature,
         Moisture,
+        Seasons,
         Volcano,
         Meteor,
         River,

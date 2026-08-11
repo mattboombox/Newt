@@ -30,7 +30,7 @@ public static class ClimateSystem
                 var elevationCooling = Math.Max(0, world.GetElevation(position)) * 0.48f;
                 var variation = (FractalNoise(world, x, y, world.Seed ^ 0xA0761D6478BD642FUL) - 0.5f) * 0.18f;
                 var temperature = 0.06f + latitudeWarmth * 0.98f - elevationCooling + variation +
-                    world.GlobalTemperatureOffset;
+                    world.GlobalTemperatureOffset + SeasonSystem.GetTemperatureOffset(world, y);
                 world.SetTemperature(position, temperature);
             }
         }

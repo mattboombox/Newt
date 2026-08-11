@@ -5,6 +5,91 @@ namespace Newt.Simulation.Tests;
 public sealed class ClimateTests
 {
     [Fact]
+    public void HemispheresHaveOppositeSeasonsAndEquatorIsUnaffected()
+    {
+        var world = CreateFlatLand(width: 21, height: 21, seed: 7);
+        TerrainClassifier.RebuildAll(world);
+        var north = new GridPosition(10, 0);
+        var equator = new GridPosition(10, 10);
+        var south = new GridPosition(10, 20);
+        var equatorialTemperature = world.GetTemperature(equator);
+
+        for (var tick = 0; tick < SeasonSystem.CycleSeconds * SimulationWorld.TicksPerSecond / 4; tick++)
+        {
+            world.AdvanceOneTick();
+        }
+
+        Assert.Equal(Season.Summer, SeasonSystem.GetSeason(world, north));
+        Assert.Equal(Season.Winter, SeasonSystem.GetSeason(world, south));
+        Assert.Equal(Season.PermanentSummer, SeasonSystem.GetSeason(world, equator));
+        Assert.Equal(equatorialTemperature, world.GetTemperature(equator), precision: 5);
+        Assert.Equal(0f, SeasonSystem.GetTemperatureChange(world, equator));
+        Assert.Equal(0f, SeasonSystem.GetMoistureChange(world, north));
+        Assert.InRange(SeasonSystem.GetTemperatureChange(world, north), 0.09f, 0.10f);
+        Assert.True(world.GetTemperature(north) > world.GetTemperature(south));
+    }
+
+    [Fact]
+    public void DisablingSeasonsRestoresBaselineTemperature()
+    {
+        var seasonal = CreateFlatLand(width: 21, height: 21, seed: 9);
+        var baseline = CreateFlatLand(width: 21, height: 21, seed: 9);
+        TerrainClassifier.RebuildAll(seasonal);
+        SeasonSystem.SetEnabled(baseline, false);
+
+        for (var tick = 0; tick < SeasonSystem.CycleSeconds * SimulationWorld.TicksPerSecond / 4; tick++)
+        {
+            seasonal.AdvanceOneTick();
+        }
+
+        SeasonSystem.SetEnabled(seasonal, false);
+        var position = new GridPosition(10, 0);
+        Assert.Equal(baseline.GetTemperature(position), seasonal.GetTemperature(position));
+        Assert.Equal(Season.PermanentSummer, SeasonSystem.GetSeason(seasonal, position));
+    }
+
+    [Fact]
+    public void DisabledSeasonsPauseTheSeasonalCalendar()
+    {
+        var world = CreateFlatLand(width: 5, height: 5, seed: 10);
+        TerrainClassifier.RebuildAll(world);
+        world.AdvanceOneTick();
+        Assert.Equal(1, world.SeasonTick);
+
+        SeasonSystem.SetEnabled(world, false);
+        world.AdvanceOneTick();
+
+        Assert.Equal(2, world.Tick);
+        Assert.Equal(1, world.SeasonTick);
+        Assert.Equal(0, world.Year);
+    }
+
+    [Fact]
+    public void PeakSummerLeavesSomeNorthernArcticClimateOnStandardWorld()
+    {
+        var world = WorldGenerator.Generate(new WorldGenerationOptions(WorldPreset.Standard, Seed: 20260806));
+
+        for (var tick = 0; tick < SeasonSystem.CycleSeconds * SimulationWorld.TicksPerSecond / 4; tick++)
+        {
+            world.AdvanceOneTick();
+        }
+
+        var northernArcticTiles = 0;
+        for (var y = 0; y < Math.Max(1, world.Height / 10); y++)
+        {
+            for (var x = 0; x < world.Width; x++)
+            {
+                if (world.GetBiome(new GridPosition(x, y)) is Biome.Arctic)
+                {
+                    northernArcticTiles++;
+                }
+            }
+        }
+
+        Assert.True(northernArcticTiles > 0, "Peak northern summer should leave a natural polar ice edge.");
+    }
+
+    [Fact]
     public void GlobalClimateToolsAdjustFieldsAndStopAtReasonableCaps()
     {
         var world = CreateFlatLand(width: 21, height: 21, seed: 11);

@@ -82,6 +82,10 @@ public sealed class SimulationWorld
 
     public long Tick { get; private set; }
 
+    public long SeasonTick { get; internal set; }
+
+    public long Year => SeasonTick / SeasonSystem.TicksPerYear;
+
     /// <summary>The absolute elevation of the globally connected ocean surface.</summary>
     public float SeaLevel { get; internal set; }
 
@@ -91,6 +95,8 @@ public sealed class SimulationWorld
     public float GlobalTemperatureOffset { get; internal set; }
 
     public float GlobalMoistureOffset { get; internal set; }
+
+    public bool SeasonsEnabled { get; internal set; } = true;
 
     public int CritterCount => _count;
 
@@ -295,6 +301,7 @@ public sealed class SimulationWorld
     public void AdvanceOneTick()
     {
         Tick++;
+        SeasonSystem.Advance(this);
         Impacts.Advance(this);
         Volcanism.Advance(this);
         Hydrology.AdvanceSprings(this);
