@@ -280,6 +280,25 @@ public sealed class GeologyTests
         Assert.Equal(destination, world.OceanSeed);
     }
 
+    [Fact]
+    public void PlacingOceanSeedEnablesOceansOnDryWorld()
+    {
+        var world = new SimulationWorld(5, 5, Terrain.Plains)
+        {
+            HasOceans = false,
+        };
+        var destination = new GridPosition(1, 2);
+        world.SetElevation(destination, -0.4f);
+        TerrainClassifier.RebuildAll(world);
+        Assert.Equal(Terrain.Canyon, world.GetTerrain(destination));
+
+        Geology.MoveOceanSeed(world, destination);
+
+        Assert.True(world.HasOceans);
+        Assert.Equal(destination, world.OceanSeed);
+        Assert.True(world.GetTerrain(destination) is Terrain.Ocean or Terrain.DeepOcean or Terrain.Shallows);
+    }
+
     private static IEnumerable<Terrain> NeighborTerrains(SimulationWorld world, GridPosition center)
     {
         for (var y = center.Y - 5; y <= center.Y + 5; y++)

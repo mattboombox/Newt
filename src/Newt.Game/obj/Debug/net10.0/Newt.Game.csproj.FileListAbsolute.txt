@@ -83,3 +83,13 @@ C:\Users\1Matt\Desktop\Newt\.tmp-moon-build\Newt.Game.deps.json
 C:\Users\1Matt\Desktop\Newt\.tmp-moon-build\Newt.Game.runtimeconfig.json
 C:\Users\1Matt\Desktop\Newt\.tmp-moon-build\Newt.Game.dll
 C:\Users\1Matt\Desktop\Newt\.tmp-moon-build\Newt.Game.pdb
+C:\Users\1Matt\Desktop\Newt\.tmp-ocean-seed-build\Newt.Game.exe
+C:\Users\1Matt\Desktop\Newt\.tmp-ocean-seed-build\Newt.Game.deps.json
+C:\Users\1Matt\Desktop\Newt\.tmp-ocean-seed-build\Newt.Game.runtimeconfig.json
+C:\Users\1Matt\Desktop\Newt\.tmp-ocean-seed-build\Newt.Game.dll
+C:\Users\1Matt\Desktop\Newt\.tmp-ocean-seed-build\Newt.Game.pdb
+C:\Users\1Matt\Desktop\Newt\.tmp-water-color-build\Newt.Game.exe
+C:\Users\1Matt\Desktop\Newt\.tmp-water-color-build\Newt.Game.deps.json
+C:\Users\1Matt\Desktop\Newt\.tmp-water-color-build\Newt.Game.runtimeconfig.json
+C:\Users\1Matt\Desktop\Newt\.tmp-water-color-build\Newt.Game.dll
+C:\Users\1Matt\Desktop\Newt\.tmp-water-color-build\Newt.Game.pdb

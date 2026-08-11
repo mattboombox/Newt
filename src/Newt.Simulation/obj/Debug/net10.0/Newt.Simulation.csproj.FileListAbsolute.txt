@@ -37,3 +37,9 @@ C:\Users\1Matt\Desktop\Newt\.tmp-mars-build\Newt.Simulation.pdb
 C:\Users\1Matt\Desktop\Newt\.tmp-moon-build\Newt.Simulation.deps.json
 C:\Users\1Matt\Desktop\Newt\.tmp-moon-build\Newt.Simulation.dll
 C:\Users\1Matt\Desktop\Newt\.tmp-moon-build\Newt.Simulation.pdb
+C:\Users\1Matt\Desktop\Newt\.tmp-ocean-seed-build\Newt.Simulation.deps.json
+C:\Users\1Matt\Desktop\Newt\.tmp-ocean-seed-build\Newt.Simulation.dll
+C:\Users\1Matt\Desktop\Newt\.tmp-ocean-seed-build\Newt.Simulation.pdb
+C:\Users\1Matt\Desktop\Newt\.tmp-water-color-build\Newt.Simulation.deps.json
+C:\Users\1Matt\Desktop\Newt\.tmp-water-color-build\Newt.Simulation.dll
+C:\Users\1Matt\Desktop\Newt\.tmp-water-color-build\Newt.Simulation.pdb

@@ -780,6 +780,10 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         {
             return GetStoneColor(terrain);
         }
+        if (IsSaltwaterTerrain(terrain))
+        {
+            return GetTerrainColor(terrain, biome, temperatureBand);
+        }
         if (_world.Body is WorldBody.Mars)
         {
             return GetMarsColor(position, temperatureBand);
@@ -947,7 +951,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     {
         WorldTool.Elevation => "left raise, right lower",
         WorldTool.SeaLevel => _world.HasOceans ? "left raise, right lower" : "no oceans on this world",
-        WorldTool.OceanSeed => "click move seed",
+        WorldTool.OceanSeed => _world.HasOceans ? "click move seed" : "click create ocean seed",
         WorldTool.Temperature => "left warmer, right cooler",
         WorldTool.Moisture => "left wetter, right drier",
         WorldTool.Seasons => "left enable, right disable",

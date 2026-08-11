@@ -68,12 +68,17 @@ display scaling so both mountain ranges and ocean basins remain readable at tile
 Press `6` to generate the 240 by 120 Moon preset from NASA/PDS Lunar Orbiter Laser
 Altimeter (LOLA) global topography. Lunar elevations are relative to the 1,737.4 km
 reference radius and use a grayscale palette that separates maria, basins, and highlands.
-The Moon has no simulated oceans.
+The Moon starts without simulated oceans. Selecting OceanSeed and clicking a tile
+creates its first connected ocean; below-datum terrain floods naturally from that seed.
 
 Press `7` to generate the 240 by 120 Mars preset from NASA/PDS Mars Orbiter Laser
 Altimeter (MOLA) MEGDR topography. Martian elevation is measured relative to the
 areoid, but negative terrain remains dry rather than becoming ocean. Mars uses a
 dedicated rust-colored relief palette with seasonally cold polar frost.
+Like the Moon, Mars starts dry but accepts a user-placed OceanSeed, after which the
+normal sea-level and connected-ocean tools apply.
+User-created oceans on Mars and the Moon use the standard blue depth palette and
+pale sea-ice color; their special rust and grayscale palettes apply only to dry land.
 - Volcano tool: left click spawns a new active volcano on an unoccupied tile.
 - Meteor tool: left click strikes the pointed tile; right click cycles magnitude
   from `0.0` through `1.0` in `0.1` steps. The active magnitude appears in the HUD.
