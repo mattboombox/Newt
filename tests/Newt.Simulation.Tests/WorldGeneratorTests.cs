@@ -91,13 +91,47 @@ public sealed class WorldGeneratorTests
     [Fact]
     public void RingWorldIsLongWithoutScalingItsLocalFeaturesByFullWidth()
     {
-        Assert.Equal(504, WorldPreset.Ring.Width);
+        Assert.Equal(1200, WorldPreset.Ring.Width);
         Assert.Equal(40, WorldPreset.Ring.Height);
-        Assert.True(WorldPreset.Ring.Width >= WorldPreset.Large.Width * 2);
+        Assert.True(WorldPreset.Ring.Width >= WorldPreset.Large.Width * 4);
 
         var world = WorldGenerator.Generate(new WorldGenerationOptions(WorldPreset.Ring, Seed: 9));
         Assert.Equal(WorldPreset.Ring.Width, world.Width);
         Assert.Equal(WorldPreset.Ring.Height, world.Height);
+        Assert.Equal(WorldBody.RingWorld, world.Body);
+        Assert.False(world.SeasonsEnabled);
+        Assert.NotEmpty(world.AdditionalOceanSeeds);
+        Assert.All(world.AdditionalOceanSeeds, seed =>
+            Assert.True(world.GetTerrain(seed) is
+                Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows or Terrain.Ice));
+        for (var x = 0; x < world.Width; x++)
+        {
+            var top = new GridPosition(x, 0);
+            var bottom = new GridPosition(x, world.Height - 1);
+            Assert.Equal(Terrain.RingWorldWall, world.GetTerrain(top));
+            Assert.Equal(Terrain.RingWorldWall, world.GetTerrain(bottom));
+            Assert.Equal(SimulationWorld.RingWorldWallElevation, world.GetElevation(top));
+            Assert.Equal(SimulationWorld.RingWorldWallElevation, world.GetElevation(bottom));
+        }
+        Assert.True(SimulationWorld.RingWorldWallElevation > SimulationWorld.MaximumGroundElevation);
+    }
+
+    [Fact]
+    public void RingWorldUsesLongitudinalEngineeredClimateZones()
+    {
+        var world = WorldGenerator.Generate(new WorldGenerationOptions(WorldPreset.Ring, Seed: 9));
+        var centerY = world.Height / 2;
+        var temperatures = Enumerable.Range(0, world.Width)
+            .Select(x => world.GetTemperature(new GridPosition(x, centerY)))
+            .ToArray();
+        var moistures = Enumerable.Range(0, world.Width)
+            .Select(x => world.GetMoisture(new GridPosition(x, centerY)))
+            .ToArray();
+
+        Assert.True(temperatures.Max() - temperatures.Min() > 0.5f);
+        Assert.True(moistures.Max() - moistures.Min() > 0.45f);
+        SeasonSystem.SetEnabled(world, true);
+        Assert.False(world.SeasonsEnabled);
     }
 
     [Fact]

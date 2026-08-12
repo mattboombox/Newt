@@ -4,4 +4,5 @@ public enum WorldBody : byte
 {
     Terrarium,
     Earth,
+    RingWorld,
 }

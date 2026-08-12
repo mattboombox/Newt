@@ -51,7 +51,20 @@ the same tile-by-tile travel animation as springs created with `F`.
 | 1 | Micro | 80 × 48 |
 | 2 | Standard | 160 × 96 |
 | 3 | Large | 252 × 130 |
-| 4 | Ring World | 504 × 40 |
+| 4 | Ring World | 1200 × 40 |
+
+Ring World is an artificial megastructure conservatory rather than a planet.
+Every large disconnected below-sea-level basin receives a saltwater source, while
+small enclosed depressions remain available for freshwater lakes. The primary
+source remains movable with OceanSeed; the other ocean sources remain fixed.
+
+Its climate varies along the ring instead of by latitude. Repeating engineered
+hot, cold, wet, and dry longitudinal sections create distinct conservatory
+regions. Planetary seasons are permanently disabled for this preset.
+
+Continuous steel-colored Ring World Wall tiles run along its top and bottom
+edges. Their structural elevation is `2.15`, slightly above the normal `2.0`
+terrain ceiling, and terrain-changing events cannot permanently erode them.
 
 ## Prototype controls
 

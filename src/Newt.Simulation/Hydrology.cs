@@ -293,6 +293,15 @@ public static class Hydrology
     private static SpringResult? AdvanceSpring(SimulationWorld world, ActiveSpring spring)
     {
         var current = spring.Current;
+        if (spring.PlannedRoute.TryPeek(out var nextPlanned) &&
+            world.GetElevation(nextPlanned) < world.GetElevation(current) - ElevationTolerance)
+        {
+            // The minimax route is only needed to cross the lake's rim or a flat
+            // spillway. Once it descends again, normal routing must take over so
+            // a later depression can form its own lake instead of being bridged.
+            spring.PlannedRoute.Clear();
+        }
+
         if (spring.PlannedRoute.TryDequeue(out var planned))
         {
             if (IsOcean(world.GetTerrain(planned)))
@@ -333,7 +342,8 @@ public static class Hydrology
         foreach (var direction in FlowDirections)
         {
             var candidate = GetNeighbor(world, current, direction);
-            if (candidate is null || spring.Visited.Contains(candidate.Value))
+            if (candidate is null || spring.Visited.Contains(candidate.Value) ||
+                spring.UpstreamLake.Contains(candidate.Value))
             {
                 continue;
             }
@@ -363,6 +373,7 @@ public static class Hydrology
                     spring);
             }
 
+            CaptureUpstreamLake(world, current, spring.UpstreamLake);
             Connect(world, lake.OutletConnection.Value, lake.Outlet.Value);
             world.SetSurfaceWater(lake.Outlet.Value, SurfaceWaterKind.River);
             world.SetWaterSurfaceElevation(lake.Outlet.Value, null);
@@ -389,6 +400,35 @@ public static class Hydrology
         }
 
         return null;
+    }
+
+    private static void CaptureUpstreamLake(
+        SimulationWorld world,
+        GridPosition start,
+        HashSet<GridPosition> destination)
+    {
+        destination.Clear();
+        if (world.GetSurfaceWater(start) is not SurfaceWaterKind.FreshwaterLake)
+        {
+            return;
+        }
+
+        var queue = new Queue<GridPosition>();
+        queue.Enqueue(start);
+        destination.Add(start);
+        while (queue.TryDequeue(out var current))
+        {
+            foreach (var direction in BasinDirections)
+            {
+                var neighbor = GetNeighbor(world, current, direction);
+                if (neighbor is not null &&
+                    world.GetSurfaceWater(neighbor.Value) is SurfaceWaterKind.FreshwaterLake &&
+                    destination.Add(neighbor.Value))
+                {
+                    queue.Enqueue(neighbor.Value);
+                }
+            }
+        }
     }
 
     private static HashSet<GridPosition> FindConnectedFreshwater(

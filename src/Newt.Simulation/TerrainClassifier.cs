@@ -32,6 +32,27 @@ public static class TerrainClassifier
         }
 
         AddCoasts(world);
+        ApplyRingWorldWalls(world);
+    }
+
+    internal static void ApplyRingWorldWalls(SimulationWorld world)
+    {
+        if (world.Body is not WorldBody.RingWorld)
+        {
+            return;
+        }
+
+        for (var x = 0; x < world.Width; x++)
+        {
+            world.SetStructuralTerrain(
+                new GridPosition(x, 0),
+                Terrain.RingWorldWall,
+                SimulationWorld.RingWorldWallElevation);
+            world.SetStructuralTerrain(
+                new GridPosition(x, world.Height - 1),
+                Terrain.RingWorldWall,
+                SimulationWorld.RingWorldWallElevation);
+        }
     }
 
     private static bool[] FindOceanConnectedTiles(SimulationWorld world)
@@ -45,6 +66,10 @@ public static class TerrainClassifier
         var frontier = new Queue<GridPosition>();
 
         TryVisit(world.OceanSeed.X, world.OceanSeed.Y);
+        foreach (var seed in world.AdditionalOceanSeeds)
+        {
+            TryVisit(seed.X, seed.Y);
+        }
 
         while (frontier.TryDequeue(out var current))
         {

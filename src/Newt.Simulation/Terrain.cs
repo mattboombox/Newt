@@ -14,4 +14,5 @@ public enum Terrain : byte
     Lowlands,
     Canyon,
     Trench,
+    RingWorldWall,
 }

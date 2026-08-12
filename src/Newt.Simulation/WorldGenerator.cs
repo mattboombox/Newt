@@ -22,7 +22,12 @@ public static class WorldGenerator
         }
 
         var preset = options.Preset;
-        var world = new SimulationWorld(preset.Width, preset.Height, Terrain.DeepOcean, options.Seed);
+        var isRingWorld = preset == WorldPreset.Ring;
+        var world = new SimulationWorld(preset.Width, preset.Height, Terrain.DeepOcean, options.Seed)
+        {
+            Body = isRingWorld ? WorldBody.RingWorld : WorldBody.Terrarium,
+            SeasonsEnabled = !isRingWorld,
+        };
         var elevation = new double[checked(preset.Width * preset.Height)];
         var random = new GeneratorRandom(options.Seed);
         var area = preset.Width * preset.Height;
@@ -52,7 +57,8 @@ public static class WorldGenerator
             }
         }
 
-        SelectMainOceanSeed(world);
+        TerrainClassifier.ApplyRingWorldWalls(world);
+        SelectOceanSeeds(world, includeLargeSecondaryBasins: isRingWorld);
 
         TerrainClassifier.RebuildAll(world);
         SeedNaturalVolcanoes(world, options.Seed);
@@ -362,11 +368,12 @@ public static class WorldGenerator
         }
     }
 
-    private static void SelectMainOceanSeed(SimulationWorld world)
+    private static void SelectOceanSeeds(
+        SimulationWorld world,
+        bool includeLargeSecondaryBasins)
     {
         var visited = new bool[checked(world.Width * world.Height)];
-        var largestSize = 0;
-        var selected = world.OceanSeed;
+        var basins = new List<(int Size, GridPosition Deepest)>();
         var directions = new GridPosition[]
         {
             new(1, 0), new(-1, 0), new(0, 1), new(0, -1),
@@ -422,15 +429,24 @@ public static class WorldGenerator
                     }
                 }
 
-                if (size > largestSize)
-                {
-                    largestSize = size;
-                    selected = deepest;
-                }
+                basins.Add((size, deepest));
             }
         }
 
-        world.OceanSeed = selected;
+        var ordered = basins.OrderByDescending(basin => basin.Size).ToArray();
+        if (ordered.Length == 0)
+        {
+            world.SetAdditionalOceanSeeds([]);
+            return;
+        }
+
+        world.OceanSeed = ordered[0].Deepest;
+        var minimumSecondaryBasinSize = Math.Max(64, world.Width * world.Height / 100);
+        world.SetAdditionalOceanSeeds(includeLargeSecondaryBasins
+            ? ordered.Skip(1)
+                .Where(basin => basin.Size >= minimumSecondaryBasinSize)
+                .Select(basin => basin.Deepest)
+            : []);
     }
 
     private static double FindLandThreshold(double[] elevation, double landFraction)

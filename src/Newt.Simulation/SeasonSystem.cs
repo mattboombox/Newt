@@ -12,6 +12,10 @@ public static class SeasonSystem
     public static void SetEnabled(SimulationWorld world, bool enabled)
     {
         ArgumentNullException.ThrowIfNull(world);
+        if (world.Body is WorldBody.RingWorld)
+        {
+            enabled = false;
+        }
         if (world.SeasonsEnabled == enabled)
         {
             return;

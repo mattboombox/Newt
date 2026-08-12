@@ -29,8 +29,10 @@ public static class ClimateSystem
                 var position = new GridPosition(x, y);
                 var elevationCooling = Math.Max(0, world.GetElevation(position)) * 0.48f;
                 var variation = (FractalNoise(world, x, y, world.Seed ^ 0xA0761D6478BD642FUL) - 0.5f) * 0.18f;
-                var temperature = 0.06f + latitudeWarmth * 0.98f - elevationCooling + variation +
-                    world.GlobalTemperatureOffset + SeasonSystem.GetTemperatureOffset(world, y);
+                var baseline = world.Body is WorldBody.RingWorld
+                    ? GetRingTemperatureNormal(world, x)
+                    : 0.06f + latitudeWarmth * 0.98f + SeasonSystem.GetTemperatureOffset(world, y);
+                var temperature = baseline - elevationCooling + variation + world.GlobalTemperatureOffset;
                 world.SetTemperature(position, temperature);
             }
         }
@@ -58,8 +60,11 @@ public static class ClimateSystem
                 var lakeInfluence = DistanceInfluence(lakeDistance[index], strength: 0.45f, reach: 6f);
                 var elevationPenalty = Math.Max(0, world.GetElevation(position)) * 0.18f;
                 var variation = (FractalNoise(world, x, y, world.Seed ^ 0xE7037ED1A0B428DBUL) - 0.5f) * 0.28f;
+                var engineeredZone = world.Body is WorldBody.RingWorld
+                    ? GetRingMoistureNormal(world, x)
+                    : 0f;
                 var moisture = 0.08f + oceanInfluence + riverInfluence + lakeInfluence + variation - elevationPenalty +
-                    world.GlobalMoistureOffset;
+                    engineeredZone + world.GlobalMoistureOffset;
                 world.SetMoisture(position, moisture);
 
                 var terrain = world.GetTerrain(position);
@@ -226,6 +231,22 @@ public static class ClimateSystem
 
     private static float DistanceInfluence(int distance, float strength, float reach) =>
         distance == Unreachable ? 0 : strength * MathF.Exp(-distance / reach);
+
+    private static float GetRingTemperatureNormal(SimulationWorld world, int x)
+    {
+        var phase = (x + 0.5f) / world.Width * MathF.Tau;
+        var seedPhase = (world.Seed % 10_000) / 10_000f * MathF.Tau;
+        return 0.49f + MathF.Sin(phase * 3 + seedPhase) * 0.30f +
+            MathF.Sin(phase * 7 - seedPhase * 0.5f) * 0.08f;
+    }
+
+    private static float GetRingMoistureNormal(SimulationWorld world, int x)
+    {
+        var phase = (x + 0.5f) / world.Width * MathF.Tau;
+        var seedPhase = (world.Seed % 8_192) / 8_192f * MathF.Tau;
+        return MathF.Sin(phase * 4 + seedPhase) * 0.24f +
+            MathF.Sin(phase * 9 - seedPhase) * 0.07f;
+    }
 
     private static bool IsSubmerged(Terrain terrain) => terrain is
         Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows or Terrain.Ice;

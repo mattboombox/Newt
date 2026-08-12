@@ -9,6 +9,7 @@ public sealed class SimulationWorld
     public const int TicksPerSecond = 20;
     public const float MinimumGroundElevation = -1f;
     public const float MaximumGroundElevation = 2f;
+    public const float RingWorldWallElevation = 2.15f;
     public const float MinimumSeaLevel = -1f;
     public const float MaximumSeaLevel = 1f;
     public const float MinimumGlobalClimateOffset = -1f;
@@ -38,6 +39,7 @@ public sealed class SimulationWorld
     private readonly List<VolcanoActivity> _volcanoes = [];
     private readonly List<LavaFlowActivity> _lavaFlows = [];
     private readonly List<ImpactWaveActivity> _impactWaves = [];
+    private readonly List<GridPosition> _additionalOceanSeeds = [];
     private readonly int[] _occupants;
     private readonly CritterSpecies[] _species;
     private readonly GridPosition[] _positions;
@@ -95,6 +97,8 @@ public sealed class SimulationWorld
 
     /// <summary>The single source from which globally connected saltwater spreads.</summary>
     public GridPosition OceanSeed { get; internal set; }
+
+    public IReadOnlyList<GridPosition> AdditionalOceanSeeds => _additionalOceanSeeds;
 
     public float GlobalTemperatureOffset { get; internal set; }
 
@@ -206,6 +210,20 @@ public sealed class SimulationWorld
             MinimumGroundElevation,
             MaximumGroundElevation);
 
+    internal void SetStructuralTerrain(
+        GridPosition position,
+        Terrain terrain,
+        float elevation)
+    {
+        var index = GetIndex(position);
+        _terrain[index] = terrain;
+        _elevation[index] = elevation;
+        _surfaceCovers[index] = SurfaceCover.None;
+        _surfaceCoverUntilTicks[index] = 0;
+        _activeSurfaceCovers.Remove(position);
+        RemoveCritterAt(position);
+    }
+
     internal void SetTemperature(GridPosition position, float temperature) =>
         _temperature[GetIndex(position)] = Math.Clamp(temperature, 0, 1);
 
@@ -253,6 +271,12 @@ public sealed class SimulationWorld
     internal List<LavaFlowActivity> LavaFlows => _lavaFlows;
 
     internal List<ImpactWaveActivity> ImpactWaves => _impactWaves;
+
+    internal void SetAdditionalOceanSeeds(IEnumerable<GridPosition> seeds)
+    {
+        _additionalOceanSeeds.Clear();
+        _additionalOceanSeeds.AddRange(seeds.Where(seed => seed != OceanSeed));
+    }
 
     internal void RegisterSpringSource(GridPosition position, int maximumLength)
     {

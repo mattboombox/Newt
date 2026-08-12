@@ -53,6 +53,68 @@ public sealed class LakeTests
     }
 
     [Fact]
+    public void OverflowRouteHandsDescendingTerrainBackToLakeDetection()
+    {
+        var world = new SimulationWorld(7, 7, Terrain.Plains);
+        for (var y = 0; y < world.Height; y++)
+        {
+            for (var x = 0; x < world.Width; x++)
+            {
+                world.SetElevation(new GridPosition(x, y), 0.8f);
+            }
+        }
+
+        var source = new GridPosition(3, 2);
+        var secondBasin = new GridPosition(3, 3);
+        var bypass = new GridPosition(3, 4);
+        world.SetElevation(source, 0.6f);
+        world.SetElevation(secondBasin, 0.2f);
+        world.SetElevation(bypass, 0.7f);
+        TerrainClassifier.RebuildAll(world);
+        Hydrology.StartSpring(world, source);
+        world.ActiveSprings[0].PlannedRoute.Enqueue(secondBasin);
+        world.ActiveSprings[0].PlannedRoute.Enqueue(bypass);
+
+        world.AdvanceOneTick();
+        world.AdvanceOneTick();
+
+        Assert.Equal(SurfaceWaterKind.FreshwaterLake, world.GetSurfaceWater(secondBasin));
+        Assert.NotEqual(SurfaceWaterKind.River, world.GetSurfaceWater(bypass));
+    }
+
+    [Fact]
+    public void OverflowDoesNotFlowBackIntoItsUpstreamLake()
+    {
+        var world = new SimulationWorld(7, 7, Terrain.Plains);
+        for (var y = 0; y < world.Height; y++)
+        {
+            for (var x = 0; x < world.Width; x++)
+            {
+                world.SetElevation(new GridPosition(x, y), 0.8f);
+            }
+        }
+
+        var outlet = new GridPosition(3, 3);
+        var upstreamLake = new GridPosition(2, 3);
+        var downstream = new GridPosition(4, 3);
+        world.SetElevation(outlet, 0.6f);
+        world.SetElevation(upstreamLake, 0.1f);
+        world.SetElevation(downstream, 0.4f);
+        TerrainClassifier.RebuildAll(world);
+        world.SetSurfaceWater(outlet, SurfaceWaterKind.River);
+        world.SetSurfaceWater(upstreamLake, SurfaceWaterKind.FreshwaterLake);
+        var spring = new ActiveSpring(outlet, 20);
+        spring.UpstreamLake.Add(upstreamLake);
+        world.ActiveSprings.Add(spring);
+
+        world.AdvanceOneTick();
+
+        Assert.Equal(1, world.ActiveSpringCount);
+        Assert.Equal(SurfaceWaterKind.River, world.GetSurfaceWater(downstream));
+        Assert.Equal(SurfaceWaterKind.FreshwaterLake, world.GetSurfaceWater(upstreamLake));
+    }
+
+    [Fact]
     public void DeepTerminalCraterFillsToItsRimWithoutADepthCap()
     {
         var world = new SimulationWorld(9, 9, Terrain.Plains);

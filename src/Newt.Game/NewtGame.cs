@@ -442,7 +442,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             $"{_preset.Name}  {_world.Width} x {_world.Height}",
             $"Seed {_seed}   Tick {_world.Tick}   Year {_world.Year}   {GetSimulationRateText()}",
             _world.HasOceans
-                ? $"Sea {_world.SeaLevel:+0.00;-0.00;0.00}   Seed POS ({_world.OceanSeed.X}, {_world.OceanSeed.Y})"
+                ? $"Sea {_world.SeaLevel:+0.00;-0.00;0.00}   Seeds {1 + _world.AdditionalOceanSeeds.Count}   Primary ({_world.OceanSeed.X}, {_world.OceanSeed.Y})"
                 : $"Datum {_world.SeaLevel:+0.00;-0.00;0.00}   No oceans",
             $"Temperature {_world.GlobalTemperatureOffset:+0.00;-0.00;0.00}",
             $"Moisture {_world.GlobalMoistureOffset:+0.00;-0.00;0.00}",
@@ -471,7 +471,9 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         }
     }
 
-    private string GetWorldSeasonLine() => _world.SeasonsEnabled
+    private string GetWorldSeasonLine() => _world.Body is WorldBody.RingWorld
+        ? "Engineered climate zones"
+        : _world.SeasonsEnabled
         ? $"Seasons N {SeasonSystem.GetSeason(_world, new GridPosition(0, 0))} / S {SeasonSystem.GetSeason(_world, new GridPosition(0, _world.Height - 1))}"
         : "Seasons disabled";
 
@@ -537,6 +539,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         return terrain switch
         {
             Terrain.Ice => "Ice Sheet",
+            Terrain.RingWorldWall => "Ring World Wall",
             Terrain.Mountain => biome is Biome.Arctic ? "Snowy Mountain" : "Mountain",
             Terrain.DeepOcean => $"{temperature} Deep Ocean",
             Terrain.Ocean => $"{temperature} Ocean",
@@ -775,6 +778,11 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         Biome biome,
         TemperatureBand temperatureBand)
     {
+        if (terrain is Terrain.RingWorldWall)
+        {
+            return new Color(112, 126, 136);
+        }
+
         var cover = _world.GetSurfaceCover(position);
         if (cover is SurfaceCover.Lava)
         {
@@ -822,6 +830,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             ? new Color(210, 222, 225)
             : new Color(78, 72, 68),
         Terrain.Ice => new Color(165, 220, 235),
+        Terrain.RingWorldWall => new Color(112, 126, 136),
         _ => Color.Magenta,
     };
 
@@ -920,7 +929,9 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         WorldTool.OceanSeed => _world.HasOceans ? "click move seed" : "click create ocean seed",
         WorldTool.Temperature => "left warmer, right cooler",
         WorldTool.Moisture => "left wetter, right drier",
-        WorldTool.Seasons => "left enable, right disable",
+        WorldTool.Seasons => _world.Body is WorldBody.RingWorld
+            ? "fixed engineered climate"
+            : "left enable, right disable",
         WorldTool.Volcano => "left spawn active vent",
         WorldTool.Meteor => $"left impact, right magnitude {_eventMagnitudeIndex / 10f:0.0}",
         WorldTool.Tsunami => $"left in ocean, right magnitude {_eventMagnitudeIndex / 10f:0.0}",
