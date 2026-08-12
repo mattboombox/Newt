@@ -6,4 +6,5 @@ public readonly record struct LakeFillResult(
     int LakeTileCount,
     float SurfaceElevation,
     GridPosition? Outlet,
-    GridPosition? OutletConnection);
+    GridPosition? OutletConnection,
+    IReadOnlyList<GridPosition>? OverflowPath = null);

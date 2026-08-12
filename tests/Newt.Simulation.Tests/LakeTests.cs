@@ -33,7 +33,7 @@ public sealed class LakeTests
     }
 
     [Fact]
-    public void ActiveSpringStopsWhenItFormsALake()
+    public void ActiveSpringContinuesFromLakeOverflow()
     {
         var world = CreateBasinWorld();
         Hydrology.StartSpring(world, new GridPosition(4, 4));
@@ -41,9 +41,66 @@ public sealed class LakeTests
         world.AdvanceOneTick();
 
         Assert.Equal(SurfaceWaterKind.FreshwaterLake, world.GetSurfaceWater(new GridPosition(4, 4)));
-        Assert.Equal(0, world.ActiveSpringCount);
-        Assert.Equal(SpringTermination.FormedLake, world.LastCompletedSpring?.Termination);
-        Assert.Equal(SurfaceWaterKind.None, world.GetSurfaceWater(new GridPosition(7, 4)));
+        Assert.Equal(1, world.ActiveSpringCount);
+        Assert.Equal(SurfaceWaterKind.River, world.GetSurfaceWater(new GridPosition(7, 4)));
+
+        while (world.ActiveSpringCount > 0)
+        {
+            world.AdvanceOneTick();
+        }
+
+        Assert.Equal(SpringTermination.ReachedOcean, world.LastCompletedSpring?.Termination);
+    }
+
+    [Fact]
+    public void DeepTerminalCraterFillsToItsRimWithoutADepthCap()
+    {
+        var world = new SimulationWorld(9, 9, Terrain.Plains);
+        world.SeaLevel = -1f;
+        for (var y = 0; y < world.Height; y++)
+        {
+            for (var x = 0; x < world.Width; x++)
+            {
+                world.SetElevation(new GridPosition(x, y), 0.5f);
+            }
+        }
+        for (var y = 3; y <= 5; y++)
+        {
+            for (var x = 3; x <= 5; x++)
+            {
+                world.SetElevation(new GridPosition(x, y), -0.9f);
+            }
+        }
+        TerrainClassifier.RebuildAll(world);
+
+        var result = Hydrology.FillBasin(world, new GridPosition(4, 4));
+
+        Assert.Equal(9, result.LakeTileCount);
+        Assert.Equal(0.5f, result.SurfaceElevation, precision: 5);
+        Assert.Equal(1.4f, world.GetWaterDepth(new GridPosition(4, 4)), precision: 5);
+    }
+
+    [Fact]
+    public void ShallowTerminalLakeIsLimitedBySurfaceArea()
+    {
+        var world = new SimulationWorld(20, 20, Terrain.Plains);
+        for (var y = 0; y < world.Height; y++)
+        {
+            for (var x = 0; x < world.Width; x++)
+            {
+                world.SetElevation(new GridPosition(x, y), 0.1f);
+            }
+        }
+        TerrainClassifier.RebuildAll(world);
+
+        var result = Hydrology.FillBasin(
+            world,
+            new GridPosition(10, 10),
+            searchBudget: 1,
+            lakeTileBudget: 16);
+
+        Assert.Equal(16, result.LakeTileCount);
+        Assert.InRange(result.SurfaceElevation, 0.1f, 0.101f);
     }
 
     [Fact]

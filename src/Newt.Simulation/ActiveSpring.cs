@@ -8,4 +8,6 @@ internal sealed class ActiveSpring(GridPosition source, int maximumLength)
     public int MaximumLength { get; } = maximumLength;
 
     public HashSet<GridPosition> Visited { get; } = [source];
+
+    public Queue<GridPosition> PlannedRoute { get; } = new();
 }

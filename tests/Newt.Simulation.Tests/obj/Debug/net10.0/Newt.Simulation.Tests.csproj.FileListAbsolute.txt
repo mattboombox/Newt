@@ -95,7 +95,5 @@ C:\Users\1Matt\Desktop\Newt\tests\Newt.Simulation.Tests\obj\Debug\net10.0\Newt.S
 C:\Users\1Matt\Desktop\Newt\tests\Newt.Simulation.Tests\obj\Debug\net10.0\Newt.Simulation.Tests.sourcelink.json
 C:\Users\1Matt\Desktop\Newt\tests\Newt.Simulation.Tests\obj\Debug\net10.0\Newt.Sim.2B1F8B27.Up2Date
 C:\Users\1Matt\Desktop\Newt\tests\Newt.Simulation.Tests\obj\Debug\net10.0\Newt.Simulation.Tests.dll
-C:\Users\1Matt\Desktop\Newt\tests\Newt.Simulation.Tests\obj\Debug\net10.0\refint\Newt.Simulation.Tests.dll
 C:\Users\1Matt\Desktop\Newt\tests\Newt.Simulation.Tests\obj\Debug\net10.0\Newt.Simulation.Tests.pdb
 C:\Users\1Matt\Desktop\Newt\tests\Newt.Simulation.Tests\obj\Debug\net10.0\Newt.Simulation.Tests.genruntimeconfig.cache
-C:\Users\1Matt\Desktop\Newt\tests\Newt.Simulation.Tests\obj\Debug\net10.0\ref\Newt.Simulation.Tests.dll

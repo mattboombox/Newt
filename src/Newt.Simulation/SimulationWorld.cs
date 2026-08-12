@@ -102,6 +102,10 @@ public sealed class SimulationWorld
 
     public bool SeasonsEnabled { get; internal set; } = true;
 
+    public bool NaturalEventsEnabled { get; internal set; } = true;
+
+    internal long NextNaturalEventTick { get; set; } = 6 * 60 * TicksPerSecond;
+
     public int CritterCount => _count;
 
     public int ActiveSpringCount => _activeSprings.Count;
@@ -169,7 +173,8 @@ public sealed class SimulationWorld
             wave.Center,
             wave.CurrentRadius,
             wave.MaximumRadius,
-            wave.Magnitude);
+            wave.Magnitude,
+            wave.Kind);
     }
 
     public SurfaceWaterKind GetSurfaceWater(GridPosition position) =>
@@ -306,6 +311,7 @@ public sealed class SimulationWorld
     {
         Tick++;
         SeasonSystem.Advance(this);
+        NaturalEvents.Advance(this);
         Impacts.Advance(this);
         Volcanism.Advance(this);
         Hydrology.AdvanceSprings(this);

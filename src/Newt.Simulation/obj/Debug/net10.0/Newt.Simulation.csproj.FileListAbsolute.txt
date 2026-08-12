@@ -7,9 +7,7 @@ C:\Users\1Matt\Desktop\Newt\src\Newt.Simulation\obj\Debug\net10.0\Newt.Simulatio
 C:\Users\1Matt\Desktop\Newt\src\Newt.Simulation\obj\Debug\net10.0\Newt.Simulation.csproj.CoreCompileInputs.cache
 C:\Users\1Matt\Desktop\Newt\src\Newt.Simulation\obj\Debug\net10.0\Newt.Simulation.sourcelink.json
 C:\Users\1Matt\Desktop\Newt\src\Newt.Simulation\obj\Debug\net10.0\Newt.Simulation.dll
-C:\Users\1Matt\Desktop\Newt\src\Newt.Simulation\obj\Debug\net10.0\refint\Newt.Simulation.dll
 C:\Users\1Matt\Desktop\Newt\src\Newt.Simulation\obj\Debug\net10.0\Newt.Simulation.pdb
-C:\Users\1Matt\Desktop\Newt\src\Newt.Simulation\obj\Debug\net10.0\ref\Newt.Simulation.dll
 C:\Users\1Matt\Desktop\Newt\.verify-meteors\Newt.Simulation.deps.json
 C:\Users\1Matt\Desktop\Newt\.verify-meteors\Newt.Simulation.dll
 C:\Users\1Matt\Desktop\Newt\.verify-meteors\Newt.Simulation.pdb
@@ -43,3 +41,8 @@ C:\Users\1Matt\Desktop\Newt\.tmp-ocean-seed-build\Newt.Simulation.pdb
 C:\Users\1Matt\Desktop\Newt\.tmp-water-color-build\Newt.Simulation.deps.json
 C:\Users\1Matt\Desktop\Newt\.tmp-water-color-build\Newt.Simulation.dll
 C:\Users\1Matt\Desktop\Newt\.tmp-water-color-build\Newt.Simulation.pdb
+C:\Users\1Matt\Desktop\Newt\.codex-game-build\Newt.Simulation.deps.json
+C:\Users\1Matt\Desktop\Newt\.codex-game-build\Newt.Simulation.dll
+C:\Users\1Matt\Desktop\Newt\.codex-game-build\Newt.Simulation.pdb
+C:\Users\1Matt\Desktop\Newt\src\Newt.Simulation\obj\Debug\net10.0\refint\Newt.Simulation.dll
+C:\Users\1Matt\Desktop\Newt\src\Newt.Simulation\obj\Debug\net10.0\ref\Newt.Simulation.dll

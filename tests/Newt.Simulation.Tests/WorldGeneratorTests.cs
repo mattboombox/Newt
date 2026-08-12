@@ -48,55 +48,31 @@ public sealed class WorldGeneratorTests
     }
 
     [Fact]
-    public void DefaultGameWorldStartsWithOceanAtItsCenterSeed()
+    public void DefaultGameWorldSeedsItsLargestBelowSeaLevelBasin()
     {
         var world = WorldGenerator.Generate(new WorldGenerationOptions(WorldPreset.Standard, Seed: 20260806));
 
-        Assert.Equal(new GridPosition(world.Width / 2, world.Height / 2), world.OceanSeed);
         Assert.True(world.GetTerrain(world.OceanSeed) is
             Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows or Terrain.Ice);
+        Assert.Equal(
+            LargestBelowSeaLevelComponentSize(world),
+            BelowSeaLevelComponentSize(world, world.OceanSeed));
     }
 
     [Fact]
     public void PresetsProduceTheirDocumentedDimensions()
     {
-        WorldPreset[] presets = [WorldPreset.Micro, WorldPreset.Standard, WorldPreset.Large, WorldPreset.Ring, WorldPreset.Earth, WorldPreset.Mars, WorldPreset.Moon];
+        WorldPreset[] presets = [WorldPreset.Micro, WorldPreset.Standard, WorldPreset.Large, WorldPreset.Ring, WorldPreset.Earth];
         foreach (var preset in presets)
         {
             var world = WorldGenerator.Generate(new WorldGenerationOptions(preset, Seed: 9));
             Assert.Equal(preset.Width, world.Width);
             Assert.Equal(preset.Height, world.Height);
-            if (preset != WorldPreset.Earth && preset != WorldPreset.Mars && preset != WorldPreset.Moon)
+            if (preset != WorldPreset.Earth)
             {
                 Assert.InRange(world.ActiveSpringCount, 1, 6);
             }
         }
-    }
-
-    [Fact]
-    public void MoonPresetUsesLolaReliefWithoutCreatingOceans()
-    {
-        var world = WorldGenerator.Generate(new WorldGenerationOptions(WorldPreset.Moon, Seed: 9));
-
-        Assert.Equal(WorldBody.Moon, world.Body);
-        Assert.False(world.HasOceans);
-        Assert.Contains(AllPositions(world), position => world.GetElevation(position) > 0.58f);
-        Assert.Contains(AllPositions(world), position => world.GetElevation(position) < -0.58f);
-        Assert.DoesNotContain(AllPositions(world), position => world.GetTerrain(position) is
-            Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows or Terrain.Beach);
-    }
-
-    [Fact]
-    public void MarsPresetUsesMolaReliefWithoutCreatingOceans()
-    {
-        var world = WorldGenerator.Generate(new WorldGenerationOptions(WorldPreset.Mars, Seed: 9));
-
-        Assert.Equal(WorldBody.Mars, world.Body);
-        Assert.False(world.HasOceans);
-        Assert.Contains(AllPositions(world), position => world.GetElevation(position) > 1f);
-        Assert.Contains(AllPositions(world), position => world.GetElevation(position) < -0.5f);
-        Assert.DoesNotContain(AllPositions(world), position => world.GetTerrain(position) is
-            Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows or Terrain.Beach);
     }
 
     [Fact]
@@ -172,6 +148,53 @@ public sealed class WorldGeneratorTests
         }
 
         return counts;
+    }
+
+    private static int LargestBelowSeaLevelComponentSize(SimulationWorld world)
+    {
+        var visited = new HashSet<GridPosition>();
+        var largest = 0;
+        foreach (var position in AllPositions(world))
+        {
+            if (world.GetElevation(position) <= world.SeaLevel && !visited.Contains(position))
+            {
+                largest = Math.Max(largest, FloodBelowSeaLevel(world, position, visited));
+            }
+        }
+        return largest;
+    }
+
+    private static int BelowSeaLevelComponentSize(SimulationWorld world, GridPosition start) =>
+        FloodBelowSeaLevel(world, start, []);
+
+    private static int FloodBelowSeaLevel(
+        SimulationWorld world,
+        GridPosition start,
+        HashSet<GridPosition> visited)
+    {
+        var queue = new Queue<GridPosition>();
+        queue.Enqueue(start);
+        visited.Add(start);
+        var count = 0;
+        ReadOnlySpan<GridPosition> directions = [new(1, 0), new(-1, 0), new(0, 1), new(0, -1)];
+        while (queue.TryDequeue(out var current))
+        {
+            count++;
+            foreach (var direction in directions)
+            {
+                var y = current.Y + direction.Y;
+                if (y < 0 || y >= world.Height)
+                {
+                    continue;
+                }
+                var neighbor = new GridPosition((current.X + direction.X + world.Width) % world.Width, y);
+                if (world.GetElevation(neighbor) <= world.SeaLevel && visited.Add(neighbor))
+                {
+                    queue.Enqueue(neighbor);
+                }
+            }
+        }
+        return count;
     }
 
     private static bool HasAdjacentArcticMountain(SimulationWorld world, GridPosition position)

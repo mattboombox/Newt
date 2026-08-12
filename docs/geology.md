@@ -6,17 +6,25 @@ new physical state.
 
 ## First live operation: elevation tool
 
-The initial tool category is Terrain and its first selection is Elevation. Left
+The initial category is World Tools and its first selection is Elevation. Left
 click a world tile to raise a circular region, or right click to lower it. Both
 directions use a smooth falloff: the center receives the full change while the
 edge receives almost none. World X coordinates wrap, so a change at the left edge
 continues naturally at the right edge. Terrain and coastlines are reclassified
 immediately.
 
-`Q` and `E` cycle between Elevation, SeaLevel, OceanSeed, Temperature,
-Moisture, Seasons, Volcano, Meteor, and River within the Terrain
-category. `R` cycles tool categories. The selection structure is ready for later
-event, spawning, and inspection categories.
+`Q` and `E` cycle tools. World Tools contains Elevation, SeaLevel, OceanSeed,
+Temperature, Moisture, Seasons, Volcano, and River. Events contains Meteor,
+Tsunami, and NaturalEvents. `R` cycles between the two categories.
+
+Natural terrain events are deterministic and occur rarely in simulation time.
+They create a random meteor impact or volcano roughly every 6 to 16 simulated
+minutes. The NaturalEvents tool enables them with left click and disables them
+with right click.
+
+The Tsunami tool starts a wave only when left-clicked over ocean. Right click
+cycles magnitude. It reuses the impact-wave animation with a blue front and
+lowers the elevation of land reached by the wave.
 
 `<` and `>` step the simulation rate through 0.25x, 0.5x, 1x, 2x, 4x,
 8x, and 16x. `P` pauses or resumes simulation time without disabling tools or
@@ -58,10 +66,10 @@ to -1.0 through +2.0. The mountain ceiling is high enough for elevation cooling 
 Arctic mountain climate even at the equator.
 
 Closed river basins form bounded terminal lakes instead of falling back to a
-single wet tile. A terminal lake can cover at most 128 tiles and rise no more than
-0.12 elevation units above its sink. This also applies below sea level, allowing
-deep landlocked freshwater lakes without letting one spring instantly fill a
-continent-sized depression.
+single wet tile. A terminal lake can cover at most 128 tiles. Its surface is set
+by the lowest elevations needed to consume that area budget, without an
+independent depth cap. This allows compact deep craters to fill while preventing
+one spring from flooding a continent-sized shallow depression.
 
 Freshwater lake rendering darkens strongly with local depth. The lake remains one
 water body and biome influence; the gradient is a visual depth cue rather than a
@@ -121,7 +129,7 @@ drainage algorithm therefore treats a basin as a container:
 3. Use the highest point on that best route as the basin's spill elevation.
 4. Flood-fill connected basin tiles below the spill elevation as a lake.
 5. Record the spill tile as part of the lake calculation.
-6. Stop the spring when the lake has formed.
+6. Continue the spring along the calculated overflow route toward the ocean.
 
 This naturally produces lakes where terrain encloses water. A lake is not placed
 randomly; its shape follows the elevation contours of its basin.
@@ -129,8 +137,9 @@ randomly; its shape follows the elevation contours of its basin.
 This is implemented. It determines lake size from topography rather than a random
 radius. Search budgets prevent an accidental continent-scale or unbounded
 calculation. When a flowing spring reaches a basin, the lake fills as one event
-and the spring terminates. The spill calculation controls lake shape and depth but
-does not create a second downstream river.
+and the spring continues from its outlet. Lake budgets limit surface area rather
+than depth, so compact deep craters can fill to their rim without allowing broad
+shallow depressions to become unbounded lakes.
 
 ## First spring prototype
 
@@ -159,7 +168,8 @@ seeded, suitably spaced non-Arctic mountain tiles adjacent to Arctic mountains.
 They obey the same tracing, basin filling, and persistent-source rules as springs
 created by the player.
 
-With the River tool selected, left click valid land to start an animated spring.
+With the River tool selected, left click a non-Arctic Mountain adjacent to a
+Snowy Mountain to start an animated spring. The `F` shortcut uses the same rule.
 Right click any freshwater tile to remove its connected river and lake system.
 If tributaries have joined, every registered source feeding that connected system
 is removed together; unrelated freshwater is redrawn and remains in the world.

@@ -5,6 +5,28 @@ namespace Newt.Simulation.Tests;
 public sealed class ClimateTests
 {
     [Fact]
+    public void FreezingDeepOceanFormsSeaIce()
+    {
+        var world = new SimulationWorld(9, 9, Terrain.DeepOcean, seed: 6);
+        world.OceanSeed = new GridPosition(4, 0);
+        world.GlobalTemperatureOffset = -1f;
+        for (var y = 0; y < world.Height; y++)
+        {
+            for (var x = 0; x < world.Width; x++)
+            {
+                world.SetElevation(new GridPosition(x, y), -0.5f);
+            }
+        }
+
+        TerrainClassifier.RebuildAll(world);
+
+        var polarDeepOcean = new GridPosition(4, 0);
+        Assert.True(world.SeaLevel - world.GetElevation(polarDeepOcean) > 0.20f);
+        Assert.Equal(TemperatureBand.Freezing, world.GetTemperatureBand(polarDeepOcean));
+        Assert.Equal(Terrain.Ice, world.GetTerrain(polarDeepOcean));
+    }
+
+    [Fact]
     public void HemispheresHaveOppositeSeasonsAndEquatorIsUnaffected()
     {
         var world = CreateFlatLand(width: 21, height: 21, seed: 7);

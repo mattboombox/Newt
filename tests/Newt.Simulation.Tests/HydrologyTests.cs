@@ -5,6 +5,25 @@ namespace Newt.Simulation.Tests;
 public sealed class HydrologyTests
 {
     [Fact]
+    public void SnowmeltSpringRejectsTerrainAwayFromSnowyMountains()
+    {
+        var world = new SimulationWorld(9, 9, Terrain.Plains, seed: 4);
+        for (var y = 0; y < world.Height; y++)
+        {
+            for (var x = 0; x < world.Width; x++)
+            {
+                world.SetElevation(new GridPosition(x, y), 0.2f);
+            }
+        }
+        TerrainClassifier.RebuildAll(world);
+
+        var result = Hydrology.StartSnowmeltSpring(world, new GridPosition(4, 4));
+
+        Assert.Equal(SpringTermination.InvalidSource, result.Termination);
+        Assert.Equal(0, world.ActiveSpringCount);
+    }
+
+    [Fact]
     public void SpringFlowsDownhillAndStopsAtOcean()
     {
         var world = CreateDescendingValley();
@@ -117,12 +136,41 @@ public sealed class HydrologyTests
                 world.GetRiverConnections(position) is not RiverConnection.None);
     }
 
+    [Theory]
+    [InlineData(SurfaceWaterKind.River)]
+    [InlineData(SurfaceWaterKind.FreshwaterLake)]
+    public void PlannedOverflowMergesWithoutOverwritingExistingFreshwater(
+        SurfaceWaterKind existingWater)
+    {
+        var world = new SimulationWorld(7, 7, Terrain.Plains);
+        for (var y = 0; y < world.Height; y++)
+        {
+            for (var x = 0; x < world.Width; x++)
+            {
+                world.SetElevation(new GridPosition(x, y), 0.5f);
+            }
+        }
+        TerrainClassifier.RebuildAll(world);
+        var source = new GridPosition(3, 3);
+        var watercourse = new GridPosition(4, 3);
+        Hydrology.StartSpring(world, source);
+        world.SetSurfaceWater(watercourse, existingWater);
+        world.ActiveSprings[0].PlannedRoute.Enqueue(watercourse);
+
+        world.AdvanceOneTick();
+
+        Assert.Equal(existingWater, world.GetSurfaceWater(watercourse));
+        Assert.Equal(0, world.ActiveSpringCount);
+        Assert.Equal(SpringTermination.ReachedWatercourse, world.LastCompletedSpring?.Termination);
+        Assert.NotEqual(RiverConnection.None, world.GetRiverConnections(source));
+    }
+
     [Fact]
     public void RemovingConnectedFreshwaterRemovesEverySourceFeedingIt()
     {
         var world = CreateJoinedRivers();
         Hydrology.TraceSpring(world, new GridPosition(4, 2));
-        Hydrology.TraceSpring(world, new GridPosition(3, 2));
+        Hydrology.TraceSpring(world, new GridPosition(2, 2));
 
         Assert.Equal(2, world.SpringSources.Count);
 

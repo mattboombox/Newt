@@ -60,7 +60,14 @@ public static class Impacts
             var wave = world.ImpactWaves[index];
             var previousRadius = wave.CurrentRadius;
             wave.CurrentRadius = Math.Min(wave.MaximumRadius, wave.CurrentRadius + wave.Speed);
-            ApplyShockAnnulus(world, wave, previousRadius, wave.CurrentRadius);
+            if (wave.Kind is WaveKind.Tsunami)
+            {
+                ApplyTsunamiAnnulus(world, wave, previousRadius, wave.CurrentRadius);
+            }
+            else
+            {
+                ApplyShockAnnulus(world, wave, previousRadius, wave.CurrentRadius);
+            }
             if (wave.CurrentRadius >= wave.MaximumRadius)
             {
                 world.ImpactWaves.RemoveAt(index);
@@ -241,6 +248,56 @@ public static class Impacts
                     world.RemoveCritterAt(position);
                 }
             }
+        }
+    }
+
+    private static void ApplyTsunamiAnnulus(
+        SimulationWorld world,
+        ImpactWaveActivity wave,
+        float previousRadius,
+        float currentRadius)
+    {
+        var changed = false;
+        var reach = (int)MathF.Ceiling(currentRadius * 1.12f + 1);
+        for (var offsetY = -reach; offsetY <= reach; offsetY++)
+        {
+            var y = wave.Center.Y + offsetY;
+            if (y < 0 || y >= world.Height)
+            {
+                continue;
+            }
+            for (var offsetX = -reach; offsetX <= reach; offsetX++)
+            {
+                var position = new GridPosition(Mod(wave.Center.X + offsetX, world.Width), y);
+                var distance = DistortedDistance(world, wave.Center, position);
+                if (distance <= previousRadius || distance > currentRadius)
+                {
+                    continue;
+                }
+
+                if (world.GetTerrain(position) is
+                    Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows or Terrain.Ice)
+                {
+                    continue;
+                }
+
+                var remainingStrength = Math.Max(0, 1 - distance / wave.MaximumRadius);
+                var erosion = (0.012f + wave.Magnitude * 0.055f) * remainingStrength;
+                if (erosion <= 0)
+                {
+                    continue;
+                }
+
+                world.SetElevation(position, world.GetElevation(position) - erosion);
+                world.RemoveCritterAt(position);
+                changed = true;
+            }
+        }
+
+        if (changed)
+        {
+            TerrainClassifier.RebuildLandforms(world);
+            Hydrology.RebuildFreshwater(world);
         }
     }
 

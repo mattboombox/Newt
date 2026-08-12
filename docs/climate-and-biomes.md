@@ -91,9 +91,10 @@ marine environment:
 | Temperate | Temperate |
 | Hot | Hot |
 
-Saltwater below `0.12` becomes physical sea ice. Liquid water between `0.12` and
-`0.18` retains its depth terrain and uses the Freezing climate label. Moisture is
-not used to classify oceans because the tile is already water-covered.
+Saltwater below `0.12` becomes physical sea ice at every depth, including deep
+ocean. Liquid water between `0.12` and `0.18` retains its depth terrain and uses
+the Freezing climate label. Moisture is not used to classify oceans because the
+tile is already water-covered.
 
 Cold ocean tiles render five percent darker than temperate water, freezing water
 ten percent darker, and warm water six percent lighter. These restrained changes

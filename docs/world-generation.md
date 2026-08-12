@@ -5,12 +5,18 @@ fraction. Identical options produce identical terrain.
 
 ## Current algorithm
 
-1. Begin with a flat elevation field.
-2. Walk several semi-random volcanic chains across the wrapping world. Each step
-   adds an overlapping shield-shaped cone, producing ridges, island arcs, and
-   irregular volcanic uplands.
-3. Select an elevation threshold that approximates the requested land fraction.
-4. Carve a central ocean basin around the world's initial saltwater seed.
+1. Build a small number of broad, overlapping continental masses. Each mass uses
+   several offset lobes so it has peninsulas and irregular edges rather than a
+   single oval outline.
+2. Walk a few semi-random volcanic chains across those foundations. Continental
+   lobes stay comparatively low while the volcanic shields are narrow and steep,
+   producing concentrated regional ridges without shrinking the landmass.
+3. Add three scales of smooth seeded elevation noise for bays, valleys, broken
+   coastlines, and varied continental interiors.
+4. Select an elevation threshold that approximates the requested land fraction.
+5. Find the largest connected below-sea-level basin and place the world's single
+   saltwater seed at its deepest tile. Smaller disconnected depressions remain
+   dry inland basins rather than becoming separate saltwater oceans.
 5. Build a seeded temperature field from latitude and elevation.
 6. Classify physical landforms and saltwater coastlines.
 7. Build moisture from saltwater distance, freshwater, elevation, and seeded
@@ -65,25 +71,11 @@ come from a downsampled NOAA ETOPO 2022 ice-surface grid, with sea level preserv
 The source data are public domain under CC0-1.0. Land and ocean heights use separate
 display scaling so both mountain ranges and ocean basins remain readable at tile scale.
 
-Press `6` to generate the 240 by 120 Moon preset from NASA/PDS Lunar Orbiter Laser
-Altimeter (LOLA) global topography. Lunar elevations are relative to the 1,737.4 km
-reference radius and use a grayscale palette that separates maria, basins, and highlands.
-The Moon starts without simulated oceans. Selecting OceanSeed and clicking a tile
-creates its first connected ocean; below-datum terrain floods naturally from that seed.
-
-Press `7` to generate the 240 by 120 Mars preset from NASA/PDS Mars Orbiter Laser
-Altimeter (MOLA) MEGDR topography. Martian elevation is measured relative to the
-areoid, but negative terrain remains dry rather than becoming ocean. Mars uses a
-dedicated rust-colored relief palette with seasonally cold polar frost.
-Like the Moon, Mars starts dry but accepts a user-placed OceanSeed, after which the
-normal sea-level and connected-ocean tools apply.
-User-created oceans on Mars and the Moon use the standard blue depth palette and
-pale sea-ice color; their special rust and grayscale palettes apply only to dry land.
 - Volcano tool: left click spawns a new active volcano on an unoccupied tile.
 - Meteor tool: left click strikes the pointed tile; right click cycles magnitude
   from `0.0` through `1.0` in `0.1` steps. The active magnitude appears in the HUD.
-- River tool: left click starts a spring and right click removes the connected
-  river and lake system under the pointer.
+- River tool: left click starts a spring only on a mountain adjacent to a Snowy
+  Mountain; right click removes the connected river and lake system.
 
 Elevation, SeaLevel, Temperature, and Moisture repeat while their mouse button is
 held. The first repeat begins after 0.25 seconds and continues every 0.075 seconds.

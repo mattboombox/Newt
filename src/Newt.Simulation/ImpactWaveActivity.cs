@@ -4,7 +4,8 @@ internal sealed class ImpactWaveActivity(
     GridPosition center,
     float maximumRadius,
     float speed,
-    float magnitude)
+    float magnitude,
+    WaveKind kind = WaveKind.Impact)
 {
     public GridPosition Center { get; } = center;
 
@@ -15,4 +16,6 @@ internal sealed class ImpactWaveActivity(
     public float Speed { get; } = speed;
 
     public float Magnitude { get; } = magnitude;
+
+    public WaveKind Kind { get; } = kind;
 }

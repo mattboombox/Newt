@@ -4,10 +4,9 @@ namespace Newt.Simulation;
 public static class Hydrology
 {
     private const float ElevationTolerance = 0.000_001f;
-    private const int DefaultBasinSearchBudget = 4_096;
+    private const int DefaultBasinSearchBudget = 32_768;
     private const int DefaultLakeTileBudget = 2_048;
     private const int TerminalLakeTileBudget = 128;
-    private const float MaximumTerminalLakeDepth = 0.12f;
 
     private static readonly GridPosition[] FlowDirections =
     [
@@ -28,6 +27,48 @@ public static class Hydrology
         new(0, 1),
         new(-1, 0),
     ];
+
+    /// <summary>Starts a player/natural snowmelt spring only at a valid mountain edge.</summary>
+    public static SpringResult StartSnowmeltSpring(
+        SimulationWorld world,
+        GridPosition source,
+        int maximumLength = 2_048)
+    {
+        ArgumentNullException.ThrowIfNull(world);
+        if (!IsSnowmeltSource(world, source))
+        {
+            var invalid = new SpringResult(SpringTermination.InvalidSource, 0, source);
+            world.LastCompletedSpring = invalid;
+            return invalid;
+        }
+
+        return StartSpring(world, source, maximumLength);
+    }
+
+    public static bool IsSnowmeltSource(SimulationWorld world, GridPosition position)
+    {
+        ArgumentNullException.ThrowIfNull(world);
+        if (!world.Contains(position) ||
+            world.GetTerrain(position) is not Terrain.Mountain ||
+            world.GetBiome(position) is Biome.Arctic ||
+            world.GetSurfaceCover(position) is not SurfaceCover.None)
+        {
+            return false;
+        }
+
+        foreach (var direction in FlowDirections)
+        {
+            var neighbor = GetNeighbor(world, position, direction);
+            if (neighbor is not null &&
+                world.GetTerrain(neighbor.Value) is Terrain.Mountain &&
+                world.GetBiome(neighbor.Value) is Biome.Arctic)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     /// <summary>Starts a spring whose channel will extend by one tile per simulation tick.</summary>
     public static SpringResult StartSpring(
@@ -219,15 +260,6 @@ public static class Hydrology
 
         var spillElevation = bestSpill[exit.Value];
         var path = ReconstructPath(previous, sink, exit.Value);
-        var outletIndex = path.FindIndex(position =>
-            world.GetElevation(position) >= spillElevation - ElevationTolerance);
-        if (outletIndex < 0)
-        {
-            outletIndex = path.Count - 1;
-        }
-
-        var outlet = path[outletIndex];
-        var outletConnection = outletIndex > 0 ? path[outletIndex - 1] : sink;
         var lakeTiles = FindLakeTiles(world, sink, spillElevation, lakeTileBudget);
         if (lakeTiles is null || lakeTiles.Count == 0)
         {
@@ -240,12 +272,52 @@ public static class Hydrology
             world.SetWaterSurfaceElevation(position, spillElevation);
         }
 
-        return new LakeFillResult(true, lakeTiles.Count, spillElevation, outlet, outletConnection);
+        var lakeSet = lakeTiles.ToHashSet();
+        var outletIndex = path.FindIndex(position => !lakeSet.Contains(position));
+        if (outletIndex < 0)
+        {
+            return new LakeFillResult(true, lakeTiles.Count, spillElevation, null, null);
+        }
+
+        var outlet = path[outletIndex];
+        var outletConnection = outletIndex > 0 ? path[outletIndex - 1] : sink;
+        return new LakeFillResult(
+            true,
+            lakeTiles.Count,
+            spillElevation,
+            outlet,
+            outletConnection,
+            path.Skip(outletIndex).ToArray());
     }
 
     private static SpringResult? AdvanceSpring(SimulationWorld world, ActiveSpring spring)
     {
         var current = spring.Current;
+        if (spring.PlannedRoute.TryDequeue(out var planned))
+        {
+            if (IsOcean(world.GetTerrain(planned)))
+            {
+                Connect(world, current, planned);
+                return Completed(SpringTermination.ReachedOcean, spring);
+            }
+
+            if (world.GetSurfaceWater(planned) is
+                SurfaceWaterKind.River or SurfaceWaterKind.FreshwaterLake)
+            {
+                Connect(world, current, planned);
+                return Completed(SpringTermination.ReachedWatercourse, spring);
+            }
+
+            Connect(world, current, planned);
+            world.SetSurfaceWater(planned, SurfaceWaterKind.River);
+            world.SetWaterSurfaceElevation(planned, null);
+            spring.Current = planned;
+            spring.Visited.Add(planned);
+            return spring.Visited.Count >= spring.MaximumLength
+                ? Completed(SpringTermination.MaximumLength, spring)
+                : null;
+        }
+
         foreach (var direction in FlowDirections)
         {
             var neighbor = GetNeighbor(world, current, direction);
@@ -283,9 +355,27 @@ public static class Hydrology
         if (lowest is null)
         {
             var lake = FillBasin(world, current);
-            return Completed(
-                lake.Created ? SpringTermination.FormedLake : SpringTermination.Basin,
-                spring);
+            if (!lake.Created || lake.Outlet is null || lake.OutletConnection is null ||
+                lake.OverflowPath is null || lake.OverflowPath.Count == 0)
+            {
+                return Completed(
+                    lake.Created ? SpringTermination.FormedLake : SpringTermination.Basin,
+                    spring);
+            }
+
+            Connect(world, lake.OutletConnection.Value, lake.Outlet.Value);
+            world.SetSurfaceWater(lake.Outlet.Value, SurfaceWaterKind.River);
+            world.SetWaterSurfaceElevation(lake.Outlet.Value, null);
+            spring.Current = lake.Outlet.Value;
+            spring.Visited.Add(lake.Outlet.Value);
+            foreach (var position in lake.OverflowPath.Skip(1))
+            {
+                spring.PlannedRoute.Enqueue(position);
+            }
+
+            return spring.Visited.Count >= spring.MaximumLength
+                ? Completed(SpringTermination.MaximumLength, spring)
+                : null;
         }
 
         Connect(world, current, lowest.Value);
@@ -348,7 +438,7 @@ public static class Hydrology
         GridPosition sink,
         int tileBudget = TerminalLakeTileBudget)
     {
-        var surface = world.GetElevation(sink) + MaximumTerminalLakeDepth;
+        var surface = FindTerminalLakeSurface(world, sink, tileBudget);
         var lakeTiles = FindBoundedTerminalLakeTiles(world, sink, surface, tileBudget);
         foreach (var position in lakeTiles)
         {
@@ -357,6 +447,52 @@ public static class Hydrology
         }
 
         return new LakeFillResult(true, lakeTiles.Count, surface, null, null);
+    }
+
+    private static float FindTerminalLakeSurface(
+        SimulationWorld world,
+        GridPosition sink,
+        int tileBudget)
+    {
+        var frontier = new PriorityQueue<GridPosition, float>();
+        var bestSpill = new Dictionary<GridPosition, float> { [sink] = world.GetElevation(sink) };
+        frontier.Enqueue(sink, world.GetElevation(sink));
+        var surface = world.GetElevation(sink);
+        var examined = 0;
+
+        while (frontier.TryDequeue(out var current, out var currentSpill) && examined < tileBudget)
+        {
+            if (currentSpill > bestSpill[current] + ElevationTolerance)
+            {
+                continue;
+            }
+
+            surface = currentSpill;
+            examined++;
+            foreach (var direction in BasinDirections)
+            {
+                var neighbor = GetNeighbor(world, current, direction);
+                if (neighbor is null || IsOcean(world.GetTerrain(neighbor.Value)))
+                {
+                    continue;
+                }
+
+                var candidateSpill = Math.Max(currentSpill, world.GetElevation(neighbor.Value));
+                if (bestSpill.TryGetValue(neighbor.Value, out var knownSpill) &&
+                    candidateSpill >= knownSpill - ElevationTolerance)
+                {
+                    continue;
+                }
+
+                bestSpill[neighbor.Value] = candidateSpill;
+                frontier.Enqueue(neighbor.Value, candidateSpill);
+            }
+        }
+
+        var enclosedTiles = FindBoundedTerminalLakeTiles(world, sink, surface, tileBudget);
+        return enclosedTiles.Count <= 1
+            ? surface + ElevationTolerance * 2
+            : surface;
     }
 
     private static List<GridPosition> FindBoundedTerminalLakeTiles(

@@ -14,11 +14,12 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private const double ToolRepeatIntervalSeconds = 0.075;
     private static readonly int[] ZoomLevels = [2, 4, 8, 16, 24];
     private static readonly double[] SimulationRates = [0.25, 0.5, 1, 2, 4, 8, 16];
-    private static readonly ToolCategory[] ToolCategoryOrder = [ToolCategory.Terrain];
-    private static readonly WorldTool[] TerrainToolOrder =
+    private static readonly ToolCategory[] ToolCategoryOrder = [ToolCategory.WorldTools, ToolCategory.Events];
+    private static readonly WorldTool[] WorldToolOrder =
         [WorldTool.Elevation, WorldTool.SeaLevel, WorldTool.OceanSeed,
-            WorldTool.Temperature, WorldTool.Moisture, WorldTool.Seasons, WorldTool.Volcano, WorldTool.Meteor,
-            WorldTool.River];
+            WorldTool.Temperature, WorldTool.Moisture, WorldTool.Seasons, WorldTool.Volcano, WorldTool.River];
+    private static readonly WorldTool[] EventToolOrder =
+        [WorldTool.Meteor, WorldTool.Tsunami, WorldTool.NaturalEvents];
     private static readonly TimeSpan SimulationStep = TimeSpan.FromSeconds(1d / SimulationWorld.TicksPerSecond);
     private readonly GraphicsDeviceManager _graphics;
     private SimulationWorld _world = null!;
@@ -39,7 +40,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private int _repeatingButton;
     private double _toolHoldSeconds;
     private double _nextToolRepeatSeconds;
-    private int _meteorMagnitudeIndex = 3;
+    private int _eventMagnitudeIndex = 3;
     private int _simulationRateIndex = 2;
     private bool _paused;
 
@@ -185,16 +186,6 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             _preset = WorldPreset.Earth;
             GenerateWorld();
         }
-        else if (WasPressed(keyboard, Keys.D6))
-        {
-            _preset = WorldPreset.Moon;
-            GenerateWorld();
-        }
-        else if (WasPressed(keyboard, Keys.D7))
-        {
-            _preset = WorldPreset.Mars;
-            GenerateWorld();
-        }
         else if (WasPressed(keyboard, Keys.Q))
         {
             CycleTool(-1);
@@ -217,7 +208,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             var position = ScreenToWorld(mouse.X, mouse.Y);
             if (position is not null)
             {
-                Hydrology.StartSpring(_world, position.Value);
+                Hydrology.StartSnowmeltSpring(_world, position.Value);
             }
         }
         else if (WasPressed(keyboard, Keys.OemComma))
@@ -330,13 +321,25 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 Volcanism.SpawnVolcano(_world, position.Value);
                 break;
             case WorldTool.Meteor when primaryActivated:
-                Impacts.CreateMeteorImpact(_world, position.Value, _meteorMagnitudeIndex / 10f);
+                Impacts.CreateMeteorImpact(_world, position.Value, _eventMagnitudeIndex / 10f);
                 break;
             case WorldTool.Meteor:
-                _meteorMagnitudeIndex = (_meteorMagnitudeIndex + 1) % 11;
+                _eventMagnitudeIndex = (_eventMagnitudeIndex + 1) % 11;
+                break;
+            case WorldTool.Tsunami when primaryActivated:
+                Tsunamis.Create(_world, position.Value, _eventMagnitudeIndex / 10f);
+                break;
+            case WorldTool.Tsunami:
+                _eventMagnitudeIndex = (_eventMagnitudeIndex + 1) % 11;
+                break;
+            case WorldTool.NaturalEvents when primaryActivated:
+                NaturalEvents.SetEnabled(_world, true);
+                break;
+            case WorldTool.NaturalEvents:
+                NaturalEvents.SetEnabled(_world, false);
                 break;
             case WorldTool.River when primaryActivated:
-                Hydrology.StartSpring(_world, position.Value);
+                Hydrology.StartSnowmeltSpring(_world, position.Value);
                 break;
             case WorldTool.River:
                 Hydrology.RemoveFreshwaterAt(_world, position.Value);
@@ -373,7 +376,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
 
     private static WorldTool[] GetTools(ToolCategory category) => category switch
     {
-        ToolCategory.Terrain => TerrainToolOrder,
+        ToolCategory.WorldTools => WorldToolOrder,
+        ToolCategory.Events => EventToolOrder,
         _ => throw new ArgumentOutOfRangeException(nameof(category)),
     };
 
@@ -700,7 +704,9 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                     screenY * TileSize + inset,
                     Math.Max(1, TileSize - inset * 2),
                     Math.Max(1, TileSize - inset * 2)),
-                new Color(255, 222, 145, 185));
+                wave.Kind is WaveKind.Tsunami
+                    ? new Color(45, 180, 255, 210)
+                    : new Color(255, 222, 145, 185));
             return;
         }
     }
@@ -784,47 +790,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         {
             return GetTerrainColor(terrain, biome, temperatureBand);
         }
-        if (_world.Body is WorldBody.Mars)
-        {
-            return GetMarsColor(position, temperatureBand);
-        }
-        if (_world.Body is WorldBody.Moon)
-        {
-            return GetMoonColor(position);
-        }
         return GetTerrainColor(terrain, biome, temperatureBand);
-    }
-
-    private Color GetMoonColor(GridPosition position) => _world.GetElevation(position) switch
-    {
-        < -0.70f => new Color(43, 44, 47),
-        < -0.40f => new Color(65, 66, 70),
-        < -0.15f => new Color(88, 89, 92),
-        < 0.10f => new Color(112, 112, 113),
-        < 0.34f => new Color(137, 136, 133),
-        < 0.58f => new Color(161, 159, 154),
-        < 1.0f => new Color(187, 184, 176),
-        _ => new Color(216, 212, 202),
-    };
-
-    private Color GetMarsColor(GridPosition position, TemperatureBand temperatureBand)
-    {
-        var latitude = Math.Abs((position.Y + 0.5f) / _world.Height * 2 - 1);
-        if (latitude > 0.86f && temperatureBand is TemperatureBand.Freezing)
-        {
-            return new Color(224, 211, 185);
-        }
-
-        return _world.GetElevation(position) switch
-        {
-            < -0.55f => new Color(72, 31, 27),
-            < -0.25f => new Color(104, 43, 31),
-            < 0f => new Color(137, 57, 36),
-            < 0.34f => new Color(168, 77, 43),
-            < 0.58f => new Color(188, 101, 58),
-            < 1.0f => new Color(205, 130, 78),
-            _ => new Color(224, 164, 108),
-        };
     }
 
     private static Color GetTerrainColor(
@@ -956,14 +922,19 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         WorldTool.Moisture => "left wetter, right drier",
         WorldTool.Seasons => "left enable, right disable",
         WorldTool.Volcano => "left spawn active vent",
-        WorldTool.Meteor => $"left impact, right magnitude {_meteorMagnitudeIndex / 10f:0.0}",
-        WorldTool.River => "left spawn, right remove",
+        WorldTool.Meteor => $"left impact, right magnitude {_eventMagnitudeIndex / 10f:0.0}",
+        WorldTool.Tsunami => $"left in ocean, right magnitude {_eventMagnitudeIndex / 10f:0.0}",
+        WorldTool.NaturalEvents => _world.NaturalEventsEnabled
+            ? "left enabled, right disable"
+            : "left enable, right disabled",
+        WorldTool.River => "left by snowy mountain, right remove",
         _ => string.Empty,
     };
 
     private enum ToolCategory
     {
-        Terrain,
+        WorldTools,
+        Events,
     }
 
     private enum WorldTool
@@ -976,6 +947,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         Seasons,
         Volcano,
         Meteor,
+        Tsunami,
+        NaturalEvents,
         River,
     }
 }

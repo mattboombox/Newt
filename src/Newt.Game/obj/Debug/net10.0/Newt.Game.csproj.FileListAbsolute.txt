@@ -33,10 +33,8 @@ C:\Users\1Matt\Desktop\Newt\src\Newt.Game\obj\Debug\net10.0\Newt.Game.csproj.Cor
 C:\Users\1Matt\Desktop\Newt\src\Newt.Game\obj\Debug\net10.0\Newt.Game.sourcelink.json
 C:\Users\1Matt\Desktop\Newt\src\Newt.Game\obj\Debug\net10.0\Newt.Game.csproj.Up2Date
 C:\Users\1Matt\Desktop\Newt\src\Newt.Game\obj\Debug\net10.0\Newt.Game.dll
-C:\Users\1Matt\Desktop\Newt\src\Newt.Game\obj\Debug\net10.0\refint\Newt.Game.dll
 C:\Users\1Matt\Desktop\Newt\src\Newt.Game\obj\Debug\net10.0\Newt.Game.pdb
 C:\Users\1Matt\Desktop\Newt\src\Newt.Game\obj\Debug\net10.0\Newt.Game.genruntimeconfig.cache
-C:\Users\1Matt\Desktop\Newt\src\Newt.Game\obj\Debug\net10.0\ref\Newt.Game.dll
 C:\Users\1Matt\Desktop\Newt\src\Newt.Game\bin\Debug\net10.0\Content\HudFont.xnb
 C:\Users\1Matt\Desktop\Newt\.verify-meteors\Newt.Game.exe
 C:\Users\1Matt\Desktop\Newt\.verify-meteors\Newt.Game.deps.json
@@ -93,3 +91,10 @@ C:\Users\1Matt\Desktop\Newt\.tmp-water-color-build\Newt.Game.deps.json
 C:\Users\1Matt\Desktop\Newt\.tmp-water-color-build\Newt.Game.runtimeconfig.json
 C:\Users\1Matt\Desktop\Newt\.tmp-water-color-build\Newt.Game.dll
 C:\Users\1Matt\Desktop\Newt\.tmp-water-color-build\Newt.Game.pdb
+C:\Users\1Matt\Desktop\Newt\.codex-game-build\Content\HudFont.xnb
+C:\Users\1Matt\Desktop\Newt\.codex-game-build\Newt.Game.deps.json
+C:\Users\1Matt\Desktop\Newt\.codex-game-build\Newt.Game.runtimeconfig.json
+C:\Users\1Matt\Desktop\Newt\.codex-game-build\Newt.Game.dll
+C:\Users\1Matt\Desktop\Newt\.codex-game-build\Newt.Game.pdb
+C:\Users\1Matt\Desktop\Newt\src\Newt.Game\obj\Debug\net10.0\refint\Newt.Game.dll
+C:\Users\1Matt\Desktop\Newt\src\Newt.Game\obj\Debug\net10.0\ref\Newt.Game.dll

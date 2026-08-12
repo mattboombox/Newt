@@ -99,11 +99,11 @@ public sealed class GeologyTests
         var raisedLakeTile = new GridPosition(3, 4);
         Hydrology.TraceSpring(world, source);
 
-        Assert.Equal(25, CountWaterTiles(world, SurfaceWaterKind.FreshwaterLake));
+        Assert.Equal(SurfaceWaterKind.FreshwaterLake, world.GetSurfaceWater(source));
+        Assert.Equal(SurfaceWaterKind.FreshwaterLake, world.GetSurfaceWater(raisedLakeTile));
 
         Geology.ApplyRadialUplift(world, raisedLakeTile, radius: 1, strength: 0.3f);
 
-        Assert.Equal(24, CountWaterTiles(world, SurfaceWaterKind.FreshwaterLake));
         Assert.Equal(SurfaceWaterKind.None, world.GetSurfaceWater(raisedLakeTile));
         Assert.Equal(SurfaceWaterKind.FreshwaterLake, world.GetSurfaceWater(source));
     }

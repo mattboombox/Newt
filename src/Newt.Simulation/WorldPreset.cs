@@ -12,8 +12,4 @@ public readonly record struct WorldPreset(string Name, int Width, int Height)
     public static WorldPreset Ring => new("Ring World", 504, 40);
 
     public static WorldPreset Earth => new("Earth", 240, 120);
-
-    public static WorldPreset Mars => new("Mars", 240, 120);
-
-    public static WorldPreset Moon => new("Moon", 240, 120);
 }

@@ -77,12 +77,17 @@ public static class TerrainClassifier
 
     private static Terrain ClassifyOcean(float depth, float temperature)
     {
+        if (temperature < ClimateSystem.SeaIceThreshold)
+        {
+            return Terrain.Ice;
+        }
+
         if (depth > 0.20f)
         {
             return Terrain.DeepOcean;
         }
 
-        return temperature < ClimateSystem.SeaIceThreshold ? Terrain.Ice : Terrain.Ocean;
+        return Terrain.Ocean;
     }
 
     private static Terrain ClassifyDryLand(float elevation)
