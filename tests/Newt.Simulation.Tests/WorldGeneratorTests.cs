@@ -62,7 +62,9 @@ public sealed class WorldGeneratorTests
     [Fact]
     public void PresetsProduceTheirDocumentedDimensions()
     {
-        WorldPreset[] presets = [WorldPreset.Micro, WorldPreset.Standard, WorldPreset.Large, WorldPreset.Ring, WorldPreset.Earth];
+        WorldPreset[] presets =
+            [WorldPreset.Micro, WorldPreset.Standard, WorldPreset.Large, WorldPreset.Huge,
+                WorldPreset.Ring, WorldPreset.Earth, WorldPreset.Massive];
         foreach (var preset in presets)
         {
             var world = WorldGenerator.Generate(new WorldGenerationOptions(preset, Seed: 9));
@@ -76,24 +78,114 @@ public sealed class WorldGeneratorTests
     }
 
     [Fact]
+    public void LargeAndHugePresetsUseTheirDocumentedDimensions()
+    {
+        Assert.Equal(320, WorldPreset.Large.Width);
+        Assert.Equal(192, WorldPreset.Large.Height);
+        Assert.Equal(640, WorldPreset.Huge.Width);
+        Assert.Equal(311, WorldPreset.Huge.Height);
+        Assert.Equal(2560, WorldPreset.Huge.Width * 4);
+        Assert.True(WorldPreset.Huge.Height * 4 < 1440 - 156);
+    }
+
+    [Fact]
+    public void MassivePresetFillsA1440pViewportAtFarthestZoom()
+    {
+        Assert.Equal(1280, WorldPreset.Massive.Width);
+        Assert.Equal(642, WorldPreset.Massive.Height);
+        Assert.Equal(2560, WorldPreset.Massive.Width * 2);
+        Assert.Equal(1440 - 156, WorldPreset.Massive.Height * 2);
+    }
+
+    [Fact]
     public void EarthPresetUsesRecognizableRealWorldRelief()
     {
         var world = WorldGenerator.Generate(new WorldGenerationOptions(WorldPreset.Earth, Seed: 9));
 
-        Assert.Equal(240, world.Width);
-        Assert.Equal(120, world.Height);
+        Assert.Equal(1280, world.Width);
+        Assert.Equal(642, world.Height);
         Assert.Equal(WorldBody.Earth, world.Body);
-        Assert.True(world.GetElevation(new GridPosition(174, 39)) > 0.58f); // Himalayas
-        Assert.True(world.GetElevation(new GridPosition(20, 60)) < -0.20f); // Pacific
-        Assert.True(world.GetElevation(new GridPosition(120, 60)) < 0); // Gulf of Guinea
+        Assert.True(world.GetElevation(new GridPosition(928, 209)) > 0.58f); // Himalayas
+        Assert.True(world.GetElevation(new GridPosition(107, 321)) < -0.20f); // Pacific
+        Assert.True(world.GetElevation(new GridPosition(640, 321)) < 0); // Gulf of Guinea
+        Assert.True(world.GetTerrain(new GridPosition(693, 192)) is
+            Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows); // Mediterranean
+    }
+
+    [Fact]
+    public void EarthMapCanBeGeneratedAtLargeSizeFromTheSameReliefResource()
+    {
+        var world = WorldGenerator.Generate(new WorldGenerationOptions(
+            WorldPreset.Large,
+            Seed: 9,
+            MapType: WorldMapType.Earth));
+
+        Assert.Equal(320, world.Width);
+        Assert.Equal(192, world.Height);
+        Assert.Equal(WorldBody.Earth, world.Body);
+        Assert.Contains(AllPositions(world), position => world.GetElevation(position) > 0.58f);
+        Assert.Contains(AllPositions(world), position => world.GetElevation(position) < -0.20f);
+    }
+
+    [Fact]
+    public void ProceduralMapShapesAreDeterministicAndDistinct()
+    {
+        var continents = WorldGenerator.Generate(new WorldGenerationOptions(
+            WorldPreset.Standard, 42, MapType: WorldMapType.Continents));
+        var pangaea = WorldGenerator.Generate(new WorldGenerationOptions(
+            WorldPreset.Standard, 42, MapType: WorldMapType.Pangaea));
+        var archipelago = WorldGenerator.Generate(new WorldGenerationOptions(
+            WorldPreset.Standard, 42, MapType: WorldMapType.Archipelago));
+        var secondArchipelago = WorldGenerator.Generate(new WorldGenerationOptions(
+            WorldPreset.Standard, 42, MapType: WorldMapType.Archipelago));
+
+        Assert.Contains(AllPositions(continents), position =>
+            continents.GetElevation(position) != pangaea.GetElevation(position));
+        Assert.Contains(AllPositions(continents), position =>
+            continents.GetElevation(position) != archipelago.GetElevation(position));
+        Assert.All(AllPositions(archipelago), position =>
+            Assert.Equal(archipelago.GetElevation(position), secondArchipelago.GetElevation(position)));
+    }
+
+    [Fact]
+    public void ExtremeMapShapesHaveClearlyDifferentLandConnectivity()
+    {
+        var pangaea = WorldGenerator.Generate(new WorldGenerationOptions(
+            WorldPreset.Standard, 42, MapType: WorldMapType.Pangaea));
+        var archipelago = WorldGenerator.Generate(new WorldGenerationOptions(
+            WorldPreset.Standard, 42, MapType: WorldMapType.Archipelago));
+        var pangaeaLand = FindAboveSeaLevelComponents(pangaea).OrderByDescending(component => component.Count).ToList();
+        var archipelagoLand = FindAboveSeaLevelComponents(archipelago).OrderByDescending(component => component.Count).ToList();
+
+        var pangaeaTotal = pangaeaLand.Sum(component => component.Count);
+        Assert.True(pangaeaLand[0].Count >= pangaeaTotal * 0.70,
+            $"Largest Pangaea component {pangaeaLand[0].Count} / {pangaeaTotal}; components {pangaeaLand.Count}");
+        Assert.True(archipelagoLand.Count >= 10);
+        Assert.True(archipelagoLand[0].Count <= archipelagoLand.Sum(component => component.Count) * 0.45);
+    }
+
+    [Fact]
+    public void WaterWorldHasNoExposedLandAndVariedDepth()
+    {
+        var world = WorldGenerator.Generate(new WorldGenerationOptions(
+            WorldPreset.Standard, 42, MapType: WorldMapType.AllOcean));
+        var elevations = AllPositions(world).Select(world.GetElevation).ToArray();
+
+        Assert.All(elevations, elevation => Assert.True(elevation < world.SeaLevel));
+        Assert.True(elevations.Max() - elevations.Min() > 0.15f);
+        Assert.DoesNotContain(AllPositions(world), position => world.GetTerrain(position) is
+            Terrain.Plains or Terrain.Hills or Terrain.Mountain or Terrain.Beach or
+            Terrain.Lowlands or Terrain.Canyon or Terrain.Trench);
+        Assert.Equal(0, world.VolcanoCount);
+        Assert.Equal(0, world.ActiveSpringCount);
     }
 
     [Fact]
     public void RingWorldIsLongWithoutScalingItsLocalFeaturesByFullWidth()
     {
-        Assert.Equal(1200, WorldPreset.Ring.Width);
+        Assert.Equal(1280, WorldPreset.Ring.Width);
         Assert.Equal(40, WorldPreset.Ring.Height);
-        Assert.True(WorldPreset.Ring.Width >= WorldPreset.Large.Width * 4);
+        Assert.True(WorldPreset.Ring.Width > WorldPreset.Huge.Width);
 
         var world = WorldGenerator.Generate(new WorldGenerationOptions(WorldPreset.Ring, Seed: 9));
         Assert.Equal(WorldPreset.Ring.Width, world.Width);
@@ -153,7 +245,20 @@ public sealed class WorldGeneratorTests
     }
 
     [Fact]
-    public void NaturalSpringsStartOnNonArcticMountainsBesideArcticMountains()
+    public void SmallGeneratedIslandsAreNotEntirelyMountainSummits()
+    {
+        for (ulong seed = 1; seed <= 12; seed++)
+        {
+            var world = WorldGenerator.Generate(new WorldGenerationOptions(WorldPreset.Micro, Seed: seed));
+            foreach (var island in FindAboveSeaLevelComponents(world).Where(component => component.Count <= 20))
+            {
+                Assert.Contains(island, position => world.GetElevation(position) <= 0.58f);
+            }
+        }
+    }
+
+    [Fact]
+    public void NaturalSpringsStartOnMountains()
     {
         var world = WorldGenerator.Generate(new WorldGenerationOptions(WorldPreset.Micro, Seed: 42));
         var sources = AllPositions(world)
@@ -165,8 +270,6 @@ public sealed class WorldGeneratorTests
         foreach (var source in sources)
         {
             Assert.Equal(Terrain.Mountain, world.GetTerrain(source));
-            Assert.NotEqual(Biome.Arctic, world.GetBiome(source));
-            Assert.True(HasAdjacentArcticMountain(world, source));
         }
     }
 
@@ -196,6 +299,45 @@ public sealed class WorldGeneratorTests
             }
         }
         return largest;
+    }
+
+    private static IEnumerable<List<GridPosition>> FindAboveSeaLevelComponents(SimulationWorld world)
+    {
+        var visited = new HashSet<GridPosition>();
+        GridPosition[] directions = [new(1, 0), new(-1, 0), new(0, 1), new(0, -1)];
+        foreach (var start in AllPositions(world))
+        {
+            if (world.GetElevation(start) <= world.SeaLevel || !visited.Add(start))
+            {
+                continue;
+            }
+
+            var component = new List<GridPosition>();
+            var queue = new Queue<GridPosition>();
+            queue.Enqueue(start);
+            while (queue.TryDequeue(out var current))
+            {
+                component.Add(current);
+                foreach (var direction in directions)
+                {
+                    var y = current.Y + direction.Y;
+                    if (y < 0 || y >= world.Height)
+                    {
+                        continue;
+                    }
+
+                    var neighbor = new GridPosition(
+                        (current.X + direction.X + world.Width) % world.Width,
+                        y);
+                    if (world.GetElevation(neighbor) > world.SeaLevel && visited.Add(neighbor))
+                    {
+                        queue.Enqueue(neighbor);
+                    }
+                }
+            }
+
+            yield return component;
+        }
     }
 
     private static int BelowSeaLevelComponentSize(SimulationWorld world, GridPosition start) =>

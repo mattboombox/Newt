@@ -44,6 +44,7 @@ public sealed class SimulationWorld
     private readonly CritterSpecies[] _species;
     private readonly GridPosition[] _positions;
     private readonly long[] _nextMovementTicks;
+    private readonly int[] _speciesCounts = new int[Enum.GetValues<CritterSpecies>().Length];
     private ulong _randomState;
     private int _count;
 
@@ -111,6 +112,10 @@ public sealed class SimulationWorld
     internal long NextNaturalEventTick { get; set; } = 6 * 60 * TicksPerSecond;
 
     public int CritterCount => _count;
+
+    public int GetCritterCount(CritterSpecies species) => _speciesCounts[(int)species];
+
+    public bool PlanktonRecoveryEnabled { get; private set; }
 
     public int ActiveSpringCount => _activeSprings.Count;
 
@@ -270,6 +275,12 @@ public sealed class SimulationWorld
 
     internal List<LavaFlowActivity> LavaFlows => _lavaFlows;
 
+    internal bool VolcanicTerrainRefreshPending { get; set; }
+
+    internal bool VolcanicFreshwaterRefreshPending { get; set; }
+
+    internal long LastVolcanicTerrainRefreshTick { get; set; }
+
     internal List<ImpactWaveActivity> ImpactWaves => _impactWaves;
 
     internal void SetAdditionalOceanSeeds(IEnumerable<GridPosition> seeds)
@@ -305,8 +316,7 @@ public sealed class SimulationWorld
             throw new InvalidOperationException($"Tile {position} is already occupied.");
         }
 
-        if (_surfaceCovers[tileIndex] is not SurfaceCover.None ||
-            !CanLiveOn(species, _terrain[tileIndex]))
+        if (!CanLiveOn(species, tileIndex))
         {
             throw new InvalidOperationException($"{species} cannot live on {_terrain[tileIndex]}.");
         }
@@ -316,7 +326,32 @@ public sealed class SimulationWorld
         _positions[index] = position;
         _nextMovementTicks[index] = Tick + GetMovementIntervalTicks(species);
         _occupants[tileIndex] = index;
+        _speciesCounts[(int)species]++;
         return new CritterId(index + 1);
+    }
+
+    public bool TryAddCritter(CritterSpecies species, GridPosition position)
+    {
+        if (!Contains(position))
+        {
+            return false;
+        }
+
+        var index = GetIndex(position);
+        if (_occupants[index] >= 0 || !CanLiveOn(species, index))
+        {
+            return false;
+        }
+
+        AddCritter(species, position);
+        return true;
+    }
+
+    /// <summary>Seeds one plankton and restores one after global extinction.</summary>
+    public bool EnablePlanktonRecovery()
+    {
+        PlanktonRecoveryEnabled = true;
+        return EnsurePlanktonPopulation();
     }
 
     public CritterSnapshot GetCritter(int index)
@@ -339,6 +374,10 @@ public sealed class SimulationWorld
         Impacts.Advance(this);
         Volcanism.Advance(this);
         Hydrology.AdvanceSprings(this);
+        if (PlanktonRecoveryEnabled && GetCritterCount(CritterSpecies.Plankton) == 0)
+        {
+            EnsurePlanktonPopulation();
+        }
         for (var index = 0; index < _count; index++)
         {
             if (Tick < _nextMovementTicks[index])
@@ -368,8 +407,7 @@ public sealed class SimulationWorld
 
             var destinationIndex = GetIndex(candidate);
             if (_occupants[destinationIndex] >= 0 ||
-                _surfaceCovers[destinationIndex] is not SurfaceCover.None ||
-                !CanLiveOn(_species[critterIndex], _terrain[destinationIndex]))
+                !CanLiveOn(_species[critterIndex], destinationIndex))
             {
                 continue;
             }
@@ -391,6 +429,7 @@ public sealed class SimulationWorld
         }
 
         var lastIndex = _count - 1;
+        _speciesCounts[(int)_species[critterIndex]]--;
         _occupants[tileIndex] = -1;
         if (critterIndex != lastIndex)
         {
@@ -404,6 +443,38 @@ public sealed class SimulationWorld
         return true;
     }
 
+    private bool EnsurePlanktonPopulation()
+    {
+        if (GetCritterCount(CritterSpecies.Plankton) > 0)
+        {
+            return false;
+        }
+
+        GridPosition? selected = null;
+        var candidateCount = 0;
+        for (var y = 0; y < Height; y++)
+        {
+            for (var x = 0; x < Width; x++)
+            {
+                var position = new GridPosition(x, y);
+                var index = y * Width + x;
+                if (_terrain[index] is not Terrain.DeepOcean || _occupants[index] >= 0 ||
+                    _surfaceCovers[index] is not SurfaceCover.None)
+                {
+                    continue;
+                }
+
+                candidateCount++;
+                if (NextInt(candidateCount) == 0)
+                {
+                    selected = position;
+                }
+            }
+        }
+
+        return selected is not null && TryAddCritter(CritterSpecies.Plankton, selected.Value);
+    }
+
     private int GetIndex(GridPosition position)
     {
         if (position.X < 0 || position.X >= Width || position.Y < 0 || position.Y >= Height)
@@ -414,13 +485,13 @@ public sealed class SimulationWorld
         return position.Y * Width + position.X;
     }
 
-    private static bool CanLiveOn(CritterSpecies species, Terrain terrain) => species switch
-    {
-        CritterSpecies.Plankton => terrain is Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows,
-        CritterSpecies.Crab => terrain is Terrain.Shallows or Terrain.Beach,
-        CritterSpecies.Ape => terrain is Terrain.Plains or Terrain.Beach,
-        _ => false,
-    };
+    private bool CanLiveOn(CritterSpecies species, int tileIndex) =>
+        CritterHabitats.CanOccupy(
+            CritterHabitats.GetHabitat(species),
+            _terrain[tileIndex],
+            _surfaceWater[tileIndex],
+            _biomes[tileIndex],
+            _surfaceCovers[tileIndex]);
 
     private static int GetMovementIntervalTicks(CritterSpecies species) => species switch
     {

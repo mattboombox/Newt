@@ -78,7 +78,6 @@ public static class Geology
         }
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(radius);
         var affectedTiles = 0;
-        var freshwaterTouched = false;
         var radiusSquared = radius * radius;
         for (var offsetY = -radius; offsetY <= radius; offsetY++)
         {
@@ -101,22 +100,16 @@ public static class Geology
                 var normalizedDistance = distanceSquared / (float)radiusSquared;
                 var falloff = 1 - normalizedDistance;
                 var elevationChange = strength * falloff * falloff;
-                freshwaterTouched |= elevationChange != 0 &&
-                    world.GetSurfaceWater(position) is not SurfaceWaterKind.None;
                 world.SetElevation(position, world.GetElevation(position) + elevationChange);
                 affectedTiles++;
             }
         }
 
         TerrainClassifier.RebuildLandforms(world);
-        if (freshwaterTouched)
-        {
-            Hydrology.RebuildFreshwater(world);
-        }
-        else
-        {
-            ClimateSystem.RebuildMoistureAndBiomes(world);
-        }
+        // A changed sill can connect a distant freshwater basin to the ocean
+        // even when the brush never touches the lake itself. Always retrace the
+        // persistent springs so freshwater cannot remain layered over saltwater.
+        Hydrology.RebuildFreshwater(world);
         return affectedTiles;
     }
 

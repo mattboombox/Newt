@@ -4,6 +4,7 @@ namespace Newt.Simulation;
 public static class Volcanism
 {
     private const int FlowStepIntervalTicks = 5;
+    private const int TerrainRefreshIntervalTicks = 10 * SimulationWorld.TicksPerSecond;
     private const int LandLavaLifetimeTicks = 9 * SimulationWorld.TicksPerSecond;
     private const int SubmergedLavaLifetimeTicks = 3 * SimulationWorld.TicksPerSecond;
     private const int BaseStoneLifetimeTicks = 45 * SimulationWorld.TicksPerSecond;
@@ -19,6 +20,46 @@ public static class Volcanism
         new(0, -1),
         new(1, -1),
     ];
+
+    /// <summary>Places a temporary stone cover on one tile without changing elevation.</summary>
+    public static bool PlaceStone(SimulationWorld world, GridPosition position)
+    {
+        ArgumentNullException.ThrowIfNull(world);
+        if (!world.Contains(position) || world.IsOccupied(position) ||
+            world.GetTerrain(position) is Terrain.RingWorldWall)
+        {
+            return false;
+        }
+
+        world.SetSurfaceCover(position, SurfaceCover.Stone, world.Tick + BaseStoneLifetimeTicks);
+        return true;
+    }
+
+    /// <summary>Places one small lava deposit and raises only the clicked tile.</summary>
+    public static bool PlaceLava(SimulationWorld world, GridPosition position)
+    {
+        ArgumentNullException.ThrowIfNull(world);
+        if (!world.Contains(position) || world.GetTerrain(position) is Terrain.RingWorldWall ||
+            !DepositLava(world, position, 0.03f))
+        {
+            return false;
+        }
+
+        RebuildAfterDeposits(world);
+        return true;
+    }
+
+    public static bool ClearGeologicalCover(SimulationWorld world, GridPosition position)
+    {
+        ArgumentNullException.ThrowIfNull(world);
+        if (!world.Contains(position) || world.GetSurfaceCover(position) is SurfaceCover.None)
+        {
+            return false;
+        }
+
+        world.SetSurfaceCover(position, SurfaceCover.None, 0);
+        return true;
+    }
 
     public static bool SpawnVolcano(
         SimulationWorld world,
@@ -112,7 +153,12 @@ public static class Volcanism
         var terrainChanged = AdvanceVolcanoes(world);
         terrainChanged |= AdvanceFlows(world);
         AdvanceSurfaceCovers(world);
-        if (terrainChanged)
+        world.VolcanicTerrainRefreshPending |= terrainChanged;
+        // Individual flows still animate on schedule, but their global terrain
+        // refresh is shared by all volcanoes. Hydrology is rebuilt separately and
+        // only when a deposit actually touches freshwater.
+        if (world.VolcanicTerrainRefreshPending &&
+            world.Tick - world.LastVolcanicTerrainRefreshTick >= TerrainRefreshIntervalTicks)
         {
             RebuildAfterDeposits(world);
         }
@@ -310,6 +356,8 @@ public static class Volcanism
         }
 
         var submerged = IsOcean(world.GetTerrain(position));
+        world.VolcanicFreshwaterRefreshPending |=
+            world.GetSurfaceWater(position) is not SurfaceWaterKind.None;
         world.SetElevation(position, world.GetElevation(position) + elevationGain);
         world.SetSurfaceCover(
             position,
@@ -396,7 +444,17 @@ public static class Volcanism
     private static void RebuildAfterDeposits(SimulationWorld world)
     {
         TerrainClassifier.RebuildLandforms(world);
-        Hydrology.RebuildFreshwater(world);
+        if (world.VolcanicFreshwaterRefreshPending)
+        {
+            Hydrology.RebuildFreshwater(world);
+        }
+        else
+        {
+            ClimateSystem.RebuildBiomesFromCurrentMoisture(world);
+        }
+        world.VolcanicTerrainRefreshPending = false;
+        world.VolcanicFreshwaterRefreshPending = false;
+        world.LastVolcanicTerrainRefreshTick = world.Tick;
     }
 
     private static GridPosition? GetPosition(SimulationWorld world, int x, int y)

@@ -10,9 +10,14 @@ fraction. Identical options produce identical terrain.
    single oval outline.
 2. Walk a few semi-random volcanic chains across those foundations. Continental
    lobes stay comparatively low while the volcanic shields are narrow and steep,
-   producing concentrated regional ridges without shrinking the landmass.
-3. Add three scales of smooth seeded elevation noise for bays, valleys, broken
-   coastlines, and varied continental interiors.
+   producing concentrated regional ridges without shrinking the landmass. A
+   tightly focused summit boost raises and cools their cores without widening
+   the shields, creating more snow-covered peaks. Chains remain anchored to the
+   continental foundation so tiny offshore islands do not become bare summits.
+3. Add several fixed-scale bands of smooth seeded elevation noise for bays,
+   valleys, broken coastlines, and varied continental interiors, plus fine-scale
+   relief that gives shores sharper inlets and projections. Larger presets add
+   more continents and ranges instead of stretching these features.
 4. Select an elevation threshold that approximates the requested land fraction.
 5. Find the largest connected below-sea-level basin and place the world's single
    saltwater seed at its deepest tile. Smaller disconnected depressions remain
@@ -23,8 +28,7 @@ fraction. Identical options produce identical terrain.
    regional variation.
 8. Classify biomes and choose the visible lowland surface.
 9. Seed spaced active volcanoes on mountain chains.
-10. Select a small, spaced set of non-Arctic mountain tiles beside Arctic
-   mountains and start animated snowmelt springs from them.
+10. Select a small, spaced set of mountain tiles and start animated springs from them.
 
 Elevation remains part of world state after generation. It is stored as a signed
 absolute value against the original zero datum and compared with the mutable sea
@@ -46,12 +50,27 @@ the same tile-by-tile travel animation as springs created with `F`.
 
 ## Presets
 
+Press `M` to open the new-world menu. World size and map shape are selected
+independently. The current shapes are Continents, Pangaea, Archipelago, Water World,
+Ring World, and Earth. Earth supports every regular size by resampling the embedded
+1280 × 642 NOAA relief grid; Large (320 × 192) is the practical default while
+Massive retains the full source detail. Ring World keeps its fixed 1280 × 40
+engineered dimensions.
+
+Continents retains the balanced 38% land layout. Pangaea concentrates roughly
+48% land into one dominant, heavily lobed supercontinent. Archipelago lowers land
+to roughly 22% and scatters many small island groups through open ocean. Water World
+keeps every tile submerged while retaining varied bathymetry and polar sea ice.
+
 | Key | Preset | Dimensions |
 | --- | --- | --- |
 | 1 | Micro | 80 × 48 |
 | 2 | Standard | 160 × 96 |
-| 3 | Large | 252 × 130 |
-| 4 | Ring World | 1200 × 40 |
+| 3 | Large | 320 × 192 |
+| 4 | Huge | 640 × 311 |
+| 5 | Ring World | 1280 × 40 |
+| 6 | Earth | 1280 × 642 |
+| 7 | Massive (stress test) | 1280 × 642 |
 
 Ring World is an artificial megastructure conservatory rather than a planet.
 Every large disconnected below-sea-level basin receives a saltwater source, while
@@ -68,18 +87,21 @@ terrain ceiling, and terrain-changing events cannot permanently erode them.
 
 ## Prototype controls
 
-- `1`–`4`: generate the corresponding preset with the current seed.
+- `M`: open or close the world setup menu; use arrows and Enter to generate.
 - `N`: increment the seed and generate a new world.
 - `Q` / `E`: cycle backward or forward through tools in the current category.
 - `R`: cycle tool categories.
+- Terrain Tools: Stone temporarily covers one tile without changing elevation
+  before the biome reclaims it; Lava covers one tile and deposits `+0.03`
+  elevation. Right click clears either cover.
+- Critter Tools / Plankton: left click an empty Deep Ocean tile to spawn plankton.
 - Elevation tool: left click raises terrain and right click lowers it.
 - Sea-level tool: left click raises the ocean and right click lowers it.
 - Ocean-seed tool: click a tile to move the world's single saltwater source.
 - Temperature tool: left click warms globally and right click cools globally.
 - Moisture tool: left click makes the world wetter and right click makes it drier.
 
-Press `5` to generate the 240 by 120 Earth preset (`1` through `4` retain the
-procedural presets). Its elevation and bathymetry
+Select Earth in the world menu to generate it at the chosen size. Its elevation and bathymetry
 come from a downsampled NOAA ETOPO 2022 ice-surface grid, with sea level preserved.
 The source data are public domain under CC0-1.0. Land and ocean heights use separate
 display scaling so both mountain ranges and ocean basins remain readable at tile scale.
@@ -87,8 +109,8 @@ display scaling so both mountain ranges and ocean basins remain readable at tile
 - Volcano tool: left click spawns a new active volcano on an unoccupied tile.
 - Meteor tool: left click strikes the pointed tile; right click cycles magnitude
   from `0.0` through `1.0` in `0.1` steps. The active magnitude appears in the HUD.
-- River tool: left click starts a spring only on a mountain adjacent to a Snowy
-  Mountain; right click removes the connected river and lake system.
+- River tool: left click starts a spring on any Mountain or Snowy Mountain;
+  right click removes the connected river and lake system.
 
 Elevation, SeaLevel, Temperature, and Moisture repeat while their mouse button is
 held. The first repeat begins after 0.25 seconds and continues every 0.075 seconds.
@@ -96,7 +118,9 @@ OceanSeed, Volcano, Meteor, and River remain single-click tools.
 - `F`: create a spring on the hovered land tile and trace it downhill.
 - Arrow keys or `WASD`: move the camera.
 - Hold Shift while moving: pan four times faster.
-- Mouse wheel: zoom.
+- Mouse wheel: zoom toward or away from the tile beneath the pointer.
+- Maps smaller than the available viewport are centered horizontally and
+  vertically; larger maps retain normal panning and horizontal wrapping.
 - Hover a tile: inspect terrain, biome, water, elevation, temperature, moisture,
   and occupancy in the bottom HUD.
 

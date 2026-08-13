@@ -93,6 +93,28 @@ public sealed class VolcanismTests
     }
 
     [Fact]
+    public void DryLavaDoesNotRequestAFreshwaterRebuild()
+    {
+        var world = CreateLandWorld();
+
+        Assert.True(Volcanism.DepositLava(world, new GridPosition(7, 7), 0.02f));
+
+        Assert.False(world.VolcanicFreshwaterRefreshPending);
+    }
+
+    [Fact]
+    public void LavaTouchingARiverRequestsAFreshwaterRebuild()
+    {
+        var world = CreateLandWorld();
+        var position = new GridPosition(7, 7);
+        world.SetSurfaceWater(position, SurfaceWaterKind.River);
+
+        Assert.True(Volcanism.DepositLava(world, position, 0.02f));
+
+        Assert.True(world.VolcanicFreshwaterRefreshPending);
+    }
+
+    [Fact]
     public void ExtinctVolcanoCanSpawnAdjacentActiveSuccessor()
     {
         var world = CreateLandWorld();
@@ -120,6 +142,65 @@ public sealed class VolcanismTests
 
         Assert.False(Volcanism.SpawnVolcano(world, position));
         Assert.Equal(0, world.VolcanoCount);
+    }
+
+    [Fact]
+    public void StoneToolCoversOnlyClickedTileWithoutChangingElevation()
+    {
+        var world = CreateLandWorld();
+        var position = new GridPosition(7, 7);
+        var elevation = world.GetElevation(position);
+
+        Assert.True(Volcanism.PlaceStone(world, position));
+
+        Assert.Equal(SurfaceCover.Stone, world.GetSurfaceCover(position));
+        Assert.Equal(elevation, world.GetElevation(position));
+        Assert.Equal(SurfaceCover.None, world.GetSurfaceCover(new GridPosition(8, 7)));
+    }
+
+    [Fact]
+    public void BiomeReclaimsToolPlacedStone()
+    {
+        var world = CreateLandWorld();
+        var position = new GridPosition(7, 7);
+        var biome = world.GetBiome(position);
+        Volcanism.PlaceStone(world, position);
+
+        for (var tick = 0; tick < 45 * SimulationWorld.TicksPerSecond; tick++)
+        {
+            world.AdvanceOneTick();
+        }
+
+        Assert.Equal(SurfaceCover.None, world.GetSurfaceCover(position));
+        Assert.Equal(biome, world.GetBiome(position));
+    }
+
+    [Fact]
+    public void LavaToolRaisesAndCoversOnlyClickedTile()
+    {
+        var world = CreateLandWorld();
+        var position = new GridPosition(7, 7);
+        var elevation = world.GetElevation(position);
+        var neighbor = new GridPosition(8, 7);
+        var neighborElevation = world.GetElevation(neighbor);
+
+        Assert.True(Volcanism.PlaceLava(world, position));
+
+        Assert.Equal(SurfaceCover.Lava, world.GetSurfaceCover(position));
+        Assert.Equal(elevation + 0.03f, world.GetElevation(position), precision: 5);
+        Assert.Equal(neighborElevation, world.GetElevation(neighbor));
+        Assert.Equal(SurfaceCover.None, world.GetSurfaceCover(neighbor));
+    }
+
+    [Fact]
+    public void TerrainCoverToolCanClearStoneOrLava()
+    {
+        var world = CreateLandWorld();
+        var position = new GridPosition(7, 7);
+        Volcanism.PlaceStone(world, position);
+
+        Assert.True(Volcanism.ClearGeologicalCover(world, position));
+        Assert.Equal(SurfaceCover.None, world.GetSurfaceCover(position));
     }
 
     private static SimulationWorld CreateLandWorld()

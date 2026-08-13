@@ -28,7 +28,7 @@ public static class Hydrology
         new(-1, 0),
     ];
 
-    /// <summary>Starts a player/natural snowmelt spring only at a valid mountain edge.</summary>
+    /// <summary>Starts a player/natural spring on any uncovered mountain tile.</summary>
     public static SpringResult StartSnowmeltSpring(
         SimulationWorld world,
         GridPosition source,
@@ -50,24 +50,12 @@ public static class Hydrology
         ArgumentNullException.ThrowIfNull(world);
         if (!world.Contains(position) ||
             world.GetTerrain(position) is not Terrain.Mountain ||
-            world.GetBiome(position) is Biome.Arctic ||
             world.GetSurfaceCover(position) is not SurfaceCover.None)
         {
             return false;
         }
 
-        foreach (var direction in FlowDirections)
-        {
-            var neighbor = GetNeighbor(world, position, direction);
-            if (neighbor is not null &&
-                world.GetTerrain(neighbor.Value) is Terrain.Mountain &&
-                world.GetBiome(neighbor.Value) is Biome.Arctic)
-            {
-                return true;
-            }
-        }
-
-        return false;
+        return true;
     }
 
     /// <summary>Starts a spring whose channel will extend by one tile per simulation tick.</summary>

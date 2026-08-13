@@ -7,7 +7,9 @@ public static class SeasonSystem
     public const float EquatorialBand = 0.20f;
     public const float PolarTemperatureAmplitude = 0.10f;
     public const int TicksPerYear = CycleSeconds * SimulationWorld.TicksPerSecond;
-    private const int ClimateRefreshTicks = SimulationWorld.TicksPerSecond;
+    // Seasonal temperature changes are gradual; refreshing the whole climate
+    // every ten seconds avoids repeated map-wide work without visible stepping.
+    private const int ClimateRefreshTicks = 10 * SimulationWorld.TicksPerSecond;
 
     public static void SetEnabled(SimulationWorld world, bool enabled)
     {
@@ -104,7 +106,8 @@ public static class SeasonSystem
         world.SeasonTick++;
         if (world.SeasonTick % ClimateRefreshTicks == 0)
         {
-            TerrainClassifier.RebuildAll(world);
+            TerrainClassifier.RebuildLandforms(world);
+            ClimateSystem.RebuildBiomesFromCurrentMoisture(world);
         }
     }
 

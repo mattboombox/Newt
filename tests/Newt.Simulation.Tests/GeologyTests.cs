@@ -109,6 +109,23 @@ public sealed class GeologyTests
     }
 
     [Fact]
+    public void ElevationEditAwayFromStaleLakeClearsFreshwaterOverOcean()
+    {
+        var world = new SimulationWorld(9, 7, Terrain.Ocean);
+        var staleLake = new GridPosition(4, 3);
+        world.SetElevation(staleLake, -0.3f);
+        TerrainClassifier.RebuildAll(world);
+        world.SetSurfaceWater(staleLake, SurfaceWaterKind.FreshwaterLake);
+        world.SetWaterSurfaceElevation(staleLake, 0.1f);
+
+        Geology.ApplyRadialUplift(world, new GridPosition(0, 0), radius: 1, strength: 0.1f);
+
+        Assert.True(world.GetTerrain(staleLake) is Terrain.Ocean or Terrain.DeepOcean or Terrain.Shallows);
+        Assert.Equal(SurfaceWaterKind.None, world.GetSurfaceWater(staleLake));
+        Assert.Null(world.GetWaterSurfaceElevation(staleLake));
+    }
+
+    [Fact]
     public void LoweringSeaLevelExposesSeabedWithoutChangingItsElevation()
     {
         var world = new SimulationWorld(7, 5, Terrain.Ocean);

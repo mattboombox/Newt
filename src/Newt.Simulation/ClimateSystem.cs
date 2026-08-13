@@ -56,7 +56,9 @@ public static class ClimateSystem
                 var position = new GridPosition(x, y);
                 var index = y * world.Width + x;
                 var oceanInfluence = DistanceInfluence(oceanDistance[index], strength: 0.54f, reach: 11f);
-                var riverInfluence = DistanceInfluence(riverDistance[index], strength: 0.35f, reach: 3.5f);
+                // Rivers support a riparian corridor, not only the tile carrying the water.
+                // Keep the influence below lakes at the source, but let it fade more gradually.
+                var riverInfluence = DistanceInfluence(riverDistance[index], strength: 0.42f, reach: 5.5f);
                 var lakeInfluence = DistanceInfluence(lakeDistance[index], strength: 0.45f, reach: 6f);
                 var elevationPenalty = Math.Max(0, world.GetElevation(position)) * 0.18f;
                 var variation = (FractalNoise(world, x, y, world.Seed ^ 0xE7037ED1A0B428DBUL) - 0.5f) * 0.28f;
@@ -72,6 +74,24 @@ public static class ClimateSystem
                     ? Biome.None
                     : ClassifyBiome(world.GetTemperature(position), world.GetMoisture(position));
                 world.SetBiome(position, biome);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Reclassifies biomes after a temperature-only change without rebuilding
+    /// the unchanged ocean, river, and lake distance fields.
+    /// </summary>
+    internal static void RebuildBiomesFromCurrentMoisture(SimulationWorld world)
+    {
+        for (var y = 0; y < world.Height; y++)
+        {
+            for (var x = 0; x < world.Width; x++)
+            {
+                var position = new GridPosition(x, y);
+                world.SetBiome(position, IsSubmerged(world.GetTerrain(position))
+                    ? Biome.None
+                    : ClassifyBiome(world.GetTemperature(position), world.GetMoisture(position)));
             }
         }
     }

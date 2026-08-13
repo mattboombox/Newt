@@ -4,4 +4,5 @@ namespace Newt.Simulation;
 public readonly record struct WorldGenerationOptions(
     WorldPreset Preset,
     ulong Seed,
-    double LandFraction = 0.38);
+    double LandFraction = 0.38,
+    WorldMapType MapType = WorldMapType.Continents);

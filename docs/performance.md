@@ -2,7 +2,7 @@
 
 ## Initial targets
 
-- Reference world: 252 × 130 tiles.
+- Reference world: Huge preset at 640 × 311 tiles.
 - Reference population: 10,000 active critters.
 - Simulation rate: 20 ticks per second.
 - Presentation target: 60 frames per second on the development machine.
@@ -10,6 +10,7 @@
 
 These are engineering targets, not final hardware requirements. Each substantial
 system needs a representative benchmark before its population scale increases.
+The 1280 × 642 Massive preset is an intentionally demanding stress-test world.
 
 ## Rules
 
@@ -17,6 +18,8 @@ system needs a representative benchmark before its population scale increases.
 - Spatial queries use the grid or bounded spatial indexes.
 - Pathfinding requests are bounded, cached, shared, or budgeted.
 - Rendering may interpolate but never controls simulation state.
+- Volcanic deposits batch global landform refreshes, and reroute freshwater only
+  when lava actually touches a river or lake.
 - Cleanup uses dense collections or deferred batches, not repeated linear removal.
 - Diagnostics expose tick duration, population by species, births, deaths,
   movements, blocked movements, and pathfinding work.

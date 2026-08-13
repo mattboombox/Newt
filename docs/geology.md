@@ -163,13 +163,13 @@ player-created spring still grows one tile per tick; only this response to geolo
 is instantaneous. A retraced river may divert, and its terminal lake may shrink,
 expand, or move to a different basin.
 
-New worlds also begin with a few animated snowmelt springs. Their sources are
-seeded, suitably spaced non-Arctic mountain tiles adjacent to Arctic mountains.
+New worlds also begin with a few animated springs. Their sources are seeded,
+suitably spaced Mountain or Snowy Mountain tiles.
 They obey the same tracing, basin filling, and persistent-source rules as springs
 created by the player.
 
-With the River tool selected, left click a non-Arctic Mountain adjacent to a
-Snowy Mountain to start an animated spring. The `F` shortcut uses the same rule.
+With the River tool selected, left click any Mountain or Snowy Mountain to start
+an animated spring. The `F` shortcut uses the same rule.
 Right click any freshwater tile to remove its connected river and lake system.
 If tributaries have joined, every registered source feeding that connected system
 is removed together; unrelated freshwater is redrawn and remains in the world.
@@ -183,6 +183,13 @@ tributaries, bridges, navigation, and channel erosion.
 ## Water representation
 
 Terrain, elevation, and surface water are separate properties:
+
+Terrain Tools preserves that separation. Stone places a temporary surface cover
+on only the clicked tile and does not alter its elevation; the biome eventually
+reclaims it, with nearby rivers accelerating recovery. Lava places a temporary
+cover on only the clicked tile and adds `0.03` elevation, matching a small volcanic
+deposit. Right click with either tool clears the geological cover without undoing
+any elevation previously deposited by lava.
 
 ```text
 tile

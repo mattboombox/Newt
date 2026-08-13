@@ -13,17 +13,26 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private const double ToolRepeatDelaySeconds = 0.25;
     private const double ToolRepeatIntervalSeconds = 0.075;
     private static readonly int[] ZoomLevels = [2, 4, 8, 16, 24];
+    private static readonly WorldPreset[] MenuSizes =
+        [WorldPreset.Micro, WorldPreset.Standard, WorldPreset.Large, WorldPreset.Huge, WorldPreset.Massive];
+    private static readonly WorldMapType[] MenuMapTypes =
+        [WorldMapType.Continents, WorldMapType.Pangaea, WorldMapType.Archipelago, WorldMapType.AllOcean,
+            WorldMapType.RingWorld, WorldMapType.Earth];
     private static readonly double[] SimulationRates = [0.25, 0.5, 1, 2, 4, 8, 16];
-    private static readonly ToolCategory[] ToolCategoryOrder = [ToolCategory.WorldTools, ToolCategory.Events];
+    private static readonly ToolCategory[] ToolCategoryOrder =
+        [ToolCategory.WorldTools, ToolCategory.TerrainTools, ToolCategory.CritterTools, ToolCategory.Events];
     private static readonly WorldTool[] WorldToolOrder =
         [WorldTool.Elevation, WorldTool.SeaLevel, WorldTool.OceanSeed,
             WorldTool.Temperature, WorldTool.Moisture, WorldTool.Seasons, WorldTool.Volcano, WorldTool.River];
     private static readonly WorldTool[] EventToolOrder =
         [WorldTool.Meteor, WorldTool.Tsunami, WorldTool.NaturalEvents];
+    private static readonly WorldTool[] CritterToolOrder = [WorldTool.Plankton];
+    private static readonly WorldTool[] TerrainToolOrder = [WorldTool.Stone, WorldTool.Lava];
     private static readonly TimeSpan SimulationStep = TimeSpan.FromSeconds(1d / SimulationWorld.TicksPerSecond);
     private readonly GraphicsDeviceManager _graphics;
     private SimulationWorld _world = null!;
     private WorldPreset _preset = WorldPreset.Standard;
+    private WorldMapType _mapType = WorldMapType.Continents;
     private ulong _seed = 20260806;
     private SpriteBatch? _spriteBatch;
     private Texture2D? _pixel;
@@ -43,6 +52,10 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private int _eventMagnitudeIndex = 3;
     private int _simulationRateIndex = 2;
     private bool _paused;
+    private bool _setupMenuOpen;
+    private int _setupRow;
+    private int _menuSizeIndex = 1;
+    private int _menuMapTypeIndex;
 
     public NewtGame()
     {
@@ -60,6 +73,12 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
 
     private int TileSize => ZoomLevels[_zoomIndex];
 
+    private int MapOffsetX => Math.Max(0,
+        (GraphicsDevice.Viewport.Width - _world.Width * TileSize) / 2);
+
+    private int MapOffsetY => Math.Max(0,
+        (MapViewportHeight - _world.Height * TileSize) / 2);
+
     protected override void LoadContent()
     {
         _spriteBatch = new SpriteBatch(GraphicsDevice);
@@ -72,6 +91,15 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     {
         var keyboard = Keyboard.GetState();
         var mouse = Mouse.GetState();
+        if (_setupMenuOpen)
+        {
+            HandleSetupMenu(keyboard);
+            _previousKeyboard = keyboard;
+            _previousMouse = mouse;
+            base.Update(gameTime);
+            return;
+        }
+
         if (GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed || keyboard.IsKeyDown(Keys.Escape))
         {
             Exit();
@@ -105,8 +133,12 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             return;
         }
 
-        var visibleColumns = GraphicsDevice.Viewport.Width / TileSize + 2;
-        var visibleRows = MapViewportHeight / TileSize + 2;
+        var visibleColumns = MapOffsetX > 0
+            ? _world.Width
+            : GraphicsDevice.Viewport.Width / TileSize + 2;
+        var visibleRows = MapOffsetY > 0
+            ? _world.Height
+            : MapViewportHeight / TileSize + 2;
         _spriteBatch.Begin(samplerState: SamplerState.PointClamp);
         for (var screenY = 0; screenY < visibleRows; screenY++)
         {
@@ -125,7 +157,11 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 var temperatureBand = _world.GetTemperatureBand(position);
                 _spriteBatch.Draw(
                     _pixel,
-                    new Rectangle(screenX * TileSize, screenY * TileSize, TileSize, TileSize),
+                    new Rectangle(
+                        MapOffsetX + screenX * TileSize,
+                        MapOffsetY + screenY * TileSize,
+                        TileSize,
+                        TileSize),
                     GetTileColor(position, terrain, biome, temperatureBand));
                 var water = _world.GetSurfaceWater(position);
                 if (water is not SurfaceWaterKind.None)
@@ -149,11 +185,19 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
 
             _spriteBatch.Draw(
                 _pixel,
-                new Rectangle(screenX * TileSize, screenY * TileSize, TileSize, TileSize),
+                new Rectangle(
+                    MapOffsetX + screenX * TileSize,
+                    MapOffsetY + screenY * TileSize,
+                    TileSize,
+                    TileSize),
                 GetCritterColor(critter.Species));
         }
 
         DrawHud();
+        if (_setupMenuOpen)
+        {
+            DrawSetupMenu();
+        }
 
         _spriteBatch.End();
         base.Draw(gameTime);
@@ -161,32 +205,25 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
 
     private void HandleWorldShortcuts(KeyboardState keyboard, MouseState mouse)
     {
-        if (WasPressed(keyboard, Keys.D1))
+        if (WasPressed(keyboard, Keys.M))
         {
-            _preset = WorldPreset.Micro;
-            GenerateWorld();
+            _menuMapTypeIndex = Array.IndexOf(MenuMapTypes, _mapType);
+            if (_menuMapTypeIndex < 0)
+            {
+                _menuMapTypeIndex = 0;
+            }
+            var currentSize = _preset == WorldPreset.Earth ? WorldPreset.Massive : _preset;
+            var sizeIndex = Array.IndexOf(MenuSizes, currentSize);
+            if (sizeIndex >= 0)
+            {
+                _menuSizeIndex = sizeIndex;
+            }
+            _setupMenuOpen = true;
+            _setupRow = 0;
+            return;
         }
-        else if (WasPressed(keyboard, Keys.D2))
-        {
-            _preset = WorldPreset.Standard;
-            GenerateWorld();
-        }
-        else if (WasPressed(keyboard, Keys.D3))
-        {
-            _preset = WorldPreset.Large;
-            GenerateWorld();
-        }
-        else if (WasPressed(keyboard, Keys.D4))
-        {
-            _preset = WorldPreset.Ring;
-            GenerateWorld();
-        }
-        else if (WasPressed(keyboard, Keys.D5))
-        {
-            _preset = WorldPreset.Earth;
-            GenerateWorld();
-        }
-        else if (WasPressed(keyboard, Keys.Q))
+
+        if (WasPressed(keyboard, Keys.Q))
         {
             CycleTool(-1);
         }
@@ -344,6 +381,24 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             case WorldTool.River:
                 Hydrology.RemoveFreshwaterAt(_world, position.Value);
                 break;
+            case WorldTool.Plankton when primaryActivated:
+                if (_world.GetTerrain(position.Value) is Terrain.DeepOcean)
+                {
+                    _world.TryAddCritter(CritterSpecies.Plankton, position.Value);
+                }
+                break;
+            case WorldTool.Stone when primaryActivated:
+                Volcanism.PlaceStone(_world, position.Value);
+                break;
+            case WorldTool.Stone:
+                Volcanism.ClearGeologicalCover(_world, position.Value);
+                break;
+            case WorldTool.Lava when primaryActivated:
+                Volcanism.PlaceLava(_world, position.Value);
+                break;
+            case WorldTool.Lava:
+                Volcanism.ClearGeologicalCover(_world, position.Value);
+                break;
         }
     }
 
@@ -377,6 +432,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private static WorldTool[] GetTools(ToolCategory category) => category switch
     {
         ToolCategory.WorldTools => WorldToolOrder,
+        ToolCategory.TerrainTools => TerrainToolOrder,
+        ToolCategory.CritterTools => CritterToolOrder,
         ToolCategory.Events => EventToolOrder,
         _ => throw new ArgumentOutOfRangeException(nameof(category)),
     };
@@ -401,13 +458,23 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             _cameraY += panStep;
         }
 
-        if (mouse.ScrollWheelValue > _previousMouse.ScrollWheelValue)
+        var zoomDirection = Math.Sign(mouse.ScrollWheelValue - _previousMouse.ScrollWheelValue);
+        var anchor = zoomDirection == 0 ? null : ScreenToWorld(mouse.X, mouse.Y);
+        var previousZoomIndex = _zoomIndex;
+        if (zoomDirection > 0)
         {
             _zoomIndex = Math.Min(_zoomIndex + 1, ZoomLevels.Length - 1);
         }
-        else if (mouse.ScrollWheelValue < _previousMouse.ScrollWheelValue)
+        else if (zoomDirection < 0)
         {
             _zoomIndex = Math.Max(_zoomIndex - 1, 0);
+        }
+
+        if (_zoomIndex != previousZoomIndex && anchor is not null)
+        {
+            // Keep the world tile under the pointer in the same screen region.
+            _cameraX = anchor.Value.X - (mouse.X - MapOffsetX) / TileSize;
+            _cameraY = anchor.Value.Y - (mouse.Y - MapOffsetY) / TileSize;
         }
 
         _cameraX = Mod(_cameraX, _world.Width);
@@ -439,7 +506,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
 
         DrawHudLines(HudPadding, hudY + 8,
             "WORLD",
-            $"{_preset.Name}  {_world.Width} x {_world.Height}",
+            $"{GetMapTypeName(_mapType)} / {_preset.Name}  {_world.Width} x {_world.Height}",
             $"Seed {_seed}   Tick {_world.Tick}   Year {_world.Year}   {GetSimulationRateText()}",
             _world.HasOceans
                 ? $"Sea {_world.SeaLevel:+0.00;-0.00;0.00}   Seeds {1 + _world.AdditionalOceanSeeds.Count}   Primary ({_world.OceanSeed.X}, {_world.OceanSeed.Y})"
@@ -449,14 +516,14 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             GetWorldSeasonLine());
 
         DrawHudLines(toolX + HudPadding, hudY + 8,
-            "ACTIVE TOOL",
+            $"TOOL: {GetToolCategoryName(CurrentToolCategory)}",
             CurrentTool.ToString(),
             GetToolHint(CurrentTool),
             "Q / E  cycle tools",
             "R  cycle categories",
             "< / >  speed   P  pause",
             "Wheel  zoom",
-            "WASD / arrows  pan");
+            "WASD / arrows  pan   M  world menu");
 
         var position = ScreenToWorld(mouse.X, mouse.Y);
         DrawHudLines(tileX + HudPadding, hudY + 8,
@@ -517,7 +584,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 : "Season disabled",
             $"Temperature {_world.GetTemperature(position):0.000} ({SeasonSystem.GetTemperatureChange(_world, position):+0.000;-0.000;0.000} season)   {_world.GetTemperatureBand(position)}",
             $"Moisture {_world.GetMoisture(position):0.000} ({SeasonSystem.GetMoistureChange(_world, position):+0.000;-0.000;0.000} season)   {_world.GetMoistureBand(position)}",
-            $"Water {waterText}",
+            $"Fresh Water {waterText}",
             GetEntityInspection(position),
         ];
     }
@@ -584,44 +651,117 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             return null;
         }
 
-        var y = _cameraY + screenY / TileSize;
+        var mapX = screenX - MapOffsetX;
+        var mapY = screenY - MapOffsetY;
+        if (mapY < 0 || mapY >= _world.Height * TileSize ||
+            (MapOffsetX > 0 && (mapX < 0 || mapX >= _world.Width * TileSize)))
+        {
+            return null;
+        }
+
+        var y = _cameraY + mapY / TileSize;
         if (y >= _world.Height)
         {
             return null;
         }
 
-        return new GridPosition(Mod(_cameraX + screenX / TileSize, _world.Width), y);
+        return new GridPosition(Mod(_cameraX + FloorDiv(mapX, TileSize), _world.Width), y);
     }
 
     private void GenerateWorld()
     {
-        _world = WorldGenerator.Generate(new WorldGenerationOptions(_preset, _seed));
+        _world = WorldGenerator.Generate(new WorldGenerationOptions(_preset, _seed, MapType: _mapType));
         _cameraX = 0;
         _cameraY = 0;
         _accumulator = TimeSpan.Zero;
-        AddFirstCritter(CritterSpecies.Plankton, Terrain.Ocean, Terrain.DeepOcean);
-        AddFirstCritter(CritterSpecies.Crab, Terrain.Shallows, Terrain.Beach);
-        AddFirstCritter(CritterSpecies.Ape, Terrain.Plains, Terrain.Beach);
+        _world.EnablePlanktonRecovery();
     }
 
-    private void AddFirstCritter(CritterSpecies species, params Terrain[] allowedTerrains)
+    private void HandleSetupMenu(KeyboardState keyboard)
     {
-        for (var y = 0; y < _world.Height; y++)
+        if (WasPressed(keyboard, Keys.M) || WasPressed(keyboard, Keys.Escape))
         {
-            for (var x = 0; x < _world.Width; x++)
+            _setupMenuOpen = false;
+            return;
+        }
+        if (WasPressed(keyboard, Keys.Up) || WasPressed(keyboard, Keys.W))
+        {
+            _setupRow = Mod(_setupRow - 1, 4);
+        }
+        else if (WasPressed(keyboard, Keys.Down) || WasPressed(keyboard, Keys.S))
+        {
+            _setupRow = Mod(_setupRow + 1, 4);
+        }
+
+        var direction = WasPressed(keyboard, Keys.Left) || WasPressed(keyboard, Keys.A) ? -1 :
+            WasPressed(keyboard, Keys.Right) || WasPressed(keyboard, Keys.D) ? 1 : 0;
+        if (direction != 0)
+        {
+            if (_setupRow == 0)
             {
-                var position = new GridPosition(x, y);
-                if (!_world.IsOccupied(position) && allowedTerrains.Contains(_world.GetTerrain(position)))
-                {
-                    if (_world.GetSurfaceCover(position) is SurfaceCover.None)
-                    {
-                        _world.AddCritter(species, position);
-                        return;
-                    }
-                }
+                _menuMapTypeIndex = Mod(_menuMapTypeIndex + direction, MenuMapTypes.Length);
+            }
+            else if (_setupRow == 1)
+            {
+                _menuSizeIndex = Mod(_menuSizeIndex + direction, MenuSizes.Length);
+            }
+            else if (_setupRow == 2)
+            {
+                _seed = direction > 0 ? _seed + 1 : _seed == 0 ? ulong.MaxValue : _seed - 1;
             }
         }
+
+        if (WasPressed(keyboard, Keys.Enter) || (_setupRow == 3 && WasPressed(keyboard, Keys.Space)))
+        {
+            _mapType = MenuMapTypes[_menuMapTypeIndex];
+            _preset = _mapType is WorldMapType.RingWorld ? WorldPreset.Ring : MenuSizes[_menuSizeIndex];
+            GenerateWorld();
+            _setupMenuOpen = false;
+        }
     }
+
+    private void DrawSetupMenu()
+    {
+        if (_spriteBatch is null || _pixel is null || _hudFont is null)
+        {
+            return;
+        }
+
+        var panelWidth = 520;
+        var panelHeight = 250;
+        var left = (GraphicsDevice.Viewport.Width - panelWidth) / 2;
+        var top = (MapViewportHeight - panelHeight) / 2;
+        _spriteBatch.Draw(_pixel, new Rectangle(left, top, panelWidth, panelHeight), new Color(12, 16, 20, 245));
+        _spriteBatch.Draw(_pixel, new Rectangle(left, top, panelWidth, 2), new Color(126, 190, 213));
+        _spriteBatch.DrawString(_hudFont, "NEW WORLD", new Vector2(left + 24, top + 20), new Color(126, 190, 213));
+
+        var type = MenuMapTypes[_menuMapTypeIndex];
+        var sizeText = type is WorldMapType.RingWorld
+            ? $"Fixed  {WorldPreset.Ring.Width} x {WorldPreset.Ring.Height}"
+            : $"{MenuSizes[_menuSizeIndex].Name}  {MenuSizes[_menuSizeIndex].Width} x {MenuSizes[_menuSizeIndex].Height}";
+        string[] rows =
+        [
+            $"Map Shape       <  {GetMapTypeName(type)}  >",
+            $"World Size      <  {sizeText}  >",
+            $"Seed            <  {_seed}  >",
+            "Generate World",
+        ];
+        for (var row = 0; row < rows.Length; row++)
+        {
+            var color = row == _setupRow ? Color.White : new Color(160, 168, 174);
+            var prefix = row == _setupRow ? "> " : "  ";
+            _spriteBatch.DrawString(_hudFont, prefix + rows[row], new Vector2(left + 24, top + 62 + row * 34), color);
+        }
+        _spriteBatch.DrawString(_hudFont, "Arrows or WASD navigate   Enter generate   M/Esc close",
+            new Vector2(left + 24, top + panelHeight - 32), new Color(130, 140, 146));
+    }
+
+    private static string GetMapTypeName(WorldMapType type) => type switch
+    {
+        WorldMapType.RingWorld => "Ring World",
+        WorldMapType.AllOcean => "Water World",
+        _ => type.ToString(),
+    };
 
     private bool WasPressed(KeyboardState current, Keys key) => current.IsKeyDown(key) && _previousKeyboard.IsKeyUp(key);
 
@@ -647,8 +787,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 _world.GetWaterDepth(worldPosition),
                 _world.GetBiome(worldPosition) is Biome.Arctic)
             : GetSurfaceWaterColor(water);
-        var originX = screenX * TileSize;
-        var originY = screenY * TileSize;
+        var originX = MapOffsetX + screenX * TileSize;
+        var originY = MapOffsetY + screenY * TileSize;
         if (water is SurfaceWaterKind.FreshwaterLake)
         {
             _spriteBatch.Draw(_pixel, new Rectangle(originX, originY, TileSize, TileSize), color);
@@ -680,7 +820,11 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             : new Color(92, 70, 66);
         _spriteBatch.Draw(
             _pixel,
-            new Rectangle(screenX * TileSize + inset, screenY * TileSize + inset, size, size),
+            new Rectangle(
+                MapOffsetX + screenX * TileSize + inset,
+                MapOffsetY + screenY * TileSize + inset,
+                size,
+                size),
             color);
     }
 
@@ -703,8 +847,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             _spriteBatch.Draw(
                 _pixel,
                 new Rectangle(
-                    screenX * TileSize + inset,
-                    screenY * TileSize + inset,
+                    MapOffsetX + screenX * TileSize + inset,
+                    MapOffsetY + screenY * TileSize + inset,
                     Math.Max(1, TileSize - inset * 2),
                     Math.Max(1, TileSize - inset * 2)),
                 wave.Kind is WaveKind.Tsunami
@@ -771,6 +915,9 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         var result = value % modulus;
         return result < 0 ? result + modulus : result;
     }
+
+    private static int FloorDiv(int value, int divisor) =>
+        value >= 0 ? value / divisor : -((-value + divisor - 1) / divisor);
 
     private Color GetTileColor(
         GridPosition position,
@@ -938,13 +1085,27 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         WorldTool.NaturalEvents => _world.NaturalEventsEnabled
             ? "left enabled, right disable"
             : "left enable, right disabled",
-        WorldTool.River => "left by snowy mountain, right remove",
+        WorldTool.River => "left on mountain, right remove",
+        WorldTool.Plankton => "left spawn in deep ocean",
+        WorldTool.Stone => "left place cover, right clear",
+        WorldTool.Lava => "left deposit +0.03, right clear",
         _ => string.Empty,
+    };
+
+    private static string GetToolCategoryName(ToolCategory category) => category switch
+    {
+        ToolCategory.WorldTools => "WORLD TOOLS",
+        ToolCategory.TerrainTools => "TERRAIN TOOLS",
+        ToolCategory.CritterTools => "CRITTER TOOLS",
+        ToolCategory.Events => "EVENTS",
+        _ => category.ToString().ToUpperInvariant(),
     };
 
     private enum ToolCategory
     {
         WorldTools,
+        TerrainTools,
+        CritterTools,
         Events,
     }
 
@@ -961,5 +1122,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         Tsunami,
         NaturalEvents,
         River,
+        Plankton,
+        Stone,
+        Lava,
     }
 }

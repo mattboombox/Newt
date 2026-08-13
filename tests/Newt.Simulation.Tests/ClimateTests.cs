@@ -209,6 +209,27 @@ public sealed class ClimateTests
     }
 
     [Fact]
+    public void RiverCreatesAGraduallyFadingRiparianCorridor()
+    {
+        var world = CreateFlatLand(width: 41, height: 21, seed: 53);
+        var river = new GridPosition(20, 10);
+        var threeTilesAway = new GridPosition(20, 7);
+        var sixTilesAway = new GridPosition(20, 4);
+        TerrainClassifier.RebuildAll(world);
+        var dryMoistureAtThree = world.GetMoisture(threeTilesAway);
+        var dryMoistureAtSix = world.GetMoisture(sixTilesAway);
+
+        world.SetSurfaceWater(river, SurfaceWaterKind.River);
+        TerrainClassifier.RebuildAll(world);
+
+        var influenceAtThree = world.GetMoisture(threeTilesAway) - dryMoistureAtThree;
+        var influenceAtSix = world.GetMoisture(sixTilesAway) - dryMoistureAtSix;
+        Assert.True(influenceAtThree > 0.2f);
+        Assert.True(influenceAtSix > 0.1f);
+        Assert.True(influenceAtThree > influenceAtSix);
+    }
+
+    [Fact]
     public void GrasslandClimateDoesNotFlattenHills()
     {
         var world = CreateFlatLand(width: 41, height: 41, seed: 71);

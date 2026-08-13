@@ -5,7 +5,7 @@ namespace Newt.Simulation.Tests;
 public sealed class HydrologyTests
 {
     [Fact]
-    public void SnowmeltSpringRejectsTerrainAwayFromSnowyMountains()
+    public void SpringRejectsNonMountainTerrain()
     {
         var world = new SimulationWorld(9, 9, Terrain.Plains, seed: 4);
         for (var y = 0; y < world.Height; y++)
@@ -21,6 +21,49 @@ public sealed class HydrologyTests
 
         Assert.Equal(SpringTermination.InvalidSource, result.Termination);
         Assert.Equal(0, world.ActiveSpringCount);
+    }
+
+    [Fact]
+    public void SpringAcceptsRegularMountainWithoutSnowyNeighbor()
+    {
+        var world = new SimulationWorld(9, 9, Terrain.Plains, seed: 4);
+        for (var y = 0; y < world.Height; y++)
+        {
+            for (var x = 0; x < world.Width; x++)
+            {
+                world.SetElevation(new GridPosition(x, y), 0.2f);
+            }
+        }
+
+        var source = new GridPosition(4, 4);
+        world.SetElevation(source, 0.7f);
+        TerrainClassifier.RebuildAll(world);
+
+        Assert.Equal(Terrain.Mountain, world.GetTerrain(source));
+        Assert.NotEqual(Biome.Arctic, world.GetBiome(source));
+        Assert.True(Hydrology.IsSnowmeltSource(world, source));
+    }
+
+    [Fact]
+    public void SnowmeltSpringAcceptsASnowyMountainTile()
+    {
+        var world = new SimulationWorld(9, 9, Terrain.Plains, seed: 4);
+        for (var y = 0; y < world.Height; y++)
+        {
+            for (var x = 0; x < world.Width; x++)
+            {
+                world.SetElevation(new GridPosition(x, y), 0.2f);
+            }
+        }
+
+        var source = new GridPosition(4, 0);
+        world.SetElevation(source, 0.8f);
+        TerrainClassifier.RebuildAll(world);
+
+        Assert.Equal(Terrain.Mountain, world.GetTerrain(source));
+        Assert.Equal(Biome.Arctic, world.GetBiome(source));
+        Assert.True(Hydrology.IsSnowmeltSource(world, source));
+        Assert.Equal(SpringTermination.Flowing, Hydrology.StartSnowmeltSpring(world, source).Termination);
     }
 
     [Fact]
