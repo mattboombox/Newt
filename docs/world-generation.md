@@ -91,13 +91,35 @@ terrain ceiling, and terrain-changing events cannot permanently erode them.
 - `N`: increment the seed and generate a new world.
 - `Q` / `E`: cycle backward or forward through tools in the current category.
 - `R`: cycle tool categories.
-- Terrain Tools: Stone temporarily covers one tile without changing elevation
-  before the biome reclaims it; Lava covers one tile and deposits `+0.03`
-  elevation. Right click clears either cover.
+- Other / Inspect: left click a critter to show its full entity details and keep
+  the camera centered on it. Right click stops following. Inspection also clears
+  automatically if the followed critter dies.
+- Terrain Tools: Elevation, River, Volcano, Stone, and Lava. Stone temporarily
+  covers one tile without changing elevation before the biome reclaims it;
+  Lava covers one tile and deposits `+0.03` elevation. Right click clears
+  either cover.
 - Critter Tools / Plankton: left click an empty Deep Ocean tile to spawn plankton.
+- Primitive evolution currently branches from Plankton to Jellyfish or Worm, then
+  from Worm to Fish, Fish to Newt, and Newt to Mega Toad. Worms scavenge detritus in Shallows;
+  jellyfish consume plankton and worms on contact; fish locally pursue and eat
+  either prey. Newts live on land, feed in rivers and freshwater lakes, and make
+  one cached migration toward freshwater after they are born or evolved. Mega
+  Toads hunt worms, fish, and newts locally and can enter land, shallows, and
+  freshwater lakes, but not open ocean.
 - Elevation tool: left click raises terrain and right click lowers it.
 - Sea-level tool: left click raises the ocean and right click lowers it.
 - Ocean-seed tool: click a tile to move the world's single saltwater source.
+- Life tool: left click enables critters and ordinary biomes; right click makes
+  the current and subsequently generated worlds lifeless. Lifeless worlds keep
+  deserts, Arctic snow on every landform, and ice sheets but suppress other living biomes and
+  do not seed plankton. Barren land appears as Stone Plains, Stone Hills, Stone
+  Lowlands, Stone Canyons, or Stone Trenches. Re-enabling life lets ordinary
+  biomes reclaim those surfaces gradually; beaches and mountains are never stone.
+  Meteor and volcanic stone is the same biome-less state with a disturbance-specific
+  recovery timer.
+- Evolution Chance tool: left click adds 0.5 percentage points and right click
+  subtracts 0.5, clamped from 0 to 100 percent. This controls whether offspring
+  move one step down the evolution tree when they are born.
 - Temperature tool: left click warms globally and right click cools globally.
 - Moisture tool: left click makes the world wetter and right click makes it drier.
 
@@ -109,12 +131,18 @@ display scaling so both mountain ranges and ocean basins remain readable at tile
 - Volcano tool: left click spawns a new active volcano on an unoccupied tile.
 - Meteor tool: left click strikes the pointed tile; right click cycles magnitude
   from `0.0` through `1.0` in `0.1` steps. The active magnitude appears in the HUD.
+- Evolve event: left click a critter to move it one step down the evolution tree;
+  right click moves it one step back toward its ancestor.
+- Watershed Shift event: left click dries one naturally generated river system
+  and starts a replacement on another eligible mountain. Rivers created with the
+  River tool or `F` are player-owned and never dry from this event. Automatic
+  Natural Events can also produce watershed shifts.
 - River tool: left click starts a spring on any Mountain or Snowy Mountain;
   right click removes the connected river and lake system.
 
-Elevation, SeaLevel, Temperature, and Moisture repeat while their mouse button is
+Elevation, SeaLevel, Temperature, Moisture, and Evolution Chance repeat while their mouse button is
 held. The first repeat begins after 0.25 seconds and continues every 0.075 seconds.
-OceanSeed, Volcano, Meteor, and River remain single-click tools.
+OceanSeed, Volcano, Meteor, Watershed Shift, Evolve, and River remain single-click tools.
 - `F`: create a spring on the hovered land tile and trace it downhill.
 - Arrow keys or `WASD`: move the camera.
 - Hold Shift while moving: pan four times faster.
@@ -152,6 +180,11 @@ Each impact launches an expanding, slightly irregular circular shockwave. Its
 strength fades with distance and removes critters as its visible front reaches
 them. The wave itself does not erase biomes: only the crater, rim, and ejecta are
 temporarily stripped to stone, so distant land keeps its biome identity.
+River basin searches follow a proven route toward ocean before selecting the
+route's highest saddle as the lake surface. This lets large irregular craters fill
+past their internal bumps. Each filled depression starts a downstream river at
+its spill tile, and that river repeats the process without a channel-length cap
+until it reaches ocean or joins another watercourse.
 - Escape: exit.
 
 ## Planned extensions

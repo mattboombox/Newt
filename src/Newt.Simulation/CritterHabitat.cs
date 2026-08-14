@@ -4,6 +4,7 @@ namespace Newt.Simulation;
 public enum CritterHabitat
 {
     OceanDweller,
+    ShallowSeeker,
     LandDweller,
     FreshwaterDweller,
     Flier,
@@ -13,8 +14,11 @@ public static class CritterHabitats
 {
     public static CritterHabitat GetHabitat(CritterSpecies species) => species switch
     {
-        CritterSpecies.Plankton => CritterHabitat.OceanDweller,
-        CritterSpecies.Crab or CritterSpecies.Ape => CritterHabitat.LandDweller,
+        CritterSpecies.Plankton or CritterSpecies.Jellyfish or CritterSpecies.Fish =>
+            CritterHabitat.OceanDweller,
+        CritterSpecies.Worm => CritterHabitat.ShallowSeeker,
+        CritterSpecies.Newt or CritterSpecies.MegaToad or CritterSpecies.Crab or CritterSpecies.Ape =>
+            CritterHabitat.LandDweller,
         _ => throw new ArgumentOutOfRangeException(nameof(species)),
     };
 
@@ -38,6 +42,11 @@ public static class CritterHabitats
         return habitat switch
         {
             CritterHabitat.OceanDweller =>
+            terrain is Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows,
+
+            // Worms may cross open saltwater while following adjacent chemical
+            // cues, but they can feed only after reaching shallows.
+            CritterHabitat.ShallowSeeker =>
             terrain is Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows,
 
             // Land species may ford a river, but lakes remain aquatic habitat.

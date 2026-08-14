@@ -27,10 +27,6 @@
       "RelativeMoniker": "D:0:0:{228BFD20-ED4C-4A59-A9A1-457E22762FB2}|src\\Newt.Simulation\\Newt.Simulation.csproj|solutionrelative:src\\newt.simulation\\volcanosnapshot.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{228BFD20-ED4C-4A59-A9A1-457E22762FB2}|src\\Newt.Simulation\\Newt.Simulation.csproj|c:\\users\\1matt\\desktop\\newt\\src\\newt.simulation\\springsource.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{228BFD20-ED4C-4A59-A9A1-457E22762FB2}|src\\Newt.Simulation\\Newt.Simulation.csproj|solutionrelative:src\\newt.simulation\\springsource.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
       "AbsoluteMoniker": "D:0:0:{228BFD20-ED4C-4A59-A9A1-457E22762FB2}|src\\Newt.Simulation\\Newt.Simulation.csproj|c:\\users\\1matt\\desktop\\newt\\src\\newt.simulation\\springresult.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{228BFD20-ED4C-4A59-A9A1-457E22762FB2}|src\\Newt.Simulation\\Newt.Simulation.csproj|solutionrelative:src\\newt.simulation\\springresult.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     }
@@ -42,12 +38,8 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 3,
+          "SelectedChildIndex": 2,
           "Children": [
-            {
-              "$type": "Bookmark",
-              "Name": "ST:0:0:{cce594b6-0c39-4442-ba28-10c64ac7e89f}"
-            },
             {
               "$type": "Bookmark",
               "Name": "ST:0:0:{1c4feeaa-4718-4aa9-859d-94ce25d182ba}"
@@ -72,7 +64,7 @@
               "RelativeDocumentMoniker": "src\\Newt.Simulation\\Biome.cs",
               "ToolTip": "C:\\Users\\1Matt\\Desktop\\Newt\\src\\Newt.Simulation\\Biome.cs",
               "RelativeToolTip": "src\\Newt.Simulation\\Biome.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABQAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2026-08-11T03:00:05.697Z",
               "EditorCaption": ""
@@ -128,18 +120,6 @@
             {
               "$type": "Document",
               "DocumentIndex": 6,
-              "Title": "SpringSource.cs",
-              "DocumentMoniker": "C:\\Users\\1Matt\\Desktop\\Newt\\src\\Newt.Simulation\\SpringSource.cs",
-              "RelativeDocumentMoniker": "src\\Newt.Simulation\\SpringSource.cs",
-              "ToolTip": "C:\\Users\\1Matt\\Desktop\\Newt\\src\\Newt.Simulation\\SpringSource.cs",
-              "RelativeToolTip": "src\\Newt.Simulation\\SpringSource.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-08-11T02:59:37.427Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 7,
               "Title": "SpringResult.cs",
               "DocumentMoniker": "C:\\Users\\1Matt\\Desktop\\Newt\\src\\Newt.Simulation\\SpringResult.cs",
               "RelativeDocumentMoniker": "src\\Newt.Simulation\\SpringResult.cs",

@@ -66,6 +66,20 @@ The offset tapers to zero through the equatorial band, whose tiles display
 Seasons tool can disable the cycle and immediately restore baseline temperatures.
 One complete seasonal cycle advances the displayed year by one. Disabling seasons
 also pauses this seasonal calendar while ordinary simulation ticks continue.
+
+The Life world tool is a separate global ecology switch. With life disabled,
+plankton recovery and critter creation stop, existing critters are removed, and
+biome classification retains Desert and Arctic on every landform. This keeps
+climate-driven snow visible regardless of the Life setting. Physical ice-sheet
+terrain remains unchanged. Biome-less plains, hills, lowlands,
+canyons, and trenches are the Stone biome in presentation and inspection. None
+retains its literal meaning on other terrain. Re-enabling life restores plankton
+recovery immediately, then climate-appropriate biomes reclaim barren stone over
+a deterministic 18-to-45-second interval. Beaches and mountains never receive
+stone presentation. Meteor ejecta and cooled lava use that same biome-less state;
+their surface-cover record only tracks when climate may reclaim the tile. The Life
+setting is also applied to subsequently generated worlds.
+
 The model does not simulate daily temperature, air masses, or atmospheric heat transport. Ocean moderation
 can be considered later only if the simpler field proves visually insufficient.
 
@@ -133,8 +147,7 @@ moisture = baseline
 ```
 
 - Saltwater moisture decays inland using one multi-source distance calculation.
-- Rivers create narrow fertile corridors.
-- Lakes create wider moist regions.
+- Rivers and lakes spread moisture with the same strength and reach.
 - High exposed terrain receives a modest penalty.
 - Smooth seeded variation produces broad wet and dry regions.
 
@@ -196,8 +209,10 @@ ecological model.
 6. Plains and hills retain their landform and receive biome-specific colors.
 7. Rivers and lakes remain surface-water overlays.
 
-When a spring finishes forming a river or lake, climate is rebuilt once. It is
-not rebuilt for every growing river tile, which keeps the per-tick cost bounded.
+When a lake finishes filling, climate is rebuilt immediately even if its overflow
+river is still traveling toward the ocean. Lakes formed on the same tick share
+one rebuild. Climate is not rebuilt for every growing river tile, which keeps the
+per-tick cost bounded.
 
 ## Gameplay consequences
 

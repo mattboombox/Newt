@@ -65,6 +65,9 @@ public sealed class VolcanismTests
         world.AdvanceOneTick();
 
         Assert.Equal(SurfaceCover.Stone, world.GetSurfaceCover(position));
+        Assert.Equal(Biome.None, world.GetBiome(position));
+        ClimateSystem.RebuildMoistureAndBiomes(world);
+        Assert.Equal(Biome.None, world.GetBiome(position));
         world.SetSurfaceCover(position, SurfaceCover.Stone, world.Tick + 1);
 
         world.AdvanceOneTick();

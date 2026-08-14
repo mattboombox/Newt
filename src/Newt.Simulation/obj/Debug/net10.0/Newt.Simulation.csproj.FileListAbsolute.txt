@@ -46,4 +46,13 @@ C:\Users\1Matt\Desktop\Newt\src\Newt.Simulation\obj\Debug\net10.0\refint\Newt.Si
 C:\Users\1Matt\Desktop\Newt\src\Newt.Simulation\obj\Debug\net10.0\ref\Newt.Simulation.dll
 C:\Users\1Matt\Desktop\Newt\src\Newt.Simulation\obj\Debug\net10.0\Newt.Simulation.csproj.CoreCompileInputs.cache
 C:\Users\1Matt\Desktop\Newt\src\Newt.Simulation\obj\Debug\net10.0\Newt.Simulation.sourcelink.json
+C:\Users\1Matt\Desktop\Newt\.verify-hydrology-build\Newt.Simulation.deps.json
+C:\Users\1Matt\Desktop\Newt\.verify-hydrology-build\Newt.Simulation.dll
+C:\Users\1Matt\Desktop\Newt\.verify-hydrology-build\Newt.Simulation.pdb
+C:\Users\1Matt\Desktop\Newt\.verify-river-build\Newt.Simulation.deps.json
+C:\Users\1Matt\Desktop\Newt\.verify-river-build\Newt.Simulation.dll
+C:\Users\1Matt\Desktop\Newt\.verify-river-build\Newt.Simulation.pdb
+C:\Users\1Matt\Desktop\Newt\.verify-entity-ui\Newt.Simulation.deps.json
+C:\Users\1Matt\Desktop\Newt\.verify-entity-ui\Newt.Simulation.dll
+C:\Users\1Matt\Desktop\Newt\.verify-entity-ui\Newt.Simulation.pdb
 C:\Users\1Matt\Desktop\Newt\src\Newt.Simulation\obj\Debug\net10.0\Newt.Sim.7DF46C68.Up2Date

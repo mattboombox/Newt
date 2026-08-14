@@ -37,3 +37,4 @@ C:\Users\1Matt\Desktop\Newt\src\Newt.Game\obj\Release\net10.0\refint\Newt.Game.d
 C:\Users\1Matt\Desktop\Newt\src\Newt.Game\obj\Release\net10.0\Newt.Game.pdb
 C:\Users\1Matt\Desktop\Newt\src\Newt.Game\obj\Release\net10.0\Newt.Game.genruntimeconfig.cache
 C:\Users\1Matt\Desktop\Newt\src\Newt.Game\obj\Release\net10.0\ref\Newt.Game.dll
+C:\Users\1Matt\Desktop\Newt\src\Newt.Game\bin\Release\net10.0\Content\HudFont.xnb

@@ -4,6 +4,11 @@ namespace Newt.Simulation;
 public enum CritterSpecies : byte
 {
     Plankton,
+    Jellyfish,
+    Worm,
+    Fish,
+    Newt,
+    MegaToad,
     Crab,
     Ape,
 }

@@ -20,14 +20,18 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             WorldMapType.RingWorld, WorldMapType.Earth];
     private static readonly double[] SimulationRates = [0.25, 0.5, 1, 2, 4, 8, 16];
     private static readonly ToolCategory[] ToolCategoryOrder =
-        [ToolCategory.WorldTools, ToolCategory.TerrainTools, ToolCategory.CritterTools, ToolCategory.Events];
+        [ToolCategory.WorldTools, ToolCategory.TerrainTools, ToolCategory.CritterTools,
+            ToolCategory.Events, ToolCategory.Other];
     private static readonly WorldTool[] WorldToolOrder =
-        [WorldTool.Elevation, WorldTool.SeaLevel, WorldTool.OceanSeed,
-            WorldTool.Temperature, WorldTool.Moisture, WorldTool.Seasons, WorldTool.Volcano, WorldTool.River];
+        [WorldTool.SeaLevel, WorldTool.OceanSeed, WorldTool.Temperature,
+            WorldTool.Moisture, WorldTool.EvolutionChance, WorldTool.Seasons, WorldTool.Life];
     private static readonly WorldTool[] EventToolOrder =
-        [WorldTool.Meteor, WorldTool.Tsunami, WorldTool.NaturalEvents];
+        [WorldTool.Meteor, WorldTool.Tsunami, WorldTool.WatershedShift,
+            WorldTool.Evolve, WorldTool.NaturalEvents];
     private static readonly WorldTool[] CritterToolOrder = [WorldTool.Plankton];
-    private static readonly WorldTool[] TerrainToolOrder = [WorldTool.Stone, WorldTool.Lava];
+    private static readonly WorldTool[] OtherToolOrder = [WorldTool.Inspect];
+    private static readonly WorldTool[] TerrainToolOrder =
+        [WorldTool.Elevation, WorldTool.River, WorldTool.Volcano, WorldTool.Stone, WorldTool.Lava];
     private static readonly TimeSpan SimulationStep = TimeSpan.FromSeconds(1d / SimulationWorld.TicksPerSecond);
     private readonly GraphicsDeviceManager _graphics;
     private SimulationWorld _world = null!;
@@ -51,11 +55,13 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private double _nextToolRepeatSeconds;
     private int _eventMagnitudeIndex = 3;
     private int _simulationRateIndex = 2;
+    private bool _lifeEnabled = true;
     private bool _paused;
     private bool _setupMenuOpen;
     private int _setupRow;
     private int _menuSizeIndex = 1;
     private int _menuMapTypeIndex;
+    private CritterId _inspectedCritterId;
 
     public NewtGame()
     {
@@ -119,6 +125,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 _accumulator -= SimulationStep;
             }
         }
+
+        UpdateInspectedCritterFollow();
 
         _previousKeyboard = keyboard;
         _previousMouse = mouse;
@@ -186,10 +194,10 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             _spriteBatch.Draw(
                 _pixel,
                 new Rectangle(
-                    MapOffsetX + screenX * TileSize,
-                    MapOffsetY + screenY * TileSize,
-                    TileSize,
-                    TileSize),
+                    MapOffsetX + screenX * TileSize + GetCritterMarkerInset(),
+                    MapOffsetY + screenY * TileSize + GetCritterMarkerInset(),
+                    GetCritterMarkerSize(),
+                    GetCritterMarkerSize()),
                 GetCritterColor(critter.Species));
         }
 
@@ -202,6 +210,12 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         _spriteBatch.End();
         base.Draw(gameTime);
     }
+
+    private int GetCritterMarkerSize() => TileSize <= 2
+        ? 1
+        : TileSize - 2 * Math.Max(1, TileSize / 5);
+
+    private int GetCritterMarkerInset() => (TileSize - GetCritterMarkerSize()) / 2;
 
     private void HandleWorldShortcuts(KeyboardState keyboard, MouseState mouse)
     {
@@ -245,7 +259,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             var position = ScreenToWorld(mouse.X, mouse.Y);
             if (position is not null)
             {
-                Hydrology.StartSnowmeltSpring(_world, position.Value);
+                Hydrology.StartSnowmeltSpring(_world, position.Value, SpringOrigin.Player);
             }
         }
         else if (WasPressed(keyboard, Keys.OemComma))
@@ -311,6 +325,12 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             return;
         }
 
+        if (CurrentTool is WorldTool.Inspect && secondaryActivated)
+        {
+            _inspectedCritterId = default;
+            return;
+        }
+
         var position = ScreenToWorld(mouse.X, mouse.Y);
         if (position is null)
         {
@@ -348,11 +368,25 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             case WorldTool.Moisture:
                 ClimateSystem.AdjustGlobalMoisture(_world, -ClimateSystem.GlobalClimateEditStep);
                 break;
+            case WorldTool.EvolutionChance when primaryActivated:
+                _world.AdjustEvolutionChance(1);
+                break;
+            case WorldTool.EvolutionChance:
+                _world.AdjustEvolutionChance(-1);
+                break;
             case WorldTool.Seasons when primaryActivated:
                 SeasonSystem.SetEnabled(_world, true);
                 break;
             case WorldTool.Seasons:
                 SeasonSystem.SetEnabled(_world, false);
+                break;
+            case WorldTool.Life when primaryActivated:
+                _lifeEnabled = true;
+                LifeSystem.SetEnabled(_world, true);
+                break;
+            case WorldTool.Life:
+                _lifeEnabled = false;
+                LifeSystem.SetEnabled(_world, false);
                 break;
             case WorldTool.Volcano when primaryActivated:
                 Volcanism.SpawnVolcano(_world, position.Value);
@@ -369,6 +403,17 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             case WorldTool.Tsunami:
                 _eventMagnitudeIndex = (_eventMagnitudeIndex + 1) % 11;
                 break;
+            case WorldTool.WatershedShift when primaryActivated:
+                Hydrology.ShiftNaturalWatershed(_world);
+                break;
+            case WorldTool.WatershedShift:
+                break;
+            case WorldTool.Evolve when primaryActivated:
+                _world.TryEvolveCritterAt(position.Value);
+                break;
+            case WorldTool.Evolve:
+                _world.TryDevolveCritterAt(position.Value);
+                break;
             case WorldTool.NaturalEvents when primaryActivated:
                 NaturalEvents.SetEnabled(_world, true);
                 break;
@@ -376,7 +421,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 NaturalEvents.SetEnabled(_world, false);
                 break;
             case WorldTool.River when primaryActivated:
-                Hydrology.StartSnowmeltSpring(_world, position.Value);
+                Hydrology.StartSnowmeltSpring(_world, position.Value, SpringOrigin.Player);
                 break;
             case WorldTool.River:
                 Hydrology.RemoveFreshwaterAt(_world, position.Value);
@@ -399,11 +444,20 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             case WorldTool.Lava:
                 Volcanism.ClearGeologicalCover(_world, position.Value);
                 break;
+            case WorldTool.Inspect when primaryActivated:
+                if (_world.TryGetCritterAt(position.Value, out var inspected))
+                {
+                    _inspectedCritterId = inspected.Id;
+                }
+                break;
+            case WorldTool.Inspect:
+                break;
         }
     }
 
     private static bool IsContinuousTool(WorldTool tool) => tool is
-        WorldTool.Elevation or WorldTool.SeaLevel or WorldTool.Temperature or WorldTool.Moisture;
+        WorldTool.Elevation or WorldTool.SeaLevel or WorldTool.Temperature or
+        WorldTool.Moisture or WorldTool.EvolutionChance;
 
     private void ResetToolRepeat()
     {
@@ -435,6 +489,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         ToolCategory.TerrainTools => TerrainToolOrder,
         ToolCategory.CritterTools => CritterToolOrder,
         ToolCategory.Events => EventToolOrder,
+        ToolCategory.Other => OtherToolOrder,
         _ => throw new ArgumentOutOfRangeException(nameof(category)),
     };
 
@@ -482,6 +537,27 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         _cameraY = Math.Clamp(_cameraY, 0, Math.Max(0, _world.Height - visibleRows));
     }
 
+    private void UpdateInspectedCritterFollow()
+    {
+        if (!_inspectedCritterId.IsValid)
+        {
+            return;
+        }
+        if (!_world.TryGetCritter(_inspectedCritterId, out var critter))
+        {
+            _inspectedCritterId = default;
+            return;
+        }
+
+        var visibleColumns = Math.Max(1, GraphicsDevice.Viewport.Width / TileSize);
+        var visibleRows = Math.Max(1, MapViewportHeight / TileSize);
+        _cameraX = Mod(critter.Position.X - visibleColumns / 2, _world.Width);
+        _cameraY = Math.Clamp(
+            critter.Position.Y - visibleRows / 2,
+            0,
+            Math.Max(0, _world.Height - visibleRows));
+    }
+
     private int MapViewportHeight => Math.Max(1, GraphicsDevice.Viewport.Height - HudHeight);
 
     private void DrawHud()
@@ -501,8 +577,11 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         var toolWidth = Math.Max(190, width / 5);
         var toolX = worldWidth;
         var tileX = Math.Min(width - 1, toolX + toolWidth);
+        var entityWidth = Math.Clamp(width / 3, 320, 460);
+        var entityX = Math.Max(tileX, width - entityWidth);
         DrawHudDivider(toolX, hudY);
         DrawHudDivider(tileX, hudY);
+        DrawHudDivider(entityX, hudY);
 
         DrawHudLines(HudPadding, hudY + 8,
             "WORLD",
@@ -513,6 +592,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 : $"Datum {_world.SeaLevel:+0.00;-0.00;0.00}   No oceans",
             $"Temperature {_world.GlobalTemperatureOffset:+0.00;-0.00;0.00}",
             $"Moisture {_world.GlobalMoistureOffset:+0.00;-0.00;0.00}",
+            $"Life {(_world.LifeEnabled ? "enabled" : "disabled")}   Critters {_world.CritterCount}",
             GetWorldSeasonLine());
 
         DrawHudLines(toolX + HudPadding, hudY + 8,
@@ -527,7 +607,13 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
 
         var position = ScreenToWorld(mouse.X, mouse.Y);
         DrawHudLines(tileX + HudPadding, hudY + 8,
-            position is null ? ["TILE", "Move the pointer over the map"] : GetInspectionLines(position.Value));
+            position is null
+                ? ["TILE", "Move the pointer over the map"]
+                : GetTileInspectionLines(position.Value));
+        DrawHudLines(entityX + HudPadding, hudY + 8,
+            position is null
+                ? ["ENTITY", "None"]
+                : GetEntityInspectionLines(position.Value));
     }
 
     private void DrawHudDivider(int x, int hudY)
@@ -562,7 +648,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         }
     }
 
-    private string[] GetInspectionLines(GridPosition position)
+    private string[] GetTileInspectionLines(GridPosition position)
     {
         var elevation = _world.GetElevation(position);
         var terrain = _world.GetTerrain(position);
@@ -585,7 +671,6 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             $"Temperature {_world.GetTemperature(position):0.000} ({SeasonSystem.GetTemperatureChange(_world, position):+0.000;-0.000;0.000} season)   {_world.GetTemperatureBand(position)}",
             $"Moisture {_world.GetMoisture(position):0.000} ({SeasonSystem.GetMoistureChange(_world, position):+0.000;-0.000;0.000} season)   {_world.GetMoistureBand(position)}",
             $"Fresh Water {waterText}",
-            GetEntityInspection(position),
         ];
     }
 
@@ -598,8 +683,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         {
             return terrain is Terrain.Mountain ? "Lava Mountain" : "Lava";
         }
-        if (cover is SurfaceCover.Stone && terrain is not Terrain.Mountain &&
-            !IsSaltwaterTerrain(terrain))
+        if (LifeSystem.IsStoneBiome(_world, position))
         {
             return $"Stone {GetTerrainDisplayName(terrain)}";
         }
@@ -624,24 +708,84 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         _ => terrain.ToString(),
     };
 
-    private string GetEntityInspection(GridPosition position)
+    private string[] GetEntityInspectionLines(GridPosition position)
     {
-        var entities = new List<string>();
-        if (_world.GetVolcanoState(position) is { } volcanoState)
+        if (_inspectedCritterId.IsValid &&
+            _world.TryGetCritter(_inspectedCritterId, out var followedCritter))
         {
-            entities.Add($"{volcanoState} Volcano");
+            return GetCritterInspectionLines(followedCritter, following: true);
         }
+
         for (var index = 0; index < _world.CritterCount; index++)
         {
             var critter = _world.GetCritter(index);
             if (critter.Position == position)
             {
-                entities.Add(critter.Species.ToString());
-                break;
+                return GetCritterInspectionLines(critter, following: false);
             }
         }
 
-        return entities.Count == 0 ? "Entities None" : $"Entities {string.Join(", ", entities)}";
+        if (_world.GetVolcanoState(position) is { } volcanoState)
+        {
+            return ["ENTITY", "Volcano", $"Behavior {volcanoState}", "Energy None"];
+        }
+
+        return ["ENTITY", "None"];
+    }
+
+    private static string[] GetCritterInspectionLines(CritterSnapshot critter, bool following) =>
+    [
+        following ? "ENTITY (FOLLOWING)" : "ENTITY",
+        $"{critter.Species} #{critter.Id.Value}   {critter.Position}",
+        $"Behavior {GetCritterBehavior(critter)}",
+        critter.MaximumEnergy > 0
+            ? $"Energy {critter.Energy} / {critter.MaximumEnergy}"
+            : "Energy None",
+        $"Hungry {(critter.IsHungry ? "yes" : "no")}   Reproduce {(critter.CanReproduce ? "ready" : "no")}",
+        $"Habitat {CritterHabitats.GetHabitat(critter.Species)}",
+        $"Diet {GetCritterDiet(critter.Species)}",
+    ];
+
+    private static string GetCritterDiet(CritterSpecies species) => species switch
+    {
+        CritterSpecies.Plankton => "ambient nutrients",
+        CritterSpecies.Worm => "shallow detritus",
+        CritterSpecies.Jellyfish or CritterSpecies.Fish => "plankton and worms",
+        CritterSpecies.Newt => "freshwater food",
+        CritterSpecies.MegaToad => "worms, fish, and newts",
+        _ => "not implemented",
+    };
+
+    private static string GetCritterBehavior(CritterSnapshot critter)
+    {
+        if (critter.CanReproduce)
+        {
+            return "Seeking reproductive space";
+        }
+        if (critter.IsHungry)
+        {
+            return critter.Species switch
+            {
+                CritterSpecies.Plankton => "Absorbing nutrients",
+                CritterSpecies.Worm => "Seeking shallow detritus",
+                CritterSpecies.Jellyfish => "Seeking plankton and worms",
+                CritterSpecies.Fish => "Hunting plankton and worms",
+                CritterSpecies.Newt => "Seeking freshwater food",
+                CritterSpecies.MegaToad => "Ambushing aquatic prey",
+                _ => "Seeking food",
+            };
+        }
+
+        return critter.Species switch
+        {
+            CritterSpecies.Plankton => "Drifting and feeding",
+            CritterSpecies.Worm => "Scavenging shallows",
+            CritterSpecies.Jellyfish => "Drifting and hunting",
+            CritterSpecies.Fish => "Wandering and hunting",
+            CritterSpecies.Newt => "Foraging between land and freshwater",
+            CritterSpecies.MegaToad => "Patrolling the water's edge",
+            _ => "Wandering",
+        };
     }
 
     private GridPosition? ScreenToWorld(int screenX, int screenY)
@@ -673,8 +817,9 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         _world = WorldGenerator.Generate(new WorldGenerationOptions(_preset, _seed, MapType: _mapType));
         _cameraX = 0;
         _cameraY = 0;
+        _inspectedCritterId = default;
         _accumulator = TimeSpan.Zero;
-        _world.EnablePlanktonRecovery();
+        LifeSystem.SetEnabled(_world, _lifeEnabled);
     }
 
     private void HandleSetupMenu(KeyboardState keyboard)
@@ -936,8 +1081,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             var glow = ((_world.Tick + position.X * 3L + position.Y * 5L) / 5) % 2 == 0;
             return glow ? new Color(245, 72, 20) : new Color(190, 35, 15);
         }
-        if (cover is SurfaceCover.Stone && terrain is not Terrain.Mountain &&
-            !IsSaltwaterTerrain(terrain))
+        if (LifeSystem.IsStoneBiome(_world, position))
         {
             return GetStoneColor(terrain);
         }
@@ -1046,6 +1190,11 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private static Color GetCritterColor(CritterSpecies species) => species switch
     {
         CritterSpecies.Plankton => new Color(160, 255, 180),
+        CritterSpecies.Jellyfish => new Color(180, 160, 240),
+        CritterSpecies.Worm => new Color(210, 105, 145),
+        CritterSpecies.Fish => new Color(80, 220, 235),
+        CritterSpecies.Newt => new Color(245, 145, 55),
+        CritterSpecies.MegaToad => new Color(90, 155, 65),
         CritterSpecies.Crab => new Color(255, 80, 80),
         CritterSpecies.Ape => new Color(145, 105, 70),
         _ => Color.Magenta,
@@ -1076,12 +1225,19 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         WorldTool.OceanSeed => _world.HasOceans ? "click move seed" : "click create ocean seed",
         WorldTool.Temperature => "left warmer, right cooler",
         WorldTool.Moisture => "left wetter, right drier",
+        WorldTool.EvolutionChance =>
+            $"left +0.5%, right -0.5%   {_world.EvolutionChancePercent:0.0}%",
         WorldTool.Seasons => _world.Body is WorldBody.RingWorld
             ? "fixed engineered climate"
             : "left enable, right disable",
+        WorldTool.Life => _world.LifeEnabled
+            ? "left enabled, right make barren"
+            : "left restore life, right disabled",
         WorldTool.Volcano => "left spawn active vent",
         WorldTool.Meteor => $"left impact, right magnitude {_eventMagnitudeIndex / 10f:0.0}",
         WorldTool.Tsunami => $"left in ocean, right magnitude {_eventMagnitudeIndex / 10f:0.0}",
+        WorldTool.WatershedShift => "left dry one natural river and spawn another",
+        WorldTool.Evolve => "left evolve critter, right de-evolve",
         WorldTool.NaturalEvents => _world.NaturalEventsEnabled
             ? "left enabled, right disable"
             : "left enable, right disabled",
@@ -1089,6 +1245,9 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         WorldTool.Plankton => "left spawn in deep ocean",
         WorldTool.Stone => "left place cover, right clear",
         WorldTool.Lava => "left deposit +0.03, right clear",
+        WorldTool.Inspect => _inspectedCritterId.IsValid
+            ? "following critter, right clear"
+            : "left follow critter, right clear",
         _ => string.Empty,
     };
 
@@ -1098,6 +1257,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         ToolCategory.TerrainTools => "TERRAIN TOOLS",
         ToolCategory.CritterTools => "CRITTER TOOLS",
         ToolCategory.Events => "EVENTS",
+        ToolCategory.Other => "OTHER",
         _ => category.ToString().ToUpperInvariant(),
     };
 
@@ -1107,6 +1267,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         TerrainTools,
         CritterTools,
         Events,
+        Other,
     }
 
     private enum WorldTool
@@ -1116,14 +1277,19 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         OceanSeed,
         Temperature,
         Moisture,
+        EvolutionChance,
         Seasons,
+        Life,
         Volcano,
         Meteor,
         Tsunami,
+        WatershedShift,
+        Evolve,
         NaturalEvents,
         River,
         Plankton,
         Stone,
         Lava,
+        Inspect,
     }
 }

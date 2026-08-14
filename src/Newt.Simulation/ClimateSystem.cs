@@ -11,6 +11,8 @@ public static class ClimateSystem
     internal const float HotThreshold = 0.67f;
     internal const float DryThreshold = 0.33f;
     internal const float WetThreshold = 0.67f;
+    private const float FreshwaterMoistureStrength = 0.45f;
+    private const float FreshwaterMoistureReach = 6f;
 
     /// <summary>
     /// Rebuilds temperature from latitude, elevation, and broad seeded variation.
@@ -56,10 +58,15 @@ public static class ClimateSystem
                 var position = new GridPosition(x, y);
                 var index = y * world.Width + x;
                 var oceanInfluence = DistanceInfluence(oceanDistance[index], strength: 0.54f, reach: 11f);
-                // Rivers support a riparian corridor, not only the tile carrying the water.
-                // Keep the influence below lakes at the source, but let it fade more gradually.
-                var riverInfluence = DistanceInfluence(riverDistance[index], strength: 0.42f, reach: 5.5f);
-                var lakeInfluence = DistanceInfluence(lakeDistance[index], strength: 0.45f, reach: 6f);
+                // Rivers and lakes use the same freshwater strength and reach.
+                var riverInfluence = DistanceInfluence(
+                    riverDistance[index],
+                    FreshwaterMoistureStrength,
+                    FreshwaterMoistureReach);
+                var lakeInfluence = DistanceInfluence(
+                    lakeDistance[index],
+                    FreshwaterMoistureStrength,
+                    FreshwaterMoistureReach);
                 var elevationPenalty = Math.Max(0, world.GetElevation(position)) * 0.18f;
                 var variation = (FractalNoise(world, x, y, world.Seed ^ 0xE7037ED1A0B428DBUL) - 0.5f) * 0.28f;
                 var engineeredZone = world.Body is WorldBody.RingWorld
@@ -73,7 +80,7 @@ public static class ClimateSystem
                 var biome = IsSubmerged(terrain)
                     ? Biome.None
                     : ClassifyBiome(world.GetTemperature(position), world.GetMoisture(position));
-                world.SetBiome(position, biome);
+                world.SetBiome(position, FilterBiomeForLife(world, position, biome));
             }
         }
     }
@@ -89,11 +96,45 @@ public static class ClimateSystem
             for (var x = 0; x < world.Width; x++)
             {
                 var position = new GridPosition(x, y);
-                world.SetBiome(position, IsSubmerged(world.GetTerrain(position))
+                var terrain = world.GetTerrain(position);
+                var biome = IsSubmerged(terrain)
                     ? Biome.None
-                    : ClassifyBiome(world.GetTemperature(position), world.GetMoisture(position)));
+                    : ClassifyBiome(world.GetTemperature(position), world.GetMoisture(position));
+                world.SetBiome(position, FilterBiomeForLife(world, position, biome));
             }
         }
+    }
+
+    internal static void RebuildBiomeAt(SimulationWorld world, GridPosition position)
+    {
+        var terrain = world.GetTerrain(position);
+        var biome = IsSubmerged(terrain)
+            ? Biome.None
+            : ClassifyBiome(world.GetTemperature(position), world.GetMoisture(position));
+        world.SetBiome(position, FilterBiomeForLife(world, position, biome));
+    }
+
+    private static Biome FilterBiomeForLife(
+        SimulationWorld world,
+        GridPosition position,
+        Biome biome)
+    {
+        // Stone is represented ecologically by the absence of a biome. The
+        // surface cover remains only as transient recovery-timer metadata for
+        // impacts and cooled lava.
+        if (world.GetSurfaceCover(position) is SurfaceCover.Stone)
+        {
+            return Biome.None;
+        }
+
+        if ((world.LifeEnabled && !world.IsLifeRecoveryPending(position)) ||
+            biome is Biome.Desert ||
+            biome is Biome.Arctic)
+        {
+            return biome;
+        }
+
+        return Biome.None;
     }
 
     internal static Biome ClassifyBiome(float temperature, float moisture)

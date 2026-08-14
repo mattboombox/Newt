@@ -5,6 +5,118 @@ namespace Newt.Simulation.Tests;
 public sealed class ClimateTests
 {
     [Fact]
+    public void LifelessWorldKeepsDesertAndArcticBiomes()
+    {
+        var world = new SimulationWorld(5, 1, Terrain.Plains);
+        world.HasOceans = false;
+        var ordinary = new GridPosition(0, 0);
+        var desert = new GridPosition(1, 0);
+        var arcticPlain = new GridPosition(2, 0);
+        var snowyMountain = new GridPosition(3, 0);
+        var ice = new GridPosition(4, 0);
+        world.SetTerrain(snowyMountain, Terrain.Mountain);
+        world.SetTerrain(ice, Terrain.Ice);
+        world.SetTemperature(ordinary, 0.5f);
+        world.SetMoisture(ordinary, 0.5f);
+        world.SetTemperature(desert, 0.9f);
+        world.SetMoisture(desert, 0.1f);
+        world.SetTemperature(arcticPlain, 0.1f);
+        world.SetMoisture(arcticPlain, 0.5f);
+        world.SetTemperature(snowyMountain, 0.1f);
+        world.SetMoisture(snowyMountain, 0.5f);
+        world.SetTemperature(ice, 0.1f);
+        world.SetMoisture(ice, 0.5f);
+
+        LifeSystem.SetEnabled(world, false);
+        // Reapply controlled fields after the life toggle's climate refresh.
+        world.SetTemperature(ordinary, 0.5f);
+        world.SetMoisture(ordinary, 0.5f);
+        world.SetTemperature(desert, 0.9f);
+        world.SetMoisture(desert, 0.1f);
+        world.SetTemperature(arcticPlain, 0.1f);
+        world.SetMoisture(arcticPlain, 0.5f);
+        world.SetTemperature(snowyMountain, 0.1f);
+        world.SetMoisture(snowyMountain, 0.5f);
+        ClimateSystem.RebuildBiomesFromCurrentMoisture(world);
+
+        Assert.Equal(Biome.None, world.GetBiome(ordinary));
+        Assert.Equal(Biome.Desert, world.GetBiome(desert));
+        Assert.Equal(Biome.Arctic, world.GetBiome(arcticPlain));
+        Assert.Equal(Biome.Arctic, world.GetBiome(snowyMountain));
+        Assert.Equal(Biome.None, world.GetBiome(ice));
+    }
+
+    [Fact]
+    public void ReenabledLifeReclaimsBarrenStoneTerrainGradually()
+    {
+        var world = new SimulationWorld(8, 4, Terrain.Plains, seed: 73);
+        world.HasOceans = false;
+        for (var y = 0; y < world.Height; y++)
+        {
+            for (var x = 0; x < world.Width; x++)
+            {
+                var position = new GridPosition(x, y);
+                world.SetTemperature(position, 0.5f);
+                world.SetMoisture(position, 0.5f);
+            }
+        }
+
+        LifeSystem.SetEnabled(world, false);
+        LifeSystem.SetEnabled(world, true);
+
+        Assert.All(AllPositions(world), position =>
+        {
+            Assert.True(world.IsLifeRecoveryPending(position));
+            Assert.Equal(Biome.None, world.GetBiome(position));
+        });
+
+        for (var tick = 0; tick < 46 * SimulationWorld.TicksPerSecond; tick++)
+        {
+            world.AdvanceOneTick();
+        }
+
+        Assert.All(AllPositions(world), position =>
+        {
+            Assert.False(world.IsLifeRecoveryPending(position));
+            Assert.NotEqual(Biome.None, world.GetBiome(position));
+        });
+    }
+
+    [Theory]
+    [InlineData(Terrain.Plains, true)]
+    [InlineData(Terrain.Hills, true)]
+    [InlineData(Terrain.Lowlands, true)]
+    [InlineData(Terrain.Canyon, true)]
+    [InlineData(Terrain.Trench, true)]
+    [InlineData(Terrain.Beach, false)]
+    [InlineData(Terrain.Mountain, false)]
+    public void BarrenStonePresentationExcludesBeachesAndMountains(
+        Terrain terrain,
+        bool expected)
+    {
+        Assert.Equal(expected, LifeSystem.IsBarrenStoneTerrain(terrain));
+    }
+
+    [Theory]
+    [InlineData(Terrain.Plains, true)]
+    [InlineData(Terrain.Hills, true)]
+    [InlineData(Terrain.Lowlands, true)]
+    [InlineData(Terrain.Canyon, true)]
+    [InlineData(Terrain.Trench, true)]
+    [InlineData(Terrain.Beach, false)]
+    [InlineData(Terrain.Mountain, false)]
+    [InlineData(Terrain.Ocean, false)]
+    public void NoneBiomeMeansStoneOnlyOnOrdinaryBarrenLand(
+        Terrain terrain,
+        bool expected)
+    {
+        var world = new SimulationWorld(1, 1, terrain);
+        world.SetBiome(new GridPosition(0, 0), Biome.None);
+
+        Assert.Equal(expected, LifeSystem.IsStoneBiome(world, new GridPosition(0, 0)));
+    }
+
+    [Fact]
     public void FreezingDeepOceanFormsSeaIce()
     {
         var world = new SimulationWorld(9, 9, Terrain.DeepOcean, seed: 6);
@@ -209,6 +321,29 @@ public sealed class ClimateTests
     }
 
     [Fact]
+    public void RiversAndLakesHaveEqualMoistureStrengthAndReach()
+    {
+        var riverWorld = CreateFlatLand(width: 41, height: 21, seed: 49);
+        var lakeWorld = CreateFlatLand(width: 41, height: 21, seed: 49);
+        riverWorld.HasOceans = false;
+        lakeWorld.HasOceans = false;
+        var source = new GridPosition(20, 10);
+        riverWorld.SetSurfaceWater(source, SurfaceWaterKind.River);
+        lakeWorld.SetSurfaceWater(source, SurfaceWaterKind.FreshwaterLake);
+
+        TerrainClassifier.RebuildAll(riverWorld);
+        TerrainClassifier.RebuildAll(lakeWorld);
+
+        foreach (var position in AllPositions(riverWorld))
+        {
+            Assert.Equal(
+                riverWorld.GetMoisture(position),
+                lakeWorld.GetMoisture(position),
+                precision: 5);
+        }
+    }
+
+    [Fact]
     public void RiverCreatesAGraduallyFadingRiparianCorridor()
     {
         var world = CreateFlatLand(width: 41, height: 21, seed: 53);
@@ -323,5 +458,16 @@ public sealed class ClimateTests
         }
 
         return world;
+    }
+
+    private static IEnumerable<GridPosition> AllPositions(SimulationWorld world)
+    {
+        for (var y = 0; y < world.Height; y++)
+        {
+            for (var x = 0; x < world.Width; x++)
+            {
+                yield return new GridPosition(x, y);
+            }
+        }
     }
 }

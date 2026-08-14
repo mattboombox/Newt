@@ -6,16 +6,17 @@ new physical state.
 
 ## First live operation: elevation tool
 
-The initial category is World Tools and its first selection is Elevation. Left
-click a world tile to raise a circular region, or right click to lower it. Both
+Elevation is the first Terrain Tools selection. Left click a world tile to raise
+a circular region, or right click to lower it. Both
 directions use a smooth falloff: the center receives the full change while the
 edge receives almost none. World X coordinates wrap, so a change at the left edge
 continues naturally at the right edge. Terrain and coastlines are reclassified
 immediately.
 
-`Q` and `E` cycle tools. World Tools contains Elevation, SeaLevel, OceanSeed,
-Temperature, Moisture, Seasons, Volcano, and River. Events contains Meteor,
-Tsunami, and NaturalEvents. `R` cycles between the two categories.
+`Q` and `E` cycle tools. World Tools contains SeaLevel, OceanSeed, Temperature,
+Moisture, Seasons, and Life. Terrain Tools contains Elevation, River, Volcano,
+Stone, and Lava. Events contains Meteor, Tsunami, and NaturalEvents. `R` cycles
+between categories.
 
 Natural terrain events are deterministic and occur rarely in simulation time.
 They create a random meteor impact or volcano roughly every 6 to 16 simulated
@@ -66,10 +67,12 @@ to -1.0 through +2.0. The mountain ceiling is high enough for elevation cooling 
 Arctic mountain climate even at the equator.
 
 Closed river basins form bounded terminal lakes instead of falling back to a
-single wet tile. A terminal lake can cover at most 128 tiles. Its surface is set
-by the lowest elevations needed to consume that area budget, without an
-independent depth cap. This allows compact deep craters to fill while preventing
-one spring from flooding a continent-sized shallow depression.
+single wet tile. A genuinely outletless terminal lake can cover at most 128
+tiles. Overflowing lakes may cover up to 65,536 tiles so the largest generated
+meteor craters can fill to their rims. A terminal lake's surface is set by the
+lowest elevations needed to consume its area budget, without an independent
+depth cap. This allows compact deep craters to fill while preventing one spring
+from flooding a continent-sized shallow depression.
 
 Freshwater lake rendering darkens strongly with local depth. The lake remains one
 water body and biome influence; the gradient is a visual depth cue rather than a
@@ -112,8 +115,11 @@ building a mountain ridge. Only active lava, stone, volcanoes, and flow fronts a
 processed each tick; the system does not scan unaffected world tiles.
 
 Warm, wet stone recovers faster than cold, dry stone. A river on or beside Stone
-accelerates its remaining recovery approximately fourfold. Lava and Stone block
-critter occupation until the underlying biome is exposed again.
+accelerates its remaining recovery approximately fourfold. Stone-covered
+mountains remain valid river sources; active lava does not. Lava and Stone block
+critter occupation until the biome returns. Stone is not a second ecological
+layer: impacts and cooled lava set the tile's biome to None, while the transient
+surface-cover record stores only its recovery deadline.
 
 ## Basin-shaped lakes
 
@@ -124,8 +130,8 @@ A downhill-only walk is insufficient because it stops in a local depression. The
 drainage algorithm therefore treats a basin as a container:
 
 1. Follow the steepest available descent.
-2. If no lower neighbor exists, find the lowest-elevation escape route from the
-   depression using a bounded minimax search.
+2. If no lower neighbor exists, find the lowest local rim leading back to
+   descending ground, existing water, or the ocean with a bounded minimax search.
 3. Use the highest point on that best route as the basin's spill elevation.
 4. Flood-fill connected basin tiles below the spill elevation as a lake.
 5. Record the spill tile as part of the lake calculation.

@@ -8,6 +8,4 @@ public enum SpringTermination : byte
     ReachedOcean,
     ReachedWatercourse,
     FormedLake,
-    Basin,
-    MaximumLength,
 }

@@ -4,4 +4,8 @@ namespace Newt.Simulation;
 public readonly record struct CritterSnapshot(
     CritterId Id,
     CritterSpecies Species,
-    GridPosition Position);
+    GridPosition Position,
+    int Energy,
+    int MaximumEnergy,
+    bool IsHungry,
+    bool CanReproduce);
