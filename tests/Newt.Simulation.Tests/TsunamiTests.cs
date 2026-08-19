@@ -31,6 +31,22 @@ public sealed class TsunamiTests
     }
 
     [Fact]
+    public void TsunamiDestroysReachedWolfDenAndStoredCharges()
+    {
+        var world = CreateCoastalWorld();
+        var coast = new GridPosition(10, 10);
+        Assert.True(world.AddWolfDenCharge(coast));
+
+        Assert.True(Tsunamis.Create(world, new GridPosition(5, 10), 0.8f));
+        while (world.ActiveImpactWaveCount > 0)
+        {
+            world.AdvanceOneTick();
+        }
+
+        Assert.Null(world.GetWolfDenCharges(coast));
+    }
+
+    [Fact]
     public void NaturalEventsCanBeDisabled()
     {
         var world = CreateCoastalWorld();

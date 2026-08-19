@@ -14,10 +14,14 @@ public static class CritterEvolution
 
     public static int GetEvolvedSpeciesCount(CritterSpecies species) => species switch
     {
-        CritterSpecies.Plankton => 2,
-        CritterSpecies.Worm => 1,
+        CritterSpecies.Plankton => 3,
+        CritterSpecies.Worm => 2,
+        CritterSpecies.Trilobite => 2,
+        CritterSpecies.Nautilus => 1,
         CritterSpecies.Fish => 1,
-        CritterSpecies.Newt => 1,
+        CritterSpecies.Newt => 2,
+        CritterSpecies.Therapsid => 3,
+        CritterSpecies.Deer => 2,
         _ => 0,
     };
 
@@ -30,9 +34,20 @@ public static class CritterEvolution
         {
             (CritterSpecies.Plankton, 0) => CritterSpecies.Jellyfish,
             (CritterSpecies.Plankton, 1) => CritterSpecies.Worm,
+            (CritterSpecies.Plankton, 2) => CritterSpecies.Trilobite,
             (CritterSpecies.Worm, 0) => CritterSpecies.Fish,
+            (CritterSpecies.Worm, 1) => CritterSpecies.Nautilus,
+            (CritterSpecies.Trilobite, 0) => CritterSpecies.Crab,
+            (CritterSpecies.Trilobite, 1) => CritterSpecies.SeaScorpion,
+            (CritterSpecies.Nautilus, 0) => CritterSpecies.Squid,
             (CritterSpecies.Fish, 0) => CritterSpecies.Newt,
             (CritterSpecies.Newt, 0) => CritterSpecies.MegaToad,
+            (CritterSpecies.Newt, 1) => CritterSpecies.Therapsid,
+            (CritterSpecies.Therapsid, 0) => CritterSpecies.Monkey,
+            (CritterSpecies.Therapsid, 1) => CritterSpecies.Deer,
+            (CritterSpecies.Therapsid, 2) => CritterSpecies.Wolf,
+            (CritterSpecies.Deer, 0) => CritterSpecies.Elk,
+            (CritterSpecies.Deer, 1) => CritterSpecies.Gazelle,
             _ => species,
         };
         return evolvedSpecies != species;
@@ -46,9 +61,20 @@ public static class CritterEvolution
         {
             CritterSpecies.Jellyfish => CritterSpecies.Plankton,
             CritterSpecies.Worm => CritterSpecies.Plankton,
+            CritterSpecies.Trilobite => CritterSpecies.Plankton,
             CritterSpecies.Fish => CritterSpecies.Worm,
+            CritterSpecies.Nautilus => CritterSpecies.Worm,
+            CritterSpecies.Crab => CritterSpecies.Trilobite,
+            CritterSpecies.SeaScorpion => CritterSpecies.Trilobite,
+            CritterSpecies.Squid => CritterSpecies.Nautilus,
             CritterSpecies.Newt => CritterSpecies.Fish,
             CritterSpecies.MegaToad => CritterSpecies.Newt,
+            CritterSpecies.Therapsid => CritterSpecies.Newt,
+            CritterSpecies.Monkey => CritterSpecies.Therapsid,
+            CritterSpecies.Deer => CritterSpecies.Therapsid,
+            CritterSpecies.Elk => CritterSpecies.Deer,
+            CritterSpecies.Gazelle => CritterSpecies.Deer,
+            CritterSpecies.Wolf => CritterSpecies.Therapsid,
             _ => species,
         };
         return devolvedSpecies != species;

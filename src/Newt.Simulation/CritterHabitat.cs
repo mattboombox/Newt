@@ -5,6 +5,7 @@ public enum CritterHabitat
 {
     OceanDweller,
     ShallowSeeker,
+    ShorelineHunter,
     LandDweller,
     FreshwaterDweller,
     Flier,
@@ -14,10 +15,16 @@ public static class CritterHabitats
 {
     public static CritterHabitat GetHabitat(CritterSpecies species) => species switch
     {
-        CritterSpecies.Plankton or CritterSpecies.Jellyfish or CritterSpecies.Fish =>
+        CritterSpecies.Plankton or CritterSpecies.Jellyfish or CritterSpecies.Trilobite or
+            CritterSpecies.Nautilus or CritterSpecies.Fish or CritterSpecies.Squid or
+            CritterSpecies.SquidEgg =>
             CritterHabitat.OceanDweller,
+        CritterSpecies.SeaScorpion => CritterHabitat.ShorelineHunter,
         CritterSpecies.Worm => CritterHabitat.ShallowSeeker,
-        CritterSpecies.Newt or CritterSpecies.MegaToad or CritterSpecies.Crab or CritterSpecies.Ape =>
+        CritterSpecies.Newt or CritterSpecies.MegaToad or CritterSpecies.Therapsid or
+            CritterSpecies.Monkey or CritterSpecies.Deer or CritterSpecies.Elk or
+            CritterSpecies.Gazelle or
+            CritterSpecies.Wolf or CritterSpecies.Crab =>
             CritterHabitat.LandDweller,
         _ => throw new ArgumentOutOfRangeException(nameof(species)),
     };
@@ -49,10 +56,13 @@ public static class CritterHabitats
             CritterHabitat.ShallowSeeker =>
             terrain is Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows,
 
+            CritterHabitat.ShorelineHunter =>
+            terrain is Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows or Terrain.Beach,
+
             // Land species may ford a river, but lakes remain aquatic habitat.
             CritterHabitat.LandDweller =>
             freshwater is not SurfaceWaterKind.FreshwaterLake &&
-            terrain is Terrain.Shallows or Terrain.Trench or Terrain.Canyon or
+            terrain is Terrain.Shallows or Terrain.Beach or Terrain.Trench or Terrain.Canyon or
                 Terrain.Plains or Terrain.Hills or Terrain.Ice,
 
             CritterHabitat.FreshwaterDweller =>

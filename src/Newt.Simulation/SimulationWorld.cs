@@ -7,8 +7,20 @@ namespace Newt.Simulation;
 public sealed class SimulationWorld
 {
     private const int FishPerceptionRadius = 6;
+    private const int FishPredatorFleeRadius = 5;
+    private const int LandPreyFleeRadius = 5;
+    private const int NautilusPerceptionRadius = 5;
+    private const int SquidPerceptionRadius = 5;
+    private const int SquidEggHatchRadius = 2;
+    private const int SeaScorpionPerceptionRadius = 4;
     private const int MegaToadPerceptionRadius = 3;
+    private const int TherapsidPerceptionRadius = 4;
+    private const int MonkeyPerceptionRadius = 4;
+    private const int WolfPerceptionRadius = 6;
+    private const int WolfDenSearchRadius = 8;
     private const int NewtFreshwaterPerceptionRadius = 8;
+    private const int NewtMegaToadFleeRadius = 4;
+    private const int MutualPredatorCombatDamage = 1;
     public const int TicksPerSecond = 20;
     public const float MinimumGroundElevation = -1f;
     public const float MaximumGroundElevation = 2f;
@@ -18,12 +30,21 @@ public sealed class SimulationWorld
     public const float MinimumGlobalClimateOffset = -1f;
     public const float MaximumGlobalClimateOffset = 1f;
 
-    private static readonly GridPosition[] Directions =
+    private static readonly GridPosition[] CardinalDirections =
     [
         new(1, 0),
         new(-1, 0),
         new(0, 1),
         new(0, -1),
+    ];
+
+    private static readonly GridPosition[] MovementDirections =
+    [
+        .. CardinalDirections,
+        new(1, 1),
+        new(1, -1),
+        new(-1, 1),
+        new(-1, -1),
     ];
 
     private readonly Terrain[] _terrain;
@@ -50,6 +71,9 @@ public sealed class SimulationWorld
     private readonly Dictionary<int, int> _critterIndicesById = [];
     private readonly Dictionary<int, Queue<GridPosition>> _newtMigrationPaths = [];
     private readonly HashSet<int> _newtFreshwaterSearchCompleted = [];
+    private readonly Dictionary<int, int> _wolfDenHomes = [];
+    private readonly Dictionary<int, int> _wolfDenTargets = [];
+    private readonly Dictionary<int, int> _wolfDenCharges = [];
     private readonly CritterSpecies[] _species;
     private readonly GridPosition[] _positions;
     private readonly long[] _nextMovementTicks;
@@ -158,6 +182,8 @@ public sealed class SimulationWorld
 
     public int ActiveImpactWaveCount => _impactWaves.Count;
 
+    public int WolfDenCount => _wolfDenCharges.Count;
+
     public SpringResult? LastCompletedSpring { get; internal set; }
 
     public bool Contains(GridPosition position) =>
@@ -183,6 +209,25 @@ public sealed class SimulationWorld
     public Biome GetBiome(GridPosition position) => _biomes[GetIndex(position)];
 
     public SurfaceCover GetSurfaceCover(GridPosition position) => _surfaceCovers[GetIndex(position)];
+
+    public int? GetWolfDenCharges(GridPosition position) =>
+        _wolfDenCharges.TryGetValue(GetIndex(position), out var charges) ? charges : null;
+
+    public bool TryPlaceWolfDen(GridPosition position)
+    {
+        if (!Contains(position))
+        {
+            return false;
+        }
+        var tileIndex = GetIndex(position);
+        if (_wolfDenCharges.ContainsKey(tileIndex) || !CanLiveOn(CritterSpecies.Wolf, tileIndex))
+        {
+            return false;
+        }
+
+        _wolfDenCharges.Add(tileIndex, 0);
+        return true;
+    }
 
     public VolcanoSnapshot GetVolcano(int index)
     {
@@ -266,6 +311,7 @@ public sealed class SimulationWorld
         _surfaceCovers[index] = SurfaceCover.None;
         _surfaceCoverUntilTicks[index] = 0;
         _activeSurfaceCovers.Remove(position);
+        RemoveWolfDenAt(position);
         RemoveCritterAt(position);
         _freshwaterNavigationRevision++;
     }
@@ -309,6 +355,11 @@ public sealed class SimulationWorld
         else
         {
             _activeSurfaceCovers.Add(position);
+        }
+
+        if (cover is SurfaceCover.Lava or SurfaceCover.Stone)
+        {
+            RemoveWolfDenAt(position);
         }
 
         if (cover is SurfaceCover.Stone)
@@ -416,6 +467,38 @@ public sealed class SimulationWorld
         _freshwaterNavigationRevision++;
     }
 
+    internal bool AddWolfDenCharge(GridPosition position)
+    {
+        var tileIndex = GetIndex(position);
+        if (!_wolfDenCharges.ContainsKey(tileIndex) && !TryPlaceWolfDen(position))
+        {
+            return false;
+        }
+
+        _wolfDenCharges.TryGetValue(tileIndex, out var charges);
+        _wolfDenCharges[tileIndex] = charges + 1;
+        return true;
+    }
+
+    public bool RemoveWolfDenAt(GridPosition position)
+    {
+        var tileIndex = GetIndex(position);
+        if (!_wolfDenCharges.Remove(tileIndex))
+        {
+            return false;
+        }
+
+        foreach (var id in _wolfDenHomes.Where(pair => pair.Value == tileIndex).Select(pair => pair.Key).ToArray())
+        {
+            _wolfDenHomes.Remove(id);
+        }
+        foreach (var id in _wolfDenTargets.Where(pair => pair.Value == tileIndex).Select(pair => pair.Key).ToArray())
+        {
+            _wolfDenTargets.Remove(id);
+        }
+        return true;
+    }
+
     public CritterId AddCritter(CritterSpecies species, GridPosition position)
     {
         if (!LifeEnabled)
@@ -471,6 +554,35 @@ public sealed class SimulationWorld
 
         AddCritter(species, position);
         return true;
+    }
+
+    /// <summary>
+    /// Seeds every currently empty Deep Ocean tile with one Plankton.
+    /// Occupied tiles are preserved so jump-starting life never replaces an
+    /// existing critter.
+    /// </summary>
+    public int JumpStartPlankton()
+    {
+        var initialPlanktonCount = GetCritterCount(CritterSpecies.Plankton);
+        if (!LifeEnabled)
+        {
+            LifeSystem.SetEnabled(this, true);
+        }
+
+        for (var y = 0; y < Height; y++)
+        {
+            for (var x = 0; x < Width; x++)
+            {
+                var position = new GridPosition(x, y);
+                var tileIndex = GetIndex(position);
+                if (_terrain[tileIndex] is Terrain.DeepOcean && _occupants[tileIndex] < 0)
+                {
+                    TryAddCritter(CritterSpecies.Plankton, position);
+                }
+            }
+        }
+
+        return GetCritterCount(CritterSpecies.Plankton) - initialPlanktonCount;
     }
 
     public void AdjustEvolutionChance(int stepDelta)
@@ -583,10 +695,23 @@ public sealed class SimulationWorld
             _nextMovementTicks[index] += GetMovementIntervalTicks(_species[index]);
             var prey = _species[index] switch
             {
-                CritterSpecies.Fish => TryMoveHunter(index, FishPerceptionRadius, reservedPrey),
+                CritterSpecies.Fish => TryMoveFish(index, reservedPrey),
+                CritterSpecies.Nautilus =>
+                    TryMoveHunter(index, NautilusPerceptionRadius, reservedPrey),
+                CritterSpecies.Squid =>
+                    TryMoveHunter(index, SquidPerceptionRadius, reservedPrey),
+                CritterSpecies.SeaScorpion =>
+                    TryMoveHunter(index, SeaScorpionPerceptionRadius, reservedPrey),
                 CritterSpecies.MegaToad => TryMoveHunter(index, MegaToadPerceptionRadius, reservedPrey),
+                CritterSpecies.Therapsid =>
+                    TryMoveHunter(index, TherapsidPerceptionRadius, reservedPrey),
+                CritterSpecies.Monkey => TryMoveMonkey(index, reservedPrey),
+                CritterSpecies.Wolf => TryMoveWolf(index, reservedPrey),
+                CritterSpecies.Deer or CritterSpecies.Elk or CritterSpecies.Gazelle =>
+                    TryMoveGrazer(index),
                 CritterSpecies.Newt => TryMoveNewt(index),
                 CritterSpecies.Worm => TryMoveWorm(index),
+                CritterSpecies.Trilobite => TryMoveTrilobite(index),
                 _ => TryMove(index, reservedPrey),
             };
             if (prey is not null)
@@ -604,7 +729,7 @@ public sealed class SimulationWorld
 
         foreach (var predation in predations)
         {
-            CommitPredation(predation.Predator, predation.Prey);
+            CommitEncounter(predation.Predator, predation.Prey);
         }
     }
 
@@ -619,6 +744,12 @@ public sealed class SimulationWorld
         for (var index = 0; index < _count; index++)
         {
             var species = _species[index];
+            if (species is CritterSpecies.SquidEgg && HasSquidEggHatchPreyNearby(index))
+            {
+                ChangeCritterSpecies(index, CritterSpecies.Squid, preserveEnergy: false);
+                continue;
+            }
+
             var nutrition = CritterNutritions.Get(species);
             if (!CanLiveOn(species, GetIndex(_positions[index])))
             {
@@ -655,6 +786,17 @@ public sealed class SimulationWorld
                 continue;
             }
 
+            if (!IsValidReproductionSite(species, _positions[index]))
+            {
+                continue;
+            }
+
+            if (species is CritterSpecies.Wolf)
+            {
+                TryChargeWolfDen(index, nutrition);
+                continue;
+            }
+
             reservedBirthTiles ??= [];
             var offspringSpecies = ChooseOffspringSpecies(species);
             var birthPosition = FindBirthPosition(index, offspringSpecies, reservedBirthTiles);
@@ -685,8 +827,118 @@ public sealed class SimulationWorld
         }
     }
 
+    private void TryChargeWolfDen(int wolfIndex, CritterNutrition nutrition)
+    {
+        var wolfId = _critterIds[wolfIndex].Value;
+        if (!_wolfDenHomes.TryGetValue(wolfId, out var denTile) ||
+            !_wolfDenCharges.ContainsKey(denTile))
+        {
+            _wolfDenHomes.Remove(wolfId);
+            if (!_wolfDenTargets.TryGetValue(wolfId, out denTile) ||
+                !IsValidWolfDenSite(wolfIndex, denTile))
+            {
+                denTile = FindWolfDenSite(wolfIndex);
+                _wolfDenTargets[wolfId] = denTile;
+            }
+        }
+
+        if (GetIndex(_positions[wolfIndex]) != denTile)
+        {
+            return;
+        }
+
+        if (_wolfDenCharges.ContainsKey(denTile))
+        {
+            _wolfDenCharges[denTile]++;
+        }
+        else
+        {
+            var denPosition = new GridPosition(denTile % Width, denTile / Width);
+            if (!AddWolfDenCharge(denPosition))
+            {
+                _wolfDenTargets.Remove(wolfId);
+                return;
+            }
+        }
+
+        _wolfDenHomes[wolfId] = denTile;
+        _wolfDenTargets.Remove(wolfId);
+        _energy[wolfIndex] -= nutrition.ReproductionCost;
+    }
+
+    private int FindWolfDenSite(int wolfIndex)
+    {
+        var current = _positions[wolfIndex];
+        var fallback = GetIndex(current);
+        var bestHill = -1;
+        var bestHillDistance = int.MaxValue;
+        var hillTies = 0;
+        var bestExistingDen = -1;
+        var bestExistingDistance = int.MaxValue;
+        var existingTies = 0;
+        for (var offsetY = -WolfDenSearchRadius; offsetY <= WolfDenSearchRadius; offsetY++)
+        {
+            var y = current.Y + offsetY;
+            if (y < 0 || y >= Height)
+            {
+                continue;
+            }
+            var horizontalReach = WolfDenSearchRadius - Math.Abs(offsetY);
+            for (var offsetX = -horizontalReach; offsetX <= horizontalReach; offsetX++)
+            {
+                var candidate = new GridPosition(Mod(current.X + offsetX, Width), y);
+                var tileIndex = GetIndex(candidate);
+                var occupant = _occupants[tileIndex];
+                if ((occupant >= 0 && occupant != wolfIndex) ||
+                    !CanLiveOn(CritterSpecies.Wolf, tileIndex))
+                {
+                    continue;
+                }
+
+                var distance = Math.Abs(offsetX) + Math.Abs(offsetY);
+                if (_wolfDenCharges.ContainsKey(tileIndex))
+                {
+                    if (distance < bestExistingDistance)
+                    {
+                        bestExistingDen = tileIndex;
+                        bestExistingDistance = distance;
+                        existingTies = 1;
+                    }
+                    else if (distance == bestExistingDistance && NextInt(++existingTies) == 0)
+                    {
+                        bestExistingDen = tileIndex;
+                    }
+                    continue;
+                }
+
+                if (_terrain[tileIndex] is Terrain.Hills && distance < bestHillDistance)
+                {
+                    bestHill = tileIndex;
+                    bestHillDistance = distance;
+                    hillTies = 1;
+                }
+                else if (_terrain[tileIndex] is Terrain.Hills &&
+                    distance == bestHillDistance && NextInt(++hillTies) == 0)
+                {
+                    bestHill = tileIndex;
+                }
+            }
+        }
+        return bestExistingDen >= 0 ? bestExistingDen : bestHill >= 0 ? bestHill : fallback;
+    }
+
+    private bool IsValidWolfDenSite(int wolfIndex, int tileIndex) =>
+        tileIndex >= 0 && tileIndex < _terrain.Length &&
+        (_occupants[tileIndex] < 0 || _occupants[tileIndex] == wolfIndex) &&
+        CanLiveOn(CritterSpecies.Wolf, tileIndex);
+
     internal CritterSpecies ChooseOffspringSpecies(CritterSpecies parentSpecies)
     {
+        if (parentSpecies is CritterSpecies.Squid)
+        {
+            return CritterSpecies.SquidEgg;
+        }
+
         var branchCount = CritterEvolution.GetEvolvedSpeciesCount(parentSpecies);
         var branchIndex = branchCount > 0 ? NextInt(branchCount) : 0;
         return CritterEvolution.ChooseOffspring(
@@ -723,16 +975,28 @@ public sealed class SimulationWorld
             return false;
         }
 
+        ChangeCritterSpecies(critterIndex, targetSpecies, preserveEnergy: true);
+        return true;
+    }
+
+    private void ChangeCritterSpecies(
+        int critterIndex,
+        CritterSpecies targetSpecies,
+        bool preserveEnergy)
+    {
+        var currentSpecies = _species[critterIndex];
         _speciesCounts[(int)currentSpecies]--;
         _speciesCounts[(int)targetSpecies]++;
         _species[critterIndex] = targetSpecies;
         var critterId = _critterIds[critterIndex].Value;
         _newtMigrationPaths.Remove(critterId);
         _newtFreshwaterSearchCompleted.Remove(critterId);
+        _wolfDenHomes.Remove(critterId);
+        _wolfDenTargets.Remove(critterId);
         var nutrition = CritterNutritions.Get(targetSpecies);
-        _energy[critterIndex] = nutrition.MaximumEnergy > 0
+        _energy[critterIndex] = preserveEnergy && nutrition.MaximumEnergy > 0
             ? Math.Clamp(_energy[critterIndex], 1, nutrition.MaximumEnergy)
-            : _energy[critterIndex];
+            : nutrition.InitialEnergy;
         _nextMovementTicks[critterIndex] = GetFirstMovementTick(targetSpecies);
         _nextMetabolismTicks[critterIndex] = nutrition.HasMetabolism
             ? Tick + nutrition.MetabolismIntervalTicks
@@ -740,7 +1004,37 @@ public sealed class SimulationWorld
         _nextAmbientFeedingTicks[critterIndex] = nutrition.FeedsFromEnvironment
             ? Tick + nutrition.AmbientFeedingIntervalTicks
             : long.MaxValue;
-        return true;
+        _preyTargets[critterIndex] = -1;
+    }
+
+    private bool HasSquidEggHatchPreyNearby(int eggIndex)
+    {
+        var eggPosition = _positions[eggIndex];
+        for (var offsetY = -SquidEggHatchRadius; offsetY <= SquidEggHatchRadius; offsetY++)
+        {
+            var y = eggPosition.Y + offsetY;
+            if (y < 0 || y >= Height)
+            {
+                continue;
+            }
+
+            var horizontalRadius = SquidEggHatchRadius - Math.Abs(offsetY);
+            for (var offsetX = -horizontalRadius; offsetX <= horizontalRadius; offsetX++)
+            {
+                if (offsetX == 0 && offsetY == 0)
+                {
+                    continue;
+                }
+
+                var occupant = _occupants[y * Width + Mod(eggPosition.X + offsetX, Width)];
+                if (occupant >= 0 && CanEat(CritterSpecies.Squid, _species[occupant]))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     private GridPosition? FindBirthPosition(
@@ -748,11 +1042,11 @@ public sealed class SimulationWorld
         CritterSpecies offspringSpecies,
         IReadOnlySet<GridPosition> reservedBirthTiles)
     {
-        var startDirection = NextInt(Directions.Length);
+        var startDirection = NextInt(CardinalDirections.Length);
         var parentPosition = _positions[parentIndex];
-        for (var offset = 0; offset < Directions.Length; offset++)
+        for (var offset = 0; offset < CardinalDirections.Length; offset++)
         {
-            var direction = Directions[(startDirection + offset) % Directions.Length];
+            var direction = CardinalDirections[(startDirection + offset) % CardinalDirections.Length];
             var candidate = new GridPosition(
                 Mod(parentPosition.X + direction.X, Width),
                 parentPosition.Y + direction.Y);
@@ -762,7 +1056,8 @@ public sealed class SimulationWorld
             }
 
             var tileIndex = GetIndex(candidate);
-            if (_occupants[tileIndex] < 0 && CanLiveOn(offspringSpecies, tileIndex))
+            if (_occupants[tileIndex] < 0 && CanLiveOn(offspringSpecies, tileIndex) &&
+                IsValidBirthSite(offspringSpecies, candidate))
             {
                 return candidate;
             }
@@ -784,11 +1079,11 @@ public sealed class SimulationWorld
         int critterIndex,
         IReadOnlySet<GridPosition>? reservedPrey = null)
     {
-        var startDirection = NextInt(Directions.Length);
+        var startDirection = NextInt(MovementDirections.Length);
         var current = _positions[critterIndex];
-        for (var offset = 0; offset < Directions.Length; offset++)
+        for (var offset = 0; offset < MovementDirections.Length; offset++)
         {
-            var direction = Directions[(startDirection + offset) % Directions.Length];
+            var direction = MovementDirections[(startDirection + offset) % MovementDirections.Length];
             var candidate = new GridPosition(
                 Mod(current.X + direction.X, Width),
                 current.Y + direction.Y);
@@ -801,10 +1096,16 @@ public sealed class SimulationWorld
             if (_occupants[destinationIndex] >= 0)
             {
                 var preyIndex = _occupants[destinationIndex];
-                if (CanEat(_species[critterIndex], _species[preyIndex]) &&
+                if (CanPursuePrey(critterIndex, preyIndex) &&
                     reservedPrey?.Contains(candidate) is not true)
                 {
                     return candidate;
+                }
+                if (CanLiveOn(_species[critterIndex], destinationIndex) &&
+                    TryShovePlankton(critterIndex, destinationIndex, reservedPrey))
+                {
+                    MoveCritter(critterIndex, destinationIndex, candidate);
+                    return null;
                 }
                 continue;
             }
@@ -814,9 +1115,7 @@ public sealed class SimulationWorld
                 continue;
             }
 
-            _occupants[GetIndex(current)] = -1;
-            _occupants[destinationIndex] = critterIndex;
-            _positions[critterIndex] = candidate;
+            MoveCritter(critterIndex, destinationIndex, candidate);
             return null;
         }
 
@@ -826,12 +1125,12 @@ public sealed class SimulationWorld
     private GridPosition? TryMoveWorm(int critterIndex)
     {
         var current = _positions[critterIndex];
-        if (_terrain[GetIndex(current)] is not Terrain.Shallows)
+        if (!IsWormFeedingTile(GetIndex(current)))
         {
-            var startDirection = NextInt(Directions.Length);
-            for (var offset = 0; offset < Directions.Length; offset++)
+            var startDirection = NextInt(MovementDirections.Length);
+            for (var offset = 0; offset < MovementDirections.Length; offset++)
             {
-                var direction = Directions[(startDirection + offset) % Directions.Length];
+                var direction = MovementDirections[(startDirection + offset) % MovementDirections.Length];
                 var candidate = new GridPosition(
                     Mod(current.X + direction.X, Width),
                     current.Y + direction.Y);
@@ -841,9 +1140,40 @@ public sealed class SimulationWorld
                 }
 
                 var destinationIndex = GetIndex(candidate);
-                if (_terrain[destinationIndex] is Terrain.Shallows &&
-                    _occupants[destinationIndex] < 0 &&
-                    CanLiveOn(CritterSpecies.Worm, destinationIndex))
+                if (IsWormFeedingTile(destinationIndex) &&
+                    CanLiveOn(CritterSpecies.Worm, destinationIndex) &&
+                    CanEnterOrShovePlankton(critterIndex, destinationIndex))
+                {
+                    MoveCritter(critterIndex, destinationIndex, candidate);
+                    return null;
+                }
+            }
+        }
+
+        return TryMove(critterIndex);
+    }
+
+    private GridPosition? TryMoveTrilobite(int critterIndex)
+    {
+        var current = _positions[critterIndex];
+        if (!IsTrilobiteFeedingTerrain(_terrain[GetIndex(current)]))
+        {
+            var startDirection = NextInt(MovementDirections.Length);
+            for (var offset = 0; offset < MovementDirections.Length; offset++)
+            {
+                var direction = MovementDirections[(startDirection + offset) % MovementDirections.Length];
+                var candidate = new GridPosition(
+                    Mod(current.X + direction.X, Width),
+                    current.Y + direction.Y);
+                if (candidate.Y < 0 || candidate.Y >= Height)
+                {
+                    continue;
+                }
+
+                var destinationIndex = GetIndex(candidate);
+                if (IsTrilobiteFeedingTerrain(_terrain[destinationIndex]) &&
+                    CanLiveOn(CritterSpecies.Trilobite, destinationIndex) &&
+                    CanEnterOrShovePlankton(critterIndex, destinationIndex))
                 {
                     MoveCritter(critterIndex, destinationIndex, candidate);
                     return null;
@@ -860,8 +1190,10 @@ public sealed class SimulationWorld
         IReadOnlySet<GridPosition>? reservedPrey)
     {
         var predatorSpecies = _species[critterIndex];
-        var target = GetValidHunterTarget(critterIndex, predatorSpecies, reservedPrey) ??
-            FindHunterPrey(critterIndex, predatorSpecies, perceptionRadius, reservedPrey);
+        var target = predatorSpecies is CritterSpecies.MegaToad
+            ? FindHunterPrey(critterIndex, predatorSpecies, perceptionRadius, reservedPrey)
+            : GetValidHunterTarget(critterIndex, predatorSpecies, reservedPrey) ??
+                FindHunterPrey(critterIndex, predatorSpecies, perceptionRadius, reservedPrey);
         if (target is null)
         {
             _preyTargets[critterIndex] = -1;
@@ -873,10 +1205,10 @@ public sealed class SimulationWorld
         var currentDistance = WrappedManhattanDistance(current, target.Value);
         var bestDistance = currentDistance;
         GridPosition? best = null;
-        var startDirection = NextInt(Directions.Length);
-        for (var offset = 0; offset < Directions.Length; offset++)
+        var startDirection = NextInt(MovementDirections.Length);
+        for (var offset = 0; offset < MovementDirections.Length; offset++)
         {
-            var direction = Directions[(startDirection + offset) % Directions.Length];
+            var direction = MovementDirections[(startDirection + offset) % MovementDirections.Length];
             var candidate = new GridPosition(
                 Mod(current.X + direction.X, Width),
                 current.Y + direction.Y);
@@ -892,6 +1224,12 @@ public sealed class SimulationWorld
                     reservedPrey?.Contains(candidate) is not true)
                 {
                     return candidate;
+                }
+                if (CanLiveOn(predatorSpecies, destinationIndex) &&
+                    TryShovePlankton(critterIndex, destinationIndex, reservedPrey))
+                {
+                    MoveCritter(critterIndex, destinationIndex, candidate);
+                    return null;
                 }
                 continue;
             }
@@ -910,6 +1248,12 @@ public sealed class SimulationWorld
 
         if (best is null)
         {
+            if (predatorSpecies is CritterSpecies.MegaToad)
+            {
+                // Do not opportunistically swallow last-choice prey while a
+                // preferred target is visible but temporarily blocked.
+                return null;
+            }
             return TryMove(critterIndex, reservedPrey);
         }
 
@@ -917,14 +1261,241 @@ public sealed class SimulationWorld
         return null;
     }
 
+    private GridPosition? TryMoveFish(
+        int critterIndex,
+        IReadOnlySet<GridPosition>? reservedPrey)
+    {
+        if (TryFleePredators(critterIndex, FishPredatorFleeRadius))
+        {
+            return null;
+        }
+
+        return TryMoveHunter(critterIndex, FishPerceptionRadius, reservedPrey);
+    }
+
+    private GridPosition? TryMoveMonkey(
+        int critterIndex,
+        IReadOnlySet<GridPosition>? reservedPrey)
+    {
+        if (TryFleePredators(critterIndex, LandPreyFleeRadius))
+        {
+            return null;
+        }
+
+        var nutrition = CritterNutritions.Get(CritterSpecies.Monkey);
+        if (_energy[critterIndex] <= nutrition.HungryThreshold &&
+            CanFeedFromEnvironment(CritterSpecies.Monkey, GetIndex(_positions[critterIndex])))
+        {
+            return null;
+        }
+
+        return TryMoveHunter(critterIndex, MonkeyPerceptionRadius, reservedPrey);
+    }
+
+    private GridPosition? TryMoveWolf(
+        int critterIndex,
+        IReadOnlySet<GridPosition>? reservedPrey)
+    {
+        var nutrition = CritterNutritions.Get(CritterSpecies.Wolf);
+        if (_energy[critterIndex] >= nutrition.ReproductionThreshold)
+        {
+            var wolfId = _critterIds[critterIndex].Value;
+            if ((_wolfDenHomes.TryGetValue(wolfId, out var denTile) ||
+                    _wolfDenTargets.TryGetValue(wolfId, out denTile)) &&
+                GetIndex(_positions[critterIndex]) != denTile)
+            {
+                return TryMoveTowardWolfDen(critterIndex, denTile, reservedPrey);
+            }
+        }
+
+        return TryMoveHunter(critterIndex, WolfPerceptionRadius, reservedPrey);
+    }
+
+    private GridPosition? TryMoveTowardWolfDen(
+        int critterIndex,
+        int denTile,
+        IReadOnlySet<GridPosition>? reservedPrey)
+    {
+        var current = _positions[critterIndex];
+        var target = new GridPosition(denTile % Width, denTile / Width);
+        var bestDistance = WrappedManhattanDistance(current, target);
+        GridPosition? best = null;
+        var startDirection = NextInt(MovementDirections.Length);
+        for (var offset = 0; offset < MovementDirections.Length; offset++)
+        {
+            var direction = MovementDirections[(startDirection + offset) % MovementDirections.Length];
+            var candidate = new GridPosition(Mod(current.X + direction.X, Width), current.Y + direction.Y);
+            if (candidate.Y < 0 || candidate.Y >= Height)
+            {
+                continue;
+            }
+            var candidateIndex = GetIndex(candidate);
+            if (!CanLiveOn(CritterSpecies.Wolf, candidateIndex) ||
+                (_occupants[candidateIndex] >= 0 &&
+                    !CanShovePlankton(critterIndex, candidateIndex, reservedPrey)))
+            {
+                continue;
+            }
+            var distance = WrappedManhattanDistance(candidate, target);
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                best = candidate;
+            }
+        }
+
+        if (best is not null)
+        {
+            MoveCritter(critterIndex, GetIndex(best.Value), best.Value);
+        }
+        return null;
+    }
+
+    private GridPosition? TryMoveGrazer(int critterIndex)
+    {
+        if (TryFleePredators(critterIndex, LandPreyFleeRadius))
+        {
+            return null;
+        }
+
+        var species = _species[critterIndex];
+        var currentIndex = GetIndex(_positions[critterIndex]);
+        var nutrition = CritterNutritions.Get(species);
+        if (_energy[critterIndex] <= nutrition.HungryThreshold &&
+            CanFeedFromEnvironment(species, currentIndex))
+        {
+            return null;
+        }
+
+        if (_energy[critterIndex] <= nutrition.HungryThreshold)
+        {
+            var current = _positions[critterIndex];
+            var startDirection = NextInt(MovementDirections.Length);
+            for (var offset = 0; offset < MovementDirections.Length; offset++)
+            {
+                var direction = MovementDirections[(startDirection + offset) % MovementDirections.Length];
+                var candidate = new GridPosition(
+                    Mod(current.X + direction.X, Width),
+                    current.Y + direction.Y);
+                if (candidate.Y < 0 || candidate.Y >= Height)
+                {
+                    continue;
+                }
+
+                var destinationIndex = GetIndex(candidate);
+                if (CanFeedFromEnvironment(species, destinationIndex) &&
+                    CanEnterOrShovePlankton(critterIndex, destinationIndex))
+                {
+                    MoveCritter(critterIndex, destinationIndex, candidate);
+                    return null;
+                }
+            }
+        }
+
+        return TryMove(critterIndex);
+    }
+
+    private bool TryFleePredators(int critterIndex, int fleeRadius)
+    {
+        var current = _positions[critterIndex];
+        Span<GridPosition> threats = stackalloc GridPosition[
+            2 * fleeRadius * (fleeRadius + 1)];
+        var threatCount = 0;
+        for (var offsetY = -fleeRadius;
+            offsetY <= fleeRadius;
+            offsetY++)
+        {
+            var y = current.Y + offsetY;
+            if (y < 0 || y >= Height)
+            {
+                continue;
+            }
+
+            var horizontalReach = fleeRadius - Math.Abs(offsetY);
+            for (var offsetX = -horizontalReach; offsetX <= horizontalReach; offsetX++)
+            {
+                if (offsetX == 0 && offsetY == 0)
+                {
+                    continue;
+                }
+
+                var position = new GridPosition(Mod(current.X + offsetX, Width), y);
+                var occupant = _occupants[GetIndex(position)];
+                if (occupant >= 0 && CanEat(_species[occupant], _species[critterIndex]))
+                {
+                    threats[threatCount++] = position;
+                }
+            }
+        }
+
+        if (threatCount == 0)
+        {
+            return false;
+        }
+
+        var currentScore = GetFleeDistance(current, threats[..threatCount]);
+        var bestScore = currentScore;
+        GridPosition? best = null;
+        var ties = 0;
+        var startDirection = NextInt(MovementDirections.Length);
+        for (var offset = 0; offset < MovementDirections.Length; offset++)
+        {
+            var direction = MovementDirections[(startDirection + offset) % MovementDirections.Length];
+            var candidate = new GridPosition(
+                Mod(current.X + direction.X, Width),
+                current.Y + direction.Y);
+            if (candidate.Y < 0 || candidate.Y >= Height)
+            {
+                continue;
+            }
+
+            var candidateIndex = GetIndex(candidate);
+            if (!CanLiveOn(_species[critterIndex], candidateIndex) ||
+                (_occupants[candidateIndex] >= 0 &&
+                    !CanShovePlankton(critterIndex, candidateIndex)))
+            {
+                continue;
+            }
+
+            var score = GetFleeDistance(candidate, threats[..threatCount]);
+            if (score > bestScore)
+            {
+                bestScore = score;
+                best = candidate;
+                ties = 1;
+            }
+            else if (score == bestScore && score > currentScore && NextInt(++ties) == 0)
+            {
+                best = candidate;
+            }
+        }
+
+        if (best is not null)
+        {
+            var destinationIndex = GetIndex(best.Value);
+            if (CanEnterOrShovePlankton(critterIndex, destinationIndex))
+            {
+                MoveCritter(critterIndex, destinationIndex, best.Value);
+            }
+        }
+
+        // A detected predator suppresses hunting even when escape is blocked.
+        return true;
+    }
+
     private GridPosition? TryMoveNewt(int critterIndex)
     {
+        if (TryFleeMegaToads(critterIndex))
+        {
+            return null;
+        }
+
         var nutrition = CritterNutritions.Get(CritterSpecies.Newt);
         if (_energy[critterIndex] <= nutrition.HungryThreshold &&
-            IsAtOrAdjacentToNewtFood(GetIndex(_positions[critterIndex])))
+            CanFeedFromEnvironment(CritterSpecies.Newt, GetIndex(_positions[critterIndex])))
         {
-            // A hungry Newt that has reached the shoreline waits for its next
-            // feeding interval instead of wandering out of feeding range.
+            // A hungry Newt that has reached food waits for its next feeding
+            // interval instead of wandering out of feeding range.
             return null;
         }
 
@@ -954,7 +1525,8 @@ public sealed class SimulationWorld
         }
 
         // Preserve the route and wait when another critter temporarily blocks it.
-        if (_occupants[destinationIndex] >= 0)
+        if (_occupants[destinationIndex] >= 0 &&
+            !TryShovePlankton(critterIndex, destinationIndex))
         {
             return null;
         }
@@ -966,6 +1538,107 @@ public sealed class SimulationWorld
             _newtMigrationPaths.Remove(critterId);
         }
         return null;
+    }
+
+    private bool TryFleeMegaToads(int critterIndex)
+    {
+        var current = _positions[critterIndex];
+        Span<GridPosition> threats = stackalloc GridPosition[40];
+        var threatCount = 0;
+        for (var offsetY = -NewtMegaToadFleeRadius;
+            offsetY <= NewtMegaToadFleeRadius;
+            offsetY++)
+        {
+            var y = current.Y + offsetY;
+            if (y < 0 || y >= Height)
+            {
+                continue;
+            }
+
+            var horizontalReach = NewtMegaToadFleeRadius - Math.Abs(offsetY);
+            for (var offsetX = -horizontalReach; offsetX <= horizontalReach; offsetX++)
+            {
+                if (offsetX == 0 && offsetY == 0)
+                {
+                    continue;
+                }
+
+                var position = new GridPosition(Mod(current.X + offsetX, Width), y);
+                var occupant = _occupants[GetIndex(position)];
+                if (occupant >= 0 && _species[occupant] is CritterSpecies.MegaToad)
+                {
+                    threats[threatCount++] = position;
+                }
+            }
+        }
+
+        if (threatCount == 0)
+        {
+            return false;
+        }
+
+        var currentScore = GetFleeDistance(current, threats[..threatCount]);
+        var bestScore = currentScore;
+        GridPosition? best = null;
+        var ties = 0;
+        var ordinaryHabitat = IsNewtOrdinaryTile(GetIndex(current));
+        var startDirection = NextInt(MovementDirections.Length);
+        for (var offset = 0; offset < MovementDirections.Length; offset++)
+        {
+            var direction = MovementDirections[(startDirection + offset) % MovementDirections.Length];
+            var candidate = new GridPosition(
+                Mod(current.X + direction.X, Width),
+                current.Y + direction.Y);
+            if (candidate.Y < 0 || candidate.Y >= Height)
+            {
+                continue;
+            }
+
+            var candidateIndex = GetIndex(candidate);
+            if ((_occupants[candidateIndex] >= 0 &&
+                    !CanShovePlankton(critterIndex, candidateIndex)) ||
+                (ordinaryHabitat
+                    ? !IsNewtOrdinaryTile(candidateIndex)
+                    : !IsNewtTransitTile(candidateIndex)))
+            {
+                continue;
+            }
+
+            var score = GetFleeDistance(candidate, threats[..threatCount]);
+            if (score > bestScore)
+            {
+                bestScore = score;
+                best = candidate;
+                ties = 1;
+            }
+            else if (score == bestScore && score > currentScore && NextInt(++ties) == 0)
+            {
+                best = candidate;
+            }
+        }
+
+        if (best is not null)
+        {
+            var destinationIndex = GetIndex(best.Value);
+            if (CanEnterOrShovePlankton(critterIndex, destinationIndex))
+            {
+                MoveCritter(critterIndex, destinationIndex, best.Value);
+            }
+        }
+
+        // Detecting a toad suppresses feeding waits and ordinary wandering even
+        // if every safer step is temporarily blocked.
+        return true;
+    }
+
+    private int GetFleeDistance(GridPosition position, ReadOnlySpan<GridPosition> threats)
+    {
+        var nearest = int.MaxValue;
+        foreach (var threat in threats)
+        {
+            nearest = Math.Min(nearest, WrappedManhattanDistance(position, threat));
+        }
+        return nearest;
     }
 
     private bool TryApproachNearbyNewtFood(int critterIndex)
@@ -1014,10 +1687,10 @@ public sealed class SimulationWorld
 
         GridPosition? best = null;
         bestDistance = WrappedManhattanDistance(current, target.Value);
-        var startDirection = NextInt(Directions.Length);
-        for (var offset = 0; offset < Directions.Length; offset++)
+        var startDirection = NextInt(MovementDirections.Length);
+        for (var offset = 0; offset < MovementDirections.Length; offset++)
         {
-            var direction = Directions[(startDirection + offset) % Directions.Length];
+            var direction = MovementDirections[(startDirection + offset) % MovementDirections.Length];
             var candidate = new GridPosition(
                 Mod(current.X + direction.X, Width),
                 current.Y + direction.Y);
@@ -1027,7 +1700,9 @@ public sealed class SimulationWorld
             }
 
             var candidateIndex = GetIndex(candidate);
-            if (_occupants[candidateIndex] >= 0 || !IsNewtTransitTile(candidateIndex) ||
+            if ((_occupants[candidateIndex] >= 0 &&
+                    !CanShovePlankton(critterIndex, candidateIndex)) ||
+                !IsNewtTransitTile(candidateIndex) ||
                 WrappedManhattanDistance(candidate, target.Value) >= bestDistance)
             {
                 continue;
@@ -1039,7 +1714,11 @@ public sealed class SimulationWorld
 
         if (best is not null)
         {
-            MoveCritter(critterIndex, GetIndex(best.Value), best.Value);
+            var destinationIndex = GetIndex(best.Value);
+            if (CanEnterOrShovePlankton(critterIndex, destinationIndex))
+            {
+                MoveCritter(critterIndex, destinationIndex, best.Value);
+            }
         }
 
         // Detecting food is enough to suppress random wandering when the best
@@ -1107,7 +1786,7 @@ public sealed class SimulationWorld
         {
             var currentIndex = frontier.Dequeue();
             var current = new GridPosition(currentIndex % Width, currentIndex / Width);
-            foreach (var direction in Directions)
+            foreach (var direction in MovementDirections)
             {
                 var y = current.Y + direction.Y;
                 if (y < 0 || y >= Height)
@@ -1134,10 +1813,10 @@ public sealed class SimulationWorld
     private GridPosition? TryWanderNewt(int critterIndex)
     {
         var current = _positions[critterIndex];
-        var startDirection = NextInt(Directions.Length);
-        for (var offset = 0; offset < Directions.Length; offset++)
+        var startDirection = NextInt(MovementDirections.Length);
+        for (var offset = 0; offset < MovementDirections.Length; offset++)
         {
-            var direction = Directions[(startDirection + offset) % Directions.Length];
+            var direction = MovementDirections[(startDirection + offset) % MovementDirections.Length];
             var candidate = new GridPosition(
                 Mod(current.X + direction.X, Width),
                 current.Y + direction.Y);
@@ -1147,7 +1826,8 @@ public sealed class SimulationWorld
             }
 
             var destinationIndex = GetIndex(candidate);
-            if (_occupants[destinationIndex] < 0 && IsNewtOrdinaryTile(destinationIndex))
+            if (IsNewtOrdinaryTile(destinationIndex) &&
+                CanEnterOrShovePlankton(critterIndex, destinationIndex))
             {
                 MoveCritter(critterIndex, destinationIndex, candidate);
                 return null;
@@ -1171,7 +1851,7 @@ public sealed class SimulationWorld
         var occupant = _occupants[targetIndex];
         var target = new GridPosition(targetIndex % Width, targetIndex / Width);
         return occupant >= 0 &&
-            CanEat(predatorSpecies, _species[occupant]) &&
+            CanPursuePrey(critterIndex, occupant) &&
             CanLiveOn(predatorSpecies, targetIndex) &&
             reservedPrey?.Contains(target) is not true
                 ? target
@@ -1188,6 +1868,18 @@ public sealed class SimulationWorld
         GridPosition? selected = null;
         var bestDistance = int.MaxValue;
         var ties = 0;
+        GridPosition? selectedNewt = null;
+        var bestNewtDistance = int.MaxValue;
+        var newtTies = 0;
+        GridPosition? selectedToad = null;
+        var bestToadDistance = int.MaxValue;
+        var toadTies = 0;
+        GridPosition? selectedTherapsid = null;
+        var bestTherapsidDistance = int.MaxValue;
+        var therapsidTies = 0;
+        GridPosition? selectedWolfFallback = null;
+        var bestWolfFallbackDistance = int.MaxValue;
+        var wolfFallbackTies = 0;
         for (var offsetY = -perceptionRadius; offsetY <= perceptionRadius; offsetY++)
         {
             var y = current.Y + offsetY;
@@ -1209,13 +1901,80 @@ public sealed class SimulationWorld
                 }
                 var candidateIndex = GetIndex(candidate);
                 var occupant = _occupants[candidateIndex];
-                if (occupant < 0 || !CanEat(predatorSpecies, _species[occupant]) ||
+                if (occupant < 0 || occupant == critterIndex ||
+                    !CanPursuePrey(critterIndex, occupant) ||
                     !CanLiveOn(predatorSpecies, candidateIndex))
                 {
                     continue;
                 }
 
+                var preySpecies = _species[occupant];
                 var distance = Math.Abs(offsetX) + Math.Abs(offsetY);
+                if (predatorSpecies is CritterSpecies.MegaToad &&
+                    preySpecies is CritterSpecies.MegaToad)
+                {
+                    if (distance < bestToadDistance)
+                    {
+                        bestToadDistance = distance;
+                        selectedToad = candidate;
+                        toadTies = 1;
+                    }
+                    else if (distance == bestToadDistance && NextInt(++toadTies) == 0)
+                    {
+                        selectedToad = candidate;
+                    }
+                    continue;
+                }
+
+                if (predatorSpecies is CritterSpecies.MegaToad &&
+                    preySpecies is CritterSpecies.Newt)
+                {
+                    if (distance < bestNewtDistance)
+                    {
+                        bestNewtDistance = distance;
+                        selectedNewt = candidate;
+                        newtTies = 1;
+                    }
+                    else if (distance == bestNewtDistance && NextInt(++newtTies) == 0)
+                    {
+                        selectedNewt = candidate;
+                    }
+                    continue;
+                }
+
+                if (predatorSpecies is CritterSpecies.MegaToad &&
+                    preySpecies is CritterSpecies.Therapsid)
+                {
+                    if (distance < bestTherapsidDistance)
+                    {
+                        bestTherapsidDistance = distance;
+                        selectedTherapsid = candidate;
+                        therapsidTies = 1;
+                    }
+                    else if (distance == bestTherapsidDistance && NextInt(++therapsidTies) == 0)
+                    {
+                        selectedTherapsid = candidate;
+                    }
+                    continue;
+                }
+
+                if (predatorSpecies is CritterSpecies.Wolf &&
+                    preySpecies is CritterSpecies.MegaToad or CritterSpecies.Therapsid)
+                {
+                    if (distance < bestWolfFallbackDistance)
+                    {
+                        bestWolfFallbackDistance = distance;
+                        selectedWolfFallback = candidate;
+                        wolfFallbackTies = 1;
+                    }
+                    else if (distance == bestWolfFallbackDistance &&
+                        NextInt(++wolfFallbackTies) == 0)
+                    {
+                        selectedWolfFallback = candidate;
+                    }
+                    continue;
+                }
+
                 if (distance < bestDistance)
                 {
                     bestDistance = distance;
@@ -1229,7 +1988,77 @@ public sealed class SimulationWorld
             }
         }
 
-        return selected;
+        if (predatorSpecies is not CritterSpecies.MegaToad)
+        {
+            return predatorSpecies is CritterSpecies.Wolf
+                ? selected ?? selectedWolfFallback
+                : selected;
+        }
+
+        var selectedNonToad = selected ?? selectedNewt ?? selectedTherapsid;
+        return (selectedToad, selectedNonToad) switch
+        {
+            (not null, not null) => NextInt(2) == 0 ? selectedToad : selectedNonToad,
+            (not null, null) => selectedToad,
+            _ => selectedNonToad,
+        };
+    }
+
+    private void CommitEncounter(GridPosition predatorPosition, GridPosition preyPosition)
+    {
+        var predatorIndex = _occupants[GetIndex(predatorPosition)];
+        var preyIndex = _occupants[GetIndex(preyPosition)];
+        if (predatorIndex < 0 || preyIndex < 0)
+        {
+            return;
+        }
+
+        var predatorSpecies = _species[predatorIndex];
+        var preySpecies = _species[preyIndex];
+        if (predatorSpecies != preySpecies &&
+            CanEat(predatorSpecies, preySpecies) &&
+            CanEat(preySpecies, predatorSpecies))
+        {
+            CommitMutualPredatorCombat(predatorPosition, preyPosition);
+            return;
+        }
+
+        CommitPredation(predatorPosition, preyPosition);
+    }
+
+    private void CommitMutualPredatorCombat(
+        GridPosition attackerPosition,
+        GridPosition defenderPosition)
+    {
+        var attackerIndex = _occupants[GetIndex(attackerPosition)];
+        var defenderIndex = _occupants[GetIndex(defenderPosition)];
+        if (attackerIndex < 0 || defenderIndex < 0)
+        {
+            return;
+        }
+
+        var attackerSpecies = _species[attackerIndex];
+        var defenderSpecies = _species[defenderIndex];
+        if (NextInt(2) == 0)
+        {
+            _energy[attackerIndex] = Math.Max(
+                0,
+                _energy[attackerIndex] - MutualPredatorCombatDamage);
+            if (_energy[attackerIndex] == 0)
+            {
+                RemoveCritterAt(attackerPosition);
+                FeedPredatorAt(defenderPosition, attackerSpecies);
+            }
+            return;
+        }
+
+        _energy[defenderIndex] = Math.Max(
+            0,
+            _energy[defenderIndex] - MutualPredatorCombatDamage);
+        if (_energy[defenderIndex] == 0)
+        {
+            CommitPredation(attackerPosition, defenderPosition);
+        }
     }
 
     private void CommitPredation(GridPosition predatorPosition, GridPosition preyPosition)
@@ -1249,12 +2078,23 @@ public sealed class SimulationWorld
         // so resolve it again through its still-occupied source tile.
         predatorIndex = _occupants[GetIndex(predatorPosition)];
         var destinationIndex = GetIndex(preyPosition);
-        _occupants[GetIndex(predatorPosition)] = -1;
-        _occupants[destinationIndex] = predatorIndex;
-        _positions[predatorIndex] = preyPosition;
+        MoveCritter(predatorIndex, destinationIndex, preyPosition);
         _preyTargets[predatorIndex] = -1;
+        FeedPredatorAt(preyPosition, preySpecies);
+    }
+
+    private void FeedPredatorAt(GridPosition predatorPosition, CritterSpecies preySpecies)
+    {
+        var predatorIndex = _occupants[GetIndex(predatorPosition)];
+        if (predatorIndex < 0)
+        {
+            return;
+        }
+
+        var predatorSpecies = _species[predatorIndex];
         var nutrition = CritterNutritions.Get(predatorSpecies);
-        var foodEnergy = preySpecies is CritterSpecies.Worm ? 2 : 1;
+        var preyNutrition = CritterNutritions.Get(preySpecies);
+        var foodEnergy = Math.Max(1, preyNutrition.MaximumEnergy / 2);
         _energy[predatorIndex] = Math.Min(
             nutrition.MaximumEnergy,
             _energy[predatorIndex] + foodEnergy);
@@ -1262,19 +2102,65 @@ public sealed class SimulationWorld
 
     private static bool CanEat(CritterSpecies predator, CritterSpecies prey) => predator switch
     {
-        CritterSpecies.Jellyfish or CritterSpecies.Fish =>
+        CritterSpecies.Jellyfish =>
             prey is CritterSpecies.Plankton or CritterSpecies.Worm,
-        CritterSpecies.MegaToad =>
-            prey is CritterSpecies.Worm or CritterSpecies.Fish or CritterSpecies.Newt,
+        CritterSpecies.Fish =>
+            prey is CritterSpecies.Plankton or CritterSpecies.Worm or CritterSpecies.Crab,
+        CritterSpecies.SeaScorpion =>
+            prey is CritterSpecies.Fish or CritterSpecies.Worm or CritterSpecies.Trilobite or
+                CritterSpecies.Newt or CritterSpecies.Crab or CritterSpecies.Squid,
+        CritterSpecies.Nautilus => prey is CritterSpecies.Plankton,
+        CritterSpecies.Squid =>
+            prey is CritterSpecies.Fish or CritterSpecies.Trilobite or CritterSpecies.Crab or
+                CritterSpecies.Newt or CritterSpecies.Nautilus or CritterSpecies.SeaScorpion,
+        CritterSpecies.MegaToad or CritterSpecies.Therapsid => IsLargeLandPredatorPrey(prey),
+        CritterSpecies.Monkey => prey is CritterSpecies.Newt or CritterSpecies.Crab,
+        CritterSpecies.Wolf => prey is not CritterSpecies.Wolf && IsLargeLandPredatorPrey(prey),
         _ => false,
     };
 
+    private static bool IsLargeLandPredatorPrey(CritterSpecies prey) =>
+        prey is CritterSpecies.Worm or CritterSpecies.Trilobite or CritterSpecies.Nautilus or
+            CritterSpecies.Fish or CritterSpecies.Newt or CritterSpecies.Crab or
+            CritterSpecies.MegaToad or CritterSpecies.Therapsid or CritterSpecies.Monkey or
+            CritterSpecies.Deer or CritterSpecies.Elk or CritterSpecies.Gazelle or
+            CritterSpecies.Wolf;
+
+    private bool CanPursuePrey(int predatorIndex, int preyIndex) =>
+        CanEat(_species[predatorIndex], _species[preyIndex]);
+
     private bool CanFeedFromEnvironment(CritterSpecies species, int tileIndex) => species switch
     {
-        CritterSpecies.Worm => _terrain[tileIndex] is Terrain.Shallows,
-        CritterSpecies.Newt => IsAtOrAdjacentToNewtFood(tileIndex),
+        CritterSpecies.Worm => IsWormFeedingTile(tileIndex),
+        CritterSpecies.Trilobite => IsTrilobiteFeedingTerrain(_terrain[tileIndex]),
+        CritterSpecies.Crab => _terrain[tileIndex] is Terrain.Beach or Terrain.Shallows,
+        CritterSpecies.Newt =>
+            IsAtOrAdjacentToNewtFood(tileIndex) || IsNewtFoliageTile(tileIndex),
+        CritterSpecies.Monkey => IsMonkeyFoliageTile(tileIndex),
+        CritterSpecies.Deer => IsGrazerFoliageTile(CritterSpecies.Deer, tileIndex),
+        CritterSpecies.Elk => IsGrazerFoliageTile(CritterSpecies.Elk, tileIndex),
+        CritterSpecies.Gazelle => IsGrazerFoliageTile(CritterSpecies.Gazelle, tileIndex),
         _ => true,
     };
+
+    private bool IsWormFeedingTile(int tileIndex) =>
+        _terrain[tileIndex] is Terrain.DeepOcean or Terrain.Shallows ||
+        IsNewtFeedingTile(tileIndex);
+
+    private static bool IsTrilobiteFeedingTerrain(Terrain terrain) =>
+        terrain is Terrain.DeepOcean or Terrain.Ocean;
+
+    private bool IsMonkeyFoliageTile(int tileIndex) =>
+        _biomes[tileIndex] is Biome.Jungle &&
+        CanLiveOn(CritterSpecies.Monkey, tileIndex);
+
+    private bool IsGrazerFoliageTile(CritterSpecies species, int tileIndex) =>
+        (_biomes[tileIndex] is Biome.Grassland ||
+            (species is CritterSpecies.Deer && _biomes[tileIndex] is Biome.Forest) ||
+            (species is CritterSpecies.Elk &&
+                _biomes[tileIndex] is Biome.Tundra or Biome.Taiga) ||
+            (species is CritterSpecies.Gazelle && _biomes[tileIndex] is Biome.Arid)) &&
+        CanLiveOn(species, tileIndex);
 
     private int WrappedManhattanDistance(GridPosition first, GridPosition second)
     {
@@ -1283,11 +2169,175 @@ public sealed class SimulationWorld
         return horizontal + Math.Abs(first.Y - second.Y);
     }
 
+    private bool CanEnterOrShovePlankton(
+        int moverIndex,
+        int destinationIndex,
+        IReadOnlySet<GridPosition>? reservedPrey = null)
+    {
+        if (_occupants[destinationIndex] < 0)
+        {
+            return true;
+        }
+
+        return TryShovePlankton(moverIndex, destinationIndex, reservedPrey);
+    }
+
+    private bool CanShovePlankton(
+        int moverIndex,
+        int destinationIndex,
+        IReadOnlySet<GridPosition>? reservedPrey = null)
+    {
+        var planktonIndex = _occupants[destinationIndex];
+        if (planktonIndex < 0 || _species[moverIndex] is CritterSpecies.Plankton ||
+            _species[planktonIndex] is not CritterSpecies.Plankton ||
+            !CanLiveOn(_species[moverIndex], destinationIndex))
+        {
+            return false;
+        }
+
+        var planktonPosition = _positions[planktonIndex];
+        if (reservedPrey?.Contains(planktonPosition) is true)
+        {
+            return false;
+        }
+
+        return FindPlanktonShoveDestination(moverIndex, planktonIndex, reservedPrey) is not null;
+    }
+
+    private bool TryShovePlankton(
+        int moverIndex,
+        int destinationIndex,
+        IReadOnlySet<GridPosition>? reservedPrey = null)
+    {
+        if (!CanShovePlankton(moverIndex, destinationIndex, reservedPrey))
+        {
+            return false;
+        }
+
+        var planktonIndex = _occupants[destinationIndex];
+        var shoveDestination = FindPlanktonShoveDestination(
+            moverIndex,
+            planktonIndex,
+            reservedPrey)!.Value;
+        MoveCritter(planktonIndex, GetIndex(shoveDestination), shoveDestination);
+        return true;
+    }
+
+    private GridPosition? FindPlanktonShoveDestination(
+        int moverIndex,
+        int planktonIndex,
+        IReadOnlySet<GridPosition>? reservedPrey)
+    {
+        var planktonPosition = _positions[planktonIndex];
+        var startDirection = (moverIndex + planktonIndex) % MovementDirections.Length;
+        for (var offset = 0; offset < MovementDirections.Length; offset++)
+        {
+            var direction = MovementDirections[(startDirection + offset) % MovementDirections.Length];
+            var candidate = new GridPosition(
+                Mod(planktonPosition.X + direction.X, Width),
+                planktonPosition.Y + direction.Y);
+            if (candidate.Y < 0 || candidate.Y >= Height ||
+                reservedPrey?.Contains(candidate) is true)
+            {
+                continue;
+            }
+
+            var candidateIndex = GetIndex(candidate);
+            if (_occupants[candidateIndex] < 0 &&
+                CanLiveOn(CritterSpecies.Plankton, candidateIndex))
+            {
+                return candidate;
+            }
+        }
+
+        return null;
+    }
+
     private void MoveCritter(int critterIndex, int destinationIndex, GridPosition destination)
     {
-        _occupants[GetIndex(_positions[critterIndex])] = -1;
+        var origin = _positions[critterIndex];
+        var movingSpecies = _species[critterIndex];
+        _occupants[GetIndex(origin)] = -1;
         _occupants[destinationIndex] = critterIndex;
         _positions[critterIndex] = destination;
+        TriggerWolfDenNear(origin, destination, movingSpecies);
+    }
+
+    private void TriggerWolfDenNear(
+        GridPosition origin,
+        GridPosition destination,
+        CritterSpecies movingSpecies)
+    {
+        if (!CanEat(CritterSpecies.Wolf, movingSpecies) ||
+            movingSpecies is CritterSpecies.MegaToad or CritterSpecies.Therapsid)
+        {
+            return;
+        }
+
+        if (!TryTriggerWolfDenAround(destination))
+        {
+            TryTriggerWolfDenAround(origin);
+        }
+    }
+
+    private bool TryTriggerWolfDenAround(GridPosition center)
+    {
+        var startDirection = NextInt(MovementDirections.Length + 1);
+        for (var offset = 0; offset <= MovementDirections.Length; offset++)
+        {
+            var directionIndex = (startDirection + offset) % (MovementDirections.Length + 1);
+            var direction = directionIndex == MovementDirections.Length
+                ? new GridPosition(0, 0)
+                : MovementDirections[directionIndex];
+            var y = center.Y + direction.Y;
+            if (y < 0 || y >= Height)
+            {
+                continue;
+            }
+            var denPosition = new GridPosition(Mod(center.X + direction.X, Width), y);
+            var denTile = GetIndex(denPosition);
+            if (!_wolfDenCharges.TryGetValue(denTile, out var charges) || charges <= 0)
+            {
+                continue;
+            }
+
+            var spawnPosition = FindWolfDenSpawnPosition(denPosition);
+            if (spawnPosition is null || !TryAddCritter(CritterSpecies.Wolf, spawnPosition.Value))
+            {
+                continue;
+            }
+
+            _wolfDenCharges[denTile] = charges - 1;
+            return true;
+        }
+        return false;
+    }
+
+    private GridPosition? FindWolfDenSpawnPosition(GridPosition denPosition)
+    {
+        var denTile = GetIndex(denPosition);
+        if (_occupants[denTile] < 0 && CanLiveOn(CritterSpecies.Wolf, denTile))
+        {
+            return denPosition;
+        }
+
+        var startDirection = NextInt(MovementDirections.Length);
+        for (var offset = 0; offset < MovementDirections.Length; offset++)
+        {
+            var direction = MovementDirections[(startDirection + offset) % MovementDirections.Length];
+            var y = denPosition.Y + direction.Y;
+            if (y < 0 || y >= Height)
+            {
+                continue;
+            }
+            var candidate = new GridPosition(Mod(denPosition.X + direction.X, Width), y);
+            var tileIndex = GetIndex(candidate);
+            if (_occupants[tileIndex] < 0 && CanLiveOn(CritterSpecies.Wolf, tileIndex))
+            {
+                return candidate;
+            }
+        }
+        return null;
     }
 
     internal bool RemoveCritterAt(GridPosition position)
@@ -1304,6 +2354,8 @@ public sealed class SimulationWorld
         _critterIndicesById.Remove(removedId.Value);
         _newtMigrationPaths.Remove(removedId.Value);
         _newtFreshwaterSearchCompleted.Remove(removedId.Value);
+        _wolfDenHomes.Remove(removedId.Value);
+        _wolfDenTargets.Remove(removedId.Value);
         _speciesCounts[(int)_species[critterIndex]]--;
         _occupants[tileIndex] = -1;
         if (critterIndex != lastIndex)
@@ -1367,16 +2419,88 @@ public sealed class SimulationWorld
     }
 
     private bool CanLiveOn(CritterSpecies species, int tileIndex) =>
-        species is CritterSpecies.Newt
+        species is CritterSpecies.Fish
+            ? IsFishTile(tileIndex)
+            : species is CritterSpecies.Worm
+                ? IsWormTile(tileIndex)
+            : species is CritterSpecies.Newt
             ? IsNewtTransitTile(tileIndex)
             : species is CritterSpecies.MegaToad
                 ? IsMegaToadTile(tileIndex)
+                : species is CritterSpecies.Crab
+                    ? IsCrabTile(tileIndex)
                 : CritterHabitats.CanOccupy(
                     CritterHabitats.GetHabitat(species),
                     _terrain[tileIndex],
                     _surfaceWater[tileIndex],
                     _biomes[tileIndex],
                     _surfaceCovers[tileIndex]);
+
+    private bool IsWormTile(int tileIndex) =>
+        _surfaceCovers[tileIndex] is SurfaceCover.None &&
+        (_terrain[tileIndex] is Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows ||
+            _surfaceWater[tileIndex] is SurfaceWaterKind.River or SurfaceWaterKind.FreshwaterLake);
+
+    private bool IsFishTile(int tileIndex) =>
+        _surfaceCovers[tileIndex] is SurfaceCover.None &&
+        (_terrain[tileIndex] is Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows ||
+            _surfaceWater[tileIndex] is SurfaceWaterKind.River or SurfaceWaterKind.FreshwaterLake);
+
+    private bool IsCrabTile(int tileIndex) =>
+        _surfaceCovers[tileIndex] is SurfaceCover.None &&
+        _terrain[tileIndex] is not Terrain.Ice &&
+        (_terrain[tileIndex] is Terrain.Beach ||
+            (_biomes[tileIndex] is not Biome.Arctic &&
+                _terrain[tileIndex] is Terrain.Shallows or Terrain.Plains or Terrain.Hills or
+                    Terrain.Lowlands or Terrain.Canyon or Terrain.Trench));
+
+    internal bool IsValidReproductionSite(CritterSpecies species, GridPosition position) =>
+        species switch
+        {
+            CritterSpecies.MegaToad => IsAtOrAdjacentToMegaToadBreedingWater(GetIndex(position)),
+            _ => true,
+        };
+
+    internal bool IsValidBirthSite(CritterSpecies species, GridPosition position)
+    {
+        var tileIndex = GetIndex(position);
+        return species switch
+        {
+            CritterSpecies.MegaToad => IsMegaToadBreedingWater(tileIndex),
+            _ => true,
+        };
+    }
+
+    private bool IsAtOrAdjacentToMegaToadBreedingWater(int tileIndex)
+    {
+        if (IsMegaToadBreedingWater(tileIndex))
+        {
+            return true;
+        }
+
+        var position = new GridPosition(tileIndex % Width, tileIndex / Width);
+        foreach (var direction in CardinalDirections)
+        {
+            var y = position.Y + direction.Y;
+            if (y < 0 || y >= Height)
+            {
+                continue;
+            }
+
+            var neighborIndex = y * Width + Mod(position.X + direction.X, Width);
+            if (IsMegaToadBreedingWater(neighborIndex))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private bool IsMegaToadBreedingWater(int tileIndex) =>
+        _surfaceWater[tileIndex] is SurfaceWaterKind.River ||
+        (_surfaceWater[tileIndex] is SurfaceWaterKind.FreshwaterLake &&
+            _biomes[tileIndex] is not Biome.Arctic);
 
     private bool IsMegaToadTile(int tileIndex) =>
         _surfaceCovers[tileIndex] is SurfaceCover.None &&
@@ -1405,6 +2529,10 @@ public sealed class SimulationWorld
         (_surfaceWater[tileIndex] is SurfaceWaterKind.FreshwaterLake &&
             _biomes[tileIndex] is not Biome.Arctic);
 
+    private bool IsNewtFoliageTile(int tileIndex) =>
+        IsNewtOrdinaryTile(tileIndex) &&
+        _biomes[tileIndex] is Biome.Swamp or Biome.Jungle;
+
     private bool IsAtOrAdjacentToNewtFood(int tileIndex)
     {
         if (IsNewtFeedingTile(tileIndex))
@@ -1413,7 +2541,7 @@ public sealed class SimulationWorld
         }
 
         var position = new GridPosition(tileIndex % Width, tileIndex / Width);
-        foreach (var direction in Directions)
+        foreach (var direction in CardinalDirections)
         {
             var y = position.Y + direction.Y;
             if (y < 0 || y >= Height)
@@ -1436,11 +2564,21 @@ public sealed class SimulationWorld
         CritterSpecies.Plankton => 5 * TicksPerSecond,
         CritterSpecies.Jellyfish => 5 * TicksPerSecond,
         CritterSpecies.Worm => 6 * TicksPerSecond,
-        CritterSpecies.Fish => 3 * TicksPerSecond,
+        CritterSpecies.Trilobite => 6 * TicksPerSecond,
+        CritterSpecies.SeaScorpion => 3 * TicksPerSecond,
+        CritterSpecies.Nautilus => 6 * TicksPerSecond,
+        CritterSpecies.Squid => 3 * TicksPerSecond,
+        CritterSpecies.SquidEgg => 5 * TicksPerSecond,
+        CritterSpecies.Fish => 2 * TicksPerSecond,
         CritterSpecies.Newt => 5 * TicksPerSecond,
         CritterSpecies.MegaToad => 6 * TicksPerSecond,
-        CritterSpecies.Crab => 6,
-        CritterSpecies.Ape => 6,
+        CritterSpecies.Therapsid => 5 * TicksPerSecond,
+        CritterSpecies.Monkey => 5 * TicksPerSecond,
+        CritterSpecies.Deer => 4 * TicksPerSecond,
+        CritterSpecies.Elk => 7 * TicksPerSecond,
+        CritterSpecies.Gazelle => 4 * TicksPerSecond,
+        CritterSpecies.Wolf => 2 * TicksPerSecond,
+        CritterSpecies.Crab => 4 * TicksPerSecond,
         _ => throw new ArgumentOutOfRangeException(nameof(species)),
     };
 
@@ -1450,7 +2588,9 @@ public sealed class SimulationWorld
         // Hunter perception is bounded but costlier than wandering. Distribute
         // newly born/evolved hunters across their interval so cohorts do not scan
         // on the same tick.
-        return species is CritterSpecies.Fish or CritterSpecies.MegaToad
+        return species is CritterSpecies.Fish or CritterSpecies.Nautilus or
+            CritterSpecies.Squid or CritterSpecies.SeaScorpion or CritterSpecies.MegaToad or
+            CritterSpecies.Therapsid or CritterSpecies.Monkey or CritterSpecies.Wolf
             ? Tick + 1 + NextInt(interval)
             : Tick + interval;
     }

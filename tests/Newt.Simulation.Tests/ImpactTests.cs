@@ -52,12 +52,25 @@ public sealed class ImpactTests
     }
 
     [Fact]
+    public void MeteorDestroysWolfDenAndStoredCharges()
+    {
+        var world = CreateLandWorld();
+        var center = new GridPosition(30, 30);
+        Assert.True(world.AddWolfDenCharge(center));
+        Assert.True(world.AddWolfDenCharge(center));
+
+        Impacts.CreateMeteorImpact(world, center, 0f);
+
+        Assert.Null(world.GetWolfDenCharges(center));
+    }
+
+    [Fact]
     public void ShockwaveExpandsBeforeRemovingDistantCritter()
     {
         var world = CreateLandWorld();
         var center = new GridPosition(30, 30);
         var critterPosition = new GridPosition(40, 30);
-        world.AddCritter(CritterSpecies.Ape, critterPosition);
+        world.AddCritter(CritterSpecies.Monkey, critterPosition);
 
         Impacts.CreateMeteorImpact(world, center, 0.5f);
         Assert.Equal(1, world.CritterCount);

@@ -290,6 +290,7 @@ public static class Impacts
 
                 world.SetElevation(position, world.GetElevation(position) - erosion);
                 world.RemoveCritterAt(position);
+                world.RemoveWolfDenAt(position);
                 changed = true;
             }
         }
@@ -304,6 +305,7 @@ public static class Impacts
     private static void ClearImpactEntities(SimulationWorld world, GridPosition position)
     {
         world.RemoveCritterAt(position);
+        world.RemoveWolfDenAt(position);
         Volcanism.RemoveVolcanoAt(world, position);
     }
 

@@ -98,12 +98,61 @@ terrain ceiling, and terrain-changing events cannot permanently erode them.
   covers one tile without changing elevation before the biome reclaims it;
   Lava covers one tile and deposits `+0.03` elevation. Right click clears
   either cover.
-- Critter Tools / Plankton: left click an empty Deep Ocean tile to spawn plankton.
-- Primitive evolution currently branches from Plankton to Jellyfish or Worm, then
-  from Worm to Fish, Fish to Newt, and Newt to Mega Toad. Worms scavenge detritus in Shallows;
-  jellyfish consume plankton and worms on contact; fish locally pursue and eat
-  either prey. Newts live on land, feed in rivers and freshwater lakes, and make
-  one cached migration toward freshwater after they are born or evolved. Mega
+- Critter Tools: left click an empty valid habitat tile to spawn the selected
+  Plankton, Jellyfish, Worm, Trilobite, Sea Scorpion, Nautilus, Squid, Squid Egg,
+  Fish, Newt, Mega Toad, Therapsid, Monkey, Deer, Elk, Gazelle, Wolf, or Crab. The Plankton tool retains its stricter Deep Ocean
+  requirement.
+- Primitive evolution currently branches from Plankton to Jellyfish, Worm, or
+  Trilobite. Worms continue to Fish or Nautilus, Nautilus to Squid, and Fish to
+  Newt. Newts branch to Mega Toad or Therapsid, and Therapsids branch to Monkey,
+  Deer, or Wolf; Deer continue to Elk or Gazelle.
+  Trilobites continue to Crab or Sea Scorpion. Worms traverse Rivers and
+  Freshwater Lakes as well as saltwater, and scavenge detritus in Deep Ocean,
+  Shallows, Rivers, and unfrozen Freshwater Lakes;
+  jellyfish consume plankton and worms on contact; fish locally pursue plankton,
+  worms, and crabs, enter Rivers and Freshwater Lakes, and do not hunt Newts.
+  Fish flee nearby Sea Scorpions, Squid, and Mega Toads before hunting. Crabs may
+  roam and reproduce across all of their valid habitat, but feed only on Beaches
+  and Shallows. They feed every eight seconds and breed at a low energy threshold,
+  creating a rapidly renewing coastal food source for fish. Cold and freezing Beaches remain valid crab habitat, but ice sheets
+  and other Arctic terrain do not. Trilobites graze deep-sea detritus in Ocean and Deep Ocean
+  tiles. All non-Plankton critters can shove blocking Plankton into adjacent open
+  water rather than losing their movement step; active Plankton hunters still eat them.
+  Slow shelled Nautiluses hunt Plankton and are protected from Jellyfish
+  and Sea Scorpions. Squid hunt fish, trilobites, crabs, newts,
+  Nautiluses, and Sea Scorpions.
+  They lay drifting eggs that move like Plankton and hatch when Squid prey comes
+  within two tiles. Squid and Sea Scorpions resolve mutual attacks with a 50/50
+  roll that deals one energy damage rather than instant predation. Sea Scorpions
+  hunt fish, worms, trilobites, crabs, newts, and Squid across saltwater and
+  Beaches, while
+  Mega Toads hunt worms, trilobites, fish, crabs, Monkeys, Deer, Elk, and Gazelles. When
+  another Toad and any non-Toad prey are both visible, they choose between those
+  categories with equal probability. Newts remain behind ordinary non-Toad prey,
+  while Therapsids remain a final fallback. Therapsids share the Mega Toad diet,
+  and mutual Toad-Therapsid attacks use 50/50 one-energy combat rolls. Monkeys
+  hunt Newts and Crabs and feed from Jungle foliage. Deer evolve as a second
+  Therapsid branch and graze Grasslands and Forests; slower, more
+  reproduction-intensive Elk evolve from Deer and can graze Grasslands, Tundra,
+  and Taiga. Gazelles also evolve from Deer and graze Grasslands and Arid biomes.
+  Wolves form a third Therapsid branch. They are fast hunters with the
+  Mega Toad's broad diet, including Deer, Elk, and Gazelles, but engage Mega Toads and
+  Therapsids only as last-resort combat targets. A Wolf's first reproduction
+  selects a den site, preferring nearby Hills, and the Wolf must return there for
+  every later reproduction. Reproduction stores charges instead of immediately
+  producing pups; one charge creates one Wolf only when ordinary prey moves beside
+  the den. Meteors, tsunami waves, and lava destroy dens and their stored charges.
+  Building Tools can be cycled like Critter Tools; the Wolf Den entry places an
+  empty den with left click and removes one with right click.
+  Other / Jump Start enables life and fills every unoccupied Deep Ocean tile with
+  one Plankton, preserving any critters already occupying those tiles.
+  Monkeys, Deer, Elk, and Gazelles flee any
+  nearby species capable of eating them. Predators gain food energy equal to half
+  of the prey's maximum stomach capacity, rounded down with a minimum of one.
+  Newts flee nearby Toads, and Toad breeding
+  requires Rivers or unfrozen Freshwater Lakes.
+  Newts live on land, feed in rivers, freshwater lakes, swamps, and
+  jungles, and make one cached migration toward freshwater after they are born or evolved. Mega
   Toads hunt worms, fish, and newts locally and can enter land, shallows, and
   freshwater lakes, but not open ocean.
 - Elevation tool: left click raises terrain and right click lowers it.

@@ -321,7 +321,7 @@ public sealed class ClimateTests
     }
 
     [Fact]
-    public void RiversAndLakesHaveEqualMoistureStrengthAndReach()
+    public void LakesCreateWetterAndBroaderMoistureZonesThanRivers()
     {
         var riverWorld = CreateFlatLand(width: 41, height: 21, seed: 49);
         var lakeWorld = CreateFlatLand(width: 41, height: 21, seed: 49);
@@ -334,13 +334,32 @@ public sealed class ClimateTests
         TerrainClassifier.RebuildAll(riverWorld);
         TerrainClassifier.RebuildAll(lakeWorld);
 
-        foreach (var position in AllPositions(riverWorld))
+        var adjacent = new GridPosition(21, 10);
+        var fartherAway = new GridPosition(27, 10);
+
+        Assert.True(lakeWorld.GetMoisture(adjacent) > riverWorld.GetMoisture(adjacent));
+        Assert.True(lakeWorld.GetMoisture(fartherAway) > riverWorld.GetMoisture(fartherAway));
+    }
+
+    [Fact]
+    public void HotLowlandBesideLakeBecomesJungle()
+    {
+        var world = CreateFlatLand(width: 41, height: 21, seed: 49);
+        world.HasOceans = false;
+        var lake = new GridPosition(20, 10);
+        var lakeside = new GridPosition(21, 10);
+        world.SetSurfaceWater(lake, SurfaceWaterKind.FreshwaterLake);
+        TerrainClassifier.RebuildAll(world);
+
+        foreach (var position in AllPositions(world))
         {
-            Assert.Equal(
-                riverWorld.GetMoisture(position),
-                lakeWorld.GetMoisture(position),
-                precision: 5);
+            world.SetTemperature(position, 0.8f);
         }
+
+        ClimateSystem.RebuildMoistureAndBiomes(world);
+
+        Assert.Equal(MoistureBand.Wet, ClimateSystem.ClassifyMoisture(world.GetMoisture(lakeside)));
+        Assert.Equal(Biome.Jungle, world.GetBiome(lakeside));
     }
 
     [Fact]

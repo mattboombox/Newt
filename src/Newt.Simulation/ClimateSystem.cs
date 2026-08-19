@@ -11,8 +11,10 @@ public static class ClimateSystem
     internal const float HotThreshold = 0.67f;
     internal const float DryThreshold = 0.33f;
     internal const float WetThreshold = 0.67f;
-    private const float FreshwaterMoistureStrength = 0.45f;
-    private const float FreshwaterMoistureReach = 6f;
+    private const float RiverMoistureStrength = 0.45f;
+    private const float RiverMoistureReach = 6f;
+    private const float LakeMoistureStrength = 0.75f;
+    private const float LakeMoistureReach = 8f;
 
     /// <summary>
     /// Rebuilds temperature from latitude, elevation, and broad seeded variation.
@@ -58,15 +60,14 @@ public static class ClimateSystem
                 var position = new GridPosition(x, y);
                 var index = y * world.Width + x;
                 var oceanInfluence = DistanceInfluence(oceanDistance[index], strength: 0.54f, reach: 11f);
-                // Rivers and lakes use the same freshwater strength and reach.
                 var riverInfluence = DistanceInfluence(
                     riverDistance[index],
-                    FreshwaterMoistureStrength,
-                    FreshwaterMoistureReach);
+                    RiverMoistureStrength,
+                    RiverMoistureReach);
                 var lakeInfluence = DistanceInfluence(
                     lakeDistance[index],
-                    FreshwaterMoistureStrength,
-                    FreshwaterMoistureReach);
+                    LakeMoistureStrength,
+                    LakeMoistureReach);
                 var elevationPenalty = Math.Max(0, world.GetElevation(position)) * 0.18f;
                 var variation = (FractalNoise(world, x, y, world.Seed ^ 0xE7037ED1A0B428DBUL) - 0.5f) * 0.28f;
                 var engineeredZone = world.Body is WorldBody.RingWorld

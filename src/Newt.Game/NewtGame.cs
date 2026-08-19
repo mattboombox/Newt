@@ -21,15 +21,21 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private static readonly double[] SimulationRates = [0.25, 0.5, 1, 2, 4, 8, 16];
     private static readonly ToolCategory[] ToolCategoryOrder =
         [ToolCategory.WorldTools, ToolCategory.TerrainTools, ToolCategory.CritterTools,
-            ToolCategory.Events, ToolCategory.Other];
+            ToolCategory.BuildingTools, ToolCategory.Events, ToolCategory.Other];
     private static readonly WorldTool[] WorldToolOrder =
         [WorldTool.SeaLevel, WorldTool.OceanSeed, WorldTool.Temperature,
             WorldTool.Moisture, WorldTool.EvolutionChance, WorldTool.Seasons, WorldTool.Life];
     private static readonly WorldTool[] EventToolOrder =
         [WorldTool.Meteor, WorldTool.Tsunami, WorldTool.WatershedShift,
             WorldTool.Evolve, WorldTool.NaturalEvents];
-    private static readonly WorldTool[] CritterToolOrder = [WorldTool.Plankton];
-    private static readonly WorldTool[] OtherToolOrder = [WorldTool.Inspect];
+    private static readonly WorldTool[] CritterToolOrder =
+        [WorldTool.Plankton, WorldTool.Jellyfish, WorldTool.Worm, WorldTool.Trilobite,
+            WorldTool.SeaScorpion, WorldTool.Nautilus, WorldTool.Squid, WorldTool.SquidEgg,
+            WorldTool.Fish, WorldTool.Newt, WorldTool.MegaToad, WorldTool.Therapsid,
+            WorldTool.Monkey, WorldTool.Deer, WorldTool.Elk, WorldTool.Gazelle, WorldTool.Wolf,
+            WorldTool.Crab];
+    private static readonly WorldTool[] BuildingToolOrder = [WorldTool.WolfDen];
+    private static readonly WorldTool[] OtherToolOrder = [WorldTool.JumpStart, WorldTool.Inspect];
     private static readonly WorldTool[] TerrainToolOrder =
         [WorldTool.Elevation, WorldTool.River, WorldTool.Volcano, WorldTool.Stone, WorldTool.Lava];
     private static readonly TimeSpan SimulationStep = TimeSpan.FromSeconds(1d / SimulationWorld.TicksPerSecond);
@@ -176,6 +182,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 {
                     DrawSurfaceWater(screenX, screenY, position, water);
                 }
+                DrawWolfDen(screenX, screenY, position);
                 DrawVolcanoVent(screenX, screenY, position);
                 DrawImpactWave(screenX, screenY, position);
             }
@@ -325,6 +332,13 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             return;
         }
 
+        if (CurrentTool is WorldTool.JumpStart && primaryActivated)
+        {
+            _lifeEnabled = true;
+            _world.JumpStartPlankton();
+            return;
+        }
+
         if (CurrentTool is WorldTool.Inspect && secondaryActivated)
         {
             _inspectedCritterId = default;
@@ -426,11 +440,25 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             case WorldTool.River:
                 Hydrology.RemoveFreshwaterAt(_world, position.Value);
                 break;
-            case WorldTool.Plankton when primaryActivated:
-                if (_world.GetTerrain(position.Value) is Terrain.DeepOcean)
+            case WorldTool.Plankton or WorldTool.Jellyfish or WorldTool.Worm or
+                WorldTool.Trilobite or WorldTool.SeaScorpion or WorldTool.Nautilus or
+                WorldTool.Squid or WorldTool.SquidEgg or
+                WorldTool.Fish or WorldTool.Newt or WorldTool.MegaToad or
+                WorldTool.Therapsid or WorldTool.Monkey or WorldTool.Deer or
+                WorldTool.Elk or WorldTool.Gazelle or WorldTool.Wolf or WorldTool.Crab
+                when primaryActivated:
+                var species = GetCritterSpecies(CurrentTool);
+                if (species is not CritterSpecies.Plankton ||
+                    _world.GetTerrain(position.Value) is Terrain.DeepOcean)
                 {
-                    _world.TryAddCritter(CritterSpecies.Plankton, position.Value);
+                    _world.TryAddCritter(species, position.Value);
                 }
+                break;
+            case WorldTool.WolfDen when primaryActivated:
+                _world.TryPlaceWolfDen(position.Value);
+                break;
+            case WorldTool.WolfDen:
+                _world.RemoveWolfDenAt(position.Value);
                 break;
             case WorldTool.Stone when primaryActivated:
                 Volcanism.PlaceStone(_world, position.Value);
@@ -458,6 +486,29 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private static bool IsContinuousTool(WorldTool tool) => tool is
         WorldTool.Elevation or WorldTool.SeaLevel or WorldTool.Temperature or
         WorldTool.Moisture or WorldTool.EvolutionChance;
+
+    private static CritterSpecies GetCritterSpecies(WorldTool tool) => tool switch
+    {
+        WorldTool.Plankton => CritterSpecies.Plankton,
+        WorldTool.Jellyfish => CritterSpecies.Jellyfish,
+        WorldTool.Worm => CritterSpecies.Worm,
+        WorldTool.Trilobite => CritterSpecies.Trilobite,
+        WorldTool.SeaScorpion => CritterSpecies.SeaScorpion,
+        WorldTool.Nautilus => CritterSpecies.Nautilus,
+        WorldTool.Squid => CritterSpecies.Squid,
+        WorldTool.SquidEgg => CritterSpecies.SquidEgg,
+        WorldTool.Fish => CritterSpecies.Fish,
+        WorldTool.Newt => CritterSpecies.Newt,
+        WorldTool.MegaToad => CritterSpecies.MegaToad,
+        WorldTool.Therapsid => CritterSpecies.Therapsid,
+        WorldTool.Monkey => CritterSpecies.Monkey,
+        WorldTool.Deer => CritterSpecies.Deer,
+        WorldTool.Elk => CritterSpecies.Elk,
+        WorldTool.Gazelle => CritterSpecies.Gazelle,
+        WorldTool.Wolf => CritterSpecies.Wolf,
+        WorldTool.Crab => CritterSpecies.Crab,
+        _ => throw new ArgumentOutOfRangeException(nameof(tool)),
+    };
 
     private void ResetToolRepeat()
     {
@@ -488,6 +539,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         ToolCategory.WorldTools => WorldToolOrder,
         ToolCategory.TerrainTools => TerrainToolOrder,
         ToolCategory.CritterTools => CritterToolOrder,
+        ToolCategory.BuildingTools => BuildingToolOrder,
         ToolCategory.Events => EventToolOrder,
         ToolCategory.Other => OtherToolOrder,
         _ => throw new ArgumentOutOfRangeException(nameof(category)),
@@ -597,7 +649,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
 
         DrawHudLines(toolX + HudPadding, hudY + 8,
             $"TOOL: {GetToolCategoryName(CurrentToolCategory)}",
-            CurrentTool.ToString(),
+            GetToolName(CurrentTool),
             GetToolHint(CurrentTool),
             "Q / E  cycle tools",
             "R  cycle categories",
@@ -671,6 +723,9 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             $"Temperature {_world.GetTemperature(position):0.000} ({SeasonSystem.GetTemperatureChange(_world, position):+0.000;-0.000;0.000} season)   {_world.GetTemperatureBand(position)}",
             $"Moisture {_world.GetMoisture(position):0.000} ({SeasonSystem.GetMoistureChange(_world, position):+0.000;-0.000;0.000} season)   {_world.GetMoistureBand(position)}",
             $"Fresh Water {waterText}",
+            _world.GetWolfDenCharges(position) is { } charges
+                ? $"Structure Wolf Den   Charges {charges}"
+                : "Structure None",
         ];
     }
 
@@ -730,6 +785,11 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             return ["ENTITY", "Volcano", $"Behavior {volcanoState}", "Energy None"];
         }
 
+        if (_world.GetWolfDenCharges(position) is { } charges)
+        {
+            return ["ENTITY", "Wolf Den", $"Charges {charges}", "Behavior Ambush nursery"];
+        }
+
         return ["ENTITY", "None"];
     }
 
@@ -749,10 +809,23 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private static string GetCritterDiet(CritterSpecies species) => species switch
     {
         CritterSpecies.Plankton => "ambient nutrients",
-        CritterSpecies.Worm => "shallow detritus",
-        CritterSpecies.Jellyfish or CritterSpecies.Fish => "plankton and worms",
-        CritterSpecies.Newt => "freshwater food",
-        CritterSpecies.MegaToad => "worms, fish, and newts",
+        CritterSpecies.Worm => "deep-ocean, shallow, river, and lake detritus",
+        CritterSpecies.Trilobite => "deep-sea detritus",
+        CritterSpecies.SeaScorpion => "fish, worms, trilobites, crabs, newts, and squid",
+        CritterSpecies.Nautilus => "plankton",
+        CritterSpecies.Squid => "fish, trilobites, crabs, newts, nautiluses, and sea scorpions",
+        CritterSpecies.SquidEgg => "hatches when squid prey approaches",
+        CritterSpecies.Jellyfish => "plankton and worms",
+        CritterSpecies.Fish => "plankton, worms, and crabs",
+        CritterSpecies.Newt => "freshwater food and wetland foliage",
+        CritterSpecies.MegaToad => "broad prey; 50% toad choice when another prey is visible",
+        CritterSpecies.Therapsid => "the same broad prey as mega toads",
+        CritterSpecies.Monkey => "newts, crabs, and jungle foliage",
+        CritterSpecies.Deer => "grassland and forest foliage",
+        CritterSpecies.Elk => "grassland, tundra, and taiga foliage",
+        CritterSpecies.Gazelle => "grassland and arid foliage",
+        CritterSpecies.Wolf => "mega-toad prey; toads and therapsids last",
+        CritterSpecies.Crab => "beach and shallow detritus",
         _ => "not implemented",
     };
 
@@ -767,11 +840,23 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             return critter.Species switch
             {
                 CritterSpecies.Plankton => "Absorbing nutrients",
-                CritterSpecies.Worm => "Seeking shallow detritus",
+                CritterSpecies.Worm => "Seeking marine or freshwater detritus",
+                CritterSpecies.Trilobite => "Seeking deep-sea detritus",
+                CritterSpecies.SeaScorpion => "Hunting aquatic prey",
+                CritterSpecies.Nautilus => "Slowly hunting plankton",
+                CritterSpecies.Squid => "Hunting aquatic prey",
+                CritterSpecies.SquidEgg => "Waiting for nearby prey",
                 CritterSpecies.Jellyfish => "Seeking plankton and worms",
-                CritterSpecies.Fish => "Hunting plankton and worms",
-                CritterSpecies.Newt => "Seeking freshwater food",
+                CritterSpecies.Fish => "Hunting prey or fleeing predators",
+                CritterSpecies.Newt => "Seeking freshwater or wetland foliage",
                 CritterSpecies.MegaToad => "Ambushing aquatic prey",
+                CritterSpecies.Therapsid => "Hunting broad land and coastal prey",
+                CritterSpecies.Monkey => "Hunting, feeding, or fleeing predators",
+                CritterSpecies.Deer => "Grazing or fleeing predators",
+                CritterSpecies.Elk => "Grazing or fleeing predators",
+                CritterSpecies.Gazelle => "Grazing or fleeing predators",
+                CritterSpecies.Wolf => "Hunting broad terrestrial prey",
+                CritterSpecies.Crab => "Seeking coastal detritus",
                 _ => "Seeking food",
             };
         }
@@ -779,11 +864,23 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         return critter.Species switch
         {
             CritterSpecies.Plankton => "Drifting and feeding",
-            CritterSpecies.Worm => "Scavenging shallows",
+            CritterSpecies.Worm => "Scavenging marine and freshwater habitat",
+            CritterSpecies.Trilobite => "Scavenging the deep seafloor",
+            CritterSpecies.SeaScorpion => "Patrolling coastal waters",
+            CritterSpecies.Nautilus => "Cruising for plankton",
+            CritterSpecies.Squid => "Patrolling for aquatic prey",
+            CritterSpecies.SquidEgg => "Drifting with the currents",
             CritterSpecies.Jellyfish => "Drifting and hunting",
-            CritterSpecies.Fish => "Wandering and hunting",
-            CritterSpecies.Newt => "Foraging between land and freshwater",
+            CritterSpecies.Fish => "Foraging while watching for predators",
+            CritterSpecies.Newt => "Foraging in wetlands and freshwater",
             CritterSpecies.MegaToad => "Patrolling the water's edge",
+            CritterSpecies.Therapsid => "Patrolling terrestrial hunting grounds",
+            CritterSpecies.Monkey => "Foraging while watching for predators",
+            CritterSpecies.Deer => "Roaming while watching for predators",
+            CritterSpecies.Elk => "Slowly roaming while watching for predators",
+            CritterSpecies.Gazelle => "Roaming while watching for predators",
+            CritterSpecies.Wolf => "Quickly patrolling its hunting grounds",
+            CritterSpecies.Crab => "Foraging along the coast",
             _ => "Wandering",
         };
     }
@@ -971,6 +1068,30 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 size,
                 size),
             color);
+    }
+
+    private void DrawWolfDen(int screenX, int screenY, GridPosition position)
+    {
+        if (_spriteBatch is null || _pixel is null ||
+            _world.GetWolfDenCharges(position) is not { } charges)
+        {
+            return;
+        }
+
+        var size = Math.Max(2, TileSize * 2 / 3);
+        var inset = (TileSize - size) / 2;
+        var originX = MapOffsetX + screenX * TileSize + inset;
+        var originY = MapOffsetY + screenY * TileSize + inset;
+        _spriteBatch.Draw(_pixel, new Rectangle(originX, originY, size, size), new Color(68, 45, 30));
+        var opening = Math.Max(1, size / 2);
+        _spriteBatch.Draw(
+            _pixel,
+            new Rectangle(originX + (size - opening) / 2, originY + size - opening, opening, opening),
+            new Color(25, 20, 18));
+        if (charges > 0)
+        {
+            _spriteBatch.Draw(_pixel, new Rectangle(originX, originY, Math.Max(1, size / 4), Math.Max(1, size / 4)), new Color(210, 190, 145));
+        }
     }
 
     private void DrawImpactWave(int screenX, int screenY, GridPosition position)
@@ -1192,11 +1313,21 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         CritterSpecies.Plankton => new Color(160, 255, 180),
         CritterSpecies.Jellyfish => new Color(180, 160, 240),
         CritterSpecies.Worm => new Color(210, 105, 145),
+        CritterSpecies.Trilobite => new Color(135, 92, 55),
+        CritterSpecies.SeaScorpion => new Color(190, 145, 105),
+        CritterSpecies.Nautilus => new Color(205, 185, 140),
+        CritterSpecies.Squid => new Color(165, 70, 145),
+        CritterSpecies.SquidEgg => new Color(225, 185, 230),
         CritterSpecies.Fish => new Color(80, 220, 235),
         CritterSpecies.Newt => new Color(245, 145, 55),
         CritterSpecies.MegaToad => new Color(90, 155, 65),
+        CritterSpecies.Therapsid => new Color(155, 105, 70),
+        CritterSpecies.Monkey => new Color(190, 135, 85),
+        CritterSpecies.Deer => new Color(181, 133, 82),
+        CritterSpecies.Elk => new Color(112, 78, 48),
+        CritterSpecies.Gazelle => new Color(220, 175, 95),
+        CritterSpecies.Wolf => new Color(125, 130, 135),
         CritterSpecies.Crab => new Color(255, 80, 80),
-        CritterSpecies.Ape => new Color(145, 105, 70),
         _ => Color.Magenta,
     };
 
@@ -1243,12 +1374,37 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             : "left enable, right disabled",
         WorldTool.River => "left on mountain, right remove",
         WorldTool.Plankton => "left spawn in deep ocean",
+        WorldTool.Jellyfish => "left spawn in aquatic habitat",
+        WorldTool.Fish => "left spawn in saltwater, rivers, or lakes",
+        WorldTool.Worm => "left spawn in ocean or shallows",
+        WorldTool.Trilobite => "left spawn in ocean or shallows",
+        WorldTool.SeaScorpion => "left spawn in saltwater or on beach",
+        WorldTool.Nautilus => "left spawn in aquatic habitat",
+        WorldTool.Squid => "left spawn in aquatic habitat",
+        WorldTool.SquidEgg => "left spawn a drifting squid egg",
+        WorldTool.Newt => "left spawn in amphibious habitat",
+        WorldTool.MegaToad => "left spawn on land or shallow freshwater",
+        WorldTool.Therapsid => "left spawn a terrestrial predator",
+        WorldTool.Monkey => "left spawn on land or in jungle",
+        WorldTool.Deer => "left spawn a grassland and forest grazer",
+        WorldTool.Elk => "left spawn a grassland, tundra, and taiga grazer",
+        WorldTool.Gazelle => "left spawn a grassland and arid grazer",
+        WorldTool.Wolf => "left spawn a fast terrestrial predator",
+        WorldTool.Crab => "left spawn on coast or ordinary land",
+        WorldTool.WolfDen => "left place empty den, right remove",
         WorldTool.Stone => "left place cover, right clear",
         WorldTool.Lava => "left deposit +0.03, right clear",
+        WorldTool.JumpStart => "left enable life and fill empty deep ocean with plankton",
         WorldTool.Inspect => _inspectedCritterId.IsValid
             ? "following critter, right clear"
             : "left follow critter, right clear",
         _ => string.Empty,
+    };
+
+    private static string GetToolName(WorldTool tool) => tool switch
+    {
+        WorldTool.JumpStart => "Jump Start",
+        _ => tool.ToString(),
     };
 
     private static string GetToolCategoryName(ToolCategory category) => category switch
@@ -1256,6 +1412,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         ToolCategory.WorldTools => "WORLD TOOLS",
         ToolCategory.TerrainTools => "TERRAIN TOOLS",
         ToolCategory.CritterTools => "CRITTER TOOLS",
+        ToolCategory.BuildingTools => "BUILDING TOOLS",
         ToolCategory.Events => "EVENTS",
         ToolCategory.Other => "OTHER",
         _ => category.ToString().ToUpperInvariant(),
@@ -1266,6 +1423,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         WorldTools,
         TerrainTools,
         CritterTools,
+        BuildingTools,
         Events,
         Other,
     }
@@ -1288,8 +1446,27 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         NaturalEvents,
         River,
         Plankton,
+        Jellyfish,
+        Worm,
+        Trilobite,
+        SeaScorpion,
+        Nautilus,
+        Squid,
+        SquidEgg,
+        Fish,
+        Newt,
+        MegaToad,
+        Therapsid,
+        Monkey,
+        Deer,
+        Elk,
+        Gazelle,
+        Wolf,
+        Crab,
+        WolfDen,
         Stone,
         Lava,
+        JumpStart,
         Inspect,
     }
 }

@@ -106,6 +106,18 @@ public sealed class VolcanismTests
     }
 
     [Fact]
+    public void LavaDestroysWolfDenAndStoredCharges()
+    {
+        var world = CreateLandWorld();
+        var position = new GridPosition(7, 7);
+        Assert.True(world.AddWolfDenCharge(position));
+
+        Assert.True(Volcanism.DepositLava(world, position, 0.02f));
+
+        Assert.Null(world.GetWolfDenCharges(position));
+    }
+
+    [Fact]
     public void LavaTouchingARiverRequestsAFreshwaterRebuild()
     {
         var world = CreateLandWorld();
@@ -141,7 +153,7 @@ public sealed class VolcanismTests
     {
         var world = CreateLandWorld();
         var position = new GridPosition(7, 7);
-        world.AddCritter(CritterSpecies.Ape, position);
+        world.AddCritter(CritterSpecies.Monkey, position);
 
         Assert.False(Volcanism.SpawnVolcano(world, position));
         Assert.Equal(0, world.VolcanoCount);

@@ -147,7 +147,8 @@ moisture = baseline
 ```
 
 - Saltwater moisture decays inland using one multi-source distance calculation.
-- Rivers and lakes spread moisture with the same strength and reach.
+- Rivers create narrow riparian corridors, while lakes add stronger moisture over
+  a wider area to favor wet lake shores and nearby jungle in hot climates.
 - High exposed terrain receives a modest penalty.
 - Smooth seeded variation produces broad wet and dry regions.
 
