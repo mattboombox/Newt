@@ -142,7 +142,8 @@ public sealed class SimulationWorldTests
     [Fact]
     public void PlanktonConvertsFourEnergyIntoAnAdjacentOffspring()
     {
-        var world = new SimulationWorld(1, 2, Terrain.Ocean, seed: 17);
+        var world = new SimulationWorld(1, 2, Terrain.DeepOcean, seed: 17);
+        world.SeasonsEnabled = false;
         world.AddCritter(CritterSpecies.Plankton, new GridPosition(0, 0));
 
         for (var tick = 0; tick < 60 * SimulationWorld.TicksPerSecond - 1; tick++)
@@ -167,7 +168,8 @@ public sealed class SimulationWorldTests
     [Fact]
     public void CrowdedPlanktonKeepsItsReproductionEnergyUntilSpaceOpens()
     {
-        var world = new SimulationWorld(1, 1, Terrain.Ocean, seed: 23);
+        var world = new SimulationWorld(1, 1, Terrain.DeepOcean, seed: 23);
+        world.SeasonsEnabled = false;
         var center = new GridPosition(0, 0);
         world.AddCritter(CritterSpecies.Plankton, center);
 
@@ -181,6 +183,7 @@ public sealed class SimulationWorldTests
             .Single(critter => critter.Position == center);
         Assert.Equal(4, crowded.Energy);
         Assert.True(crowded.CanReproduce);
+        Assert.Equal(2, world.GetTileNutrition(center));
     }
 
     [Fact]
@@ -357,6 +360,7 @@ public sealed class SimulationWorldTests
     {
         var world = new SimulationWorld(1, 1, Terrain.Ocean);
 
+        Assert.Equal(0.5f, world.EvolutionChancePercent);
         world.AdjustEvolutionChance(-CritterEvolution.MaximumChanceSteps);
         Assert.Equal(0, world.EvolutionChancePercent);
         world.AdjustEvolutionChance(1);
@@ -392,11 +396,13 @@ public sealed class SimulationWorldTests
         world.SetTerrain(shallows, Terrain.Shallows);
         world.AddCritter(CritterSpecies.Worm, start);
 
-        for (var tick = 0; tick < 6 * SimulationWorld.TicksPerSecond; tick++)
+        for (var tick = 0; tick < 8 * SimulationWorld.TicksPerSecond - 1; tick++)
         {
             world.AdvanceOneTick();
         }
 
+        Assert.Equal(start, world.GetCritter(0).Position);
+        world.AdvanceOneTick();
         Assert.Equal(shallows, world.GetCritter(0).Position);
     }
 
@@ -433,7 +439,7 @@ public sealed class SimulationWorldTests
         world.SetTerrain(deepOcean, Terrain.DeepOcean);
         world.AddCritter(CritterSpecies.Worm, new GridPosition(0, 0));
 
-        for (var tick = 0; tick < 6 * SimulationWorld.TicksPerSecond; tick++)
+        for (var tick = 0; tick < 8 * SimulationWorld.TicksPerSecond; tick++)
         {
             world.AdvanceOneTick();
         }
@@ -475,7 +481,7 @@ public sealed class SimulationWorldTests
         world.SetSurfaceWater(freshwater, SurfaceWaterKind.River);
         world.AddCritter(CritterSpecies.Worm, new GridPosition(0, 0));
 
-        for (var tick = 0; tick < 6 * SimulationWorld.TicksPerSecond; tick++)
+        for (var tick = 0; tick < 8 * SimulationWorld.TicksPerSecond; tick++)
         {
             world.AdvanceOneTick();
         }
@@ -499,7 +505,7 @@ public sealed class SimulationWorldTests
         }
         world.AddCritter(CritterSpecies.Plankton, blockedDestination);
 
-        for (var tick = 30; tick < 6 * SimulationWorld.TicksPerSecond; tick++)
+        for (var tick = 30; tick < 8 * SimulationWorld.TicksPerSecond; tick++)
         {
             world.AdvanceOneTick();
         }
@@ -508,6 +514,32 @@ public sealed class SimulationWorldTests
         Assert.Equal(CritterSpecies.Worm, worm.Species);
         Assert.True(world.TryGetCritterAt(shoveDestination, out var plankton));
         Assert.Equal(CritterSpecies.Plankton, plankton.Species);
+    }
+
+    [Theory]
+    [InlineData(CritterSpecies.Worm)]
+    [InlineData(CritterSpecies.Trilobite)]
+    public void WormsAndTrilobitesPushThroughDensePlanktonBlooms(CritterSpecies species)
+    {
+        var world = new SimulationWorld(6, 1, Terrain.Shallows, seed: 62);
+        world.SeasonsEnabled = false;
+        world.SetTerrain(new GridPosition(5, 0), Terrain.Mountain);
+        world.AddCritter(species, new GridPosition(0, 0));
+        world.AddCritter(CritterSpecies.Plankton, new GridPosition(1, 0));
+        world.AddCritter(CritterSpecies.Plankton, new GridPosition(2, 0));
+        world.AddCritter(CritterSpecies.Plankton, new GridPosition(3, 0));
+
+        var movementSeconds = species is CritterSpecies.Worm ? 8 : 6;
+        for (var tick = 0; tick < movementSeconds * SimulationWorld.TicksPerSecond; tick++)
+        {
+            world.AdvanceOneTick();
+        }
+
+        Assert.True(world.TryGetCritterAt(new GridPosition(1, 0), out var mover));
+        Assert.Equal(species, mover.Species);
+        Assert.True(world.TryGetCritterAt(new GridPosition(4, 0), out var displacedPlankton));
+        Assert.Equal(CritterSpecies.Plankton, displacedPlankton.Species);
+        Assert.Equal(3, world.GetCritterCount(CritterSpecies.Plankton));
     }
 
     [Fact]
@@ -528,8 +560,30 @@ public sealed class SimulationWorldTests
     }
 
     [Theory]
+    [InlineData(CritterSpecies.SeaScorpion)]
+    [InlineData(CritterSpecies.Squid)]
+    public void TrilobiteFleesVisibleMarinePredators(CritterSpecies predator)
+    {
+        var world = new SimulationWorld(11, 3, Terrain.Shallows, seed: 40);
+        world.SeasonsEnabled = false;
+        var trilobiteStart = new GridPosition(5, 1);
+        world.AddCritter(CritterSpecies.Trilobite, trilobiteStart);
+        world.AddCritter(predator, new GridPosition(8, 1));
+
+        for (var tick = 0; tick < 6 * SimulationWorld.TicksPerSecond; tick++)
+        {
+            world.AdvanceOneTick();
+        }
+
+        var trilobite = Enumerable.Range(0, world.CritterCount)
+            .Select(world.GetCritter)
+            .Single(critter => critter.Species is CritterSpecies.Trilobite);
+        Assert.True(trilobite.Position.X < trilobiteStart.X);
+    }
+
+    [Theory]
     [InlineData(Terrain.DeepOcean, 3)]
-    [InlineData(Terrain.Ocean, 3)]
+    [InlineData(Terrain.Ocean, 2)]
     [InlineData(Terrain.Shallows, 2)]
     public void TrilobiteFeedsOnlyInDeepSeaTerrain(Terrain terrain, int expectedEnergy)
     {
@@ -568,7 +622,9 @@ public sealed class SimulationWorldTests
         Assert.Equal(4, beach.GetCritter(0).Energy);
         Assert.Equal(4, shallows.GetCritter(0).Energy);
         Assert.Equal(3, plains.GetCritter(0).Energy);
-        Assert.False(new SimulationWorld(1, 1, Terrain.Ocean)
+        Assert.True(new SimulationWorld(1, 1, Terrain.Ocean)
+            .TryAddCritter(CritterSpecies.Crab, new GridPosition(0, 0)));
+        Assert.False(new SimulationWorld(1, 1, Terrain.DeepOcean)
             .TryAddCritter(CritterSpecies.Crab, new GridPosition(0, 0)));
     }
 
@@ -613,10 +669,12 @@ public sealed class SimulationWorldTests
         Assert.True(world.IsValidReproductionSite(CritterSpecies.Crab, freezingBeach));
     }
 
-    [Fact]
-    public void RapidCoastalFeedingLetsCrabReproduceWithinSixteenSeconds()
+    [Theory]
+    [InlineData(Terrain.Beach)]
+    [InlineData(Terrain.Shallows)]
+    public void RapidCoastalFeedingLetsCrabReproduceWithinSixteenSeconds(Terrain terrain)
     {
-        var world = new SimulationWorld(2, 1, Terrain.Shallows, seed: 44);
+        var world = new SimulationWorld(2, 1, terrain, seed: 44);
         world.SeasonsEnabled = false;
         world.AddCritter(CritterSpecies.Crab, new GridPosition(0, 0));
 
@@ -669,6 +727,7 @@ public sealed class SimulationWorldTests
         var beach = new GridPosition(0, 0);
         var nursery = new GridPosition(1, 0);
         world.SetTerrain(beach, Terrain.Beach);
+        world.SetTemperature(beach, 0.8f);
         var parentId = world.AddCritter(CritterSpecies.Crab, beach);
         world.AddCritter(CritterSpecies.Crab, nursery);
 
@@ -687,20 +746,23 @@ public sealed class SimulationWorldTests
         Assert.Equal(3, parent.Energy);
     }
 
-    [Fact]
-    public void JellyfishConsumesWormItBumpsInto()
+    [Theory]
+    [InlineData(CritterSpecies.Worm)]
+    [InlineData(CritterSpecies.Fish)]
+    public void JellyfishDoesNotConsumeWormsOrFish(CritterSpecies protectedSpecies)
     {
         var world = new SimulationWorld(1, 2, Terrain.Ocean, seed: 41);
         world.AddCritter(CritterSpecies.Jellyfish, new GridPosition(0, 0));
-        world.AddCritter(CritterSpecies.Worm, new GridPosition(0, 1));
+        world.AddCritter(protectedSpecies, new GridPosition(0, 1));
 
         for (var tick = 0; tick < 5 * SimulationWorld.TicksPerSecond; tick++)
         {
             world.AdvanceOneTick();
         }
 
-        Assert.Equal(0, world.GetCritterCount(CritterSpecies.Worm));
-        Assert.Equal(4, world.GetCritter(0).Energy);
+        Assert.False(SimulationWorld.CanEat(CritterSpecies.Jellyfish, protectedSpecies));
+        Assert.Equal(1, world.GetCritterCount(CritterSpecies.Jellyfish));
+        Assert.Equal(1, world.GetCritterCount(protectedSpecies));
     }
 
     [Fact]
@@ -718,6 +780,80 @@ public sealed class SimulationWorldTests
         Assert.Equal(1, world.GetCritterCount(CritterSpecies.Nautilus));
         Assert.Equal(0, world.GetCritterCount(CritterSpecies.Plankton));
         Assert.Equal(5, world.GetCritter(0).Energy);
+    }
+
+    [Fact]
+    public void DeepOceanForagingCanSupportNautilusReproduction()
+    {
+        var world = new SimulationWorld(2, 1, Terrain.DeepOcean, seed: 41);
+        world.SeasonsEnabled = false;
+        world.AdjustEvolutionChance(-CritterEvolution.MaximumChanceSteps);
+        world.AddCritter(CritterSpecies.Nautilus, new GridPosition(0, 0));
+
+        for (var tick = 0; tick < 4 * 60 * SimulationWorld.TicksPerSecond; tick++)
+        {
+            world.AdvanceOneTick();
+        }
+
+        Assert.Equal(2, world.GetCritterCount(CritterSpecies.Nautilus));
+    }
+
+    [Theory]
+    [InlineData(Terrain.DeepOcean, 4)]
+    [InlineData(Terrain.Ocean, 3)]
+    [InlineData(Terrain.Shallows, 3)]
+    public void NautilusUsesTrilobiteDeepSeaForagingTerrain(
+        Terrain terrain,
+        int expectedEnergy)
+    {
+        var world = new SimulationWorld(1, 1, terrain, seed: 41);
+        world.SeasonsEnabled = false;
+        world.AddCritter(CritterSpecies.Nautilus, new GridPosition(0, 0));
+
+        for (var tick = 0; tick < 30 * SimulationWorld.TicksPerSecond; tick++)
+        {
+            world.AdvanceOneTick();
+        }
+
+        Assert.Equal(expectedEnergy, world.GetCritter(0).Energy);
+    }
+
+    [Fact]
+    public void NautilusRoamsDeepSeaInsteadOfHoldingItsFeedingTile()
+    {
+        var world = new SimulationWorld(5, 1, Terrain.DeepOcean, seed: 41);
+        world.SeasonsEnabled = false;
+        var start = new GridPosition(2, 0);
+        world.AddCritter(CritterSpecies.Nautilus, start);
+
+        var moved = false;
+        for (var tick = 0; tick < 12 * SimulationWorld.TicksPerSecond; tick++)
+        {
+            world.AdvanceOneTick();
+            moved |= world.GetCritter(0).Position != start;
+        }
+
+        Assert.True(moved);
+    }
+
+    [Fact]
+    public void NautilusFleesVisibleSquidLikeATrilobite()
+    {
+        var world = new SimulationWorld(11, 3, Terrain.Ocean, seed: 40);
+        world.SeasonsEnabled = false;
+        var start = new GridPosition(5, 1);
+        world.AddCritter(CritterSpecies.Nautilus, start);
+        world.AddCritter(CritterSpecies.Squid, new GridPosition(8, 1));
+
+        for (var tick = 0; tick < 6 * SimulationWorld.TicksPerSecond; tick++)
+        {
+            world.AdvanceOneTick();
+        }
+
+        var nautilus = Enumerable.Range(0, world.CritterCount)
+            .Select(world.GetCritter)
+            .Single(critter => critter.Species is CritterSpecies.Nautilus);
+        Assert.True(nautilus.Position.X < start.X);
     }
 
     [Theory]
@@ -744,6 +880,9 @@ public sealed class SimulationWorldTests
     [InlineData(CritterSpecies.Crab, 7)]
     [InlineData(CritterSpecies.Newt, 7)]
     [InlineData(CritterSpecies.Nautilus, 7)]
+    [InlineData(CritterSpecies.Deer, 8)]
+    [InlineData(CritterSpecies.Elk, 9)]
+    [InlineData(CritterSpecies.Gazelle, 8)]
     public void SquidHuntsItsAquaticPrey(CritterSpecies prey, int expectedEnergy)
     {
         var world = new SimulationWorld(1, 2, Terrain.Shallows, seed: 47);
@@ -886,20 +1025,227 @@ public sealed class SimulationWorldTests
     }
 
     [Fact]
-    public void FishPursuesAndConsumesWormWithinLocalPerceptionRadius()
+    public void FishConsumesCrabAsEmergencyPrey()
     {
         var world = new SimulationWorld(1, 3, Terrain.Ocean, seed: 43);
         world.AddCritter(CritterSpecies.Fish, new GridPosition(0, 0));
-        world.AddCritter(CritterSpecies.Worm, new GridPosition(0, 2));
+        world.AddCritter(CritterSpecies.Crab, new GridPosition(0, 2));
 
         for (var tick = 0; tick < 4 * SimulationWorld.TicksPerSecond; tick++)
         {
             world.AdvanceOneTick();
         }
 
+        Assert.True(SimulationWorld.CanEat(CritterSpecies.Fish, CritterSpecies.Crab));
+        Assert.Equal(0, world.GetCritterCount(CritterSpecies.Crab));
+        Assert.Equal(1, world.GetCritterCount(CritterSpecies.Fish));
+        Assert.Equal(6, world.GetCritter(0).Energy);
+    }
+
+    [Fact]
+    public void FishShovesEmergencyWormWhenTheWormCanMoveAside()
+    {
+        var world = new SimulationWorld(3, 1, Terrain.Ocean, seed: 43);
+        world.SeasonsEnabled = false;
+        world.AddCritter(CritterSpecies.Fish, new GridPosition(0, 0));
+        world.AddCritter(CritterSpecies.Worm, new GridPosition(1, 0));
+
+        for (var tick = 0; tick < 2 * SimulationWorld.TicksPerSecond; tick++)
+        {
+            world.AdvanceOneTick();
+        }
+
+        Assert.True(world.TryGetCritterAt(new GridPosition(1, 0), out var fish));
+        Assert.Equal(CritterSpecies.Fish, fish.Species);
+        Assert.Equal(3, fish.Energy);
+        Assert.True(world.TryGetCritterAt(new GridPosition(2, 0), out var worm));
+        Assert.Equal(CritterSpecies.Worm, worm.Species);
+    }
+
+    [Fact]
+    public void FishConsumesEmergencyWormWhenTheWormCannotMoveAside()
+    {
+        var world = new SimulationWorld(2, 1, Terrain.Ocean, seed: 43);
+        world.SeasonsEnabled = false;
+        world.AddCritter(CritterSpecies.Fish, new GridPosition(0, 0));
+        world.AddCritter(CritterSpecies.Worm, new GridPosition(1, 0));
+
+        for (var tick = 0; tick < 2 * SimulationWorld.TicksPerSecond; tick++)
+        {
+            world.AdvanceOneTick();
+        }
+
         Assert.Equal(0, world.GetCritterCount(CritterSpecies.Worm));
-        Assert.Equal(new GridPosition(0, 2), world.GetCritter(0).Position);
+        Assert.Equal(1, world.GetCritterCount(CritterSpecies.Fish));
         Assert.Equal(5, world.GetCritter(0).Energy);
+    }
+
+    [Theory]
+    [InlineData(CritterSpecies.Worm)]
+    [InlineData(CritterSpecies.Crab)]
+    public void FishPrefersVisiblePlanktonOverAdjacentFallbackPrey(CritterSpecies fallbackPrey)
+    {
+        var world = new SimulationWorld(3, 3, Terrain.Ocean, seed: 43);
+        world.SeasonsEnabled = false;
+        world.AddCritter(CritterSpecies.Fish, new GridPosition(1, 1));
+        world.AddCritter(fallbackPrey, new GridPosition(2, 1));
+        world.AddCritter(CritterSpecies.Plankton, new GridPosition(1, 0));
+
+        for (var tick = 0;
+            tick < 4 * SimulationWorld.TicksPerSecond &&
+                world.GetCritterCount(CritterSpecies.Plankton) > 0;
+            tick++)
+        {
+            world.AdvanceOneTick();
+        }
+
+        Assert.Equal(1, world.GetCritterCount(CritterSpecies.Fish));
+        Assert.Equal(1, world.GetCritterCount(fallbackPrey));
+        Assert.Equal(0, world.GetCritterCount(CritterSpecies.Plankton));
+    }
+
+    [Theory]
+    [InlineData(CritterSpecies.Worm)]
+    [InlineData(CritterSpecies.Crab)]
+    public void FishPrefersNearbyShallowsOverAdjacentFallbackPrey(
+        CritterSpecies fallbackPrey)
+    {
+        var world = new SimulationWorld(3, 2, Terrain.Ocean, seed: 43);
+        world.SeasonsEnabled = false;
+        var reef = new GridPosition(0, 1);
+        world.SetTerrain(reef, Terrain.Shallows);
+        world.SetTemperature(reef, 0.8f);
+        world.AddCritter(CritterSpecies.Fish, new GridPosition(0, 0));
+        world.AddCritter(fallbackPrey, new GridPosition(1, 0));
+
+        for (var tick = 0; tick < 4 * SimulationWorld.TicksPerSecond; tick++)
+        {
+            world.AdvanceOneTick();
+        }
+
+        Assert.Equal(1, world.GetCritterCount(fallbackPrey));
+        Assert.Equal(reef, world.GetCritter(0).Position);
+    }
+
+    [Theory]
+    [InlineData(Terrain.Shallows, 0.8f, 4)]
+    [InlineData(Terrain.Shallows, 0.5f, 4)]
+    [InlineData(Terrain.Ocean, 0.8f, 2)]
+    public void FishForageInShallowsAtAnyTemperature(
+        Terrain terrain,
+        float temperature,
+        int expectedEnergy)
+    {
+        var world = new SimulationWorld(1, 1, terrain, seed: 54);
+        world.SeasonsEnabled = false;
+        world.SetTemperature(new GridPosition(0, 0), temperature);
+        world.AddCritter(CritterSpecies.Fish, new GridPosition(0, 0));
+
+        for (var tick = 0; tick < 60 * SimulationWorld.TicksPerSecond; tick++)
+        {
+            world.AdvanceOneTick();
+        }
+
+        Assert.Equal(expectedEnergy, world.GetCritter(0).Energy);
+    }
+
+    [Theory]
+    [InlineData(SurfaceWaterKind.River)]
+    [InlineData(SurfaceWaterKind.FreshwaterLake)]
+    public void FishForageInRiversAndLakes(SurfaceWaterKind freshwater)
+    {
+        var world = new SimulationWorld(1, 1, Terrain.Plains, seed: 55);
+        world.SeasonsEnabled = false;
+        world.SetSurfaceWater(new GridPosition(0, 0), freshwater);
+        world.AddCritter(CritterSpecies.Fish, new GridPosition(0, 0));
+
+        for (var tick = 0; tick < 60 * SimulationWorld.TicksPerSecond; tick++)
+        {
+            world.AdvanceOneTick();
+        }
+
+        Assert.Equal(4, world.GetCritter(0).Energy);
+    }
+
+    [Fact]
+    public void HungryFishReturnsToNearbyShallowsInsteadOfStarving()
+    {
+        var world = new SimulationWorld(7, 1, Terrain.Ocean, seed: 55);
+        world.SeasonsEnabled = false;
+        var reef = new GridPosition(3, 0);
+        world.SetTerrain(reef, Terrain.Shallows);
+        world.SetTemperature(reef, 0.8f);
+        world.AddCritter(CritterSpecies.Fish, new GridPosition(0, 0));
+
+        for (var tick = 0; tick < 4 * 60 * SimulationWorld.TicksPerSecond; tick++)
+        {
+            world.AdvanceOneTick();
+        }
+
+        Assert.Equal(1, world.GetCritterCount(CritterSpecies.Fish));
+        Assert.Equal(reef, world.GetCritter(0).Position);
+        Assert.Equal(6, world.GetCritter(0).Energy);
+    }
+
+    [Fact]
+    public void ReefForagingCanEventuallySupportFishReproduction()
+    {
+        var world = new SimulationWorld(2, 1, Terrain.Shallows, seed: 55);
+        world.SeasonsEnabled = false;
+        world.AdjustEvolutionChance(-CritterEvolution.MaximumChanceSteps);
+        world.SetTemperature(new GridPosition(0, 0), 0.8f);
+        world.SetTemperature(new GridPosition(1, 0), 0.8f);
+        world.AddCritter(CritterSpecies.Fish, new GridPosition(0, 0));
+
+        for (var tick = 0; tick < 5 * 60 * SimulationWorld.TicksPerSecond; tick++)
+        {
+            world.AdvanceOneTick();
+        }
+
+        Assert.Equal(2, world.GetCritterCount(CritterSpecies.Fish));
+    }
+
+    [Fact]
+    public void LakeForagingCanSupportFishReproduction()
+    {
+        var world = new SimulationWorld(2, 1, Terrain.Plains, seed: 56);
+        world.SeasonsEnabled = false;
+        world.AdjustEvolutionChance(-CritterEvolution.MaximumChanceSteps);
+        for (var x = 0; x < world.Width; x++)
+        {
+            var position = new GridPosition(x, 0);
+            world.SetSurfaceWater(position, SurfaceWaterKind.FreshwaterLake);
+        }
+        world.AddCritter(CritterSpecies.Fish, new GridPosition(0, 0));
+
+        for (var tick = 0; tick < 5 * 60 * SimulationWorld.TicksPerSecond; tick++)
+        {
+            world.AdvanceOneTick();
+        }
+
+        Assert.Equal(2, world.GetCritterCount(CritterSpecies.Fish));
+    }
+
+    [Fact]
+    public void FishCanPlaceOffspringInADiagonallyConnectedRiverTile()
+    {
+        var world = new SimulationWorld(3, 3, Terrain.Plains, seed: 56);
+        world.SeasonsEnabled = false;
+        world.AdjustEvolutionChance(-CritterEvolution.MaximumChanceSteps);
+        var parent = new GridPosition(1, 1);
+        var diagonalRiver = new GridPosition(2, 2);
+        world.SetSurfaceWater(parent, SurfaceWaterKind.River);
+        world.SetSurfaceWater(diagonalRiver, SurfaceWaterKind.River);
+        world.AddCritter(CritterSpecies.Fish, parent);
+
+        for (var tick = 0; tick < 5 * 60 * SimulationWorld.TicksPerSecond; tick++)
+        {
+            world.AdvanceOneTick();
+        }
+
+        Assert.Equal(2, world.GetCritterCount(CritterSpecies.Fish));
+        Assert.True(world.TryGetCritterAt(diagonalRiver, out var offspring));
+        Assert.Equal(CritterSpecies.Fish, offspring.Species);
     }
 
     [Theory]
@@ -945,6 +1291,26 @@ public sealed class SimulationWorldTests
             .Single(critter => critter.Species is CritterSpecies.Fish);
         Assert.Equal(4, fish.Position.X);
         Assert.Equal(2, world.GetCritterCount(CritterSpecies.Plankton));
+    }
+
+    [Fact]
+    public void FishShovesBlockingNewtWithoutEatingIt()
+    {
+        var world = new SimulationWorld(4, 1, Terrain.Ocean, seed: 57);
+        world.SeasonsEnabled = false;
+        world.SetTerrain(new GridPosition(3, 0), Terrain.Mountain);
+        world.AddCritter(CritterSpecies.Fish, new GridPosition(0, 0));
+        world.AddCritter(CritterSpecies.Newt, new GridPosition(1, 0));
+
+        for (var tick = 0; tick < 2 * SimulationWorld.TicksPerSecond; tick++)
+        {
+            world.AdvanceOneTick();
+        }
+
+        Assert.True(world.TryGetCritterAt(new GridPosition(1, 0), out var fish));
+        Assert.Equal(CritterSpecies.Fish, fish.Species);
+        Assert.True(world.TryGetCritterAt(new GridPosition(2, 0), out var newt));
+        Assert.Equal(CritterSpecies.Newt, newt.Species);
     }
 
     [Fact]
@@ -1094,12 +1460,29 @@ public sealed class SimulationWorldTests
     }
 
     [Fact]
-    public void NewtCanBuildEnoughFoliageEnergyToReproduce()
+    public void MegaToadHasTheLargestLandPredatorEnergyReserve()
+    {
+        var toad = CritterNutritions.Get(CritterSpecies.MegaToad);
+        var therapsid = CritterNutritions.Get(CritterSpecies.Therapsid);
+        var wolf = CritterNutritions.Get(CritterSpecies.Wolf);
+
+        Assert.Equal(16, toad.MaximumEnergy);
+        Assert.True(toad.MaximumEnergy > therapsid.MaximumEnergy);
+        Assert.True(toad.MaximumEnergy > wolf.MaximumEnergy);
+        Assert.Equal(5, toad.InitialEnergy);
+        Assert.Equal(14, toad.ReproductionThreshold);
+        Assert.Equal(9, toad.ReproductionCost);
+    }
+
+    [Theory]
+    [InlineData(Biome.Swamp)]
+    [InlineData(Biome.Jungle)]
+    public void NewtCanBuildEnoughWetlandFoliageEnergyToReproduce(Biome biome)
     {
         var world = new SimulationWorld(2, 1, Terrain.Plains, seed: 69);
         world.SeasonsEnabled = false;
-        world.SetBiome(new GridPosition(0, 0), Biome.Swamp);
-        world.SetBiome(new GridPosition(1, 0), Biome.Swamp);
+        world.SetBiome(new GridPosition(0, 0), biome);
+        world.SetBiome(new GridPosition(1, 0), biome);
         world.AddCritter(CritterSpecies.Newt, new GridPosition(0, 0));
 
         for (var tick = 0; tick < 54 * SimulationWorld.TicksPerSecond; tick++)
@@ -1237,7 +1620,7 @@ public sealed class SimulationWorldTests
     [InlineData(SurfaceWaterKind.FreshwaterLake)]
     public void FishCanSwimOntoFreshwaterMountainTiles(SurfaceWaterKind water)
     {
-        var world = new SimulationWorld(2, 1, Terrain.Shallows, seed: 76);
+        var world = new SimulationWorld(2, 1, Terrain.Ocean, seed: 76);
         world.SeasonsEnabled = false;
         var start = new GridPosition(0, 0);
         var mountainWater = new GridPosition(1, 0);
@@ -1322,9 +1705,9 @@ public sealed class SimulationWorldTests
     }
 
     [Fact]
-    public void FishLocallyHuntsCrabInShallows()
+    public void FishLocallyHuntsCrabWhenNoForagingTerrainIsAvailable()
     {
-        var world = new SimulationWorld(1, 2, Terrain.Shallows, seed: 77);
+        var world = new SimulationWorld(1, 2, Terrain.Ocean, seed: 77);
         world.SeasonsEnabled = false;
         world.AddCritter(CritterSpecies.Fish, new GridPosition(0, 0));
         world.AddCritter(CritterSpecies.Crab, new GridPosition(0, 1));
@@ -1359,11 +1742,11 @@ public sealed class SimulationWorldTests
     [Fact]
     public void FishIgnoreNewtsAndHuntEligiblePrey()
     {
-        var world = new SimulationWorld(1, 3, Terrain.Shallows, seed: 81);
+        var world = new SimulationWorld(1, 3, Terrain.Ocean, seed: 81);
         world.SeasonsEnabled = false;
         world.AddCritter(CritterSpecies.Newt, new GridPosition(0, 0));
         world.AddCritter(CritterSpecies.Fish, new GridPosition(0, 1));
-        world.AddCritter(CritterSpecies.Worm, new GridPosition(0, 2));
+        world.AddCritter(CritterSpecies.Crab, new GridPosition(0, 2));
 
         for (var tick = 0; tick < 2 * SimulationWorld.TicksPerSecond; tick++)
         {
@@ -1371,11 +1754,11 @@ public sealed class SimulationWorldTests
         }
 
         Assert.Equal(1, world.GetCritterCount(CritterSpecies.Newt));
-        Assert.Equal(0, world.GetCritterCount(CritterSpecies.Worm));
+        Assert.Equal(0, world.GetCritterCount(CritterSpecies.Crab));
         var fish = Enumerable.Range(0, world.CritterCount)
             .Select(world.GetCritter)
             .Single(critter => critter.Species is CritterSpecies.Fish);
-        Assert.Equal(5, fish.Energy);
+        Assert.Equal(6, fish.Energy);
     }
 
     [Theory]
@@ -1396,6 +1779,26 @@ public sealed class SimulationWorldTests
         Assert.Equal(1, world.GetCritterCount(CritterSpecies.MegaToad));
         Assert.Equal(0, world.GetCritterCount(prey));
         Assert.Equal(8, world.GetCritter(0).Energy);
+    }
+
+    [Fact]
+    public void MegaToadShovesBlockingNewtWhilePursuingPreferredPrey()
+    {
+        var world = new SimulationWorld(5, 3, Terrain.Shallows, seed: 71);
+        world.SeasonsEnabled = false;
+        world.AddCritter(CritterSpecies.MegaToad, new GridPosition(1, 1));
+        world.AddCritter(CritterSpecies.Newt, new GridPosition(2, 1));
+        world.AddCritter(CritterSpecies.Worm, new GridPosition(3, 1));
+
+        for (var tick = 0; tick < 99; tick++)
+        {
+            world.AdvanceOneTick();
+        }
+
+        Assert.True(world.TryGetCritterAt(new GridPosition(2, 1), out var toad));
+        Assert.Equal(CritterSpecies.MegaToad, toad.Species);
+        Assert.Equal(1, world.GetCritterCount(CritterSpecies.Newt));
+        Assert.Equal(1, world.GetCritterCount(CritterSpecies.Worm));
     }
 
     [Fact]
@@ -1431,7 +1834,88 @@ public sealed class SimulationWorldTests
         }
 
         Assert.Equal(1, world.GetCritterCount(CritterSpecies.MegaToad));
-        Assert.Equal(11, world.GetCritter(0).Energy);
+        Assert.Equal(13, world.GetCritter(0).Energy);
+    }
+
+    [Fact]
+    public void NewbornMegaToadHasAThirtySecondReproductionTruce()
+    {
+        var world = new SimulationWorld(3, 1, Terrain.Plains, seed: 82);
+        world.SeasonsEnabled = false;
+        for (var x = 0; x < world.Width; x++)
+        {
+            world.SetSurfaceWater(new GridPosition(x, 0), SurfaceWaterKind.River);
+        }
+        world.AddCritter(CritterSpecies.MegaToad, new GridPosition(0, 0));
+        world.AddCritter(CritterSpecies.Elk, new GridPosition(1, 0));
+        world.AddCritter(CritterSpecies.Elk, new GridPosition(2, 0));
+
+        var sawBirth = false;
+        for (var tick = 0; tick < 30 * SimulationWorld.TicksPerSecond; tick++)
+        {
+            world.AdvanceOneTick();
+            if (world.GetCritterCount(CritterSpecies.MegaToad) == 2)
+            {
+                sawBirth = true;
+                break;
+            }
+        }
+
+        Assert.True(sawBirth);
+        for (var tick = 0;
+            tick < SimulationWorld.ReproductionTruceTicks - 1;
+            tick++)
+        {
+            world.AdvanceOneTick();
+        }
+
+        Assert.Equal(2, world.GetCritterCount(CritterSpecies.MegaToad));
+    }
+
+    [Fact]
+    public void ClosedMegaToadPopulationCannotSustainItselfThroughCannibalism()
+    {
+        var world = new SimulationWorld(2, 1, Terrain.Plains, seed: 182);
+        world.SeasonsEnabled = false;
+        world.AdjustEvolutionChance(-CritterEvolution.MaximumChanceSteps);
+        for (var x = 0; x < world.Width; x++)
+        {
+            world.SetSurfaceWater(new GridPosition(x, 0), SurfaceWaterKind.River);
+            world.AddCritter(CritterSpecies.MegaToad, new GridPosition(x, 0));
+        }
+
+        for (var tick = 0; tick < 20 * 60 * SimulationWorld.TicksPerSecond; tick++)
+        {
+            world.AdvanceOneTick();
+        }
+
+        Assert.True(
+            world.GetCritterCount(CritterSpecies.MegaToad) == 0,
+            string.Join(", ", Enumerable.Range(0, world.CritterCount).Select(index => world.GetCritter(index))));
+    }
+
+    [Theory]
+    [InlineData(SurfaceWaterKind.River)]
+    [InlineData(SurfaceWaterKind.FreshwaterLake)]
+    public void MegaToadHuntsFishInFreshwater(SurfaceWaterKind freshwater)
+    {
+        Assert.True(SimulationWorld.CanEat(CritterSpecies.MegaToad, CritterSpecies.Fish));
+
+        var world = new SimulationWorld(1, 2, Terrain.Plains, seed: 83);
+        world.SeasonsEnabled = false;
+        world.SetSurfaceWater(new GridPosition(0, 0), freshwater);
+        world.SetSurfaceWater(new GridPosition(0, 1), freshwater);
+        world.AddCritter(CritterSpecies.MegaToad, new GridPosition(0, 0));
+        world.AddCritter(CritterSpecies.Fish, new GridPosition(0, 1));
+
+        for (var tick = 0; tick < 6 * SimulationWorld.TicksPerSecond; tick++)
+        {
+            world.AdvanceOneTick();
+        }
+
+        Assert.Equal(1, world.GetCritterCount(CritterSpecies.MegaToad));
+        Assert.Equal(0, world.GetCritterCount(CritterSpecies.Fish));
+        Assert.Equal(8, world.GetCritter(0).Energy);
     }
 
     [Fact]
@@ -1478,23 +1962,54 @@ public sealed class SimulationWorldTests
         Assert.False(world.IsValidBirthSite(CritterSpecies.MegaToad, dryLand));
     }
 
+    [Fact]
+    public void TherapsidHuntsOnlyWormsFishAndNewts()
+    {
+        foreach (var prey in Enum.GetValues<CritterSpecies>())
+        {
+            Assert.Equal(
+                prey is CritterSpecies.Worm or CritterSpecies.Fish or CritterSpecies.Newt,
+                SimulationWorld.CanEat(CritterSpecies.Therapsid, prey));
+        }
+    }
+
+    [Fact]
+    public void TherapsidHuntsFishInRivers()
+    {
+        Assert.True(SimulationWorld.CanEat(CritterSpecies.Therapsid, CritterSpecies.Fish));
+
+        var world = new SimulationWorld(1, 2, Terrain.Plains, seed: 85);
+        world.SeasonsEnabled = false;
+        world.SetSurfaceWater(new GridPosition(0, 0), SurfaceWaterKind.River);
+        world.SetSurfaceWater(new GridPosition(0, 1), SurfaceWaterKind.River);
+        world.AddCritter(CritterSpecies.Therapsid, new GridPosition(0, 0));
+        world.AddCritter(CritterSpecies.Fish, new GridPosition(0, 1));
+
+        for (var tick = 0; tick < 5 * SimulationWorld.TicksPerSecond; tick++)
+        {
+            world.AdvanceOneTick();
+        }
+
+        Assert.Equal(1, world.GetCritterCount(CritterSpecies.Therapsid));
+        Assert.Equal(0, world.GetCritterCount(CritterSpecies.Fish));
+        Assert.Equal(8, world.GetCritter(0).Energy);
+    }
+
     [Theory]
     [InlineData(CritterSpecies.Worm, 7)]
-    [InlineData(CritterSpecies.Trilobite, 8)]
-    [InlineData(CritterSpecies.Nautilus, 8)]
     [InlineData(CritterSpecies.Fish, 8)]
     [InlineData(CritterSpecies.Newt, 8)]
-    [InlineData(CritterSpecies.Crab, 8)]
-    [InlineData(CritterSpecies.Monkey, 9)]
-    [InlineData(CritterSpecies.Deer, 9)]
-    [InlineData(CritterSpecies.Elk, 10)]
-    [InlineData(CritterSpecies.Gazelle, 9)]
-    public void TherapsidUsesTheMegaToadDiet(CritterSpecies prey, int expectedEnergy)
+    public void TherapsidStrikesAdjacentAquaticPreyInLakes(
+        CritterSpecies prey,
+        int expectedEnergy)
     {
-        var world = new SimulationWorld(1, 2, Terrain.Shallows, seed: 85);
+        var world = new SimulationWorld(1, 2, Terrain.Plains, seed: 85);
         world.SeasonsEnabled = false;
-        world.AddCritter(CritterSpecies.Therapsid, new GridPosition(0, 0));
-        world.AddCritter(prey, new GridPosition(0, 1));
+        var shore = new GridPosition(0, 0);
+        var lake = new GridPosition(0, 1);
+        world.SetSurfaceWater(lake, SurfaceWaterKind.FreshwaterLake);
+        world.AddCritter(CritterSpecies.Therapsid, shore);
+        world.AddCritter(prey, lake);
 
         for (var tick = 0; tick < 5 * SimulationWorld.TicksPerSecond; tick++)
         {
@@ -1503,12 +2018,94 @@ public sealed class SimulationWorldTests
 
         Assert.Equal(1, world.GetCritterCount(CritterSpecies.Therapsid));
         Assert.Equal(0, world.GetCritterCount(prey));
+        Assert.Equal(shore, world.GetCritter(0).Position);
         Assert.Equal(expectedEnergy, world.GetCritter(0).Energy);
+    }
+
+    [Fact]
+    public void TherapsidDoesNotHuntMonkey()
+    {
+        Assert.False(SimulationWorld.CanEat(CritterSpecies.Therapsid, CritterSpecies.Monkey));
+
+        var world = new SimulationWorld(1, 2, Terrain.Plains, seed: 86);
+        world.SeasonsEnabled = false;
+        world.SetBiome(new GridPosition(0, 1), Biome.Jungle);
+        world.AddCritter(CritterSpecies.Therapsid, new GridPosition(0, 0));
+        world.AddCritter(CritterSpecies.Monkey, new GridPosition(0, 1));
+
+        for (var tick = 0; tick < 7 * SimulationWorld.TicksPerSecond; tick++)
+        {
+            world.AdvanceOneTick();
+        }
+
+        Assert.Equal(1, world.GetCritterCount(CritterSpecies.Therapsid));
+        Assert.Equal(1, world.GetCritterCount(CritterSpecies.Monkey));
+    }
+
+    [Fact]
+    public void TherapsidDoesNotHuntItsOwnOffspringSpecies()
+    {
+        var world = new SimulationWorld(1, 2, Terrain.Plains, seed: 86);
+        world.SeasonsEnabled = false;
+        world.AddCritter(CritterSpecies.Therapsid, new GridPosition(0, 0));
+        world.AddCritter(CritterSpecies.Therapsid, new GridPosition(0, 1));
+
+        for (var tick = 0; tick < 5 * SimulationWorld.TicksPerSecond; tick++)
+        {
+            world.AdvanceOneTick();
+        }
+
+        Assert.Equal(2, world.GetCritterCount(CritterSpecies.Therapsid));
+    }
+
+    [Theory]
+    [InlineData(Biome.Swamp, 9)]
+    [InlineData(Biome.Jungle, 9)]
+    [InlineData(Biome.None, 4)]
+    public void HungryTherapsidForagesEveryEighteenSecondsOnlyInWetlands(
+        Biome biome,
+        int expectedEnergy)
+    {
+        var world = new SimulationWorld(1, 1, Terrain.Plains, seed: 87);
+        world.SeasonsEnabled = false;
+        world.SetBiome(new GridPosition(0, 0), biome);
+        world.AddCritter(CritterSpecies.Therapsid, new GridPosition(0, 0));
+
+        for (var tick = 0; tick < 90 * SimulationWorld.TicksPerSecond; tick++)
+        {
+            world.AdvanceOneTick();
+        }
+
+        Assert.Equal(expectedEnergy, world.GetCritter(0).Energy);
+    }
+
+    [Theory]
+    [InlineData(Biome.Swamp)]
+    [InlineData(Biome.Jungle)]
+    public void TherapsidPrefersNearbyWetlandForageOverVisiblePrey(Biome biome)
+    {
+        var world = new SimulationWorld(3, 2, Terrain.Plains, seed: 188);
+        world.SeasonsEnabled = false;
+        var wetland = new GridPosition(1, 0);
+        world.SetBiome(wetland, biome);
+        world.AddCritter(CritterSpecies.Therapsid, new GridPosition(1, 1));
+        world.AddCritter(CritterSpecies.Monkey, new GridPosition(2, 1));
+
+        for (var tick = 0; tick < 6 * SimulationWorld.TicksPerSecond; tick++)
+        {
+            world.AdvanceOneTick();
+        }
+
+        Assert.Equal(wetland, world.GetCritter(0).Position);
+        Assert.Equal(1, world.GetCritterCount(CritterSpecies.Monkey));
     }
 
     [Fact]
     public void MegaToadAndTherapsidFightInsteadOfUsingInstantPredation()
     {
+        Assert.True(SimulationWorld.CanEat(CritterSpecies.MegaToad, CritterSpecies.Therapsid));
+        Assert.False(SimulationWorld.CanEat(CritterSpecies.Therapsid, CritterSpecies.MegaToad));
+
         var world = new SimulationWorld(1, 2, Terrain.Shallows, seed: 86);
         world.SeasonsEnabled = false;
         world.AddCritter(CritterSpecies.MegaToad, new GridPosition(0, 0));
@@ -1536,6 +2133,42 @@ public sealed class SimulationWorldTests
     }
 
     [Fact]
+    public void CombatLoserFlashesForHalfASecond()
+    {
+        var world = new SimulationWorld(1, 2, Terrain.Shallows, seed: 86);
+        world.SeasonsEnabled = false;
+        world.AddCritter(CritterSpecies.MegaToad, new GridPosition(0, 0));
+        world.AddCritter(CritterSpecies.Therapsid, new GridPosition(0, 1));
+
+        CritterSnapshot loser = default;
+        for (var tick = 0; tick < 6 * SimulationWorld.TicksPerSecond; tick++)
+        {
+            world.AdvanceOneTick();
+            loser = Enumerable.Range(0, world.CritterCount)
+                .Select(world.GetCritter)
+                .FirstOrDefault(critter => critter.IsDamageFlashing);
+            if (loser.Id.IsValid)
+            {
+                break;
+            }
+        }
+
+        Assert.True(loser.Id.IsValid);
+        Assert.Equal(4, loser.Energy);
+        for (var tick = 1; tick < SimulationWorld.CombatDamageFlashTicks; tick++)
+        {
+            world.AdvanceOneTick();
+        }
+        Assert.True(world.TryGetCritter(loser.Id, out var stillFlashing));
+        Assert.True(stillFlashing.IsDamageFlashing);
+
+        world.AdvanceOneTick();
+
+        Assert.True(world.TryGetCritter(loser.Id, out var finishedFlashing));
+        Assert.False(finishedFlashing.IsDamageFlashing);
+    }
+
+    [Fact]
     public void MegaToadPrefersOrdinaryPreyOverTherapsid()
     {
         var world = new SimulationWorld(1, 3, Terrain.Shallows, seed: 87);
@@ -1557,7 +2190,8 @@ public sealed class SimulationWorldTests
     [Theory]
     [InlineData(CritterSpecies.Newt)]
     [InlineData(CritterSpecies.Crab)]
-    public void MonkeyHuntsNewtsAndCrabs(CritterSpecies prey)
+    [InlineData(CritterSpecies.Fish)]
+    public void MonkeyLeavesAnimalPreyForPredators(CritterSpecies prey)
     {
         var world = new SimulationWorld(1, 2, Terrain.Shallows, seed: 88);
         world.SeasonsEnabled = false;
@@ -1570,16 +2204,55 @@ public sealed class SimulationWorldTests
         }
 
         Assert.Equal(1, world.GetCritterCount(CritterSpecies.Monkey));
-        Assert.Equal(0, world.GetCritterCount(prey));
-        Assert.Equal(7, world.GetCritter(0).Energy);
+        Assert.Equal(1, world.GetCritterCount(prey));
+        Assert.False(SimulationWorld.CanEat(CritterSpecies.Monkey, prey));
     }
 
     [Fact]
-    public void MonkeyFeedsFromJungleFoliage()
+    public void MonkeyIsNotAPredator()
+    {
+        foreach (var prey in Enum.GetValues<CritterSpecies>())
+        {
+            Assert.False(SimulationWorld.CanEat(CritterSpecies.Monkey, prey));
+        }
+    }
+
+    [Fact]
+    public void MutantOffspringCannotEatItsParentDuringReproductionTruce()
+    {
+        var world = new SimulationWorld(2, 1, Terrain.Plains, seed: 190);
+        world.SeasonsEnabled = false;
+        world.AdjustEvolutionChance(CritterEvolution.MaximumChanceSteps);
+        world.SetBiome(new GridPosition(0, 0), Biome.Jungle);
+        world.SetBiome(new GridPosition(1, 0), Biome.Jungle);
+        world.AddCritter(CritterSpecies.Monkey, new GridPosition(0, 0));
+
+        for (var tick = 0;
+            tick < 90 * SimulationWorld.TicksPerSecond &&
+                world.GetCritterCount(CritterSpecies.Ape) == 0;
+            tick++)
+        {
+            world.AdvanceOneTick();
+        }
+
+        Assert.Equal(1, world.GetCritterCount(CritterSpecies.Ape));
+        for (var tick = 1; tick < SimulationWorld.ReproductionTruceTicks; tick++)
+        {
+            world.AdvanceOneTick();
+        }
+
+        Assert.Equal(1, world.GetCritterCount(CritterSpecies.Monkey));
+        Assert.Equal(1, world.GetCritterCount(CritterSpecies.Ape));
+    }
+
+    [Theory]
+    [InlineData(Biome.Swamp)]
+    [InlineData(Biome.Jungle)]
+    public void MonkeyFeedsFromWetlandFoliage(Biome biome)
     {
         var world = new SimulationWorld(1, 1, Terrain.Plains, seed: 89);
         world.SeasonsEnabled = false;
-        world.SetBiome(new GridPosition(0, 0), Biome.Jungle);
+        world.SetBiome(new GridPosition(0, 0), biome);
         world.AddCritter(CritterSpecies.Monkey, new GridPosition(0, 0));
 
         for (var tick = 0; tick < 18 * SimulationWorld.TicksPerSecond; tick++)
@@ -1588,6 +2261,28 @@ public sealed class SimulationWorldTests
         }
 
         Assert.Equal(5, world.GetCritter(0).Energy);
+    }
+
+    [Theory]
+    [InlineData(Biome.Swamp)]
+    [InlineData(Biome.Jungle)]
+    public void MonkeyRemainsInWetlandsAndBuildsEnoughEnergyToReproduce(Biome biome)
+    {
+        var world = new SimulationWorld(2, 1, Terrain.Plains, seed: 90);
+        world.SeasonsEnabled = false;
+        world.SetBiome(new GridPosition(0, 0), biome);
+        world.SetBiome(new GridPosition(1, 0), biome);
+        world.AddCritter(CritterSpecies.Monkey, new GridPosition(0, 0));
+
+        for (var tick = 0; tick < 72 * SimulationWorld.TicksPerSecond; tick++)
+        {
+            world.AdvanceOneTick();
+        }
+
+        Assert.Equal(2, world.GetCritterCount(CritterSpecies.Monkey));
+        var parent = world.GetCritter(0);
+        Assert.Equal(3, parent.Energy);
+        Assert.Equal(biome, world.GetBiome(parent.Position));
     }
 
     [Fact]
@@ -1633,12 +2328,14 @@ public sealed class SimulationWorldTests
     [InlineData(CritterSpecies.Deer, Biome.Grassland, 18, 5)]
     [InlineData(CritterSpecies.Deer, Biome.Forest, 18, 5)]
     [InlineData(CritterSpecies.Deer, Biome.Tundra, 18, 4)]
+    [InlineData(CritterSpecies.Deer, Biome.Taiga, 18, 4)]
     [InlineData(CritterSpecies.Elk, Biome.Grassland, 20, 6)]
     [InlineData(CritterSpecies.Elk, Biome.Tundra, 20, 6)]
     [InlineData(CritterSpecies.Elk, Biome.Taiga, 20, 6)]
     [InlineData(CritterSpecies.Gazelle, Biome.Grassland, 18, 5)]
     [InlineData(CritterSpecies.Gazelle, Biome.Arid, 18, 5)]
-    [InlineData(CritterSpecies.Gazelle, Biome.Forest, 18, 4)]
+    [InlineData(CritterSpecies.Gazelle, Biome.Forest, 18, 5)]
+    [InlineData(CritterSpecies.Gazelle, Biome.Desert, 18, 4)]
     public void GrazersFeedOnlyFromTheirSupportedBiomes(
         CritterSpecies species,
         Biome biome,
@@ -1684,10 +2381,28 @@ public sealed class SimulationWorldTests
     }
 
     [Theory]
+    [InlineData(CritterSpecies.Deer)]
+    [InlineData(CritterSpecies.Elk)]
+    [InlineData(CritterSpecies.Gazelle)]
+    public void GrazerReproductionRequiresOpenCardinalNeighbors(CritterSpecies species)
+    {
+        var center = new GridPosition(2, 2);
+        var cardinalWorld = new SimulationWorld(5, 5, Terrain.Plains, seed: 94);
+        cardinalWorld.AddCritter(species, center);
+        cardinalWorld.AddCritter(CritterSpecies.Crab, new GridPosition(3, 2));
+        Assert.False(cardinalWorld.IsValidReproductionSite(species, center));
+
+        var diagonalWorld = new SimulationWorld(5, 5, Terrain.Plains, seed: 94);
+        diagonalWorld.AddCritter(species, center);
+        diagonalWorld.AddCritter(CritterSpecies.Crab, new GridPosition(3, 3));
+        Assert.True(diagonalWorld.IsValidReproductionSite(species, center));
+    }
+
+    [Theory]
     [InlineData(CritterSpecies.Monkey, 5)]
-    [InlineData(CritterSpecies.Deer, 4)]
-    [InlineData(CritterSpecies.Elk, 7)]
-    [InlineData(CritterSpecies.Gazelle, 4)]
+    [InlineData(CritterSpecies.Deer, 3)]
+    [InlineData(CritterSpecies.Elk, 6)]
+    [InlineData(CritterSpecies.Gazelle, 3)]
     public void TerrestrialPreyFleeFromSpeciesThatCanEatThem(
         CritterSpecies prey,
         int movementSeconds)
@@ -1773,16 +2488,16 @@ public sealed class SimulationWorldTests
         Assert.Equal(0, world.GetCritterCount(CritterSpecies.Deer));
     }
 
-    [Theory]
-    [InlineData(CritterSpecies.MegaToad)]
-    [InlineData(CritterSpecies.Therapsid)]
-    public void WolfFightsDangerousFallbackPreyInsteadOfUsingInstantPredation(
-        CritterSpecies opponent)
+    [Fact]
+    public void TherapsidDefendsItselfWhenHuntedByWolf()
     {
+        Assert.True(SimulationWorld.CanEat(CritterSpecies.Wolf, CritterSpecies.Therapsid));
+        Assert.False(SimulationWorld.CanEat(CritterSpecies.Therapsid, CritterSpecies.Wolf));
+
         var world = new SimulationWorld(1, 2, Terrain.Shallows, seed: 97);
         world.SeasonsEnabled = false;
         world.AddCritter(CritterSpecies.Wolf, new GridPosition(0, 0));
-        world.AddCritter(opponent, new GridPosition(0, 1));
+        world.AddCritter(CritterSpecies.Therapsid, new GridPosition(0, 1));
 
         for (var tick = 0; tick < 2 * SimulationWorld.TicksPerSecond; tick++)
         {
@@ -1790,7 +2505,32 @@ public sealed class SimulationWorldTests
         }
 
         Assert.Equal(1, world.GetCritterCount(CritterSpecies.Wolf));
-        Assert.Equal(1, world.GetCritterCount(opponent));
+        Assert.Equal(1, world.GetCritterCount(CritterSpecies.Therapsid));
+        Assert.Equal(
+            9,
+            Enumerable.Range(0, world.CritterCount)
+                .Select(world.GetCritter)
+                .Sum(critter => critter.Energy));
+    }
+
+    [Fact]
+    public void MegaToadHuntsWolfButWolfDoesNotHuntMegaToad()
+    {
+        Assert.True(SimulationWorld.CanEat(CritterSpecies.MegaToad, CritterSpecies.Wolf));
+        Assert.False(SimulationWorld.CanEat(CritterSpecies.Wolf, CritterSpecies.MegaToad));
+
+        var world = new SimulationWorld(1, 2, Terrain.Shallows, seed: 98);
+        world.SeasonsEnabled = false;
+        world.AddCritter(CritterSpecies.MegaToad, new GridPosition(0, 0));
+        world.AddCritter(CritterSpecies.Wolf, new GridPosition(0, 1));
+
+        for (var tick = 0; tick < 6 * SimulationWorld.TicksPerSecond; tick++)
+        {
+            world.AdvanceOneTick();
+        }
+
+        Assert.Equal(1, world.GetCritterCount(CritterSpecies.MegaToad));
+        Assert.Equal(1, world.GetCritterCount(CritterSpecies.Wolf));
         Assert.Equal(
             9,
             Enumerable.Range(0, world.CritterCount)
@@ -1836,10 +2576,18 @@ public sealed class SimulationWorldTests
         Assert.NotEqual(new GridPosition(3, 0), world.GetCritter(0).Position);
         Assert.Equal(0, world.GetWolfDenCharges(den));
         Assert.Equal(1, world.GetCritterCount(CritterSpecies.Wolf));
+        Assert.Equal(1, world.GetWolfDenAssociatedWolfCount(den));
+
+        var wolf = Enumerable.Range(0, world.CritterCount)
+            .Select(world.GetCritter)
+            .Single(critter => critter.Species is CritterSpecies.Wolf);
+        Assert.True(world.RemoveCritterAt(wolf.Position));
+        Assert.Null(world.GetWolfDenCharges(den));
+        Assert.Equal(0, world.WolfDenCount);
     }
 
     [Fact]
-    public void BuildingToolOperationsPlaceAndRemoveAnEmptyWolfDen()
+    public void BuildingToolOperationsPlaceAndRemoveAChargedWolfDen()
     {
         var world = new SimulationWorld(2, 1, Terrain.Plains, seed: 103);
         var position = new GridPosition(0, 0);
@@ -1847,12 +2595,29 @@ public sealed class SimulationWorldTests
         world.SetTerrain(ocean, Terrain.Ocean);
 
         Assert.True(world.TryPlaceWolfDen(position));
-        Assert.Equal(0, world.GetWolfDenCharges(position));
+        Assert.Equal(1, world.GetWolfDenCharges(position));
         Assert.False(world.TryPlaceWolfDen(position));
         Assert.False(world.TryPlaceWolfDen(ocean));
         Assert.True(world.RemoveWolfDenAt(position));
         Assert.Null(world.GetWolfDenCharges(position));
         Assert.False(world.RemoveWolfDenAt(position));
+    }
+
+    [Fact]
+    public void WolfDenChargesAreCappedAtFive()
+    {
+        var world = new SimulationWorld(1, 1, Terrain.Plains, seed: 104);
+        var den = new GridPosition(0, 0);
+        Assert.True(world.TryPlaceWolfDen(den));
+
+        for (var charge = 1; charge < SimulationWorld.MaximumWolfDenCharges; charge++)
+        {
+            Assert.True(world.AddWolfDenCharge(den));
+        }
+
+        Assert.Equal(SimulationWorld.MaximumWolfDenCharges, world.GetWolfDenCharges(den));
+        Assert.False(world.AddWolfDenCharge(den));
+        Assert.Equal(SimulationWorld.MaximumWolfDenCharges, world.GetWolfDenCharges(den));
     }
 
     [Theory]
@@ -1861,6 +2626,9 @@ public sealed class SimulationWorldTests
     [InlineData(CritterSpecies.Trilobite, 7)]
     [InlineData(CritterSpecies.Crab, 7)]
     [InlineData(CritterSpecies.Newt, 7)]
+    [InlineData(CritterSpecies.Deer, 8)]
+    [InlineData(CritterSpecies.Elk, 9)]
+    [InlineData(CritterSpecies.Gazelle, 8)]
     public void SeaScorpionHuntsItsAquaticPrey(CritterSpecies prey, int expectedEnergy)
     {
         var world = new SimulationWorld(1, 2, Terrain.Shallows, seed: 81);
@@ -1876,6 +2644,26 @@ public sealed class SimulationWorldTests
         Assert.Equal(1, world.GetCritterCount(CritterSpecies.SeaScorpion));
         Assert.Equal(0, world.GetCritterCount(prey));
         Assert.Equal(expectedEnergy, world.GetCritter(0).Energy);
+    }
+
+    [Theory]
+    [InlineData(CritterSpecies.Deer)]
+    [InlineData(CritterSpecies.Elk)]
+    [InlineData(CritterSpecies.Gazelle)]
+    public void SeaScorpionHuntsGrazersThatWanderOntoBeaches(CritterSpecies prey)
+    {
+        var world = new SimulationWorld(1, 2, Terrain.Beach, seed: 82);
+        world.SeasonsEnabled = false;
+        world.AddCritter(CritterSpecies.SeaScorpion, new GridPosition(0, 0));
+        world.AddCritter(prey, new GridPosition(0, 1));
+
+        for (var tick = 0; tick < 3 * SimulationWorld.TicksPerSecond; tick++)
+        {
+            world.AdvanceOneTick();
+        }
+
+        Assert.Equal(1, world.GetCritterCount(CritterSpecies.SeaScorpion));
+        Assert.Equal(0, world.GetCritterCount(prey));
     }
 
     [Fact]
@@ -1944,6 +2732,7 @@ public sealed class SimulationWorldTests
 
     [Theory]
     [InlineData(Terrain.Shallows)]
+    [InlineData(Terrain.Lowlands)]
     [InlineData(Terrain.Trench)]
     [InlineData(Terrain.Canyon)]
     [InlineData(Terrain.Plains)]
@@ -1963,6 +2752,46 @@ public sealed class SimulationWorldTests
             CritterHabitat.LandDweller,
             terrain,
             SurfaceWaterKind.FreshwaterLake));
+    }
+
+    [Theory]
+    [InlineData(CritterSpecies.Newt)]
+    [InlineData(CritterSpecies.MegaToad)]
+    [InlineData(CritterSpecies.Therapsid)]
+    [InlineData(CritterSpecies.Monkey)]
+    [InlineData(CritterSpecies.Deer)]
+    [InlineData(CritterSpecies.Elk)]
+    [InlineData(CritterSpecies.Gazelle)]
+    [InlineData(CritterSpecies.Wolf)]
+    [InlineData(CritterSpecies.Crab)]
+    public void LandSpeciesCanOccupyLowlandsCanyonsAndTrenches(CritterSpecies species)
+    {
+        foreach (var terrain in new[] { Terrain.Lowlands, Terrain.Canyon, Terrain.Trench })
+        {
+            var world = new SimulationWorld(1, 1, terrain);
+            Assert.True(world.TryAddCritter(species, new GridPosition(0, 0)));
+        }
+    }
+
+    [Theory]
+    [InlineData(Terrain.Lowlands)]
+    [InlineData(Terrain.Canyon)]
+    [InlineData(Terrain.Trench)]
+    public void GazelleMovesOntoLowerDryTerrain(Terrain destinationTerrain)
+    {
+        var world = new SimulationWorld(3, 1, Terrain.Plains, seed: 105);
+        world.SeasonsEnabled = false;
+        var destination = new GridPosition(1, 0);
+        world.SetTerrain(destination, destinationTerrain);
+        world.SetTerrain(new GridPosition(2, 0), Terrain.Mountain);
+        world.AddCritter(CritterSpecies.Gazelle, new GridPosition(0, 0));
+
+        for (var tick = 0; tick < 4 * SimulationWorld.TicksPerSecond; tick++)
+        {
+            world.AdvanceOneTick();
+        }
+
+        Assert.Equal(destination, world.GetCritter(0).Position);
     }
 
     [Fact]

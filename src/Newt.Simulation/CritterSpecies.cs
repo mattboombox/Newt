@@ -14,6 +14,8 @@ public enum CritterSpecies : byte
     MegaToad,
     Crab,
     Monkey,
+    Ape,
+    ApeSailor,
     Squid,
     SquidEgg,
     Therapsid,

@@ -5,7 +5,7 @@ public static class CritterEvolution
 {
     public const int ChanceStepsPerPercent = 2;
     public const int MaximumChanceSteps = 100 * ChanceStepsPerPercent;
-    public const int DefaultChanceSteps = 5 * ChanceStepsPerPercent;
+    public const int DefaultChanceSteps = 1;
 
     public static bool TryGetEvolvedSpecies(
         CritterSpecies species,
@@ -21,6 +21,7 @@ public static class CritterEvolution
         CritterSpecies.Fish => 1,
         CritterSpecies.Newt => 2,
         CritterSpecies.Therapsid => 3,
+        CritterSpecies.Monkey => 1,
         CritterSpecies.Deer => 2,
         _ => 0,
     };
@@ -46,6 +47,7 @@ public static class CritterEvolution
             (CritterSpecies.Therapsid, 0) => CritterSpecies.Monkey,
             (CritterSpecies.Therapsid, 1) => CritterSpecies.Deer,
             (CritterSpecies.Therapsid, 2) => CritterSpecies.Wolf,
+            (CritterSpecies.Monkey, 0) => CritterSpecies.Ape,
             (CritterSpecies.Deer, 0) => CritterSpecies.Elk,
             (CritterSpecies.Deer, 1) => CritterSpecies.Gazelle,
             _ => species,
@@ -71,6 +73,7 @@ public static class CritterEvolution
             CritterSpecies.MegaToad => CritterSpecies.Newt,
             CritterSpecies.Therapsid => CritterSpecies.Newt,
             CritterSpecies.Monkey => CritterSpecies.Therapsid,
+            CritterSpecies.Ape => CritterSpecies.Monkey,
             CritterSpecies.Deer => CritterSpecies.Therapsid,
             CritterSpecies.Elk => CritterSpecies.Deer,
             CritterSpecies.Gazelle => CritterSpecies.Deer,

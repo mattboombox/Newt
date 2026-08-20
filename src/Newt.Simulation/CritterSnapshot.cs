@@ -8,4 +8,5 @@ public readonly record struct CritterSnapshot(
     int Energy,
     int MaximumEnergy,
     bool IsHungry,
-    bool CanReproduce);
+    bool CanReproduce,
+    bool IsDamageFlashing);

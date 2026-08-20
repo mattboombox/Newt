@@ -91,6 +91,8 @@ terrain ceiling, and terrain-changing events cannot permanently erode them.
 - `N`: increment the seed and generate a new world.
 - `Q` / `E`: cycle backward or forward through tools in the current category.
 - `R`: cycle tool categories.
+- Other / Population: left click opens a live population window and right click
+  closes it. The window lists only species whose current count is above zero.
 - Other / Inspect: left click a critter to show its full entity details and keep
   the camera centered on it. Right click stops following. Inspection also clears
   automatically if the followed critter dies.
@@ -100,60 +102,115 @@ terrain ceiling, and terrain-changing events cannot permanently erode them.
   either cover.
 - Critter Tools: left click an empty valid habitat tile to spawn the selected
   Plankton, Jellyfish, Worm, Trilobite, Sea Scorpion, Nautilus, Squid, Squid Egg,
-  Fish, Newt, Mega Toad, Therapsid, Monkey, Deer, Elk, Gazelle, Wolf, or Crab. The Plankton tool retains its stricter Deep Ocean
+  Fish, Newt, Mega Toad, Therapsid, Monkey, Ape, Deer, Elk, Gazelle, Wolf, or Crab. The Plankton tool retains its stricter Deep Ocean
   requirement.
 - Primitive evolution currently branches from Plankton to Jellyfish, Worm, or
   Trilobite. Worms continue to Fish or Nautilus, Nautilus to Squid, and Fish to
-  Newt. Newts branch to Mega Toad or Therapsid, and Therapsids branch to Monkey,
-  Deer, or Wolf; Deer continue to Elk or Gazelle.
-  Trilobites continue to Crab or Sea Scorpion. Worms traverse Rivers and
+  Newt. Newts branch to Mega Toad or Therapsid, Therapsids branch to Monkey,
+  Deer, or Wolf, and Monkeys continue to Ape; Deer continue to Elk or Gazelle.
+  Every natural offspring receives a thirty-second truce with its parent's
+  species. The protection works in both directions, so mutant children cannot
+  immediately eat their parents and parents cannot immediately eat mutants.
+  Ambient feeding draws from finite tile nutrition. Deep Ocean, Shallows, Beaches,
+  Rivers, Freshwater Lakes, and every established biome except Desert are productive;
+  Mountains and ordinary Ocean are barren unless crossed by freshwater. Productive
+  Rivers, Lakes, and Deep Ocean hold two units. Beaches and Shallows hold one unit
+  when freezing or cold, two when temperate, and three when hot.
+  The terrestrial
+  ladder is Tundra 1, Grassland 2, Taiga 3, and Forest/Swamp/Jungle 4.
+  Temperature does not otherwise alter nutrition, and moisture never does. Tiles regenerate one unit
+  every `120 / capacity` seconds. Nutrition updates
+  lazily when queried, and hungry critters leave depleted feeding tiles instead of
+  remaining indefinitely in dense stationary clusters. Plankton photosynthesize,
+  so their ambient feeding neither checks nor consumes tile nutrition.
+  Trilobites continue to Crab or Sea Scorpion. Worms move every eight seconds,
+  four times slower than Fish, traverse Rivers and
   Freshwater Lakes as well as saltwater, and scavenge detritus in Deep Ocean,
   Shallows, Rivers, and unfrozen Freshwater Lakes;
-  jellyfish consume plankton and worms on contact; fish locally pursue plankton,
-  worms, and crabs, enter Rivers and Freshwater Lakes, and do not hunt Newts.
+  jellyfish consume only plankton on contact and leave worms and fish alone; fish locally pursue plankton,
+  treating worms and crabs as equal fallback prey only when forage terrain and Plankton are unavailable.
+  Fish shove fallback worms into adjacent valid habitat, consuming them only when blocked, and
+  forage every thirty seconds in Rivers, Freshwater Lakes, and
+  all Shallows, seek those tiles when hungry, remain while building
+  breeding energy, place offspring across diagonal River connections, and do not hunt Newts. Fish and Mega Toads
+  can shove blocking Newts into adjacent valid empty habitat.
   Fish flee nearby Sea Scorpions, Squid, and Mega Toads before hunting. Crabs may
-  roam and reproduce across all of their valid habitat, but feed only on Beaches
-  and Shallows. They feed every eight seconds and breed at a low energy threshold,
+  travel through ordinary Ocean, Shallows, Beaches, and non-Arctic land, but not
+  Deep Ocean. They feed every eight seconds on Beaches and Shallows, remain there
+  while building energy, and reproduce directly on either coastal terrain,
   creating a rapidly renewing coastal food source for fish. Cold and freezing Beaches remain valid crab habitat, but ice sheets
   and other Arctic terrain do not. Trilobites graze deep-sea detritus in Ocean and Deep Ocean
-  tiles. All non-Plankton critters can shove blocking Plankton into adjacent open
-  water rather than losing their movement step; active Plankton hunters still eat them.
-  Slow shelled Nautiluses hunt Plankton and are protected from Jellyfish
+  tiles and flee predators detected within three Manhattan tiles. All non-Plankton critters can shove blocking Plankton into adjacent open
+  water rather than losing their movement step; Worms and Trilobites can push
+  through chains of up to four Plankton in dense blooms. Active Plankton hunters still eat them.
+  Slow shelled Nautiluses hunt Plankton, roam and feed every thirty seconds in Ocean
+  and Deep Ocean like Trilobites, flee visible predators, and are protected from Jellyfish
   and Sea Scorpions. Squid hunt fish, trilobites, crabs, newts,
-  Nautiluses, and Sea Scorpions.
+  Nautiluses, Sea Scorpions, Deer, Elk, and Gazelles in shared saltwater habitat.
   They lay drifting eggs that move like Plankton and hatch when Squid prey comes
   within two tiles. Squid and Sea Scorpions resolve mutual attacks with a 50/50
   roll that deals one energy damage rather than instant predation. Sea Scorpions
-  hunt fish, worms, trilobites, crabs, newts, and Squid across saltwater and
-  Beaches, while
+  hunt fish, worms, trilobites, crabs, newts, Squid, Deer, Elk, and Gazelles
+  across saltwater and Beaches, while
   Mega Toads hunt worms, trilobites, fish, crabs, Monkeys, Deer, Elk, and Gazelles. When
   another Toad and any non-Toad prey are both visible, they choose between those
   categories with equal probability. Newts remain behind ordinary non-Toad prey,
-  while Therapsids remain a final fallback. Therapsids share the Mega Toad diet,
-  and mutual Toad-Therapsid attacks use 50/50 one-energy combat rolls. Monkeys
-  hunt Newts and Crabs and feed from Jungle foliage. Deer evolve as a second
-  Therapsid branch and graze Grasslands and Forests; slower, more
+  while Therapsids remain a final fallback. Therapsids hunt only Worms, Fish, and
+  Newts, including strikes against those prey in adjacent lakes, and move every
+  six seconds, and prefer available Swamp or Jungle forage within four tiles while
+  below breeding energy. Wetlands feed them every eighteen seconds; they hunt when
+  no usable forage is available. They do not hunt Mega Toads or Wolves, but defend
+  themselves with 50/50 one-energy combat rolls when either predator attacks.
+  Monkeys are non-predatory,
+  feed and remain on Swamp or Jungle foliage until ready to breed,
+  and reproduce at eight energy for a cost of five. Deer evolve as a second
+  Therapsid branch, move every three seconds, and graze Grasslands and Forests; slower, more
   reproduction-intensive Elk evolve from Deer and can graze Grasslands, Tundra,
-  and Taiga. Gazelles also evolve from Deer and graze Grasslands and Arid biomes.
+  and Taiga while moving every six seconds. Gazelles also evolve from Deer, move
+  every three seconds, and graze Arid, Forest, and Grassland
+  biomes, but not Deserts.
+  Deer remain valid inhabitants of Swamps and Jungles even though those wetland
+  biomes do not feed them.
+  Deer, Elk, and Gazelles cannot reproduce while another critter occupies a
+  cardinally adjacent tile.
+  Apes evolve from Monkeys, hunt all critters outside their own civilization in
+  shared habitat, and must found or join a village before producing offspring.
+  A founder spends its first reproduction event creating only a Village beside
+  an available Grassland or Beach district site. At five residents the village
+  adds a Grassland Farm when possible, otherwise a Beach Harbor. Kills provide
+  carried settlement food that Apes return to the Village or any connected district;
+  Farms also produce one food every fourteen seconds. Five stored food builds a
+  connected Residential District when the settlement is full, increasing capacity
+  by five. Harbors recruit up to four Ape Sailors every thirty seconds while leaving
+  at least one civilian. Sailors traverse Beach and saltwater, hunt all implemented
+  sea life except Plankton, and return their catches to a connected Harbor. Villages
+  remain more than twelve tiles apart.
+  Terrestrial critters can traverse exposed Lowlands, Canyons, and Trenches.
   Wolves form a third Therapsid branch. They are fast hunters with the
-  Mega Toad's broad diet, including Deer, Elk, and Gazelles, but engage Mega Toads and
-  Therapsids only as last-resort combat targets. A Wolf's first reproduction
+  broad terrestrial diet, including Deer, Elk, and Gazelles. They engage
+  Therapsids only as last-resort combat targets and never hunt Mega Toads, though
+  a Toad that hunts a Wolf still initiates combat. A Wolf's first reproduction
   selects a den site, preferring nearby Hills, and the Wolf must return there for
-  every later reproduction. Reproduction stores charges instead of immediately
+  every later reproduction. Reproduction stores up to five charges instead of immediately
   producing pups; one charge creates one Wolf only when ordinary prey moves beside
   the den. Meteors, tsunami waves, and lava destroy dens and their stored charges.
-  Building Tools can be cycled like Critter Tools; the Wolf Den entry places an
-  empty den with left click and removes one with right click.
+  Building Tools can be cycled like Critter Tools; the Wolf Den entry places a
+  den with one charge on left click and removes one with right click.
   Other / Jump Start enables life and fills every unoccupied Deep Ocean tile with
   one Plankton, preserving any critters already occupying those tiles.
+  Other / Population opens a live, non-pausing window of extant species counts;
+  species disappear from the list when their population reaches zero.
   Monkeys, Deer, Elk, and Gazelles flee any
   nearby species capable of eating them. Predators gain food energy equal to half
   of the prey's maximum stomach capacity, rounded down with a minimum of one.
   Newts flee nearby Toads, and Toad breeding
   requires Rivers or unfrozen Freshwater Lakes.
-  Newts live on land, feed in rivers, freshwater lakes, swamps, and
-  jungles, and make one cached migration toward freshwater after they are born or evolved. Mega
-  Toads hunt worms, fish, and newts locally and can enter land, shallows, and
+  Mega Toad reproduction requires fourteen energy and costs nine. Both a new
+  offspring and its threshold-level parent have five energy, while cannibalism
+  restores eight, leaving the survivor one energy short of another birth.
+  Newts live on land, feed and breed in swamps and jungles, feed in rivers and
+  freshwater lakes, and make one cached migration toward freshwater after they are born or evolved. Mega
+  Toads hunt worms, fish, and newts locally. Toads can enter land, shallows, and
   freshwater lakes, but not open ocean.
 - Elevation tool: left click raises terrain and right click lowers it.
 - Sea-level tool: left click raises the ocean and right click lowers it.

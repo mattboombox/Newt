@@ -20,9 +20,10 @@ public static class CritterHabitats
             CritterSpecies.SquidEgg =>
             CritterHabitat.OceanDweller,
         CritterSpecies.SeaScorpion => CritterHabitat.ShorelineHunter,
+        CritterSpecies.ApeSailor => CritterHabitat.ShorelineHunter,
         CritterSpecies.Worm => CritterHabitat.ShallowSeeker,
         CritterSpecies.Newt or CritterSpecies.MegaToad or CritterSpecies.Therapsid or
-            CritterSpecies.Monkey or CritterSpecies.Deer or CritterSpecies.Elk or
+            CritterSpecies.Monkey or CritterSpecies.Ape or CritterSpecies.Deer or CritterSpecies.Elk or
             CritterSpecies.Gazelle or
             CritterSpecies.Wolf or CritterSpecies.Crab =>
             CritterHabitat.LandDweller,
@@ -62,8 +63,8 @@ public static class CritterHabitats
             // Land species may ford a river, but lakes remain aquatic habitat.
             CritterHabitat.LandDweller =>
             freshwater is not SurfaceWaterKind.FreshwaterLake &&
-            terrain is Terrain.Shallows or Terrain.Beach or Terrain.Trench or Terrain.Canyon or
-                Terrain.Plains or Terrain.Hills or Terrain.Ice,
+            terrain is Terrain.Shallows or Terrain.Beach or Terrain.Lowlands or
+                Terrain.Canyon or Terrain.Trench or Terrain.Plains or Terrain.Hills or Terrain.Ice,
 
             CritterHabitat.FreshwaterDweller =>
             freshwater is SurfaceWaterKind.River or SurfaceWaterKind.FreshwaterLake,
