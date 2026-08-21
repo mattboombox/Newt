@@ -24,15 +24,7 @@ class Newt(Critter):
         self.configure_hunger(Newt.HUNGER_INTERVAL, Newt.STARVATION_INTERVAL)
 
     def try_reproduce(self, world):
-        current_tile = world.get_tile(self.x, self.y)
-        if current_tile is None or current_tile.terrain not in Newt.FEED_TERRAINS:
-            return self.fail_reproduction_attempt(reset_meals=True)
-
-        offspring = self.try_spawn_adjacent_offspring(world, self.is_habitable_tile)
-        if offspring is not None:
-            return offspring
-
-        return self.fail_reproduction_attempt(reset_meals=True)
+        return super().try_reproduce(world)
 
     def take_hungry_action(self, game):
         def graze(tile):

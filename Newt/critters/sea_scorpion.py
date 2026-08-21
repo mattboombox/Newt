@@ -30,10 +30,6 @@ class SeaScorpion(Critter):
         self.configure_hunger(SeaScorpion.HUNGER_INTERVAL, SeaScorpion.STARVATION_INTERVAL)
 
     def try_reproduce(self, world):
-        current_tile = world.get_tile(self.x, self.y)
-        if current_tile is None or current_tile.terrain != "shallows":
-            return self.fail_reproduction_attempt(reset_meals=True)
-
         return super().try_reproduce(world)
 
     def spawn_death_remains(self, game, tile):

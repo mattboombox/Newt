@@ -58,7 +58,6 @@ class Critter:
     PREDATOR_NAME = None
     REPRODUCTION_BLOCKS_SET_BEHAVIOR = False
     REPRODUCTION_BLOCKS_RESET_MEALS = False
-    REQUIRES_LIQUID_TO_REPRODUCE = False
 
     def __init__(
         self,
@@ -464,47 +463,7 @@ class Critter:
         return None
 
     def try_handle_priority_behavior(self, game):
-        if (
-            self.REQUIRES_LIQUID_TO_REPRODUCE
-            and self.meals_eaten >= self.REPRODUCTION_MEAL_THRESHOLD
-        ):
-            return self.try_seek_reproduction_liquid(game)
-
         return False
-
-    def is_near_liquid(self, world, x=None, y=None):
-        if x is None:
-            x = self.x
-        if y is None:
-            y = self.y
-
-        tile = world.get_tile(x, y)
-        if tile is not None and tile.has_tag("water"):
-            return True
-
-        return any(
-            world.get_tile(nx, ny).has_tag("water")
-            for nx, ny in self.get_neighbor_positions(world, x, y)
-            if world.get_tile(nx, ny) is not None
-        )
-
-    def try_seek_reproduction_liquid(self, game):
-        if self.is_near_liquid(game.world):
-            self.complete_reproduction(game)
-            return True
-
-        path = self.find_path_to_nearest_tile(
-            game.world,
-            lambda tile: self.is_habitable_tile(tile)
-            and self.is_near_liquid(game.world, tile.x, tile.y),
-        )
-        self.set_behavior("seek_liquid")
-        if not path:
-            return True
-
-        next_x, next_y = path[0]
-        self.move_to(game.world, next_x, next_y, game)
-        return True
 
     def get_predator_name(self):
         return self.PREDATOR_NAME or type(self).__name__
@@ -986,10 +945,6 @@ class Critter:
         return None
 
     def try_reproduce(self, world):
-        if self.REQUIRES_LIQUID_TO_REPRODUCE and not self.is_near_liquid(world):
-            self.set_behavior("seek_liquid")
-            return None
-
         if self.is_reproduction_blocked(world):
             self.handle_blocked_reproduction()
             return None

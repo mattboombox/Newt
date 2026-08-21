@@ -28,7 +28,7 @@ cycles magnitude. It reuses the impact-wave animation with a blue front and
 lowers the elevation of land reached by the wave.
 
 `<` and `>` step the simulation rate through 0.25x, 0.5x, 1x, 2x, 4x,
-8x, and 16x. `P` pauses or resumes simulation time without disabling tools or
+8x, 16x, and 32x. `P` pauses or resumes simulation time without disabling tools or
 camera controls. The current rate and pause state appear beside the world tick.
 
 Temperature and Moisture are global climate tools. Left click adds 0.05 and right

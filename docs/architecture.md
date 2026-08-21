@@ -44,7 +44,7 @@ Species behavior will be systems operating over these arrays. Composition is
 preferred over a deep inheritance hierarchy.
 
 Critter hunger, starvation, and reproduction share one integer energy reserve.
-Species define their metabolism, hunger threshold, food yield, and reproduction
+Species define their metabolism, hunger threshold, body size, feeding strategy, and reproduction
 cost. This prevents a hunger timer, starvation timer, and meal counter from
 drifting into contradictory states. Reproduction spends only surplus energy;
 if no adjacent habitat is open, the parent retains that energy for a later tick.
@@ -54,24 +54,39 @@ A jellyfish that selects an adjacent plankton reserves that prey for the tick;
 the plankton cannot move, and the jellyfish consumes it before entering its tile.
 This keeps predation deterministic while critters are stored in compact arrays.
 Plankton reproduction has a half-percent default chance to produce a jellyfish.
-Any non-Plankton critter can shove blocking Plankton into an adjacent valid empty
-water tile and enter the vacated tile. Deliberate Plankton predators still consume
-their target, while escape routes and travel paths use shoving instead.
+Body size has six ordered levels whose numeric values are also prey food energy:
+Tiny 1, Small 2, Medium 3, Big 4, Large 5, and Huge 8. A critter can normally shove
+only a smaller blocker into adjacent valid empty habitat. Plankton are the exception:
+every critter except a Squid Egg can shove them, including other Plankton. If no
+single-tile or four-Plankton-chain shove destination exists, the blocking Plankton
+dies and the mover enters its tile. The death provides meal energy only when that
+species can legally eat Plankton. For other blockers, if no shove destination exists, the
+blocker dies and counts as a meal only when the mover can legally eat that species;
+otherwise movement remains blocked. Deliberate hunting always consumes legal prey.
 
-Ambient food is finite per tile. Rivers, Freshwater Lakes, Shallows, Beaches,
-Deep Ocean, and established non-Desert biomes hold nutrition; Mountains and
-ordinary Ocean do not unless freshwater overrides the underlying terrain. Base
-base capacity follows the terrestrial productivity ladder: Tundra and other
-marginal productive terrain hold one unit, Grassland two, Taiga three, and Forest,
-Swamp, and Jungle four. Rivers, Lakes, and Deep Ocean hold two units.
-Beaches and Shallows hold one unit when freezing or cold, two when temperate, and
-three when hot. Temperature does not otherwise modify nutrition, and moisture never
-does; the biome or aquatic terrain class determines capacity. Feeding consumes one unit. Regeneration is
-computed lazily only when a tile is queried, at `120 / capacity` seconds per unit,
-so no world-sized nutrition update runs each tick. Ambient feeders stop waiting
-on exhausted tiles and resume seeking food or wandering until nutrition returns.
-Plankton are exempt: their ambient energy represents photosynthesis and neither
-requires nor consumes tile nutrition.
+Ambient food is finite per tile. Terrestrial capacity is Jungle 6, Swamp 5,
+Forest 4, Grassland and Taiga 3, Bog and Arid 2, Tundra 1, and Desert, Arctic,
+and Ice Sheet 0. Beaches hold 0 when freezing and 1 otherwise. Shallows hold
+2 freezing, 3 cold, and 4 temperate or hot. Ordinary Ocean is always 0. Deep
+Ocean holds 2 when cold and 1 otherwise.
+
+Rivers and Freshwater Lakes both replace underlying tile nutrition with a flat
+capacity of 2. Since freshwater determines the tile's ecological role, its value
+does not stack with the biome and does not vary with temperature. Feeding consumes one unit. Regeneration is
+computed lazily only when a tile is queried, at `480 / capacity` seconds per unit,
+so no world-sized nutrition update runs each tick. Capacity differences are retained
+instead of flattening biomes; only the shared regeneration curve is slower. Jungle
+therefore needs 80 seconds per unit, slightly longer than a Therapsid's 70-second
+metabolism, so a continent packed tile-for-tile cannot support the population forever.
+When a critter starves, it leaves one deposited nutrient on its tile. Deposited
+nutrition is stored as a separate byte per tile, can temporarily exceed the natural
+capacity, and remains edible even on terrain whose natural capacity is zero. The
+deposit is made during the existing lifecycle pass, so it adds no map-wide scan.
+Terrain feeding is part of the critter's normal action, with no separate feeding timer.
+Terrain-first omnivores flee first, eat available terrain food, approach nearby productive
+terrain, and hunt the nearest legal prey only when no terrain food is usable. Pure grazers
+stop before hunting, while dedicated hunters skip terrain food. Plankton photosynthesize
+without consuming tile nutrition and still drift on the same action.
 
 Critter evolution is represented as a parent/child tree. The current primitive
 branches are Plankton -> Jellyfish; Plankton -> Worm -> Fish -> Newt -> Mega Toad
@@ -82,7 +97,9 @@ events select an available child branch; de-evolution follows the species' uniqu
 parent without replacing or moving the critter. Each world stores an evolution
 chance from 0 to 100 percent in exact half-percent steps; reproduction rolls that
 chance before selecting a birth tile, so an evolved offspring's own habitat rules
-are used for placement. Terminal species reproduce as themselves.
+are used for placement. Therapsid offspring use twice the configured world chance,
+capped at 100 percent, because Therapsids support three important descendant branches.
+Terminal species reproduce as themselves.
 
 Critters move to any of the eight surrounding tiles. This lets amphibians follow
 diagonally connected river and lake corridors through otherwise impassable
@@ -98,14 +115,13 @@ Fish. Outside a feeding zone, they inspect the eight surrounding
 tiles for a food cue before falling back to blind wandering. Jellyfish predation
 offsets this broader feeding range. Worms can shove a chain of up to four
 Plankton through a dense bloom rather than remaining trapped behind it.
-Trilobites occupy the same broad saltwater range but graze ambient seafloor
-detritus only where Deep Ocean nutrition is available. From shallows they favor adjacent
-deep-water habitat, while occasional wandering still lets the branch reach the
-coastal habitat needed by Crab offspring. Their simple eyes detect predators
+Trilobites occupy the same broad saltwater range and graze terrain nutrition in
+Deep Ocean and Shallows. Ordinary Ocean remains transit-only because it has no
+terrain nutrition. Their simple eyes detect predators
 within three Manhattan tiles, prompting the trilobite to take the open eight-way
 step that maximizes its distance from the nearest threat. Like Worms, they can
 shove through a chain of up to four blocking Plankton.
-Sea Scorpions are active aquatic hunters descended from Trilobites. Every three
+Sea Scorpions are active aquatic hunters descended from Trilobites. Every four
 seconds they pursue fish, worms, trilobites, crabs, newts, Deer, Elk, and Gazelles
 within a Manhattan radius
 of four. They can cross Deep Ocean, Ocean, Shallows, and Beach, giving them a
@@ -114,49 +130,40 @@ Jellyfish remain collision predators but consume only Plankton; Worms and Fish
 are excluded from their diet to protect those lineages. Neither
 Sea Scorpions nor Squid hunt them, preserving Jellyfish control of Plankton. Adult
 crabs can roam across ordinary Ocean, Shallows, Beach, and non-Arctic land while
-Deep Ocean remains impassable. They gain ambient detritus every eight seconds
-only on Beach and Shallows tiles, remain there while building breeding energy,
+Deep Ocean remains impassable. They consume detritus from Beach and Shallows on
+their normal movement action, remain there while building breeding energy,
 and reproduce directly on those coastal tiles at five energy for a cost of three,
-leaving the parent safely fed while rapidly replenishing fish prey. Feeding remains
+leaving the parent safely fed. Feeding remains
 coastal, but reproduction and offspring placement may occur anywhere Crabs can live.
 
-Fish are the first active hunters. Every two seconds, a fish retains or searches
-for prey within a Manhattan radius of six, examining at most 84
+Fish are terrain-first omnivores. Every two seconds, a fish searches
+within a Manhattan radius of six, examining at most 84
 tiles, then takes one greedy eight-way step. It never runs A*. Missing, blocked, or
 out-of-range prey returns the fish to ordinary wandering. Initial fish movement
 is staggered across the two-second interval to spread large-cohort perception
-cost across simulation ticks. All Shallows, Rivers, and Freshwater Lakes provide
-one ambient food energy every thirty seconds. This can sustain slow reproduction
-without a plankton bloom while remaining weaker than active hunting, allowing
-lake populations to reproduce in a salmon-like cycle. Fish below breeding energy
-remain on these forage tiles, and hungry Fish within six tiles move back toward
-them instead of wandering into foodless ocean. Fish can enter Rivers and Freshwater Lakes,
-including freshwater Mountain corridors. Worms and Crabs share the emergency-prey
-tier: Fish target either only when no available forage tile or Plankton is visible
-within six tiles, preferring Plankton even when a fallback animal is closer.
-On reaching a fallback Worm, a Fish displaces it into adjacent valid habitat and
-enters its former tile; the Fish consumes the Worm only when no shove tile exists.
-Newts remain outside the Fish diet.
-Fish can displace a blocking Newt into an adjacent valid empty habitat tile.
+cost across simulation ticks. Shallows, Rivers, and Freshwater Lakes provide terrain
+food. Fish eat or approach that food before hunting Plankton, their only animal prey.
+Fish can enter Rivers and Freshwater Lakes, including freshwater Mountain corridors.
+A Fish can shove a smaller Worm aside while travelling, but an immovable Worm blocks
+the route without being harmed. Crabs, Worms, and Newts are never converted into food.
 Fish scan five Manhattan tiles for any species capable of eating them before
 they hunt. Sea Scorpions, Squid, Mega Toads, and Therapsids therefore make Fish choose the
 open eight-way move that maximizes distance from the nearest threat. Detecting
 a predator suppresses hunting even when no escape tile is available.
 
 Nautiluses are slow shelled hunters evolved from Worms. Every six seconds they
-pursue Plankton within a Manhattan radius of five. Like Trilobites, they roam Ocean
-and Deep Ocean, return from Shallows toward adjacent deep-sea terrain, and flee
-visible predators within three tiles. Deep Ocean supplies one ambient food energy
-every thirty seconds while nutrition remains; ordinary Ocean is transit and hunting
-habitat only. Nautiluses keep roaming instead of holding a feeding
-tile and forming dense breeding clumps. Jellyfish and Sea Scorpions
+eat available terrain food in Deep Ocean or Shallows before pursuing the nearest
+legal prey within a Manhattan radius of five. Like Trilobites, they roam Ocean and
+Deep Ocean, return from depleted Shallows toward adjacent deep-sea terrain, and flee
+visible predators within three tiles. Ordinary Ocean is transit and hunting habitat only. Jellyfish and Sea Scorpions
 cannot eat them; Mega Toads can still attempt to swallow Nautiluses encountered
 in Shallows. Nautiluses evolve into Squid, which hunt fish, trilobites, crabs,
 newts, Nautiluses, Sea Scorpions, Deer, Elk, and Gazelles every three seconds within a
 Manhattan radius of five.
 Squid reproduction lays a Squid Egg rather than a live offspring. Eggs drift
 with the same random movement and five-second interval as Plankton, then hatch
-in place when eligible Squid prey comes within two Manhattan tiles.
+in place when eligible Squid prey comes within two Manhattan tiles or immediately
+upon drifting into Shallows.
 
 Squid and Sea Scorpions are mutual predators. Their encounters use combat
 instead of instant predation: each attack makes an even deterministic roll to
@@ -164,44 +171,33 @@ choose which participant loses one energy. Combat repeats as they continue to
 hunt; at zero energy the loser dies and the winner receives its food energy.
 Other predator-prey encounters remain immediate.
 
-Newts are land dwellers that gain ambient food while standing in rivers or
+Newts are land dwellers that gain terrain food while standing in rivers or
 unfrozen freshwater lakes, from a cardinally adjacent shore tile, or by modestly
-grazing foliage while standing in swamps and jungles. Hungry Newts wait within
-feeding range rather than wandering away before their next feeding interval.
-Freshwater remains their migration target: a hungry Newt outside feeding range
-scans only an eight-tile Manhattan neighborhood and takes one greedy step toward
-detected freshwater.
+grazing foliage while standing in swamps and jungles. Newts feed on their normal
+five-second action and wait within feeding range while nutrition remains.
+Outside feeding range they scan only an eight-tile Manhattan neighborhood and
+take one greedy step toward a tile that still has nutrition available.
 
 All reproducing species retain at least two energy after paying their birth
 cost. Plankton, Worms, and Trilobites therefore wait for one additional stored
 energy before reproducing instead of dropping to one energy immediately after
 birth.
 This bounded scan performs at most 145 tile checks every five seconds and never
-runs general pathfinding. Each newt makes one freshwater search during its lifetime and snapshots
-the resulting route. The expensive map-wide search is a reverse navigation field
-shared by every newt and rebuilt only after relevant terrain or freshwater state
-changes. A newt may cross saltwater while consuming that migration route, but
-ordinary wandering is land-only after the route completes or becomes invalid.
-This gives newly evolved ocean fish a viable transition without adding repeated
-per-critter pathfinding.
+runs general pathfinding. Newts no longer make a map-wide migration toward
+freshwater, preventing distant populations from converging on the same food tiles.
 Rivers and lakes act as habitat corridors through Mountain tiles, including
 Arctic Snowy Mountains, for amphibians that can otherwise enter that kind of
 freshwater. Dry Mountain tiles remain impassable, and frozen lakes still provide
 no food to Newts.
 
 Mega Toads are the first amphibian predator. They use a bounded Manhattan
-perception radius of three and greedy eight-way movement to hunt broad prey,
-including Deer, Elk, and Gazelles, without general pathfinding. If another Mega Toad and
-any eligible non-Toad prey are both visible, the hunter chooses the Toad category
-50 percent of the time and the non-Toad category 50 percent of the time. Ordinary
-non-Toad prey remain preferable to Newts, and Therapsids are used only as the
-final non-Toad fallback. Coastal predation keeps deep-feeding trilobites vulnerable whenever
+perception radius of three and greedy eight-way movement to hunt the nearest legal prey,
+including Deer, Elk, and Gazelles, without general pathfinding or meal preference tiers.
+Coastal predation keeps deep-feeding trilobites vulnerable whenever
 they wander into Shallows. Mega Toads inherit the Newt's ordinary land range
 and may also enter shallows and freshwater lakes, but open and deep ocean are
-invalid habitat. Adults must stand in or beside a River or unfrozen Freshwater
-Lake to reproduce, and their offspring must be placed directly in that water.
-While pursuing preferred prey, a Mega Toad can similarly shove a blocking Newt
-aside instead of remaining trapped behind its ancestral population.
+invalid habitat. Reproduction has no additional freshwater or terrain gate;
+offspring only need an adjacent tile in which they can survive.
 
 Wolves are a fast third branch from Therapsids. They scan six tiles and move every
 two seconds while hunting broad terrestrial prey, including Deer, Elk, and
@@ -213,11 +209,15 @@ Wolf reproduction is structure-mediated. On first reaching reproduction energy,
 a Wolf reserves the nearest suitable Hill within eight tiles, falling back to its
 current tile when no Hill is available, and travels there before spending energy.
 The resulting passable Wolf Den stores one charge per reproduction, capped at
-five charges. Ordinary wolf
+five charges. If a Wolf reproduces at a den already holding five charges, it
+produces an adjacent Wolf offspring instead and leaves all five charges intact.
+Ordinary wolf
 prey moving onto or beside a charged den consumes at most one charge and spawns
 one Wolf on the den or an adjacent valid tile. A blocked den retains its charge.
-Dens and unused charges persist after the parent dies, but meteor excavation and
-ejecta, tsunami erosion, and lava deposits remove them.
+Stored charges also decay passively at one charge every two simulation minutes.
+An empty unassociated den is removed, preventing dens from persisting indefinitely
+on preyless islands. Meteor excavation and ejecta, tsunami erosion, and lava deposits
+also remove dens immediately.
 The presentation exposes structures through a dedicated, cycleable Building Tools
 category. Player-placed Wolf Dens begin with one charge and use the same simulation state,
 rendering, inspection, triggering, and destruction rules as wolf-built dens. A Wolf
@@ -231,36 +231,36 @@ short windows; the simulation continues updating beneath it.
 
 Monkeys, Deer, Elk, and Gazelles scan five tiles for any species whose diet includes them
 and prioritize a step that increases their distance from the nearest threat.
-Predation transfers food energy equal to half of the prey species' maximum energy,
-rounded down with a minimum value of one; the predator's own maximum still caps
-the result. Mega Toads cap at 16 energy, giving well-fed adults a larger reserve
+Predation transfers food energy equal to the prey species' body-size value; the
+predator's own maximum still caps the result. Mega Toads cap at 16 energy, giving well-fed adults a larger reserve
 for repeated predator combat than Therapsids or Wolves.
 
 Newts scan within a Manhattan radius of four for Mega Toads before waiting at a
-feeding site, migrating, or wandering.
+feeding site, seeking nearby available food, or wandering.
 When threatened, they take the available eight-way step that maximizes distance
 from the nearest detected Toad; detecting a threat suppresses shoreline waiting
 even when every escape step is blocked.
-Newts can feed, reach breeding energy, and place offspring directly within both
-Swamp and Jungle biomes; they retain their existing breeding access elsewhere.
+Reproduction has no species-specific terrain requirement. Parents still need an
+open adjacent tile that is valid habitat for the offspring.
 
 Therapsids form the terrestrial amniote branch from Newts and evolve into
 Monkeys, Deer, or Wolves; Deer continue into Elk or Gazelle. Deer and Gazelles
-move every three seconds, while Elk move every six seconds. Gazelles graze Arid,
-Forest, and Grassland foliage, but not Desert. Therapsids hunt only Worms, Fish,
+move every three seconds, while Elk move every six seconds. Gazelles graze Arid
+and Grassland foliage, but not Forest or Desert. Therapsids hunt only Worms, Fish,
 and Newts within a Manhattan radius of four; Monkeys and larger animals are not prey.
 Their six-second movement interval gives terrestrial prey more time to escape.
-Below breeding energy they remain on, or seek within four tiles, available Swamp
-or Jungle foliage before hunting. These tiles supply one energy every eighteen
-seconds; Therapsids resume hunting when no usable wetland forage is available.
-Deer can occupy Swamps and Jungles but receive ambient food only from Grassland
-and Forest.
+Below breeding energy they remain on, or seek within four tiles, available Jungle,
+Swamp, or Arid foliage before hunting. Forest and Bog nutrition is reserved for other
+ecological niches. They eat one available terrain nutrient
+on their normal six-second action; Therapsids resume hunting when no supported forage is available.
+Deer can occupy Forests, Swamps, and Jungles but receive ambient food only from Grassland.
+Elk likewise cannot feed from Forest nutrition.
 From shore, a Therapsid can strike an immediately adjacent Worm, Fish, or Newt
 in a Freshwater Lake and eat it without entering the lake itself.
-Mega Toads and Wolves can hunt Therapsids, but an attacked Therapsid defends itself.
-Those encounters use the same 50/50 one-energy combat rolls as Squid and Sea
-Scorpions rather than instant predation; Therapsids do not initiate either fight.
-Mega Toads retain Therapsids as last-choice prey.
+Mega Toads and Wolves can hunt Therapsids, but the Therapsid has a 20 percent chance
+to win each one-damage combat exchange, a 60 percent penalty from the usual chance. Therapsids
+still do not include either species in their hunting diet, so they defend themselves
+without pursuing them.
 The critter that loses any mutual-predator combat roll exposes a deterministic
 half-second damage-flash state. The presentation renders that critter white for
 the duration without changing combat timing or movement.
@@ -276,11 +276,11 @@ Toad restores eight. Either survivor therefore reaches only thirteen energy—on
 short of another birth—so a closed population cannot sustain itself without
 outside prey.
 
-Monkeys are non-predatory and gain ambient food from Swamp or Jungle foliage
-every eighteen seconds. Their reproduction threshold is
+Monkeys are non-predatory and eat available Swamp, Jungle, or Forest foliage on their normal
+five-second action. Their reproduction threshold is
 eight energy with a cost of five. A Monkey below breeding energy remains on
-Swamp or Jungle foliage to keep feeding, while a hungry Monkey adjacent to either
-biome moves toward it. Mega Toads may still eat Monkeys through ordinary predation.
+Swamp, Jungle, or Forest foliage to keep feeding, while a hungry Monkey adjacent to
+one of those biomes moves toward it. Mega Toads may still eat Monkeys through ordinary predation.
 
 Apes extend the Monkey branch and use the land habitat while hunting every species
 outside their own civilization that enters shared terrain. Their first reproduction
@@ -289,20 +289,62 @@ to an unoccupied Grassland or Beach tile. The founding event creates only the Vi
 consumes the reproduction cost, and produces no offspring. New villages must be more
 than twelve tiles apart.
 
+Ordinary Apes take Fish only when already adjacent instead of chasing faster Fish
+through Shallows. Ape Sailors move on the same two-second interval as Fish and remain
+the civilization's active marine hunters.
+
 Villages begin with capacity for five residents. At five residents they build a
-Grassland Farm when possible, otherwise a Beach Harbor. Ape kills still feed the
-hunter but also become carried settlement food; residents return that food to the
-Village or any connected district. Farms add one stored food every fourteen seconds.
-At its population cap, a village may spend five food on a connected Residential
-District, adding five capacity. Harbors recruit up to four ordinary residents into
-Ape Sailors at thirty-second intervals while retaining at least one civilian. Sailors
+Grassland Farm, Swamp Rice Paddy, or Forest Orchard when possible, otherwise a Beach
+Harbor. All three food districts add one stored food every fourteen seconds. An assigned Ape's kill is
+conserved rather than counted twice: meal energy first raises the hunter toward its
+reproduction threshold, and only the unused remainder becomes carried settlement
+food. Residents return that remainder to the Village or any connected district.
+This lets hungry Apes keep hunting until they can reproduce instead of turning every
+meal into a return trip.
+Return trips track the closest distance reached. If an Ape spends thirty seconds
+without getting closer—such as when an equal-sized crowd blocks every step—the
+carried food transfers automatically and the Ape resumes ordinary behavior. Genuine
+long trips do not time out while they continue making progress.
+Whenever an assigned Ape or Ape Sailor becomes hungry on a metabolism tick, it may
+consume one stored food from its home village remotely. This communication has no
+distance requirement, so residents do not starve merely because hunting carried them
+far from the settlement; unassigned Apes cannot draw from village stores.
+At its population cap, a village alternates connected Residential Districts with
+additional biome-appropriate food districts. A Residential District costs five food
+and adds five capacity; Farms, Rice Paddies, and Orchards remain free to establish but
+require open connected Grassland, Swamp, and Forest tiles respectively. If no planned
+food district has a valid site, the village may fall back to housing. Expansion choice,
+construction cost, and placement remain separate so future building kinds can join the
+plan without rewriting village advancement.
+
+Villages store food up to a base pantry of five plus ten for each Farm, Rice Paddy,
+or Orchard. They begin with six wood and can store at most thirty. One Lumber Camp may
+be built for three food and no wood on a connected Forest, Jungle, or Taiga tile. It
+produces one wood every fourteen, ten, or eighteen seconds respectively. The first
+food district is free; later food districts cost two wood. Residential Districts cost
+five food and four wood, while a Harbor costs six wood. The Harbor includes its first
+boat and therefore its first Sailor; later Sailors cost two wood each.
+
+Harbors recruit ordinary residents into Ape Sailors at thirty-second intervals without
+changing total village population or the recruit's stable identity. The village quota
+is one Sailor at five residents, two at ten, three at fifteen, and four at twenty or
+more. An assigned Sailor checks village stores every tick and consumes enough food to
+repair combat losses up to maximum energy whenever supplies permit. Ape Sailors never
+reproduce, so this naval food priority affects survival rather than population growth. Sailors
 occupy Beach and saltwater, hunt every implemented sea species except Plankton, and
 return their catches through a connected Harbor. Village, Farm, Harbor, and Residential
 District tiles are simulation-owned structures exposed to rendering and inspection;
 destructive terrain and surface-cover changes remove invalid structures.
+Each village is limited to one Harbor. A village that originally founded beside a food
+biome may add that Harbor later once its connected district network reaches an open
+Beach tile and the settlement has at least five residents.
+When a village loses its final living resident, the Village and every connected
+district are removed. Each former structure tile receives one deposited nutrient,
+representing scavengers reclaiming the abandoned settlement even on terrain that
+normally stores no natural nutrition.
 
-Deer, Elk, and Gazelles reproduce only when none of their four cardinally
-adjacent tiles contains another critter. Diagonal neighbors do not block a birth.
+Deer, Elk, and Gazelles use the same reproduction placement rule as other
+ordinary species; only the chosen offspring tile must be open and habitable.
 All terrestrial species may traverse exposed Lowlands, Canyons, and Trenches;
 elevation below ordinary Plains does not impose a movement restriction.
 

@@ -22,22 +22,7 @@ class Crab(Critter):
         self.configure_hunger(Crab.HUNGER_INTERVAL, Crab.STARVATION_INTERVAL)
 
     def try_reproduce(self, world):
-        current_tile = world.get_tile(self.x, self.y)
-        if current_tile is None or current_tile.terrain not in Crab.FEED_TERRAINS:
-            return self.fail_reproduction_attempt(reset_meals=True)
-
-        if self.is_reproduction_blocked(world):
-            self.handle_blocked_reproduction()
-            return None
-
-        offspring = self.try_spawn_adjacent_offspring(
-            world,
-            lambda tile: tile.terrain in Crab.FEED_TERRAINS,
-        )
-        if offspring is not None:
-            return offspring
-
-        return self.fail_reproduction_attempt(reset_meals=True)
+        return super().try_reproduce(world)
 
     def take_hungry_action(self, game):
         if not self.feed_on_nearest_terrain(

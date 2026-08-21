@@ -22,7 +22,6 @@ class LandKraken(Critter):
     PREDATOR_NAME = "Land Kraken"
     REPRODUCTION_BLOCKS_SET_BEHAVIOR = True
     REPRODUCTION_BLOCKS_RESET_MEALS = True
-    REQUIRES_LIQUID_TO_REPRODUCE = True
 
     def __init__(self, x, y):
         super().__init__(

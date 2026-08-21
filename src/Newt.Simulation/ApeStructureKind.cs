@@ -5,6 +5,9 @@ public enum ApeStructureKind : byte
 {
     Village,
     Farm,
+    RicePaddy,
+    Orchard,
+    LumberCamp,
     NavalDistrict,
     ResidentialDistrict,
 }

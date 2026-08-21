@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Newt.Game")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+4e31efb611a3d46dafee5603e26e27ce51859d67")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+b37d53d415682d00e40ce22205dbb8d6e4ea6902")]
 [assembly: System.Reflection.AssemblyProductAttribute("Newt.Game")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Newt.Game")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

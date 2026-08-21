@@ -58,3 +58,4 @@ C:\Users\1Matt\Desktop\Newt\.verify-entity-ui\Newt.Simulation.pdb
 C:\Users\1Matt\Desktop\Newt\src\Newt.Game\bin\CodexVerify\Newt.Simulation.deps.json
 C:\Users\1Matt\Desktop\Newt\src\Newt.Game\bin\CodexVerify\Newt.Simulation.dll
 C:\Users\1Matt\Desktop\Newt\src\Newt.Game\bin\CodexVerify\Newt.Simulation.pdb
+C:\Users\1Matt\Desktop\Newt\src\Newt.Simulation\obj\Debug\net10.0\Newt.Sim.7DF46C68.Up2Date

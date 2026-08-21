@@ -18,7 +18,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private static readonly WorldMapType[] MenuMapTypes =
         [WorldMapType.Continents, WorldMapType.Pangaea, WorldMapType.Archipelago, WorldMapType.AllOcean,
             WorldMapType.RingWorld, WorldMapType.Earth];
-    private static readonly double[] SimulationRates = [0.25, 0.5, 1, 2, 4, 8, 16];
+    private static readonly double[] SimulationRates = [0.25, 0.5, 1, 2, 4, 8, 16, 32];
     private static readonly ToolCategory[] ToolCategoryOrder =
         [ToolCategory.WorldTools, ToolCategory.TerrainTools, ToolCategory.CritterTools,
             ToolCategory.BuildingTools, ToolCategory.Events, ToolCategory.Other];
@@ -832,21 +832,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             $"Moisture {_world.GetMoisture(position):0.000} ({SeasonSystem.GetMoistureChange(_world, position):+0.000;-0.000;0.000} season)   {_world.GetMoistureBand(position)}",
             $"Fresh Water {waterText}",
             $"Nutrition {_world.GetTileNutrition(position)} / {_world.GetTileNutritionCapacity(position)}",
-            GetStructureInspectionText(position),
         ];
-    }
-
-    private string GetStructureInspectionText(GridPosition position)
-    {
-        if (_world.GetApeStructure(position) is { } apeStructure)
-        {
-            return apeStructure is ApeStructureKind.Village
-                ? $"Structure Ape Village   Food {_world.GetApeVillageFood(position)}"
-                : $"Structure {GetApeStructureDisplayName(apeStructure)}";
-        }
-        return _world.GetWolfDenCharges(position) is { } charges
-            ? $"Structure Wolf Den   Charges {charges}"
-            : "Structure None";
     }
 
     private string GetTileIdentity(GridPosition position, Terrain terrain)
@@ -917,7 +903,9 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                     "ENTITY",
                     "Ape Village",
                     $"Residents {_world.GetApeVillageResidentCount(position)} / {_world.GetApeVillagePopulationCapacity(position)}",
-                    $"Food {_world.GetApeVillageFood(position)}",
+                    $"Civilians {_world.GetApeVillageCivilianCount(position)}   Sailors {_world.GetApeVillageSailorCount(position)}",
+                    $"Food {_world.GetApeVillageFood(position)} / {_world.GetApeVillageFoodCapacity(position)}",
+                    $"Wood {_world.GetApeVillageWood(position)} / {_world.GetApeVillageWoodCapacity(position)}",
                     "Behavior Settlement",
                 ]
                 : ["ENTITY", GetApeStructureDisplayName(apeStructure), "Behavior Village district"];
@@ -1261,6 +1249,26 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                     _spriteBatch.Draw(_pixel, new Rectangle(x, y + row, size, rowWidth), new Color(71, 112, 48));
                 }
                 break;
+            case ApeStructureKind.RicePaddy:
+                _spriteBatch.Draw(_pixel, new Rectangle(x, y, size, size), new Color(80, 139, 112));
+                var paddyRowWidth = Math.Max(1, size / 6);
+                for (var row = 1; row < size; row += Math.Max(2, paddyRowWidth * 2))
+                {
+                    _spriteBatch.Draw(_pixel, new Rectangle(x, y + row, size, paddyRowWidth), new Color(170, 190, 91));
+                }
+                break;
+            case ApeStructureKind.Orchard:
+                _spriteBatch.Draw(_pixel, new Rectangle(x, y, size, size), new Color(103, 75, 45));
+                var treeSize = Math.Max(1, size / 3);
+                _spriteBatch.Draw(_pixel, new Rectangle(x, y, treeSize, treeSize), new Color(61, 125, 55));
+                _spriteBatch.Draw(_pixel, new Rectangle(x + size - treeSize, y, treeSize, treeSize), new Color(61, 125, 55));
+                _spriteBatch.Draw(_pixel, new Rectangle(x + (size - treeSize) / 2, y + size - treeSize, treeSize, treeSize), new Color(61, 125, 55));
+                break;
+            case ApeStructureKind.LumberCamp:
+                _spriteBatch.Draw(_pixel, new Rectangle(x, y + size / 2, size, Math.Max(1, size / 2)), new Color(111, 72, 42));
+                _spriteBatch.Draw(_pixel, new Rectangle(x, y + size / 4, size, Math.Max(1, size / 5)), new Color(177, 126, 70));
+                _spriteBatch.Draw(_pixel, new Rectangle(x + size / 5, y, Math.Max(1, size / 6), size), new Color(78, 53, 35));
+                break;
             case ApeStructureKind.NavalDistrict:
                 _spriteBatch.Draw(_pixel, new Rectangle(x, y + size / 3, size, Math.Max(1, size / 3)), new Color(117, 77, 46));
                 _spriteBatch.Draw(_pixel, new Rectangle(x + size / 4, y, Math.Max(1, size / 5), size), new Color(190, 155, 98));
@@ -1276,6 +1284,9 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     {
         ApeStructureKind.Village => "Ape Village",
         ApeStructureKind.Farm => "Farm",
+        ApeStructureKind.RicePaddy => "Rice Paddy",
+        ApeStructureKind.Orchard => "Orchard",
+        ApeStructureKind.LumberCamp => "Lumber Camp",
         ApeStructureKind.NavalDistrict => "Harbor",
         ApeStructureKind.ResidentialDistrict => "Residential District",
         _ => structure.ToString(),

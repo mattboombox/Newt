@@ -7,6 +7,13 @@ public static class CritterEvolution
     public const int MaximumChanceSteps = 100 * ChanceStepsPerPercent;
     public const int DefaultChanceSteps = 1;
 
+    internal static int GetOffspringEvolutionChanceSteps(
+        CritterSpecies parentSpecies,
+        int baseChanceSteps) =>
+        parentSpecies is CritterSpecies.Therapsid
+            ? Math.Min(MaximumChanceSteps, baseChanceSteps * 2)
+            : baseChanceSteps;
+
     public static bool TryGetEvolvedSpecies(
         CritterSpecies species,
         out CritterSpecies evolvedSpecies)

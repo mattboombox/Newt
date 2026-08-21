@@ -537,7 +537,7 @@ def handle_input(game):
                     cycle_spawning_tool(game)
 
             elif event.key == pygame.K_PERIOD:
-                game.speed = min(16, game.speed * 2)
+                game.speed = min(32, game.speed * 2)
                 print("Speed:", game.speed)
 
             elif event.key == pygame.K_COMMA:

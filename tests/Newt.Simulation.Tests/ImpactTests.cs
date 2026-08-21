@@ -64,6 +64,25 @@ public sealed class ImpactTests
         Assert.Null(world.GetWolfDenCharges(center));
     }
 
+    [Theory]
+    [InlineData(CritterSpecies.Newt, Terrain.Plains)]
+    [InlineData(CritterSpecies.Plankton, Terrain.Ocean)]
+    [InlineData(CritterSpecies.Jellyfish, Terrain.Ocean)]
+    [InlineData(CritterSpecies.ApeSailor, Terrain.Ocean)]
+    public void MeteorImmediatelyRemovesCritterAtImpactTile(
+        CritterSpecies species,
+        Terrain terrain)
+    {
+        var world = new SimulationWorld(9, 9, terrain, seed: 731);
+        var center = new GridPosition(4, 4);
+        world.AddCritter(species, center);
+
+        Impacts.CreateMeteorImpact(world, center, 0f);
+
+        Assert.Equal(0, world.CritterCount);
+        Assert.False(world.IsOccupied(center));
+    }
+
     [Fact]
     public void ShockwaveExpandsBeforeRemovingDistantCritter()
     {

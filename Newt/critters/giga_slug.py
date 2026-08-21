@@ -14,7 +14,6 @@ class GigaSlug(Critter):
     GRASS_CONSUME_CHANCE = 0.10
     FLEE_DETECTION_RADIUS = 5
     MOVE_COOLDOWN = 0.72
-    REQUIRES_LIQUID_TO_REPRODUCE = True
 
     def __init__(self, x, y):
         super().__init__(

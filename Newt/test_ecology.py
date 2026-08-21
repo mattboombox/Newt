@@ -92,8 +92,8 @@ class EcologyTests(unittest.TestCase):
             with self.subTest(critter_type=critter_type.__name__):
                 self.assertEqual(critter_type(0, 0).get_food_value(), 1)
 
-    def test_newt_can_reproduce_on_grass_and_then_becomes_old(self):
-        world = World(3, 3, default_terrain="grass")
+    def test_newt_can_reproduce_away_from_food_terrain_and_then_becomes_old(self):
+        world = World(3, 3, default_terrain="sand")
         newt = Newt(1, 1)
         world.get_tile(1, 1).critter = newt
         newt.reproduction_limit = 1

@@ -23,7 +23,16 @@ public sealed class SimulationWorld
     private const int ApeVillageBasePopulationCapacity = 5;
     private const int ApeResidentialPopulationCapacity = 5;
     private const int ApeFoodDistrictPopulationThreshold = 5;
+    private const int ApeVillageBaseFoodCapacity = 5;
+    private const int ApeFoodDistrictStorageCapacity = 10;
+    private const int ApeInitialWood = 6;
+    private const int ApeMaximumWood = 30;
+    private const int ApeLumberCampFoodCost = 3;
+    private const int ApeFoodDistrictWoodCost = 2;
     private const int ApeResidentialFoodCost = 5;
+    private const int ApeResidentialWoodCost = 4;
+    private const int ApeHarborWoodCost = 6;
+    private const int ApeSailorWoodCost = 2;
     private const int ApeFarmFoodIntervalTicks = 14 * TicksPerSecond;
     private const int ApeSailorRecruitmentIntervalTicks = 30 * TicksPerSecond;
     private const int ApeSailorsPerHarbor = 4;
@@ -35,8 +44,11 @@ public sealed class SimulationWorld
     public const int ReproductionTruceTicks = 30 * TicksPerSecond;
     public const int CombatDamageFlashTicks = TicksPerSecond / 2;
     public const int MaximumWolfDenCharges = 5;
+    public const int WolfDenChargeDecayTicks = 2 * 60 * TicksPerSecond;
+    public const int ApeFoodReturnStallTicks = 30 * TicksPerSecond;
     private const int MutualPredatorCombatDamage = 1;
     public const int TicksPerSecond = 20;
+    public const int TileNutritionRegenerationSeconds = 480;
     public const float MinimumGroundElevation = -1f;
     public const float MaximumGroundElevation = 2f;
     public const float RingWorldWallElevation = 2.15f;
@@ -70,6 +82,7 @@ public sealed class SimulationWorld
     private readonly SurfaceCover[] _surfaceCovers;
     private readonly long[] _surfaceCoverUntilTicks;
     private readonly byte[] _tileNutrition;
+    private readonly byte[] _depositedTileNutrition;
     private readonly byte[] _tileNutritionCapacities;
     private readonly long[] _tileNutritionLastTicks;
     private readonly HashSet<GridPosition> _activeSurfaceCovers = [];
@@ -87,34 +100,33 @@ public sealed class SimulationWorld
     private readonly int[] _occupants;
     private readonly CritterId[] _critterIds;
     private readonly Dictionary<int, int> _critterIndicesById = [];
-    private readonly Dictionary<int, Queue<GridPosition>> _newtMigrationPaths = [];
-    private readonly HashSet<int> _newtFreshwaterSearchCompleted = [];
     private readonly Dictionary<int, int> _wolfDenHomes = [];
     private readonly Dictionary<int, int> _wolfDenTargets = [];
     private readonly Dictionary<int, int> _wolfDenCharges = [];
+    private readonly Dictionary<int, long> _wolfDenNextDecayTicks = [];
     private readonly Dictionary<int, ApeStructureKind> _apeStructures = [];
     private readonly Dictionary<int, int> _apeAuxiliaryVillages = [];
     private readonly Dictionary<int, int> _apeVillageHomes = [];
     private readonly Dictionary<int, int> _apeVillageTargets = [];
     private readonly Dictionary<int, int> _apeVillageFood = [];
+    private readonly Dictionary<int, int> _apeVillageWood = [];
     private readonly Dictionary<int, int> _apeCarriedFood = [];
+    private readonly Dictionary<int, (int BestDistance, long LastProgressTick)>
+        _apeFoodReturnProgress = [];
     private readonly Dictionary<int, long> _apeStructureNextActionTicks = [];
     private readonly Dictionary<int, (CritterSpecies ParentSpecies, long UntilTick)>
         _reproductionTruces = [];
+    private readonly HashSet<int> _lethallyDisplacedCritterIds = [];
     private readonly CritterSpecies[] _species;
     private readonly GridPosition[] _positions;
     private readonly long[] _nextMovementTicks;
     private readonly int[] _energy;
     private readonly long[] _nextMetabolismTicks;
-    private readonly long[] _nextAmbientFeedingTicks;
     private readonly int[] _preyTargets;
     private readonly long[] _damageFlashUntilTicks;
     private readonly int[] _speciesCounts = new int[Enum.GetValues<CritterSpecies>().Length];
     private ulong _randomState;
     private int _nextCritterId = 1;
-    private long _freshwaterNavigationRevision;
-    private long _newtNavigationRevision = -1;
-    private int[]? _newtNavigationNext;
     private int _count;
 
     public SimulationWorld(int width, int height, Terrain defaultTerrain, ulong seed = 1)
@@ -134,6 +146,7 @@ public sealed class SimulationWorld
         _surfaceCovers = new SurfaceCover[_terrain.Length];
         _surfaceCoverUntilTicks = new long[_terrain.Length];
         _tileNutrition = new byte[_terrain.Length];
+        _depositedTileNutrition = new byte[_terrain.Length];
         _tileNutritionCapacities = new byte[_terrain.Length];
         _tileNutritionLastTicks = new long[_terrain.Length];
         Array.Fill(_tileNutritionLastTicks, -1);
@@ -150,7 +163,6 @@ public sealed class SimulationWorld
         _nextMovementTicks = new long[_terrain.Length];
         _energy = new int[_terrain.Length];
         _nextMetabolismTicks = new long[_terrain.Length];
-        _nextAmbientFeedingTicks = new long[_terrain.Length];
         _preyTargets = new int[_terrain.Length];
         Array.Fill(_preyTargets, -1);
         _damageFlashUntilTicks = new long[_terrain.Length];
@@ -200,8 +212,6 @@ public sealed class SimulationWorld
     internal long NextNaturalEventTick { get; set; } = 6 * 60 * TicksPerSecond;
 
     public int CritterCount => _count;
-
-    internal int NewtNavigationBuildCount { get; private set; }
 
     public int GetCritterCount(CritterSpecies species) => _speciesCounts[(int)species];
 
@@ -257,6 +267,24 @@ public sealed class SimulationWorld
         return _apeVillageHomes.Count(pair => pair.Value == tileIndex);
     }
 
+    public int GetApeVillageSailorCount(GridPosition position)
+    {
+        var villageTile = GetIndex(position);
+        return _apeVillageHomes.Count(pair =>
+            pair.Value == villageTile &&
+            _critterIndicesById.TryGetValue(pair.Key, out var residentIndex) &&
+            _species[residentIndex] is CritterSpecies.ApeSailor);
+    }
+
+    public int GetApeVillageCivilianCount(GridPosition position)
+    {
+        var villageTile = GetIndex(position);
+        return _apeVillageHomes.Count(pair =>
+            pair.Value == villageTile &&
+            _critterIndicesById.TryGetValue(pair.Key, out var residentIndex) &&
+            _species[residentIndex] is CritterSpecies.Ape);
+    }
+
     public int GetApeVillagePopulationCapacity(GridPosition position)
     {
         var tileIndex = GetIndex(position);
@@ -269,6 +297,36 @@ public sealed class SimulationWorld
     public int GetApeVillageFood(GridPosition position) =>
         _apeVillageFood.TryGetValue(GetIndex(position), out var food) ? food : 0;
 
+    public int GetApeVillageFoodCapacity(GridPosition position)
+    {
+        var villageTile = GetIndex(position);
+        return _apeStructures.TryGetValue(villageTile, out var structure) &&
+            structure is ApeStructureKind.Village
+                ? GetApeVillageFoodCapacityByTile(villageTile)
+                : 0;
+    }
+
+    public int GetApeVillageWood(GridPosition position) =>
+        _apeVillageWood.TryGetValue(GetIndex(position), out var wood) ? wood : 0;
+
+    public int GetApeVillageWoodCapacity(GridPosition position) =>
+        _apeStructures.TryGetValue(GetIndex(position), out var structure) &&
+            structure is ApeStructureKind.Village
+                ? ApeMaximumWood
+                : 0;
+
+    internal void StoreApeVillageFood(GridPosition position, int amount)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(amount);
+        var villageTile = GetIndex(position);
+        if (!_apeStructures.TryGetValue(villageTile, out var structure) ||
+            structure is not ApeStructureKind.Village)
+        {
+            throw new InvalidOperationException($"Tile {position} is not an Ape Village.");
+        }
+        AddApeVillageFood(villageTile, amount);
+    }
+
     public int GetApeCarriedFood(CritterId apeId) =>
         _apeCarriedFood.TryGetValue(apeId.Value, out var food) ? food : 0;
 
@@ -276,7 +334,7 @@ public sealed class SimulationWorld
     {
         var tileIndex = GetIndex(position);
         RefreshTileNutrition(tileIndex);
-        return _tileNutrition[tileIndex];
+        return _tileNutrition[tileIndex] + _depositedTileNutrition[tileIndex];
     }
 
     public int GetTileNutritionCapacity(GridPosition position) =>
@@ -324,6 +382,7 @@ public sealed class SimulationWorld
         }
 
         _wolfDenCharges.Add(tileIndex, initialCharges);
+        _wolfDenNextDecayTicks[tileIndex] = Tick + WolfDenChargeDecayTicks;
         return true;
     }
 
@@ -389,7 +448,6 @@ public sealed class SimulationWorld
         {
             _terrain[index] = terrain;
             RemoveInvalidApeStructureAt(position);
-            _freshwaterNavigationRevision++;
         }
     }
 
@@ -413,7 +471,6 @@ public sealed class SimulationWorld
         RemoveWolfDenAt(position);
         RemoveApeStructureAt(position);
         RemoveCritterAt(position);
-        _freshwaterNavigationRevision++;
     }
 
     internal void SetTemperature(GridPosition position, float temperature) =>
@@ -433,11 +490,6 @@ public sealed class SimulationWorld
 
         _biomes[index] = biome;
         RemoveInvalidApeStructureAt(position);
-        if (_surfaceWater[index] is SurfaceWaterKind.FreshwaterLake &&
-            (previousBiome is Biome.Arctic) != (biome is Biome.Arctic))
-        {
-            _freshwaterNavigationRevision++;
-        }
     }
 
     internal long GetSurfaceCoverUntilTick(GridPosition position) =>
@@ -472,10 +524,6 @@ public sealed class SimulationWorld
         {
             ClimateSystem.RebuildBiomeAt(this, position);
         }
-        if (cover != previousCover)
-        {
-            _freshwaterNavigationRevision++;
-        }
     }
 
     internal void SetSurfaceWater(GridPosition position, SurfaceWaterKind water)
@@ -485,7 +533,6 @@ public sealed class SimulationWorld
         {
             _surfaceWater[index] = water;
             RemoveInvalidApeStructureAt(position);
-            _freshwaterNavigationRevision++;
         }
     }
 
@@ -567,7 +614,6 @@ public sealed class SimulationWorld
         Array.Fill(_waterSurfaceElevations, float.NaN);
         Array.Clear(_riverConnections);
         _activeSprings.Clear();
-        _freshwaterNavigationRevision++;
     }
 
     internal bool AddWolfDenCharge(GridPosition position)
@@ -585,7 +631,35 @@ public sealed class SimulationWorld
             return false;
         }
         _wolfDenCharges[tileIndex] = charges + 1;
+        if (charges == 0)
+        {
+            _wolfDenNextDecayTicks[tileIndex] = Tick + WolfDenChargeDecayTicks;
+        }
         return true;
+    }
+
+    private void AdvanceWolfDens()
+    {
+        foreach (var denTile in _wolfDenCharges.Keys.ToArray())
+        {
+            if (!_wolfDenNextDecayTicks.TryGetValue(denTile, out var nextDecayTick))
+            {
+                _wolfDenNextDecayTicks[denTile] = Tick + WolfDenChargeDecayTicks;
+                continue;
+            }
+            if (Tick < nextDecayTick)
+            {
+                continue;
+            }
+
+            var elapsedIntervals = 1 + (Tick - nextDecayTick) / WolfDenChargeDecayTicks;
+            _wolfDenNextDecayTicks[denTile] =
+                nextDecayTick + elapsedIntervals * WolfDenChargeDecayTicks;
+            _wolfDenCharges[denTile] = Math.Max(
+                0,
+                _wolfDenCharges[denTile] - (int)elapsedIntervals);
+            RemoveWolfDenIfEmptyAndUnassociated(denTile);
+        }
     }
 
     public bool RemoveWolfDenAt(GridPosition position)
@@ -595,6 +669,7 @@ public sealed class SimulationWorld
         {
             return false;
         }
+        _wolfDenNextDecayTicks.Remove(tileIndex);
 
         foreach (var id in _wolfDenHomes.Where(pair => pair.Value == tileIndex).Select(pair => pair.Key).ToArray())
         {
@@ -616,6 +691,7 @@ public sealed class SimulationWorld
         }
 
         _wolfDenCharges.Remove(tileIndex);
+        _wolfDenNextDecayTicks.Remove(tileIndex);
     }
 
     private void DetachWolfFromDens(int wolfId)
@@ -646,12 +722,18 @@ public sealed class SimulationWorld
 
         if (structure is not ApeStructureKind.Village)
         {
+            var hasVillage = _apeAuxiliaryVillages.TryGetValue(tileIndex, out var villageTile);
             _apeAuxiliaryVillages.Remove(tileIndex);
             _apeStructureNextActionTicks.Remove(tileIndex);
+            if (hasVillage)
+            {
+                ClampApeVillageFood(villageTile);
+            }
             return true;
         }
 
         _apeVillageFood.Remove(tileIndex);
+        _apeVillageWood.Remove(tileIndex);
 
         foreach (var auxiliaryTile in _apeAuxiliaryVillages
             .Where(pair => pair.Value == tileIndex)
@@ -668,6 +750,8 @@ public sealed class SimulationWorld
             .ToArray())
         {
             _apeVillageHomes.Remove(id);
+            _apeCarriedFood.Remove(id);
+            _apeFoodReturnProgress.Remove(id);
         }
         foreach (var id in _apeVillageTargets
             .Where(pair => pair.Value == tileIndex)
@@ -684,6 +768,7 @@ public sealed class SimulationWorld
         _apeVillageHomes.Remove(apeId);
         _apeVillageTargets.Remove(apeId);
         _apeCarriedFood.Remove(apeId);
+        _apeFoodReturnProgress.Remove(apeId);
     }
 
     private void RemoveInvalidApeStructureAt(GridPosition position)
@@ -697,7 +782,9 @@ public sealed class SimulationWorld
         var valid = structure switch
         {
             ApeStructureKind.Village => CanLiveOn(CritterSpecies.Ape, tileIndex),
-            ApeStructureKind.Farm => IsValidApeAuxiliaryTile(tileIndex, structure),
+            ApeStructureKind.Farm or ApeStructureKind.RicePaddy or ApeStructureKind.Orchard =>
+                IsValidApeAuxiliaryTile(tileIndex, structure),
+            ApeStructureKind.LumberCamp => IsValidApeAuxiliaryTile(tileIndex, structure),
             ApeStructureKind.NavalDistrict => IsValidApeAuxiliaryTile(tileIndex, structure),
             ApeStructureKind.ResidentialDistrict =>
                 IsValidApeAuxiliaryTile(tileIndex, structure),
@@ -738,13 +825,8 @@ public sealed class SimulationWorld
         _nextMetabolismTicks[index] = nutrition.HasMetabolism
             ? Tick + nutrition.MetabolismIntervalTicks
             : long.MaxValue;
-        _nextAmbientFeedingTicks[index] = nutrition.FeedsFromEnvironment
-            ? Tick + nutrition.AmbientFeedingIntervalTicks
-            : long.MaxValue;
         _preyTargets[index] = -1;
         _damageFlashUntilTicks[index] = 0;
-        _newtMigrationPaths.Remove(id.Value);
-        _newtFreshwaterSearchCompleted.Remove(id.Value);
         _occupants[tileIndex] = index;
         _speciesCounts[(int)species]++;
         return id;
@@ -839,7 +921,8 @@ public sealed class SimulationWorld
             _energy[index],
             nutrition.MaximumEnergy,
             nutrition.HasMetabolism && _energy[index] <= nutrition.HungryThreshold,
-            nutrition.CanReproduce && _energy[index] >= nutrition.ReproductionThreshold,
+            CanSpeciesReproduce(_species[index]) &&
+                _energy[index] >= nutrition.ReproductionThreshold,
             Tick < _damageFlashUntilTicks[index]);
     }
 
@@ -881,6 +964,7 @@ public sealed class SimulationWorld
         Volcanism.Advance(this);
         Hydrology.AdvanceSprings(this);
         LifeSystem.Advance(this);
+        AdvanceWolfDens();
         AdvanceCritterLifecycles();
         AdvanceApeVillages();
         if (PlanktonRecoveryEnabled && GetCritterCount(CritterSpecies.Plankton) == 0)
@@ -892,10 +976,15 @@ public sealed class SimulationWorld
 
     private void AdvanceCritterMovements()
     {
+        _lethallyDisplacedCritterIds.Clear();
         List<(GridPosition Predator, GridPosition Prey)>? predations = null;
         HashSet<GridPosition>? reservedPrey = null;
         for (var index = 0; index < _count; index++)
         {
+            if (_lethallyDisplacedCritterIds.Contains(_critterIds[index].Value))
+            {
+                continue;
+            }
             if (reservedPrey?.Contains(_positions[index]) is true)
             {
                 continue;
@@ -908,6 +997,7 @@ public sealed class SimulationWorld
             _nextMovementTicks[index] += GetMovementIntervalTicks(_species[index]);
             var prey = _species[index] switch
             {
+                CritterSpecies.Plankton => TryMovePlankton(index),
                 CritterSpecies.Fish => TryMoveFish(index, reservedPrey),
                 CritterSpecies.Nautilus => TryMoveNautilus(index, reservedPrey),
                 CritterSpecies.Squid =>
@@ -926,6 +1016,7 @@ public sealed class SimulationWorld
                 CritterSpecies.Worm => TryMoveWorm(index),
                 CritterSpecies.Trilobite => TryMoveTrilobite(index),
                 CritterSpecies.Crab => TryMoveCrab(index),
+                CritterSpecies.SquidEgg => TryMoveSquidEgg(index),
                 _ => TryMove(index, reservedPrey),
             };
             if (prey is not null)
@@ -935,6 +1026,15 @@ public sealed class SimulationWorld
                 (predations ??= []).Add((_positions[index], prey.Value));
             }
         }
+
+        foreach (var critterId in _lethallyDisplacedCritterIds)
+        {
+            if (_critterIndicesById.TryGetValue(critterId, out var critterIndex))
+            {
+                RemoveCritterAtIndex(critterIndex);
+            }
+        }
+        _lethallyDisplacedCritterIds.Clear();
 
         if (predations is null)
         {
@@ -949,7 +1049,7 @@ public sealed class SimulationWorld
 
     private void AdvanceCritterLifecycles()
     {
-        List<GridPosition>? deaths = null;
+        List<CritterId>? deaths = null;
         List<(
             CritterSpecies Species,
             GridPosition Position,
@@ -963,7 +1063,9 @@ public sealed class SimulationWorld
         for (var index = 0; index < _count; index++)
         {
             var species = _species[index];
-            if (species is CritterSpecies.SquidEgg && HasSquidEggHatchPreyNearby(index))
+            if (species is CritterSpecies.SquidEgg &&
+                (_terrain[GetIndex(_positions[index])] is Terrain.Shallows ||
+                    HasSquidEggHatchPreyNearby(index)))
             {
                 ChangeCritterSpecies(index, CritterSpecies.Squid, preserveEnergy: false);
                 continue;
@@ -972,48 +1074,55 @@ public sealed class SimulationWorld
             var nutrition = CritterNutritions.Get(species);
             if (!CanLiveOn(species, GetIndex(_positions[index])))
             {
-                (deaths ??= []).Add(_positions[index]);
+                (deaths ??= []).Add(_critterIds[index]);
                 continue;
             }
 
-            if (nutrition.FeedsFromEnvironment && Tick >= _nextAmbientFeedingTicks[index])
-            {
-                AdvanceSchedule(
-                    ref _nextAmbientFeedingTicks[index],
-                    nutrition.AmbientFeedingIntervalTicks);
-                if (species is CritterSpecies.Plankton ||
-                    TryConsumeEnvironmentalNutrition(species, GetIndex(_positions[index])))
-                {
-                    _energy[index] = Math.Min(
-                        nutrition.MaximumEnergy,
-                        _energy[index] + nutrition.AmbientFoodEnergy);
-                }
-            }
-
-            if (nutrition.HasMetabolism && Tick >= _nextMetabolismTicks[index])
+            var metabolized = nutrition.HasMetabolism && Tick >= _nextMetabolismTicks[index];
+            if (metabolized)
             {
                 AdvanceSchedule(ref _nextMetabolismTicks[index], nutrition.MetabolismIntervalTicks);
                 _energy[index] = Math.Max(0, _energy[index] - nutrition.MetabolismCost);
-                if (_energy[index] == 0)
+                if (species is CritterSpecies.Ape)
                 {
-                    (deaths ??= []).Add(_positions[index]);
-                    continue;
+                    TryFeedApeFromVillage(index, nutrition);
                 }
             }
 
-            if (!nutrition.CanReproduce || _energy[index] < nutrition.ReproductionThreshold)
+            if (species is CritterSpecies.ApeSailor)
             {
+                TryFillApeSailorFromVillage(index, nutrition);
+            }
+
+            if (metabolized && _energy[index] == 0)
+            {
+                DepositTileNutrition(GetIndex(_positions[index]));
+                (deaths ??= []).Add(_critterIds[index]);
                 continue;
             }
 
-            if (!IsValidReproductionSite(species, _positions[index]))
+            if (!CanSpeciesReproduce(species) ||
+                _energy[index] < nutrition.ReproductionThreshold)
             {
                 continue;
             }
 
             if (species is CritterSpecies.Wolf)
             {
-                TryChargeWolfDen(index, nutrition);
+                reservedBirthTiles ??= [];
+                var wolfBirthPosition = TryReproduceWolfAtDen(
+                    index,
+                    nutrition,
+                    reservedBirthTiles);
+                if (wolfBirthPosition is not null)
+                {
+                    reservedBirthTiles.Add(wolfBirthPosition.Value);
+                    (births ??= []).Add((
+                        CritterSpecies.Wolf,
+                        wolfBirthPosition.Value,
+                        CritterSpecies.Wolf,
+                        -1));
+                }
                 continue;
             }
 
@@ -1056,9 +1165,9 @@ public sealed class SimulationWorld
 
         if (deaths is not null)
         {
-            foreach (var position in deaths)
+            foreach (var critterId in deaths)
             {
-                RemoveCritterAt(position);
+                RemoveCritter(critterId);
             }
         }
 
@@ -1087,7 +1196,10 @@ public sealed class SimulationWorld
         }
     }
 
-    private void TryChargeWolfDen(int wolfIndex, CritterNutrition nutrition)
+    private GridPosition? TryReproduceWolfAtDen(
+        int wolfIndex,
+        CritterNutrition nutrition,
+        IReadOnlySet<GridPosition> reservedBirthTiles)
     {
         var wolfId = _critterIds[wolfIndex].Value;
         if (!_wolfDenHomes.TryGetValue(wolfId, out var denTile) ||
@@ -1111,25 +1223,48 @@ public sealed class SimulationWorld
 
         if (GetIndex(_positions[wolfIndex]) != denTile)
         {
-            return;
+            return null;
         }
 
         var denPosition = new GridPosition(denTile % Width, denTile / Width);
+        if (_wolfDenCharges.TryGetValue(denTile, out var charges) &&
+            charges >= MaximumWolfDenCharges)
+        {
+            var birthPosition = FindBirthPosition(
+                wolfIndex,
+                CritterSpecies.Wolf,
+                reservedBirthTiles);
+            if (birthPosition is null)
+            {
+                return null;
+            }
+
+            CompleteWolfDenAssignment(wolfId, denTile);
+            _energy[wolfIndex] -= nutrition.ReproductionCost;
+            return birthPosition;
+        }
+
         if (!AddWolfDenCharge(denPosition))
         {
             if (!_wolfDenCharges.ContainsKey(denTile))
             {
                 _wolfDenTargets.Remove(wolfId);
             }
-            return;
+            return null;
         }
 
+        CompleteWolfDenAssignment(wolfId, denTile);
+        _energy[wolfIndex] -= nutrition.ReproductionCost;
+        return null;
+    }
+
+    private void CompleteWolfDenAssignment(int wolfId, int denTile)
+    {
         _wolfDenHomes[wolfId] = denTile;
         if (_wolfDenTargets.Remove(wolfId, out var completedTarget))
         {
             RemoveWolfDenIfEmptyAndUnassociated(completedTarget);
         }
-        _energy[wolfIndex] -= nutrition.ReproductionCost;
     }
 
     private bool TryPrepareApeReproduction(int apeIndex, CritterNutrition nutrition)
@@ -1184,10 +1319,45 @@ public sealed class SimulationWorld
 
         _apeStructures[villageTile] = ApeStructureKind.Village;
         _apeVillageFood[villageTile] = 0;
+        _apeVillageWood[villageTile] = ApeInitialWood;
         _apeVillageHomes[apeId] = villageTile;
         _apeVillageTargets.Remove(apeId);
         _energy[apeIndex] -= nutrition.ReproductionCost;
         return false;
+    }
+
+    private bool TryFeedApeFromVillage(int apeIndex, CritterNutrition nutrition)
+    {
+        if (_energy[apeIndex] > nutrition.HungryThreshold ||
+            !_apeVillageHomes.TryGetValue(_critterIds[apeIndex].Value, out var villageTile) ||
+            !_apeVillageFood.TryGetValue(villageTile, out var food) ||
+            food <= 0)
+        {
+            return false;
+        }
+
+        _apeVillageFood[villageTile] = food - 1;
+        _energy[apeIndex] = Math.Min(nutrition.MaximumEnergy, _energy[apeIndex] + 1);
+        return true;
+    }
+
+    private bool TryFillApeSailorFromVillage(int sailorIndex, CritterNutrition nutrition)
+    {
+        var needed = nutrition.MaximumEnergy - _energy[sailorIndex];
+        if (needed <= 0 ||
+            !_apeVillageHomes.TryGetValue(
+                _critterIds[sailorIndex].Value,
+                out var villageTile) ||
+            !_apeVillageFood.TryGetValue(villageTile, out var food) ||
+            food <= 0)
+        {
+            return false;
+        }
+
+        var consumed = Math.Min(needed, food);
+        _apeVillageFood[villageTile] = food - consumed;
+        _energy[sailorIndex] += consumed;
+        return true;
     }
 
     private int FindClaimableApeVillage(int apeIndex)
@@ -1218,8 +1388,8 @@ public sealed class SimulationWorld
     private int FindApeVillageSite(int apeIndex)
     {
         var current = _positions[apeIndex];
-        var bestFarmVillage = -1;
-        var bestFarmDistance = int.MaxValue;
+        var bestFoodVillage = -1;
+        var bestFoodDistance = int.MaxValue;
         var bestHarborVillage = -1;
         var bestHarborDistance = int.MaxValue;
         for (var offsetY = -ApeVillageSearchRadius; offsetY <= ApeVillageSearchRadius; offsetY++)
@@ -1244,10 +1414,10 @@ public sealed class SimulationWorld
                 }
 
                 var distance = Math.Abs(offsetX) + Math.Abs(offsetY);
-                if (auxiliaryKind is ApeStructureKind.Farm && distance < bestFarmDistance)
+                if (IsApeFoodDistrict(auxiliaryKind) && distance < bestFoodDistance)
                 {
-                    bestFarmVillage = villageTile;
-                    bestFarmDistance = distance;
+                    bestFoodVillage = villageTile;
+                    bestFoodDistance = distance;
                 }
                 else if (auxiliaryKind is ApeStructureKind.NavalDistrict && distance < bestHarborDistance)
                 {
@@ -1256,7 +1426,7 @@ public sealed class SimulationWorld
                 }
             }
         }
-        return bestFarmVillage >= 0 ? bestFarmVillage : bestHarborVillage;
+        return bestFoodVillage >= 0 ? bestFoodVillage : bestHarborVillage;
     }
 
     private bool TryGetApeVillageAuxiliarySite(
@@ -1276,7 +1446,13 @@ public sealed class SimulationWorld
         }
 
         var village = new GridPosition(villageTile % Width, villageTile / Width);
-        foreach (var desiredKind in new[] { ApeStructureKind.Farm, ApeStructureKind.NavalDistrict })
+        foreach (var desiredKind in new[]
+        {
+            ApeStructureKind.Farm,
+            ApeStructureKind.RicePaddy,
+            ApeStructureKind.Orchard,
+            ApeStructureKind.NavalDistrict,
+        })
         {
             foreach (var direction in CardinalDirections)
             {
@@ -1317,6 +1493,13 @@ public sealed class SimulationWorld
         {
             ApeStructureKind.Farm =>
                 _biomes[tileIndex] is Biome.Grassland && CanLiveOn(CritterSpecies.Ape, tileIndex),
+            ApeStructureKind.RicePaddy =>
+                _biomes[tileIndex] is Biome.Swamp && CanLiveOn(CritterSpecies.Ape, tileIndex),
+            ApeStructureKind.Orchard =>
+                _biomes[tileIndex] is Biome.Forest && CanLiveOn(CritterSpecies.Ape, tileIndex),
+            ApeStructureKind.LumberCamp =>
+                _biomes[tileIndex] is Biome.Forest or Biome.Jungle or Biome.Taiga &&
+                CanLiveOn(CritterSpecies.Ape, tileIndex),
             ApeStructureKind.NavalDistrict => _terrain[tileIndex] is Terrain.Beach,
             ApeStructureKind.ResidentialDistrict =>
                 CanLiveOn(CritterSpecies.Ape, tileIndex) &&
@@ -1333,6 +1516,28 @@ public sealed class SimulationWorld
             pair.Value == villageTile &&
             _apeStructures.TryGetValue(pair.Key, out var structure) &&
             structure is ApeStructureKind.ResidentialDistrict);
+
+    private int GetApeVillageFoodCapacityByTile(int villageTile) =>
+        ApeVillageBaseFoodCapacity +
+        ApeFoodDistrictStorageCapacity * GetApeFoodDistrictCount(villageTile);
+
+    private void AddApeVillageFood(int villageTile, int amount)
+    {
+        _apeVillageFood.TryGetValue(villageTile, out var food);
+        _apeVillageFood[villageTile] = Math.Min(
+            GetApeVillageFoodCapacityByTile(villageTile),
+            food + amount);
+    }
+
+    private void ClampApeVillageFood(int villageTile)
+    {
+        if (_apeVillageFood.TryGetValue(villageTile, out var food))
+        {
+            _apeVillageFood[villageTile] = Math.Min(
+                food,
+                GetApeVillageFoodCapacityByTile(villageTile));
+        }
+    }
 
     private bool IsAtOrAdjacentToConnectedApeStructure(int apeIndex, int villageTile)
     {
@@ -1359,14 +1564,34 @@ public sealed class SimulationWorld
             .ToArray())
         {
             var population = GetApeVillageResidentCountByTile(villageTile);
+            if (population == 0)
+            {
+                RemoveAbandonedApeVillage(villageTile);
+                continue;
+            }
+
             if (population >= ApeFoodDistrictPopulationThreshold &&
-                !HasApeStructure(villageTile, ApeStructureKind.Farm) &&
+                !HasApeFoodDistrict(villageTile) &&
                 !HasApeStructure(villageTile, ApeStructureKind.NavalDistrict))
             {
-                if (!TryBuildApeStructure(villageTile, ApeStructureKind.Farm))
+                if (!TryBuildApeFoodDistrict(villageTile))
                 {
-                    TryBuildApeStructure(villageTile, ApeStructureKind.NavalDistrict);
+                    TryPurchaseApeStructure(villageTile, ApeStructureKind.NavalDistrict);
                 }
+            }
+
+            if (population >= ApeFoodDistrictPopulationThreshold &&
+                !HasApeStructure(villageTile, ApeStructureKind.LumberCamp))
+            {
+                TryPurchaseApeStructure(villageTile, ApeStructureKind.LumberCamp);
+            }
+
+            // A settlement that began inland can add one harbor later when its
+            // connected district network finally reaches an open Beach tile.
+            if (population >= ApeFoodDistrictPopulationThreshold &&
+                !HasApeStructure(villageTile, ApeStructureKind.NavalDistrict))
+            {
+                TryPurchaseApeStructure(villageTile, ApeStructureKind.NavalDistrict);
             }
 
             foreach (var structureTile in _apeAuxiliaryVillages
@@ -1378,9 +1603,13 @@ public sealed class SimulationWorld
                 {
                     continue;
                 }
-                if (structure is ApeStructureKind.Farm)
+                if (IsApeFoodDistrict(structure))
                 {
-                    AdvanceApeFarm(villageTile, structureTile);
+                    AdvanceApeFoodDistrict(villageTile, structureTile);
+                }
+                else if (structure is ApeStructureKind.LumberCamp)
+                {
+                    AdvanceApeLumberCamp(villageTile, structureTile);
                 }
                 else if (structure is ApeStructureKind.NavalDistrict)
                 {
@@ -1389,20 +1618,118 @@ public sealed class SimulationWorld
             }
 
             population = GetApeVillageResidentCountByTile(villageTile);
-            _apeVillageFood.TryGetValue(villageTile, out var food);
-            if (population >= GetApeVillagePopulationCapacityByTile(villageTile) &&
-                food >= ApeResidentialFoodCost &&
-                TryBuildApeStructure(villageTile, ApeStructureKind.ResidentialDistrict))
+            if (population >= GetApeVillagePopulationCapacityByTile(villageTile))
             {
-                _apeVillageFood[villageTile] = food - ApeResidentialFoodCost;
+                TryBuildNextApeVillageExpansion(villageTile);
             }
         }
     }
 
-    private bool HasApeStructure(int villageTile, ApeStructureKind kind) =>
-        _apeAuxiliaryVillages.Any(pair =>
+    private void RemoveAbandonedApeVillage(int villageTile)
+    {
+        var abandonedTiles = _apeAuxiliaryVillages
+            .Where(pair => pair.Value == villageTile)
+            .Select(pair => pair.Key)
+            .Append(villageTile)
+            .ToArray();
+        var villagePosition = new GridPosition(villageTile % Width, villageTile / Width);
+        if (!RemoveApeStructureAt(villagePosition))
+        {
+            return;
+        }
+
+        foreach (var abandonedTile in abandonedTiles)
+        {
+            DepositTileNutrition(abandonedTile);
+        }
+    }
+
+    private bool TryBuildNextApeVillageExpansion(int villageTile)
+    {
+        foreach (var kind in GetApeVillageExpansionCandidates(villageTile))
+        {
+            if (TryPurchaseApeStructure(villageTile, kind))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private IEnumerable<ApeStructureKind> GetApeVillageExpansionCandidates(int villageTile)
+    {
+        var foodDistricts = GetApeFoodDistrictCount(villageTile);
+        var homes = GetApeStructureCount(villageTile, ApeStructureKind.ResidentialDistrict);
+        if (foodDistricts <= homes)
+        {
+            yield return ApeStructureKind.Farm;
+            yield return ApeStructureKind.RicePaddy;
+            yield return ApeStructureKind.Orchard;
+            yield return ApeStructureKind.ResidentialDistrict;
+        }
+        else
+        {
+            yield return ApeStructureKind.ResidentialDistrict;
+        }
+    }
+
+    internal static int GetApeStructureFoodCost(ApeStructureKind kind) => kind switch
+    {
+        ApeStructureKind.LumberCamp => ApeLumberCampFoodCost,
+        ApeStructureKind.ResidentialDistrict => ApeResidentialFoodCost,
+        _ => 0,
+    };
+
+    internal static int GetApeStructureWoodCost(ApeStructureKind kind) => kind switch
+    {
+        ApeStructureKind.Farm or ApeStructureKind.RicePaddy or ApeStructureKind.Orchard =>
+            ApeFoodDistrictWoodCost,
+        ApeStructureKind.ResidentialDistrict => ApeResidentialWoodCost,
+        ApeStructureKind.NavalDistrict => ApeHarborWoodCost,
+        _ => 0,
+    };
+
+    private int GetApeStructureCount(int villageTile, ApeStructureKind kind) =>
+        _apeAuxiliaryVillages.Count(pair =>
             pair.Value == villageTile &&
             _apeStructures.TryGetValue(pair.Key, out var structure) && structure == kind);
+
+    private bool HasApeStructure(int villageTile, ApeStructureKind kind) =>
+        GetApeStructureCount(villageTile, kind) > 0;
+
+    private int GetApeFoodDistrictCount(int villageTile) =>
+        _apeAuxiliaryVillages.Count(pair =>
+            pair.Value == villageTile &&
+            _apeStructures.TryGetValue(pair.Key, out var structure) &&
+            IsApeFoodDistrict(structure));
+
+    private bool HasApeFoodDistrict(int villageTile) =>
+        GetApeFoodDistrictCount(villageTile) > 0;
+
+    private bool TryBuildApeFoodDistrict(int villageTile) =>
+        TryBuildApeStructure(villageTile, ApeStructureKind.Farm) ||
+        TryBuildApeStructure(villageTile, ApeStructureKind.RicePaddy) ||
+        TryBuildApeStructure(villageTile, ApeStructureKind.Orchard);
+
+    private static bool IsApeFoodDistrict(ApeStructureKind kind) =>
+        kind is ApeStructureKind.Farm or ApeStructureKind.RicePaddy or ApeStructureKind.Orchard;
+
+    private bool TryPurchaseApeStructure(int villageTile, ApeStructureKind kind)
+    {
+        _apeVillageFood.TryGetValue(villageTile, out var food);
+        _apeVillageWood.TryGetValue(villageTile, out var wood);
+        var foodCost = GetApeStructureFoodCost(kind);
+        var woodCost = GetApeStructureWoodCost(kind);
+        if (food < foodCost || wood < woodCost ||
+            !TryBuildApeStructure(villageTile, kind))
+        {
+            return false;
+        }
+
+        _apeVillageFood[villageTile] = food - foodCost;
+        _apeVillageWood[villageTile] = wood - woodCost;
+        return true;
+    }
 
     private bool TryBuildApeStructure(int villageTile, ApeStructureKind kind)
     {
@@ -1414,9 +1741,14 @@ public sealed class SimulationWorld
 
         _apeStructures[constructionTile] = kind;
         _apeAuxiliaryVillages[constructionTile] = villageTile;
-        if (kind is ApeStructureKind.Farm)
+        if (IsApeFoodDistrict(kind))
         {
             _apeStructureNextActionTicks[constructionTile] = Tick + ApeFarmFoodIntervalTicks;
+        }
+        else if (kind is ApeStructureKind.LumberCamp)
+        {
+            _apeStructureNextActionTicks[constructionTile] =
+                Tick + GetApeLumberProductionIntervalTicks(_biomes[constructionTile]);
         }
         else if (kind is ApeStructureKind.NavalDistrict)
         {
@@ -1452,13 +1784,13 @@ public sealed class SimulationWorld
 
         return candidates
             .OrderBy(tile => kind is ApeStructureKind.ResidentialDistrict &&
-                _biomes[tile] is Biome.Grassland)
+                _biomes[tile] is Biome.Grassland or Biome.Swamp or Biome.Forest)
             .ThenBy(tile => tile)
             .DefaultIfEmpty(-1)
             .First();
     }
 
-    private void AdvanceApeFarm(int villageTile, int farmTile)
+    private void AdvanceApeFoodDistrict(int villageTile, int farmTile)
     {
         if (!_apeStructureNextActionTicks.TryGetValue(farmTile, out var nextTick))
         {
@@ -1472,13 +1804,44 @@ public sealed class SimulationWorld
 
         do
         {
-            _apeVillageFood.TryGetValue(villageTile, out var food);
-            _apeVillageFood[villageTile] = food + 1;
+            AddApeVillageFood(villageTile, 1);
             nextTick += ApeFarmFoodIntervalTicks;
         }
         while (nextTick <= Tick);
         _apeStructureNextActionTicks[farmTile] = nextTick;
     }
+
+    private void AdvanceApeLumberCamp(int villageTile, int lumberCampTile)
+    {
+        var interval = GetApeLumberProductionIntervalTicks(_biomes[lumberCampTile]);
+        if (!_apeStructureNextActionTicks.TryGetValue(lumberCampTile, out var nextTick))
+        {
+            nextTick = Tick + interval;
+        }
+        if (Tick < nextTick)
+        {
+            _apeStructureNextActionTicks[lumberCampTile] = nextTick;
+            return;
+        }
+
+        do
+        {
+            _apeVillageWood.TryGetValue(villageTile, out var wood);
+            _apeVillageWood[villageTile] = Math.Min(ApeMaximumWood, wood + 1);
+            nextTick += interval;
+        }
+        while (nextTick <= Tick);
+        _apeStructureNextActionTicks[lumberCampTile] = nextTick;
+    }
+
+    internal static int GetApeLumberProductionIntervalTicks(Biome biome) =>
+        biome switch
+        {
+            Biome.Jungle => 10 * TicksPerSecond,
+            Biome.Forest => 14 * TicksPerSecond,
+            Biome.Taiga => 18 * TicksPerSecond,
+            _ => 18 * TicksPerSecond,
+        };
 
     private void AdvanceApeHarborRecruitment(int villageTile, int harborTile)
     {
@@ -1516,7 +1879,16 @@ public sealed class SimulationWorld
             pair.Value == villageTile &&
             _critterIndicesById.TryGetValue(pair.Key, out var residentIndex) &&
             _species[residentIndex] is CritterSpecies.ApeSailor);
-        if (sailorCount >= harborCount * ApeSailorsPerHarbor)
+        var population = GetApeVillageResidentCountByTile(villageTile);
+        var sailorLimit = harborCount > 0 ? GetApeSailorLimitForPopulation(population) : 0;
+        if (sailorCount >= sailorLimit)
+        {
+            return false;
+        }
+
+        _apeVillageWood.TryGetValue(villageTile, out var wood);
+        var woodCost = sailorCount == 0 ? 0 : ApeSailorWoodCost;
+        if (wood < woodCost)
         {
             return false;
         }
@@ -1541,11 +1913,21 @@ public sealed class SimulationWorld
             .ThenBy(id => id)
             .First();
         var recruitIndex = _critterIndicesById[recruitId];
-        ChangeCritterSpecies(recruitIndex, CritterSpecies.ApeSailor, preserveEnergy: true);
+        ChangeCritterSpecies(
+            recruitIndex,
+            CritterSpecies.ApeSailor,
+            preserveEnergy: true,
+            preserveApeVillage: true);
         MoveCritter(recruitIndex, harborTile, harbor);
-        _apeVillageHomes[recruitId] = villageTile;
+        _apeVillageWood[villageTile] = wood - woodCost;
         return true;
     }
+
+    internal static int GetApeSailorLimitForPopulation(int population) =>
+        Math.Min(ApeSailorsPerHarbor, Math.Max(0, population) / 5);
+
+    internal static bool CanSpeciesReproduce(CritterSpecies species) =>
+        species is not CritterSpecies.ApeSailor && CritterNutritions.Get(species).CanReproduce;
 
     private int FindWolfDenSite(int wolfIndex)
     {
@@ -1629,7 +2011,9 @@ public sealed class SimulationWorld
         return CritterEvolution.ChooseOffspring(
             parentSpecies,
             NextInt(CritterEvolution.MaximumChanceSteps),
-            EvolutionChanceSteps,
+            CritterEvolution.GetOffspringEvolutionChanceSteps(
+                parentSpecies,
+                EvolutionChanceSteps),
             branchIndex);
     }
 
@@ -1667,17 +2051,19 @@ public sealed class SimulationWorld
     private void ChangeCritterSpecies(
         int critterIndex,
         CritterSpecies targetSpecies,
-        bool preserveEnergy)
+        bool preserveEnergy,
+        bool preserveApeVillage = false)
     {
         var currentSpecies = _species[critterIndex];
         _speciesCounts[(int)currentSpecies]--;
         _speciesCounts[(int)targetSpecies]++;
         _species[critterIndex] = targetSpecies;
         var critterId = _critterIds[critterIndex].Value;
-        _newtMigrationPaths.Remove(critterId);
-        _newtFreshwaterSearchCompleted.Remove(critterId);
         DetachWolfFromDens(critterId);
-        DetachApeFromVillage(critterId);
+        if (!preserveApeVillage)
+        {
+            DetachApeFromVillage(critterId);
+        }
         var nutrition = CritterNutritions.Get(targetSpecies);
         _energy[critterIndex] = preserveEnergy && nutrition.MaximumEnergy > 0
             ? Math.Clamp(_energy[critterIndex], 1, nutrition.MaximumEnergy)
@@ -1685,9 +2071,6 @@ public sealed class SimulationWorld
         _nextMovementTicks[critterIndex] = GetFirstMovementTick(targetSpecies);
         _nextMetabolismTicks[critterIndex] = nutrition.HasMetabolism
             ? Tick + nutrition.MetabolismIntervalTicks
-            : long.MaxValue;
-        _nextAmbientFeedingTicks[critterIndex] = nutrition.FeedsFromEnvironment
-            ? Tick + nutrition.AmbientFeedingIntervalTicks
             : long.MaxValue;
         _preyTargets[critterIndex] = -1;
         _damageFlashUntilTicks[critterIndex] = 0;
@@ -1745,8 +2128,7 @@ public sealed class SimulationWorld
             }
 
             var tileIndex = GetIndex(candidate);
-            if (_occupants[tileIndex] < 0 && CanLiveOn(offspringSpecies, tileIndex) &&
-                IsValidBirthSite(offspringSpecies, candidate))
+            if (_occupants[tileIndex] < 0 && CanLiveOn(offspringSpecies, tileIndex))
             {
                 return candidate;
             }
@@ -1818,10 +2200,33 @@ public sealed class SimulationWorld
         return null;
     }
 
+    private GridPosition? TryMovePlankton(int critterIndex)
+    {
+        TryFeedFromTerrain(critterIndex);
+        return TryMove(critterIndex);
+    }
+
+    private GridPosition? TryMoveSquidEgg(int critterIndex)
+    {
+        TryMove(critterIndex);
+        if (_terrain[GetIndex(_positions[critterIndex])] is Terrain.Shallows)
+        {
+            ChangeCritterSpecies(critterIndex, CritterSpecies.Squid, preserveEnergy: false);
+        }
+        return null;
+    }
+
     private GridPosition? TryMoveWorm(int critterIndex)
     {
+        if (TryFeedFromTerrain(critterIndex))
+        {
+            return null;
+        }
+
         var current = _positions[critterIndex];
-        if (!CanFeedFromEnvironment(CritterSpecies.Worm, GetIndex(current)))
+        var nutrition = CritterNutritions.Get(CritterSpecies.Worm);
+        if (_energy[critterIndex] < nutrition.MaximumEnergy &&
+            !CanFeedFromEnvironment(CritterSpecies.Worm, GetIndex(current)))
         {
             var startDirection = NextInt(MovementDirections.Length);
             for (var offset = 0; offset < MovementDirections.Length; offset++)
@@ -1856,6 +2261,11 @@ public sealed class SimulationWorld
             return null;
         }
 
+        if (TryFeedFromTerrain(critterIndex))
+        {
+            return null;
+        }
+
         if (TryReturnToDeepSeaTerrain(critterIndex, CritterSpecies.Trilobite))
         {
             return null;
@@ -1867,7 +2277,7 @@ public sealed class SimulationWorld
     private bool TryReturnToDeepSeaTerrain(int critterIndex, CritterSpecies species)
     {
         var current = _positions[critterIndex];
-        if (IsTrilobiteFeedingTerrain(_terrain[GetIndex(current)]))
+        if (IsPreferredDeepSeaTerrain(species, _terrain[GetIndex(current)]))
         {
             return false;
         }
@@ -1885,7 +2295,7 @@ public sealed class SimulationWorld
             }
 
             var destinationIndex = GetIndex(candidate);
-            if (IsTrilobiteFeedingTerrain(_terrain[destinationIndex]) &&
+            if (IsPreferredDeepSeaTerrain(species, _terrain[destinationIndex]) &&
                 CanLiveOn(species, destinationIndex) &&
                 CanEnterOrShoveMovementBlocker(critterIndex, destinationIndex))
             {
@@ -1897,16 +2307,28 @@ public sealed class SimulationWorld
         return false;
     }
 
+    private static bool IsPreferredDeepSeaTerrain(CritterSpecies species, Terrain terrain) =>
+        species is CritterSpecies.Nautilus
+            ? terrain is Terrain.DeepOcean or Terrain.Ocean
+            : IsTrilobiteFeedingTerrain(terrain);
+
     private GridPosition? TryMoveHunter(
         int critterIndex,
         int perceptionRadius,
         IReadOnlySet<GridPosition>? reservedPrey)
     {
         var predatorSpecies = _species[critterIndex];
-        var target = predatorSpecies is CritterSpecies.MegaToad or CritterSpecies.Fish
-            ? FindHunterPrey(critterIndex, predatorSpecies, perceptionRadius, reservedPrey)
-            : GetValidHunterTarget(critterIndex, predatorSpecies, reservedPrey) ??
-                FindHunterPrey(critterIndex, predatorSpecies, perceptionRadius, reservedPrey);
+        if (_energy[critterIndex] >= CritterNutritions.Get(predatorSpecies).MaximumEnergy)
+        {
+            _preyTargets[critterIndex] = -1;
+            return TryMove(critterIndex, reservedPrey);
+        }
+
+        var target = FindHunterPrey(
+            critterIndex,
+            predatorSpecies,
+            perceptionRadius,
+            reservedPrey);
         if (target is null)
         {
             _preyTargets[critterIndex] = -1;
@@ -1939,13 +2361,6 @@ public sealed class SimulationWorld
                         CanTherapsidStrikeAdjacentLakePrey(critterIndex, preyIndex)) &&
                     reservedPrey?.Contains(candidate) is not true)
                 {
-                    if (predatorSpecies is CritterSpecies.Fish &&
-                        _species[preyIndex] is CritterSpecies.Worm &&
-                        TryShoveWorm(critterIndex, destinationIndex, reservedPrey))
-                    {
-                        MoveCritter(critterIndex, destinationIndex, candidate);
-                        return null;
-                    }
                     return candidate;
                 }
                 if (CanLiveOn(predatorSpecies, destinationIndex) &&
@@ -1971,12 +2386,6 @@ public sealed class SimulationWorld
 
         if (best is null)
         {
-            if (predatorSpecies is CritterSpecies.MegaToad)
-            {
-                // Do not opportunistically swallow last-choice prey while a
-                // preferred target is visible but temporarily blocked.
-                return null;
-            }
             return TryMove(critterIndex, reservedPrey);
         }
 
@@ -1993,14 +2402,13 @@ public sealed class SimulationWorld
             return null;
         }
 
-        var nutrition = CritterNutritions.Get(CritterSpecies.Fish);
-        if (_energy[critterIndex] < nutrition.ReproductionThreshold &&
-            CanFeedFromEnvironment(CritterSpecies.Fish, GetIndex(_positions[critterIndex])))
+        if (TryFeedFromTerrain(critterIndex))
         {
             return null;
         }
 
-        if (_energy[critterIndex] <= nutrition.HungryThreshold &&
+        var nutrition = CritterNutritions.Get(CritterSpecies.Fish);
+        if (_energy[critterIndex] < nutrition.MaximumEnergy &&
             TryApproachNearbyFeedingTile(
                 critterIndex,
                 CritterSpecies.Fish,
@@ -2017,14 +2425,13 @@ public sealed class SimulationWorld
         int critterIndex,
         IReadOnlySet<GridPosition>? reservedPrey)
     {
-        var nutrition = CritterNutritions.Get(CritterSpecies.Therapsid);
-        if (_energy[critterIndex] < nutrition.ReproductionThreshold &&
-            CanFeedFromEnvironment(CritterSpecies.Therapsid, GetIndex(_positions[critterIndex])))
+        if (TryFeedFromTerrain(critterIndex))
         {
             return null;
         }
 
-        if (_energy[critterIndex] < nutrition.ReproductionThreshold &&
+        var nutrition = CritterNutritions.Get(CritterSpecies.Therapsid);
+        if (_energy[critterIndex] < nutrition.MaximumEnergy &&
             TryApproachNearbyFeedingTile(
                 critterIndex,
                 CritterSpecies.Therapsid,
@@ -2046,6 +2453,22 @@ public sealed class SimulationWorld
             return null;
         }
 
+        if (TryFeedFromTerrain(critterIndex))
+        {
+            return null;
+        }
+
+        var nutrition = CritterNutritions.Get(CritterSpecies.Nautilus);
+        if (_energy[critterIndex] < nutrition.MaximumEnergy &&
+            TryApproachNearbyFeedingTile(
+                critterIndex,
+                CritterSpecies.Nautilus,
+                NautilusPerceptionRadius,
+                reservedPrey))
+        {
+            return null;
+        }
+
         if (TryReturnToDeepSeaTerrain(critterIndex, CritterSpecies.Nautilus))
         {
             return null;
@@ -2056,14 +2479,13 @@ public sealed class SimulationWorld
 
     private GridPosition? TryMoveCrab(int critterIndex)
     {
-        var nutrition = CritterNutritions.Get(CritterSpecies.Crab);
-        if (_energy[critterIndex] < nutrition.ReproductionThreshold &&
-            CanFeedFromEnvironment(CritterSpecies.Crab, GetIndex(_positions[critterIndex])))
+        if (TryFeedFromTerrain(critterIndex))
         {
             return null;
         }
 
-        if (_energy[critterIndex] <= nutrition.HungryThreshold &&
+        var nutrition = CritterNutritions.Get(CritterSpecies.Crab);
+        if (_energy[critterIndex] < nutrition.MaximumEnergy &&
             TryMoveToAdjacentFeedingTile(critterIndex, CritterSpecies.Crab))
         {
             return null;
@@ -2170,7 +2592,9 @@ public sealed class SimulationWorld
             var candidateIndex = GetIndex(candidate);
             if (!CanLiveOn(species, candidateIndex) ||
                 (_occupants[candidateIndex] >= 0 &&
-                    !CanShoveMovementBlocker(critterIndex, candidateIndex, reservedPrey)))
+                    !CanShoveMovementBlocker(critterIndex, candidateIndex, reservedPrey) &&
+                    !(species is CritterSpecies.Fish &&
+                        CanShoveWorm(critterIndex, candidateIndex, reservedPrey))))
             {
                 continue;
             }
@@ -2190,7 +2614,9 @@ public sealed class SimulationWorld
 
         var destinationIndex = GetIndex(best.Value);
         if (_occupants[destinationIndex] >= 0 &&
-            !TryShoveMovementBlocker(critterIndex, destinationIndex, reservedPrey))
+            !TryShoveMovementBlocker(critterIndex, destinationIndex, reservedPrey) &&
+            !(species is CritterSpecies.Fish &&
+                TryShoveWorm(critterIndex, destinationIndex, reservedPrey)))
         {
             return false;
         }
@@ -2208,14 +2634,13 @@ public sealed class SimulationWorld
             return null;
         }
 
-        var nutrition = CritterNutritions.Get(CritterSpecies.Monkey);
-        if (_energy[critterIndex] < nutrition.ReproductionThreshold &&
-            CanFeedFromEnvironment(CritterSpecies.Monkey, GetIndex(_positions[critterIndex])))
+        if (TryFeedFromTerrain(critterIndex))
         {
             return null;
         }
 
-        if (_energy[critterIndex] <= nutrition.HungryThreshold)
+        var nutrition = CritterNutritions.Get(CritterSpecies.Monkey);
+        if (_energy[critterIndex] < nutrition.MaximumEnergy)
         {
             var current = _positions[critterIndex];
             var startDirection = NextInt(MovementDirections.Length);
@@ -2313,18 +2738,33 @@ public sealed class SimulationWorld
         if (!_apeCarriedFood.TryGetValue(apeId, out var carriedFood) || carriedFood <= 0 ||
             !_apeVillageHomes.TryGetValue(apeId, out var villageTile))
         {
+            _apeFoodReturnProgress.Remove(apeId);
             return false;
         }
 
         if (IsAtOrAdjacentToConnectedApeStructure(critterIndex, villageTile))
         {
-            _apeVillageFood.TryGetValue(villageTile, out var villageFood);
-            _apeVillageFood[villageTile] = villageFood + carriedFood;
-            _apeCarriedFood.Remove(apeId);
+            DepositApeCarriedFood(apeId, villageTile, carriedFood);
             return true;
         }
 
         var target = FindNearestConnectedApeStructure(critterIndex, villageTile);
+        var distance = target < 0
+            ? int.MaxValue
+            : WrappedManhattanDistance(
+                _positions[critterIndex],
+                new GridPosition(target % Width, target / Width));
+        if (!_apeFoodReturnProgress.TryGetValue(apeId, out var progress) ||
+            distance < progress.BestDistance)
+        {
+            _apeFoodReturnProgress[apeId] = (distance, Tick);
+        }
+        else if (Tick - progress.LastProgressTick >= ApeFoodReturnStallTicks)
+        {
+            DepositApeCarriedFood(apeId, villageTile, carriedFood);
+            return true;
+        }
+
         if (target < 0)
         {
             return false;
@@ -2332,6 +2772,13 @@ public sealed class SimulationWorld
 
         movement = TryMoveTowardApeStructure(critterIndex, target, reservedPrey);
         return true;
+    }
+
+    private void DepositApeCarriedFood(int apeId, int villageTile, int carriedFood)
+    {
+        AddApeVillageFood(villageTile, carriedFood);
+        _apeCarriedFood.Remove(apeId);
+        _apeFoodReturnProgress.Remove(apeId);
     }
 
     private int FindNearestConnectedApeStructure(int apeIndex, int villageTile)
@@ -2458,16 +2905,14 @@ public sealed class SimulationWorld
             return null;
         }
 
-        var species = _species[critterIndex];
-        var currentIndex = GetIndex(_positions[critterIndex]);
-        var nutrition = CritterNutritions.Get(species);
-        if (_energy[critterIndex] <= nutrition.HungryThreshold &&
-            CanFeedFromEnvironment(species, currentIndex))
+        if (TryFeedFromTerrain(critterIndex))
         {
             return null;
         }
 
-        if (_energy[critterIndex] <= nutrition.HungryThreshold)
+        var species = _species[critterIndex];
+        var nutrition = CritterNutritions.Get(species);
+        if (_energy[critterIndex] < nutrition.MaximumEnergy)
         {
             var current = _positions[critterIndex];
             var startDirection = NextInt(MovementDirections.Length);
@@ -2590,54 +3035,19 @@ public sealed class SimulationWorld
             return null;
         }
 
-        var nutrition = CritterNutritions.Get(CritterSpecies.Newt);
-        if (_energy[critterIndex] <= nutrition.HungryThreshold &&
-            CanFeedFromEnvironment(CritterSpecies.Newt, GetIndex(_positions[critterIndex])))
+        if (TryFeedFromTerrain(critterIndex))
         {
-            // A hungry Newt that has reached food waits for its next feeding
-            // interval instead of wandering out of feeding range.
             return null;
         }
 
-        if (_energy[critterIndex] <= nutrition.HungryThreshold &&
+        var nutrition = CritterNutritions.Get(CritterSpecies.Newt);
+        if (_energy[critterIndex] < nutrition.MaximumEnergy &&
             TryApproachNearbyNewtFood(critterIndex))
         {
             return null;
         }
 
-        var critterId = _critterIds[critterIndex].Value;
-        if (!_newtFreshwaterSearchCompleted.Contains(critterId))
-        {
-            PlanNewtFreshwaterMigration(critterIndex);
-        }
-
-        if (!_newtMigrationPaths.TryGetValue(critterId, out var path) || path.Count == 0)
-        {
-            return TryWanderNewt(critterIndex);
-        }
-
-        var next = path.Peek();
-        var destinationIndex = GetIndex(next);
-        if (!IsNewtTransitTile(destinationIndex))
-        {
-            _newtMigrationPaths.Remove(critterId);
-            return TryWanderNewt(critterIndex);
-        }
-
-        // Preserve the route and wait when another critter temporarily blocks it.
-        if (_occupants[destinationIndex] >= 0 &&
-            !TryShoveMovementBlocker(critterIndex, destinationIndex))
-        {
-            return null;
-        }
-
-        path.Dequeue();
-        MoveCritter(critterIndex, destinationIndex, next);
-        if (path.Count == 0)
-        {
-            _newtMigrationPaths.Remove(critterId);
-        }
-        return null;
+        return TryWanderNewt(critterIndex);
     }
 
     private bool TryFleeMegaToads(int critterIndex)
@@ -2761,7 +3171,7 @@ public sealed class SimulationWorld
             for (var offsetX = -horizontalReach; offsetX <= horizontalReach; offsetX++)
             {
                 var candidate = new GridPosition(Mod(current.X + offsetX, Width), y);
-                if (!IsNewtFeedingTile(GetIndex(candidate)))
+                if (!CanFeedFromEnvironment(CritterSpecies.Newt, GetIndex(candidate)))
                 {
                     continue;
                 }
@@ -2826,90 +3236,6 @@ public sealed class SimulationWorld
         return true;
     }
 
-    private void PlanNewtFreshwaterMigration(int critterIndex)
-    {
-        var critterId = _critterIds[critterIndex].Value;
-        _newtFreshwaterSearchCompleted.Add(critterId);
-        var currentIndex = GetIndex(_positions[critterIndex]);
-        if (IsNewtFeedingTile(currentIndex))
-        {
-            return;
-        }
-
-        EnsureNewtNavigationField();
-        if (_newtNavigationNext is null || _newtNavigationNext[currentIndex] < 0)
-        {
-            return;
-        }
-
-        var path = new Queue<GridPosition>();
-        var cursor = currentIndex;
-        for (var step = 0; step < _terrain.Length && !IsNewtFeedingTile(cursor); step++)
-        {
-            var next = _newtNavigationNext[cursor];
-            if (next < 0 || next == cursor)
-            {
-                break;
-            }
-
-            path.Enqueue(new GridPosition(next % Width, next / Width));
-            cursor = next;
-        }
-
-        if (path.Count > 0 && IsNewtFeedingTile(cursor))
-        {
-            _newtMigrationPaths[critterId] = path;
-        }
-    }
-
-    private void EnsureNewtNavigationField()
-    {
-        if (_newtNavigationNext is not null &&
-            _newtNavigationRevision == _freshwaterNavigationRevision)
-        {
-            return;
-        }
-
-        var navigationNext = new int[_terrain.Length];
-        Array.Fill(navigationNext, -1);
-        var frontier = new Queue<int>();
-        for (var index = 0; index < _terrain.Length; index++)
-        {
-            if (IsNewtFeedingTile(index) && IsNewtTransitTile(index))
-            {
-                navigationNext[index] = index;
-                frontier.Enqueue(index);
-            }
-        }
-
-        while (frontier.Count > 0)
-        {
-            var currentIndex = frontier.Dequeue();
-            var current = new GridPosition(currentIndex % Width, currentIndex / Width);
-            foreach (var direction in MovementDirections)
-            {
-                var y = current.Y + direction.Y;
-                if (y < 0 || y >= Height)
-                {
-                    continue;
-                }
-
-                var neighborIndex = y * Width + Mod(current.X + direction.X, Width);
-                if (navigationNext[neighborIndex] >= 0 || !IsNewtTransitTile(neighborIndex))
-                {
-                    continue;
-                }
-
-                navigationNext[neighborIndex] = currentIndex;
-                frontier.Enqueue(neighborIndex);
-            }
-        }
-
-        _newtNavigationNext = navigationNext;
-        _newtNavigationRevision = _freshwaterNavigationRevision;
-        NewtNavigationBuildCount++;
-    }
-
     private GridPosition? TryWanderNewt(int critterIndex)
     {
         var current = _positions[critterIndex];
@@ -2937,28 +3263,6 @@ public sealed class SimulationWorld
         return null;
     }
 
-    private GridPosition? GetValidHunterTarget(
-        int critterIndex,
-        CritterSpecies predatorSpecies,
-        IReadOnlySet<GridPosition>? reservedPrey)
-    {
-        var targetIndex = _preyTargets[critterIndex];
-        if (targetIndex < 0)
-        {
-            return null;
-        }
-
-        var occupant = _occupants[targetIndex];
-        var target = new GridPosition(targetIndex % Width, targetIndex / Width);
-        return occupant >= 0 &&
-            CanPursuePrey(critterIndex, occupant) &&
-            (CanLiveOn(predatorSpecies, targetIndex) ||
-                CanTherapsidStrikeAdjacentLakePrey(critterIndex, occupant)) &&
-            reservedPrey?.Contains(target) is not true
-                ? target
-                : null;
-    }
-
     private GridPosition? FindHunterPrey(
         int critterIndex,
         CritterSpecies predatorSpecies,
@@ -2969,21 +3273,6 @@ public sealed class SimulationWorld
         GridPosition? selected = null;
         var bestDistance = int.MaxValue;
         var ties = 0;
-        GridPosition? selectedNewt = null;
-        var bestNewtDistance = int.MaxValue;
-        var newtTies = 0;
-        GridPosition? selectedToad = null;
-        var bestToadDistance = int.MaxValue;
-        var toadTies = 0;
-        GridPosition? selectedTherapsid = null;
-        var bestTherapsidDistance = int.MaxValue;
-        var therapsidTies = 0;
-        GridPosition? selectedWolfFallback = null;
-        var bestWolfFallbackDistance = int.MaxValue;
-        var wolfFallbackTies = 0;
-        GridPosition? selectedFishWormFallback = null;
-        var bestFishWormFallbackDistance = int.MaxValue;
-        var fishWormFallbackTies = 0;
         for (var offsetY = -perceptionRadius; offsetY <= perceptionRadius; offsetY++)
         {
             var y = current.Y + offsetY;
@@ -3005,95 +3294,16 @@ public sealed class SimulationWorld
                 }
                 var candidateIndex = GetIndex(candidate);
                 var occupant = _occupants[candidateIndex];
+                var distance = Math.Abs(offsetX) + Math.Abs(offsetY);
                 if (occupant < 0 || occupant == critterIndex ||
                     !CanPursuePrey(critterIndex, occupant) ||
+                    !CanPursuePreyAtDistance(
+                        predatorSpecies,
+                        _species[occupant],
+                        WrappedManhattanDistance(current, candidate)) ||
                     (!CanLiveOn(predatorSpecies, candidateIndex) &&
                         !CanTherapsidStrikeAdjacentLakePrey(critterIndex, occupant)))
                 {
-                    continue;
-                }
-
-                var preySpecies = _species[occupant];
-                var distance = Math.Abs(offsetX) + Math.Abs(offsetY);
-                if (predatorSpecies is CritterSpecies.Fish &&
-                    preySpecies is (CritterSpecies.Worm or CritterSpecies.Crab))
-                {
-                    if (distance < bestFishWormFallbackDistance)
-                    {
-                        bestFishWormFallbackDistance = distance;
-                        selectedFishWormFallback = candidate;
-                        fishWormFallbackTies = 1;
-                    }
-                    else if (distance == bestFishWormFallbackDistance &&
-                        NextInt(++fishWormFallbackTies) == 0)
-                    {
-                        selectedFishWormFallback = candidate;
-                    }
-                    continue;
-                }
-
-                if (predatorSpecies is CritterSpecies.MegaToad &&
-                    preySpecies is CritterSpecies.MegaToad)
-                {
-                    if (distance < bestToadDistance)
-                    {
-                        bestToadDistance = distance;
-                        selectedToad = candidate;
-                        toadTies = 1;
-                    }
-                    else if (distance == bestToadDistance && NextInt(++toadTies) == 0)
-                    {
-                        selectedToad = candidate;
-                    }
-                    continue;
-                }
-
-                if (predatorSpecies is CritterSpecies.MegaToad &&
-                    preySpecies is CritterSpecies.Newt)
-                {
-                    if (distance < bestNewtDistance)
-                    {
-                        bestNewtDistance = distance;
-                        selectedNewt = candidate;
-                        newtTies = 1;
-                    }
-                    else if (distance == bestNewtDistance && NextInt(++newtTies) == 0)
-                    {
-                        selectedNewt = candidate;
-                    }
-                    continue;
-                }
-
-                if (predatorSpecies is CritterSpecies.MegaToad &&
-                    preySpecies is CritterSpecies.Therapsid)
-                {
-                    if (distance < bestTherapsidDistance)
-                    {
-                        bestTherapsidDistance = distance;
-                        selectedTherapsid = candidate;
-                        therapsidTies = 1;
-                    }
-                    else if (distance == bestTherapsidDistance && NextInt(++therapsidTies) == 0)
-                    {
-                        selectedTherapsid = candidate;
-                    }
-                    continue;
-                }
-
-                if (predatorSpecies is CritterSpecies.Wolf &&
-                    preySpecies is CritterSpecies.Therapsid)
-                {
-                    if (distance < bestWolfFallbackDistance)
-                    {
-                        bestWolfFallbackDistance = distance;
-                        selectedWolfFallback = candidate;
-                        wolfFallbackTies = 1;
-                    }
-                    else if (distance == bestWolfFallbackDistance &&
-                        NextInt(++wolfFallbackTies) == 0)
-                    {
-                        selectedWolfFallback = candidate;
-                    }
                     continue;
                 }
 
@@ -3110,25 +3320,7 @@ public sealed class SimulationWorld
             }
         }
 
-        if (predatorSpecies is CritterSpecies.Fish)
-        {
-            return selected ?? selectedFishWormFallback;
-        }
-
-        if (predatorSpecies is not CritterSpecies.MegaToad)
-        {
-            return predatorSpecies is CritterSpecies.Wolf
-                ? selected ?? selectedWolfFallback
-                : selected;
-        }
-
-        var selectedNonToad = selected ?? selectedNewt ?? selectedTherapsid;
-        return (selectedToad, selectedNonToad) switch
-        {
-            (not null, not null) => NextInt(2) == 0 ? selectedToad : selectedNonToad,
-            (not null, null) => selectedToad,
-            _ => selectedNonToad,
-        };
+        return selected;
     }
 
     private void CommitEncounter(GridPosition predatorPosition, GridPosition preyPosition)
@@ -3156,8 +3348,7 @@ public sealed class SimulationWorld
         if (predatorSpecies != preySpecies &&
             CanEat(predatorSpecies, preySpecies) &&
             (CanEat(preySpecies, predatorSpecies) ||
-                preySpecies is CritterSpecies.Therapsid &&
-                    predatorSpecies is (CritterSpecies.MegaToad or CritterSpecies.Wolf) ||
+                CanDefendAgainst(preySpecies, predatorSpecies) ||
                 predatorSpecies is CritterSpecies.MegaToad &&
                 preySpecies is CritterSpecies.Wolf))
         {
@@ -3181,7 +3372,15 @@ public sealed class SimulationWorld
 
         var attackerSpecies = _species[attackerIndex];
         var defenderSpecies = _species[defenderIndex];
-        if (NextInt(2) == 0)
+        var defenderWinChance = GetDefenderCombatWinChancePercent(
+            defenderSpecies,
+            attackerSpecies);
+        var defenderWins = defenderWinChance switch
+        {
+            20 => NextInt(5) == 0,
+            _ => NextInt(2) == 0,
+        };
+        if (defenderWins)
         {
             _energy[attackerIndex] = Math.Max(
                 0,
@@ -3237,27 +3436,32 @@ public sealed class SimulationWorld
 
         var predatorSpecies = _species[predatorIndex];
         var nutrition = CritterNutritions.Get(predatorSpecies);
-        var preyNutrition = CritterNutritions.Get(preySpecies);
-        var foodEnergy = Math.Max(1, preyNutrition.MaximumEnergy / 2);
+        var foodEnergy = CritterNutritions.Get(preySpecies).FoodEnergy;
+        var personalFood = foodEnergy;
+        var settlementFood = 0;
+        var apeId = _critterIds[predatorIndex].Value;
+        if (predatorSpecies is CritterSpecies.Ape or CritterSpecies.ApeSailor &&
+            _apeVillageHomes.ContainsKey(apeId))
+        {
+            personalFood = Math.Min(
+                foodEnergy,
+                Math.Max(0, nutrition.ReproductionThreshold - _energy[predatorIndex]));
+            settlementFood = foodEnergy - personalFood;
+        }
         _energy[predatorIndex] = Math.Min(
             nutrition.MaximumEnergy,
-            _energy[predatorIndex] + foodEnergy);
-        if (predatorSpecies is CritterSpecies.Ape or CritterSpecies.ApeSailor)
+            _energy[predatorIndex] + personalFood);
+        if (settlementFood > 0)
         {
-            var apeId = _critterIds[predatorIndex].Value;
-            if (_apeVillageHomes.ContainsKey(apeId))
-            {
-                _apeCarriedFood.TryGetValue(apeId, out var carriedFood);
-                _apeCarriedFood[apeId] = carriedFood + foodEnergy;
-            }
+            _apeCarriedFood.TryGetValue(apeId, out var carriedFood);
+            _apeCarriedFood[apeId] = carriedFood + settlementFood;
         }
     }
 
     internal static bool CanEat(CritterSpecies predator, CritterSpecies prey) => predator switch
     {
         CritterSpecies.Jellyfish => prey is CritterSpecies.Plankton,
-        CritterSpecies.Fish =>
-            prey is CritterSpecies.Plankton or CritterSpecies.Worm or CritterSpecies.Crab,
+        CritterSpecies.Fish => prey is CritterSpecies.Plankton,
         CritterSpecies.SeaScorpion =>
             prey is CritterSpecies.Fish or CritterSpecies.Worm or CritterSpecies.Trilobite or
                 CritterSpecies.Newt or CritterSpecies.Crab or CritterSpecies.Squid or
@@ -3284,6 +3488,28 @@ public sealed class SimulationWorld
         _ => false,
     };
 
+    internal static bool CanDefendAgainst(CritterSpecies defender, CritterSpecies attacker) =>
+        defender is CritterSpecies.Therapsid &&
+        attacker is CritterSpecies.MegaToad or CritterSpecies.Wolf;
+
+    internal static int GetDefenderCombatWinChancePercent(
+        CritterSpecies defender,
+        CritterSpecies attacker) =>
+        CanDefendAgainst(defender, attacker) ? 20 : 50;
+
+    internal static bool CanPursuePreyAtDistance(
+        CritterSpecies predator,
+        CritterSpecies prey,
+        int distance) =>
+        CanEat(predator, prey) &&
+        !(predator is CritterSpecies.Ape && prey is CritterSpecies.Fish && distance > 1);
+
+    internal static bool CanDisplace(CritterSpecies mover, CritterSpecies blocker) =>
+        CritterNutritions.Get(mover).BodySize > CritterNutritions.Get(blocker).BodySize;
+
+    internal static bool CanDisplacePlankton(CritterSpecies mover) =>
+        mover is not CritterSpecies.SquidEgg;
+
     private static bool IsLargeLandPredatorPrey(CritterSpecies prey) =>
         prey is CritterSpecies.Worm or CritterSpecies.Trilobite or CritterSpecies.Nautilus or
             CritterSpecies.Fish or CritterSpecies.Newt or CritterSpecies.Crab or
@@ -3304,12 +3530,6 @@ public sealed class SimulationWorld
             return false;
         }
 
-        if (_species[predatorIndex] is CritterSpecies.Fish &&
-            _species[preyIndex] is (CritterSpecies.Worm or CritterSpecies.Crab) &&
-            HasNearbyAvailableFishForagingTile(predatorIndex))
-        {
-            return false;
-        }
         return true;
     }
 
@@ -3326,32 +3546,6 @@ public sealed class SimulationWorld
             return false;
         }
         return truce.ParentSpecies == otherSpecies;
-    }
-
-    private bool HasNearbyAvailableFishForagingTile(int fishIndex)
-    {
-        var current = _positions[fishIndex];
-        for (var offsetY = -FishPerceptionRadius; offsetY <= FishPerceptionRadius; offsetY++)
-        {
-            var y = current.Y + offsetY;
-            if (y < 0 || y >= Height)
-            {
-                continue;
-            }
-
-            var horizontalReach = FishPerceptionRadius - Math.Abs(offsetY);
-            for (var offsetX = -horizontalReach; offsetX <= horizontalReach; offsetX++)
-            {
-                var tileIndex = y * Width + Mod(current.X + offsetX, Width);
-                if (CanFeedFromEnvironment(CritterSpecies.Fish, tileIndex) &&
-                    (_occupants[tileIndex] < 0 || _occupants[tileIndex] == fishIndex))
-                {
-                    return true;
-                }
-            }
-        }
-
-        return false;
     }
 
     private bool CanTherapsidStrikeAdjacentLakePrey(int predatorIndex, int preyIndex)
@@ -3374,12 +3568,38 @@ public sealed class SimulationWorld
     private bool CanFeedFromEnvironment(CritterSpecies species, int tileIndex)
         => FindEnvironmentalFoodTile(species, tileIndex) >= 0;
 
+    private bool TryFeedFromTerrain(int critterIndex)
+    {
+        var nutrition = CritterNutritions.Get(_species[critterIndex]);
+        if (!nutrition.FeedsFromEnvironment || _energy[critterIndex] >= nutrition.MaximumEnergy)
+        {
+            return false;
+        }
+
+        if (nutrition.FeedingStrategy is not CritterFeedingStrategy.Photosynthetic &&
+            !TryConsumeEnvironmentalNutrition(
+                _species[critterIndex],
+                GetIndex(_positions[critterIndex])))
+        {
+            return false;
+        }
+
+        _energy[critterIndex]++;
+        return true;
+    }
+
     private bool TryConsumeEnvironmentalNutrition(CritterSpecies species, int tileIndex)
     {
         var foodTile = FindEnvironmentalFoodTile(species, tileIndex);
         if (foodTile < 0)
         {
             return false;
+        }
+
+        if (_depositedTileNutrition[foodTile] > 0)
+        {
+            _depositedTileNutrition[foodTile]--;
+            return true;
         }
 
         if (_tileNutrition[foodTile] == _tileNutritionCapacities[foodTile])
@@ -3392,8 +3612,9 @@ public sealed class SimulationWorld
 
     private int FindEnvironmentalFoodTile(CritterSpecies species, int tileIndex)
     {
-        if (IsEnvironmentalFoodSourceForSpecies(species, tileIndex) &&
-            HasAvailableTileNutrition(tileIndex))
+        if (HasDepositedTileNutrition(tileIndex) ||
+            (IsEnvironmentalFoodSourceForSpecies(species, tileIndex) &&
+                HasNaturalTileNutrition(tileIndex)))
         {
             return tileIndex;
         }
@@ -3412,7 +3633,9 @@ public sealed class SimulationWorld
                 continue;
             }
             var candidateTile = y * Width + Mod(position.X + direction.X, Width);
-            if (IsNewtFeedingTile(candidateTile) && HasAvailableTileNutrition(candidateTile))
+            if (IsNewtFeedingTile(candidateTile) &&
+                (HasDepositedTileNutrition(candidateTile) ||
+                    HasNaturalTileNutrition(candidateTile)))
             {
                 return candidateTile;
             }
@@ -3420,10 +3643,21 @@ public sealed class SimulationWorld
         return -1;
     }
 
-    private bool HasAvailableTileNutrition(int tileIndex)
+    private bool HasDepositedTileNutrition(int tileIndex) =>
+        _depositedTileNutrition[tileIndex] > 0;
+
+    private bool HasNaturalTileNutrition(int tileIndex)
     {
         RefreshTileNutrition(tileIndex);
         return _tileNutrition[tileIndex] > 0;
+    }
+
+    private void DepositTileNutrition(int tileIndex)
+    {
+        if (_depositedTileNutrition[tileIndex] < byte.MaxValue)
+        {
+            _depositedTileNutrition[tileIndex]++;
+        }
     }
 
     private bool IsEnvironmentalFoodSourceForSpecies(CritterSpecies species, int tileIndex) =>
@@ -3431,12 +3665,10 @@ public sealed class SimulationWorld
     {
         CritterSpecies.Worm => IsWormFeedingTile(tileIndex),
         CritterSpecies.Trilobite => IsTrilobiteFeedingTerrain(_terrain[tileIndex]),
-        CritterSpecies.Nautilus => IsTrilobiteFeedingTerrain(_terrain[tileIndex]),
+        CritterSpecies.Nautilus => IsNautilusFeedingTerrain(_terrain[tileIndex]),
         CritterSpecies.Crab => IsCrabFeedingTile(tileIndex),
         CritterSpecies.Fish => IsFishForagingTile(tileIndex),
-        CritterSpecies.Therapsid =>
-            (_biomes[tileIndex] is Biome.Swamp or Biome.Jungle) &&
-            CanLiveOn(CritterSpecies.Therapsid, tileIndex),
+        CritterSpecies.Therapsid => IsTherapsidFoliageTile(tileIndex),
         CritterSpecies.Newt =>
             IsNewtFeedingTile(tileIndex) || IsNewtFoliageTile(tileIndex),
         CritterSpecies.Monkey => IsMonkeyFoliageTile(tileIndex),
@@ -3453,38 +3685,46 @@ public sealed class SimulationWorld
             return 0;
         }
 
-        var capacity = _surfaceWater[tileIndex] is
-            (SurfaceWaterKind.River or SurfaceWaterKind.FreshwaterLake)
-                ? 2
-                : _terrain[tileIndex] switch
-                {
-                    Terrain.Shallows => ClimateSystem.ClassifyTemperature(_temperature[tileIndex]) switch
-                    {
-                        TemperatureBand.Freezing or TemperatureBand.Cold => 1,
-                        TemperatureBand.Hot => 3,
-                        _ => 2,
-                    },
-                    Terrain.Beach => ClimateSystem.ClassifyTemperature(_temperature[tileIndex]) switch
-                    {
-                        TemperatureBand.Freezing or TemperatureBand.Cold => 1,
-                        TemperatureBand.Hot => 3,
-                        _ => 2,
-                    },
-                    Terrain.DeepOcean => 2,
-                    Terrain.Mountain or Terrain.RingWorldWall => 0,
-                    _ when _biomes[tileIndex] is Biome.Swamp or Biome.Jungle => 4,
-                    _ when _biomes[tileIndex] is Biome.Forest => 4,
-                    _ when _biomes[tileIndex] is Biome.Taiga => 3,
-                    _ when _biomes[tileIndex] is Biome.Grassland => 2,
-                    _ when _biomes[tileIndex] is not (Biome.None or Biome.Desert) => 1,
-                    _ => 0,
-                };
-        if (capacity == 0)
+        var temperatureBand = ClimateSystem.ClassifyTemperature(_temperature[tileIndex]);
+        if (_surfaceWater[tileIndex] is
+            SurfaceWaterKind.River or SurfaceWaterKind.FreshwaterLake)
         {
-            return 0;
+            return 2;
         }
-        return capacity;
+
+        return GetUnderlyingTileNutritionCapacity(tileIndex, temperatureBand);
     }
+
+    private int GetUnderlyingTileNutritionCapacity(
+        int tileIndex,
+        TemperatureBand temperatureBand) =>
+        _terrain[tileIndex] switch
+        {
+            Terrain.Beach => temperatureBand is TemperatureBand.Freezing ? 0 : 1,
+            Terrain.Shallows => temperatureBand switch
+            {
+                TemperatureBand.Freezing => 2,
+                TemperatureBand.Cold => 3,
+                _ => 4,
+            },
+            Terrain.Ocean => 0,
+            Terrain.DeepOcean => temperatureBand switch
+            {
+                TemperatureBand.Cold => 2,
+                _ => 1,
+            },
+            Terrain.Mountain or Terrain.Ice or Terrain.RingWorldWall => 0,
+            _ => _biomes[tileIndex] switch
+            {
+                Biome.Jungle => 6,
+                Biome.Swamp => 5,
+                Biome.Forest => 4,
+                Biome.Grassland or Biome.Taiga => 3,
+                Biome.Bog or Biome.Arid => 2,
+                Biome.Tundra => 1,
+                _ => 0,
+            },
+        };
 
     private void RefreshTileNutrition(int tileIndex)
     {
@@ -3511,7 +3751,7 @@ public sealed class SimulationWorld
             return;
         }
 
-        var regenerationInterval = 120 * TicksPerSecond / capacity;
+        var regenerationInterval = TileNutritionRegenerationSeconds * TicksPerSecond / capacity;
         var elapsed = Tick - _tileNutritionLastTicks[tileIndex];
         var regenerated = (int)(elapsed / regenerationInterval);
         if (regenerated <= 0)
@@ -3530,7 +3770,10 @@ public sealed class SimulationWorld
         IsNewtFeedingTile(tileIndex);
 
     private static bool IsTrilobiteFeedingTerrain(Terrain terrain) =>
-        terrain is Terrain.DeepOcean or Terrain.Ocean;
+        terrain is Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows;
+
+    private static bool IsNautilusFeedingTerrain(Terrain terrain) =>
+        terrain is Terrain.DeepOcean or Terrain.Shallows;
 
     private bool IsCrabFeedingTile(int tileIndex) =>
         _terrain[tileIndex] is Terrain.Beach or Terrain.Shallows;
@@ -3540,17 +3783,21 @@ public sealed class SimulationWorld
         _terrain[tileIndex] is Terrain.Shallows;
 
     private bool IsMonkeyFoliageTile(int tileIndex) =>
-        _biomes[tileIndex] is Biome.Swamp or Biome.Jungle &&
+        _biomes[tileIndex] is Biome.Swamp or Biome.Jungle or Biome.Forest &&
         CanLiveOn(CritterSpecies.Monkey, tileIndex);
+
+    private bool IsTherapsidFoliageTile(int tileIndex) =>
+        _biomes[tileIndex] is Biome.Swamp or Biome.Jungle or Biome.Arid &&
+        CanLiveOn(CritterSpecies.Therapsid, tileIndex);
 
     private bool IsGrazerFoliageTile(CritterSpecies species, int tileIndex) =>
         CanLiveOn(species, tileIndex) && species switch
         {
-            CritterSpecies.Deer => _biomes[tileIndex] is Biome.Grassland or Biome.Forest,
+            CritterSpecies.Deer => _biomes[tileIndex] is Biome.Grassland,
             CritterSpecies.Elk =>
                 _biomes[tileIndex] is Biome.Grassland or Biome.Tundra or Biome.Taiga,
             CritterSpecies.Gazelle =>
-                _biomes[tileIndex] is Biome.Arid or Biome.Forest or Biome.Grassland,
+                _biomes[tileIndex] is Biome.Arid or Biome.Grassland,
             _ => false,
         };
 
@@ -3579,6 +3826,7 @@ public sealed class SimulationWorld
         int destinationIndex,
         IReadOnlySet<GridPosition>? reservedPrey = null) =>
         CanShovePlankton(moverIndex, destinationIndex, reservedPrey) ||
+        CanShoveCritter(moverIndex, destinationIndex, reservedPrey) ||
         CanShoveNewt(moverIndex, destinationIndex, reservedPrey);
 
     private bool TryShoveMovementBlocker(
@@ -3586,7 +3834,71 @@ public sealed class SimulationWorld
         int destinationIndex,
         IReadOnlySet<GridPosition>? reservedPrey = null) =>
         TryShovePlankton(moverIndex, destinationIndex, reservedPrey) ||
+        TryShoveCritter(moverIndex, destinationIndex, reservedPrey) ||
         TryShoveNewt(moverIndex, destinationIndex, reservedPrey);
+
+    private bool CanShoveCritter(
+        int moverIndex,
+        int destinationIndex,
+        IReadOnlySet<GridPosition>? reservedPrey)
+    {
+        var blockerIndex = _occupants[destinationIndex];
+        return blockerIndex >= 0 &&
+            _species[blockerIndex] is not CritterSpecies.Plankton &&
+            CanDisplace(_species[moverIndex], _species[blockerIndex]) &&
+            CanLiveOn(_species[moverIndex], destinationIndex) &&
+            reservedPrey?.Contains(_positions[blockerIndex]) is not true &&
+            FindCritterShoveDestination(moverIndex, blockerIndex, reservedPrey) is not null;
+    }
+
+    private bool TryShoveCritter(
+        int moverIndex,
+        int destinationIndex,
+        IReadOnlySet<GridPosition>? reservedPrey)
+    {
+        if (!CanShoveCritter(moverIndex, destinationIndex, reservedPrey))
+        {
+            return false;
+        }
+
+        var blockerIndex = _occupants[destinationIndex];
+        var shoveDestination = FindCritterShoveDestination(
+            moverIndex,
+            blockerIndex,
+            reservedPrey)!.Value;
+        MoveCritter(blockerIndex, GetIndex(shoveDestination), shoveDestination);
+        return true;
+    }
+
+    private GridPosition? FindCritterShoveDestination(
+        int moverIndex,
+        int blockerIndex,
+        IReadOnlySet<GridPosition>? reservedPrey)
+    {
+        var blockerPosition = _positions[blockerIndex];
+        var blockerSpecies = _species[blockerIndex];
+        var startDirection = (moverIndex + blockerIndex) % MovementDirections.Length;
+        for (var offset = 0; offset < MovementDirections.Length; offset++)
+        {
+            var direction = MovementDirections[(startDirection + offset) % MovementDirections.Length];
+            var candidate = new GridPosition(
+                Mod(blockerPosition.X + direction.X, Width),
+                blockerPosition.Y + direction.Y);
+            if (candidate.Y < 0 || candidate.Y >= Height ||
+                reservedPrey?.Contains(candidate) is true)
+            {
+                continue;
+            }
+
+            var candidateIndex = GetIndex(candidate);
+            if (_occupants[candidateIndex] < 0 && CanLiveOn(blockerSpecies, candidateIndex))
+            {
+                return candidate;
+            }
+        }
+
+        return null;
+    }
 
     private bool CanShovePlankton(
         int moverIndex,
@@ -3594,7 +3906,8 @@ public sealed class SimulationWorld
         IReadOnlySet<GridPosition>? reservedPrey = null)
     {
         var planktonIndex = _occupants[destinationIndex];
-        if (planktonIndex < 0 || _species[moverIndex] is CritterSpecies.Plankton ||
+        if (planktonIndex < 0 || planktonIndex == moverIndex ||
+            !CanDisplacePlankton(_species[moverIndex]) ||
             _species[planktonIndex] is not CritterSpecies.Plankton ||
             !CanLiveOn(_species[moverIndex], destinationIndex))
         {
@@ -3607,9 +3920,7 @@ public sealed class SimulationWorld
             return false;
         }
 
-        return FindPlanktonShoveDestination(moverIndex, planktonIndex, reservedPrey) is not null ||
-            (_species[moverIndex] is CritterSpecies.Worm or CritterSpecies.Trilobite &&
-                FindPlanktonShoveChain(moverIndex, planktonIndex, reservedPrey) is not null);
+        return true;
     }
 
     private bool TryShovePlankton(
@@ -3633,7 +3944,19 @@ public sealed class SimulationWorld
             return true;
         }
 
-        return TryShovePlanktonChain(moverIndex, planktonIndex, reservedPrey);
+        if (TryShovePlanktonChain(moverIndex, planktonIndex, reservedPrey))
+        {
+            return true;
+        }
+
+        var moverSpecies = _species[moverIndex];
+        var moverPosition = _positions[moverIndex];
+        _lethallyDisplacedCritterIds.Add(_critterIds[planktonIndex].Value);
+        if (CanEat(moverSpecies, CritterSpecies.Plankton))
+        {
+            FeedPredatorAt(moverPosition, CritterSpecies.Plankton);
+        }
+        return true;
     }
 
     private GridPosition? FindPlanktonShoveDestination(
@@ -3673,7 +3996,7 @@ public sealed class SimulationWorld
     {
         var newtIndex = _occupants[destinationIndex];
         if (newtIndex < 0 ||
-            _species[moverIndex] is not (CritterSpecies.Fish or CritterSpecies.MegaToad) ||
+            !CanDisplace(_species[moverIndex], _species[newtIndex]) ||
             _species[newtIndex] is not CritterSpecies.Newt ||
             !CanLiveOn(_species[moverIndex], destinationIndex) ||
             reservedPrey?.Contains(_positions[newtIndex]) is true)
@@ -3738,7 +4061,7 @@ public sealed class SimulationWorld
         IReadOnlySet<GridPosition>? reservedPrey)
     {
         var wormIndex = _occupants[destinationIndex];
-        if (wormIndex < 0 || _species[moverIndex] is not CritterSpecies.Fish ||
+        if (wormIndex < 0 || !CanDisplace(_species[moverIndex], _species[wormIndex]) ||
             _species[wormIndex] is not CritterSpecies.Worm ||
             !CanLiveOn(CritterSpecies.Fish, destinationIndex) ||
             reservedPrey?.Contains(_positions[wormIndex]) is true)
@@ -3962,22 +4285,66 @@ public sealed class SimulationWorld
     internal bool RemoveCritterAt(GridPosition position)
     {
         var tileIndex = GetIndex(position);
-        var critterIndex = _occupants[tileIndex];
-        if (critterIndex < 0)
+        var removed = false;
+
+        // A tile should have exactly one critter. Still, resolve the position
+        // defensively as well as the occupancy index: if an interrupted or
+        // formerly buggy compact-array move left a duplicate entry behind,
+        // terrain destruction must remove every critter at the tile instead of
+        // leaving an unreachable immortal entry.
+        while (true)
+        {
+            var critterIndex = _occupants[tileIndex];
+            if (critterIndex < 0 || critterIndex >= _count ||
+                _positions[critterIndex] != position)
+            {
+                critterIndex = -1;
+                for (var index = 0; index < _count; index++)
+                {
+                    if (_positions[index] == position)
+                    {
+                        critterIndex = index;
+                        break;
+                    }
+                }
+            }
+
+            if (critterIndex < 0)
+            {
+                _occupants[tileIndex] = -1;
+                return removed;
+            }
+
+            RemoveCritterAtIndex(critterIndex);
+            removed = true;
+        }
+    }
+
+    private bool RemoveCritter(CritterId critterId)
+    {
+        if (!critterId.IsValid ||
+            !_critterIndicesById.TryGetValue(critterId.Value, out var critterIndex))
         {
             return false;
         }
 
+        return RemoveCritterAtIndex(critterIndex);
+    }
+
+    private bool RemoveCritterAtIndex(int critterIndex)
+    {
+        var tileIndex = GetIndex(_positions[critterIndex]);
         var lastIndex = _count - 1;
         var removedId = _critterIds[critterIndex];
         _critterIndicesById.Remove(removedId.Value);
-        _newtMigrationPaths.Remove(removedId.Value);
-        _newtFreshwaterSearchCompleted.Remove(removedId.Value);
         DetachWolfFromDens(removedId.Value);
         DetachApeFromVillage(removedId.Value);
         _reproductionTruces.Remove(removedId.Value);
         _speciesCounts[(int)_species[critterIndex]]--;
-        _occupants[tileIndex] = -1;
+        if (_occupants[tileIndex] == critterIndex)
+        {
+            _occupants[tileIndex] = -1;
+        }
         if (critterIndex != lastIndex)
         {
             _critterIds[critterIndex] = _critterIds[lastIndex];
@@ -3987,10 +4354,13 @@ public sealed class SimulationWorld
             _nextMovementTicks[critterIndex] = _nextMovementTicks[lastIndex];
             _energy[critterIndex] = _energy[lastIndex];
             _nextMetabolismTicks[critterIndex] = _nextMetabolismTicks[lastIndex];
-            _nextAmbientFeedingTicks[critterIndex] = _nextAmbientFeedingTicks[lastIndex];
             _preyTargets[critterIndex] = _preyTargets[lastIndex];
             _damageFlashUntilTicks[critterIndex] = _damageFlashUntilTicks[lastIndex];
-            _occupants[GetIndex(_positions[critterIndex])] = critterIndex;
+            var movedTileIndex = GetIndex(_positions[critterIndex]);
+            if (_occupants[movedTileIndex] == lastIndex)
+            {
+                _occupants[movedTileIndex] = critterIndex;
+            }
         }
 
         _count--;
@@ -4081,72 +4451,9 @@ public sealed class SimulationWorld
                 _terrain[tileIndex] is Terrain.Ocean or Terrain.Shallows or Terrain.Plains or Terrain.Hills or
                     Terrain.Lowlands or Terrain.Canyon or Terrain.Trench));
 
-    internal bool IsValidReproductionSite(CritterSpecies species, GridPosition position) =>
-        species switch
-        {
-            CritterSpecies.MegaToad => IsAtOrAdjacentToMegaToadBreedingWater(GetIndex(position)),
-            CritterSpecies.Deer or CritterSpecies.Elk or CritterSpecies.Gazelle =>
-                !HasOccupiedCardinalNeighbor(position),
-            _ => true,
-        };
+    internal bool IsValidReproductionSite(CritterSpecies species, GridPosition position) => true;
 
-    private bool HasOccupiedCardinalNeighbor(GridPosition position)
-    {
-        foreach (var direction in CardinalDirections)
-        {
-            var neighbor = new GridPosition(
-                Mod(position.X + direction.X, Width),
-                position.Y + direction.Y);
-            if (neighbor != position && neighbor.Y >= 0 && neighbor.Y < Height &&
-                _occupants[GetIndex(neighbor)] >= 0)
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    internal bool IsValidBirthSite(CritterSpecies species, GridPosition position)
-    {
-        var tileIndex = GetIndex(position);
-        return species switch
-        {
-            CritterSpecies.MegaToad => IsMegaToadBreedingWater(tileIndex),
-            _ => true,
-        };
-    }
-
-    private bool IsAtOrAdjacentToMegaToadBreedingWater(int tileIndex)
-    {
-        if (IsMegaToadBreedingWater(tileIndex))
-        {
-            return true;
-        }
-
-        var position = new GridPosition(tileIndex % Width, tileIndex / Width);
-        foreach (var direction in CardinalDirections)
-        {
-            var y = position.Y + direction.Y;
-            if (y < 0 || y >= Height)
-            {
-                continue;
-            }
-
-            var neighborIndex = y * Width + Mod(position.X + direction.X, Width);
-            if (IsMegaToadBreedingWater(neighborIndex))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private bool IsMegaToadBreedingWater(int tileIndex) =>
-        _surfaceWater[tileIndex] is SurfaceWaterKind.River ||
-        (_surfaceWater[tileIndex] is SurfaceWaterKind.FreshwaterLake &&
-            _biomes[tileIndex] is not Biome.Arctic);
+    internal bool IsValidBirthSite(CritterSpecies species, GridPosition position) => true;
 
     private bool IsMegaToadTile(int tileIndex) =>
         _surfaceCovers[tileIndex] is SurfaceCover.None &&
@@ -4211,7 +4518,7 @@ public sealed class SimulationWorld
         CritterSpecies.Jellyfish => 5 * TicksPerSecond,
         CritterSpecies.Worm => 8 * TicksPerSecond,
         CritterSpecies.Trilobite => 6 * TicksPerSecond,
-        CritterSpecies.SeaScorpion => 3 * TicksPerSecond,
+        CritterSpecies.SeaScorpion => 4 * TicksPerSecond,
         CritterSpecies.Nautilus => 6 * TicksPerSecond,
         CritterSpecies.Squid => 3 * TicksPerSecond,
         CritterSpecies.SquidEgg => 5 * TicksPerSecond,
@@ -4221,7 +4528,7 @@ public sealed class SimulationWorld
         CritterSpecies.Therapsid => 6 * TicksPerSecond,
         CritterSpecies.Monkey => 5 * TicksPerSecond,
         CritterSpecies.Ape => 3 * TicksPerSecond,
-        CritterSpecies.ApeSailor => 3 * TicksPerSecond,
+        CritterSpecies.ApeSailor => 2 * TicksPerSecond,
         CritterSpecies.Deer => 3 * TicksPerSecond,
         CritterSpecies.Elk => 6 * TicksPerSecond,
         CritterSpecies.Gazelle => 3 * TicksPerSecond,
