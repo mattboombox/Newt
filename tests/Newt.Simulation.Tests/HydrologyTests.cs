@@ -5,7 +5,7 @@ namespace Newt.Simulation.Tests;
 public sealed class HydrologyTests
 {
     [Fact]
-    public void SpringRejectsNonMountainTerrain()
+    public void NaturalSpringRejectsPlainTerrain()
     {
         var world = new SimulationWorld(9, 9, Terrain.Plains, seed: 4);
         for (var y = 0; y < world.Height; y++)
@@ -21,6 +21,25 @@ public sealed class HydrologyTests
 
         Assert.Equal(SpringTermination.InvalidSource, result.Termination);
         Assert.Equal(0, world.ActiveSpringCount);
+    }
+
+    [Theory]
+    [InlineData(SpringOrigin.Player)]
+    [InlineData(SpringOrigin.Natural)]
+    public void PlayerAndNaturalRiversCanStartOnHillTerrain(SpringOrigin origin)
+    {
+        var world = new SimulationWorld(9, 9, Terrain.Plains, seed: 5);
+        var source = new GridPosition(4, 4);
+        world.SetTerrain(source, Terrain.Hills);
+        world.SetElevation(source, 0.4f);
+
+        var result = Hydrology.StartSnowmeltSpring(world, source, origin);
+
+        Assert.Equal(SpringTermination.Flowing, result.Termination);
+        Assert.Equal(SurfaceWaterKind.River, world.GetSurfaceWater(source));
+        Assert.Contains(
+            world.SpringSources,
+            spring => spring.Position == source && spring.Origin == origin);
     }
 
     [Fact]
@@ -276,16 +295,30 @@ public sealed class HydrologyTests
     }
 
     [Fact]
-    public void WatershedShiftCannotDryWorldWithOnlyPlayerRiver()
+    public void WatershedEventSpawnsNaturalRiverWhilePreservingPlayerRiver()
     {
         var world = CreateWatershedShiftWorld();
         var playerSource = new GridPosition(7, 1);
         Hydrology.TraceSpring(world, playerSource, SpringOrigin.Player);
+        foreach (var position in AllPositions(world))
+        {
+            if (world.GetTerrain(position) is not Terrain.Ocean)
+            {
+                world.SetTerrain(position, Terrain.Plains);
+            }
+        }
+        world.SetTerrain(new GridPosition(3, 1), Terrain.Hills);
+        world.SetTerrain(new GridPosition(11, 1), Terrain.Hills);
 
-        Assert.False(Hydrology.ShiftNaturalWatershed(world));
+        Assert.True(Hydrology.ShiftNaturalWatershed(world));
         Assert.Contains(
             world.SpringSources,
             source => source.Position == playerSource && source.Origin is SpringOrigin.Player);
+        var naturalSource = Assert.Single(
+            world.SpringSources,
+            source => source.Origin is SpringOrigin.Natural);
+        Assert.Equal(Terrain.Hills, world.GetTerrain(naturalSource.Position));
+        Assert.Equal(SurfaceWaterKind.River, world.GetSurfaceWater(naturalSource.Position));
         Assert.NotEqual(SurfaceWaterKind.None, world.GetSurfaceWater(playerSource));
     }
 

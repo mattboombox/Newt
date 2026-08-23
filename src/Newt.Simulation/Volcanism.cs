@@ -71,7 +71,8 @@ public static class Volcanism
         {
             throw new ArgumentOutOfRangeException(nameof(position));
         }
-        if (world.IsOccupied(position) ||
+        if (world.GetTerrain(position) is Terrain.RingWorldWall || world.HasTeleporter(position) ||
+            world.IsOccupied(position) ||
             world.Volcanoes.Any(volcano => volcano.Position == position))
         {
             return false;

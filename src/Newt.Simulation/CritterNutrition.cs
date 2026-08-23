@@ -84,12 +84,12 @@ public static class CritterNutritions
         BodySize: CritterBodySize.Big,
         FeedingStrategy: CritterFeedingStrategy.TerrainOnly,
         InitialEnergy: 2,
-        MaximumEnergy: 6,
+        MaximumEnergy: 5,
         HungryThreshold: 1,
         MetabolismIntervalTicks: 60 * SimulationWorld.TicksPerSecond,
         MetabolismCost: 1,
-        ReproductionThreshold: 6,
-        ReproductionCost: 4);
+        ReproductionThreshold: 5,
+        ReproductionCost: 3);
 
     private static readonly CritterNutrition SeaScorpion = new(
         BodySize: CritterBodySize.Large,

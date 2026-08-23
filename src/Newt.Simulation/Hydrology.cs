@@ -31,14 +31,17 @@ public static class Hydrology
         new(-1, 0),
     ];
 
-    /// <summary>Starts a player/natural spring on any uncovered mountain tile.</summary>
+    /// <summary>Starts a natural or player spring on a hill or mountain.</summary>
     public static SpringResult StartSnowmeltSpring(
         SimulationWorld world,
         GridPosition source,
         SpringOrigin origin = SpringOrigin.Natural)
     {
         ArgumentNullException.ThrowIfNull(world);
-        if (!IsSnowmeltSource(world, source))
+        var validSource = origin is SpringOrigin.Player
+            ? IsPlayerRiverSource(world, source)
+            : IsSnowmeltSource(world, source);
+        if (!validSource)
         {
             var invalid = new SpringResult(SpringTermination.InvalidSource, 0, source);
             world.LastCompletedSpring = invalid;
@@ -51,8 +54,23 @@ public static class Hydrology
     public static bool IsSnowmeltSource(SimulationWorld world, GridPosition position)
     {
         ArgumentNullException.ThrowIfNull(world);
+        return IsUplandRiverSource(world, position, allowHills: true);
+    }
+
+    private static bool IsPlayerRiverSource(SimulationWorld world, GridPosition position) =>
+        IsUplandRiverSource(world, position, allowHills: true);
+
+    private static bool IsWatershedSource(SimulationWorld world, GridPosition position) =>
+        IsUplandRiverSource(world, position, allowHills: true);
+
+    private static bool IsUplandRiverSource(
+        SimulationWorld world,
+        GridPosition position,
+        bool allowHills)
+    {
         if (!world.Contains(position) ||
-            world.GetTerrain(position) is not Terrain.Mountain ||
+            world.GetTerrain(position) is not Terrain.Mountain &&
+                (!allowHills || world.GetTerrain(position) is not Terrain.Hills) ||
             world.GetSurfaceCover(position) is SurfaceCover.Lava)
         {
             return false;
@@ -144,7 +162,7 @@ public static class Hydrology
 
     /// <summary>
     /// Dries one natural watershed and starts a replacement from a different
-    /// mountain. Player-created sources are never candidates for removal.
+    /// hill or mountain. If none exists yet, seeds one without removing player rivers.
     /// </summary>
     public static bool ShiftNaturalWatershed(SimulationWorld world)
     {
@@ -154,7 +172,10 @@ public static class Hydrology
             .ToArray();
         if (naturalSources.Length == 0)
         {
-            return false;
+            var newSource = SelectNaturalSpringReplacement(world, removedSource: null);
+            return newSource is not null &&
+                StartSpring(world, newSource.Value, SpringOrigin.Natural).Termination is
+                    SpringTermination.Flowing;
         }
 
         var removed = naturalSources[world.NextInt(naturalSources.Length)];
@@ -166,7 +187,8 @@ public static class Hydrology
         RebuildFreshwater(world);
         var replacement = SelectNaturalSpringReplacement(world, removed.Position);
         if (replacement is not null &&
-            StartSnowmeltSpring(world, replacement.Value).Termination is SpringTermination.Flowing)
+            StartSpring(world, replacement.Value, SpringOrigin.Natural).Termination is
+                SpringTermination.Flowing)
         {
             return true;
         }
@@ -180,7 +202,7 @@ public static class Hydrology
 
     private static GridPosition? SelectNaturalSpringReplacement(
         SimulationWorld world,
-        GridPosition removedSource)
+        GridPosition? removedSource)
     {
         GridPosition? selected = null;
         var candidateCount = 0;
@@ -190,7 +212,7 @@ public static class Hydrology
             {
                 var position = new GridPosition(x, y);
                 if (position == removedSource ||
-                    !IsSnowmeltSource(world, position) ||
+                    !IsWatershedSource(world, position) ||
                     world.GetSurfaceWater(position) is not SurfaceWaterKind.None ||
                     world.IsOccupied(position))
                 {

@@ -84,6 +84,38 @@ public sealed class ApeTests
     }
 
     [Theory]
+    [InlineData(Biome.Grassland, ApeStructureKind.Farm)]
+    [InlineData(Biome.Swamp, ApeStructureKind.RicePaddy)]
+    [InlineData(Biome.Forest, ApeStructureKind.Orchard)]
+    public void FiveResidentsCannotBuildFoodDistrictOnBiomeClassifiedBeaches(
+        Biome biome,
+        ApeStructureKind foodDistrict)
+    {
+        var world = CreateFedApeWorld(hasGrassland: false);
+        for (var y = 0; y < world.Height; y++)
+        {
+            for (var x = 0; x < world.Width; x++)
+            {
+                world.SetBiome(new GridPosition(x, y), biome);
+            }
+        }
+        AdvanceUntilVillage(world);
+        var village = FindStructure(world, ApeStructureKind.Village);
+        for (var y = 0; y < world.Height; y++)
+        {
+            for (var x = 0; x < world.Width; x++)
+            {
+                world.SetTerrain(new GridPosition(x, y), Terrain.Beach);
+            }
+        }
+        AddAssignedResidents(world, village, 4);
+
+        world.AdvanceOneTick();
+
+        Assert.Equal(0, CountStructures(world, foodDistrict));
+    }
+
+    [Theory]
     [InlineData(Biome.Swamp, ApeStructureKind.RicePaddy)]
     [InlineData(Biome.Forest, ApeStructureKind.Orchard)]
     public void FiveResidentsBuildBiomeFoodDistrictThatProducesLikeFarm(

@@ -4,12 +4,15 @@ namespace Newt.Simulation;
 public static class SeasonSystem
 {
     public const int CycleSeconds = 360;
+    public const int ClimateRefreshSeconds = 30;
     public const float EquatorialBand = 0.20f;
     public const float PolarTemperatureAmplitude = 0.10f;
     public const int TicksPerYear = CycleSeconds * SimulationWorld.TicksPerSecond;
     // Seasonal temperature changes are gradual; refreshing the whole climate
-    // every ten seconds avoids repeated map-wide work without visible stepping.
-    private const int ClimateRefreshTicks = 10 * SimulationWorld.TicksPerSecond;
+    // every thirty seconds avoids repeated map-wide work without visible stepping.
+    internal const int ClimateRefreshTicks =
+        ClimateRefreshSeconds * SimulationWorld.TicksPerSecond;
+    internal const int ClimateRefreshStageSpacingTicks = SimulationWorld.TicksPerSecond;
 
     public static void SetEnabled(SimulationWorld world, bool enabled)
     {
@@ -104,10 +107,24 @@ public static class SeasonSystem
         }
 
         world.SeasonTick++;
-        if (world.SeasonTick % ClimateRefreshTicks == 0)
+        if (world.SeasonTick < ClimateRefreshTicks)
         {
-            TerrainClassifier.RebuildLandforms(world);
-            ClimateSystem.RebuildBiomesFromCurrentMoisture(world);
+            return;
+        }
+
+        // Keep the stages far enough apart to land on separate rendered frames at
+        // high simulation rates, while completing the transition in two seconds.
+        switch (world.SeasonTick % ClimateRefreshTicks)
+        {
+            case 0:
+                ClimateSystem.RebuildTemperature(world);
+                break;
+            case ClimateRefreshStageSpacingTicks:
+                TerrainClassifier.RebuildLandformsFromCurrentTemperature(world);
+                break;
+            case 2 * ClimateRefreshStageSpacingTicks:
+                ClimateSystem.RebuildBiomesFromCurrentMoisture(world);
+                break;
         }
     }
 

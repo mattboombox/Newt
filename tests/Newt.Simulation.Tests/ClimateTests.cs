@@ -199,6 +199,41 @@ public sealed class ClimateTests
     }
 
     [Fact]
+    public void SeasonalClimateRefreshRunsEveryThirtySecondsAcrossSpacedStages()
+    {
+        var world = new SimulationWorld(3, 3, Terrain.Plains, seed: 12);
+        NaturalEvents.SetEnabled(world, false);
+        foreach (var position in AllPositions(world))
+        {
+            world.SetElevation(position, -0.5f);
+        }
+        var target = new GridPosition(1, 1);
+        world.SetBiome(target, Biome.Jungle);
+        world.SeasonTick = SeasonSystem.ClimateRefreshTicks - 1;
+
+        world.AdvanceOneTick();
+
+        Assert.Equal(30, SeasonSystem.ClimateRefreshSeconds);
+        Assert.Equal(Terrain.Plains, world.GetTerrain(target));
+        Assert.Equal(Biome.Jungle, world.GetBiome(target));
+
+        for (var tick = 0; tick < SeasonSystem.ClimateRefreshStageSpacingTicks; tick++)
+        {
+            world.AdvanceOneTick();
+        }
+
+        Assert.True(world.GetTerrain(target) is Terrain.DeepOcean or Terrain.Ice);
+        Assert.Equal(Biome.Jungle, world.GetBiome(target));
+
+        for (var tick = 0; tick < SeasonSystem.ClimateRefreshStageSpacingTicks; tick++)
+        {
+            world.AdvanceOneTick();
+        }
+
+        Assert.Equal(Biome.None, world.GetBiome(target));
+    }
+
+    [Fact]
     public void PeakSummerLeavesSomeNorthernArcticClimateOnStandardWorld()
     {
         var world = WorldGenerator.Generate(new WorldGenerationOptions(WorldPreset.Standard, Seed: 20260806));

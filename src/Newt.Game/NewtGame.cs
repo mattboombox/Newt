@@ -2,6 +2,8 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using Newt.Simulation;
+using System.Globalization;
+using System.Security.Cryptography;
 
 namespace Newt.Game;
 
@@ -34,7 +36,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             WorldTool.Fish, WorldTool.Newt, WorldTool.MegaToad, WorldTool.Therapsid,
             WorldTool.Monkey, WorldTool.Ape, WorldTool.Deer, WorldTool.Elk,
             WorldTool.Gazelle, WorldTool.Wolf, WorldTool.Crab];
-    private static readonly WorldTool[] BuildingToolOrder = [WorldTool.WolfDen];
+    private static readonly WorldTool[] BuildingToolOrder = [WorldTool.WolfDen, WorldTool.Teleporter];
     private static readonly WorldTool[] OtherToolOrder =
         [WorldTool.JumpStart, WorldTool.Population, WorldTool.Inspect];
     private static readonly WorldTool[] TerrainToolOrder =
@@ -44,7 +46,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private SimulationWorld _world = null!;
     private WorldPreset _preset = WorldPreset.Standard;
     private WorldMapType _mapType = WorldMapType.Continents;
-    private ulong _seed = 20260806;
+    private ulong _seed = CreateRandomSeed();
+    private string _seedText;
     private SpriteBatch? _spriteBatch;
     private Texture2D? _pixel;
     private SpriteFont? _hudFont;
@@ -65,6 +68,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private bool _lifeEnabled = true;
     private bool _paused;
     private bool _setupMenuOpen;
+    private bool _seedTypingActive;
     private int _setupRow;
     private int _menuSizeIndex = 1;
     private int _menuMapTypeIndex;
@@ -73,6 +77,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
 
     public NewtGame()
     {
+        _seedText = _seed.ToString(CultureInfo.InvariantCulture);
         _graphics = new GraphicsDeviceManager(this)
         {
             PreferredBackBufferWidth = 960,
@@ -186,6 +191,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 }
                 DrawApeStructure(screenX, screenY, position);
                 DrawWolfDen(screenX, screenY, position);
+                DrawTeleporter(screenX, screenY, position);
                 DrawVolcanoVent(screenX, screenY, position);
                 DrawImpactWave(screenX, screenY, position);
             }
@@ -248,6 +254,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             }
             _setupMenuOpen = true;
             _setupRow = 0;
+            _seedTypingActive = false;
+            _seedText = _seed.ToString(CultureInfo.InvariantCulture);
             return;
         }
 
@@ -266,6 +274,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         else if (WasPressed(keyboard, Keys.N))
         {
             _seed++;
+            _seedText = _seed.ToString(CultureInfo.InvariantCulture);
             GenerateWorld();
         }
         else if (WasPressed(keyboard, Keys.F))
@@ -479,6 +488,12 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 break;
             case WorldTool.WolfDen:
                 _world.RemoveWolfDenAt(position.Value);
+                break;
+            case WorldTool.Teleporter when primaryActivated:
+                _world.TryPlaceTeleporter(position.Value);
+                break;
+            case WorldTool.Teleporter:
+                _world.RemoveTeleporterAt(position.Value);
                 break;
             case WorldTool.Stone when primaryActivated:
                 Volcanism.PlaceStone(_world, position.Value);
@@ -896,6 +911,17 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             return ["ENTITY", "Wolf Den", $"Charges {charges}", "Behavior Ambush nursery"];
         }
 
+        if (_world.HasTeleporter(position))
+        {
+            var behavior = _world.TeleporterCount switch
+            {
+                1 => "Random valid destination",
+                2 => "Linked portal pair",
+                _ => "Random linked portal",
+            };
+            return ["ENTITY", "Teleporter", $"Network {_world.TeleporterCount}", $"Behavior {behavior}"];
+        }
+
         if (_world.GetApeStructure(position) is { } apeStructure)
         {
             return apeStructure is ApeStructureKind.Village
@@ -940,7 +966,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         CritterSpecies.Fish => "shallow/freshwater forage and plankton; worms and crabs as fallback",
         CritterSpecies.Newt => "freshwater food; feeds and breeds in swamps and jungles",
         CritterSpecies.MegaToad => "fish and broad prey; cannibalism cannot sustain a closed population",
-        CritterSpecies.Therapsid => "prefers wetland forage; worms, fish, and newts as fallback",
+        CritterSpecies.Therapsid => "prefers wetland forage; fish as fallback",
         CritterSpecies.Monkey => "swamp and jungle foliage only",
         CritterSpecies.Ape => "every other critter species",
         CritterSpecies.ApeSailor => "sea life except plankton",
@@ -1058,10 +1084,12 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         if (WasPressed(keyboard, Keys.Up) || WasPressed(keyboard, Keys.W))
         {
             _setupRow = Mod(_setupRow - 1, 4);
+            FinishSeedTyping();
         }
         else if (WasPressed(keyboard, Keys.Down) || WasPressed(keyboard, Keys.S))
         {
             _setupRow = Mod(_setupRow + 1, 4);
+            FinishSeedTyping();
         }
 
         var direction = WasPressed(keyboard, Keys.Left) || WasPressed(keyboard, Keys.A) ? -1 :
@@ -1079,7 +1107,13 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             else if (_setupRow == 2)
             {
                 _seed = direction > 0 ? _seed + 1 : _seed == 0 ? ulong.MaxValue : _seed - 1;
+                FinishSeedTyping();
             }
+        }
+
+        if (_setupRow == 2)
+        {
+            HandleSeedTyping(keyboard);
         }
 
         if (WasPressed(keyboard, Keys.Enter) || (_setupRow == 3 && WasPressed(keyboard, Keys.Space)))
@@ -1114,7 +1148,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         [
             $"Map Shape       <  {GetMapTypeName(type)}  >",
             $"World Size      <  {sizeText}  >",
-            $"Seed            <  {_seed}  >",
+            $"Seed            <  {(_seedText.Length == 0 ? "_" : _seedText)}  >",
             "Generate World",
         ];
         for (var row = 0; row < rows.Length; row++)
@@ -1123,8 +1157,76 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             var prefix = row == _setupRow ? "> " : "  ";
             _spriteBatch.DrawString(_hudFont, prefix + rows[row], new Vector2(left + 24, top + 62 + row * 34), color);
         }
-        _spriteBatch.DrawString(_hudFont, "Arrows or WASD navigate   Enter generate   M/Esc close",
+        var help = _setupRow == 2
+            ? "Type digits to replace seed   Backspace edits   Enter generate"
+            : "Arrows or WASD navigate   Enter generate   M/Esc close";
+        _spriteBatch.DrawString(_hudFont, help,
             new Vector2(left + 24, top + panelHeight - 32), new Color(130, 140, 146));
+    }
+
+    private void HandleSeedTyping(KeyboardState keyboard)
+    {
+        var digit = GetPressedDigit(keyboard);
+        if (digit >= 0)
+        {
+            var digitText = digit.ToString(CultureInfo.InvariantCulture);
+            var candidate = _seedTypingActive ? _seedText + digitText : digitText;
+            if (ulong.TryParse(candidate, NumberStyles.None, CultureInfo.InvariantCulture, out var seed))
+            {
+                _seedTypingActive = true;
+                _seedText = candidate;
+                _seed = seed;
+            }
+        }
+        else if (WasPressed(keyboard, Keys.Back))
+        {
+            _seedTypingActive = true;
+            _seedText = _seedText.Length > 0 ? _seedText[..^1] : string.Empty;
+            _seed = _seedText.Length == 0
+                ? 0
+                : ulong.Parse(_seedText, CultureInfo.InvariantCulture);
+        }
+    }
+
+    private void FinishSeedTyping()
+    {
+        _seedTypingActive = false;
+        _seedText = _seed.ToString(CultureInfo.InvariantCulture);
+    }
+
+    private int GetPressedDigit(KeyboardState keyboard)
+    {
+        ReadOnlySpan<Keys> digitKeys =
+        [
+            Keys.D0, Keys.D1, Keys.D2, Keys.D3, Keys.D4,
+            Keys.D5, Keys.D6, Keys.D7, Keys.D8, Keys.D9,
+        ];
+        ReadOnlySpan<Keys> numberPadKeys =
+        [
+            Keys.NumPad0, Keys.NumPad1, Keys.NumPad2, Keys.NumPad3, Keys.NumPad4,
+            Keys.NumPad5, Keys.NumPad6, Keys.NumPad7, Keys.NumPad8, Keys.NumPad9,
+        ];
+        for (var digit = 0; digit <= 9; digit++)
+        {
+            if (WasPressed(keyboard, digitKeys[digit]) || WasPressed(keyboard, numberPadKeys[digit]))
+            {
+                return digit;
+            }
+        }
+
+        return -1;
+    }
+
+    private static ulong CreateRandomSeed()
+    {
+        ulong seed;
+        do
+        {
+            seed = BitConverter.ToUInt64(RandomNumberGenerator.GetBytes(sizeof(ulong)));
+        }
+        while (seed == 0);
+
+        return seed;
     }
 
     private static string GetMapTypeName(WorldMapType type) => type switch
@@ -1221,6 +1323,36 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         {
             _spriteBatch.Draw(_pixel, new Rectangle(originX, originY, Math.Max(1, size / 4), Math.Max(1, size / 4)), new Color(210, 190, 145));
         }
+    }
+
+    private void DrawTeleporter(int screenX, int screenY, GridPosition position)
+    {
+        if (_spriteBatch is null || _pixel is null || !_world.HasTeleporter(position))
+        {
+            return;
+        }
+
+        var size = Math.Max(3, TileSize * 3 / 4);
+        var inset = (TileSize - size) / 2;
+        var x = MapOffsetX + screenX * TileSize + inset;
+        var y = MapOffsetY + screenY * TileSize + inset;
+        var capHeight = Math.Max(1, size / 4);
+        var beamWidth = Math.Max(1, size / 3);
+        var wallGray = new Color(112, 126, 136);
+        var portalGreen = new Color(145, 255, 115);
+        _spriteBatch.Draw(_pixel, new Rectangle(x, y, size, capHeight), wallGray);
+        _spriteBatch.Draw(
+            _pixel,
+            new Rectangle(
+                x + (size - beamWidth) / 2,
+                y + capHeight,
+                beamWidth,
+                Math.Max(1, size - capHeight * 2)),
+            portalGreen);
+        _spriteBatch.Draw(
+            _pixel,
+            new Rectangle(x, y + size - capHeight, size, capHeight),
+            wallGray);
     }
 
     private void DrawApeStructure(int screenX, int screenY, GridPosition position)
@@ -1567,12 +1699,12 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         WorldTool.Volcano => "left spawn active vent",
         WorldTool.Meteor => $"left impact, right magnitude {_eventMagnitudeIndex / 10f:0.0}",
         WorldTool.Tsunami => $"left in ocean, right magnitude {_eventMagnitudeIndex / 10f:0.0}",
-        WorldTool.WatershedShift => "left dry one natural river and spawn another",
+        WorldTool.WatershedShift => "left spawn or shift a natural river",
         WorldTool.Evolve => "left evolve critter, right de-evolve",
         WorldTool.NaturalEvents => _world.NaturalEventsEnabled
             ? "left enabled, right disable"
             : "left enable, right disabled",
-        WorldTool.River => "left on mountain, right remove",
+        WorldTool.River => "left on mountain or hill, right remove",
         WorldTool.Plankton => "left spawn in deep ocean",
         WorldTool.Jellyfish => "left spawn in aquatic habitat",
         WorldTool.Fish => "left spawn in saltwater, rivers, or lakes",
@@ -1593,6 +1725,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         WorldTool.Wolf => "left spawn a fast terrestrial predator",
         WorldTool.Crab => "left spawn outside deep ocean, ice, or Arctic land",
         WorldTool.WolfDen => "left place den with 1 charge, right remove",
+        WorldTool.Teleporter => "left place portal, right remove",
         WorldTool.Stone => "left place cover, right clear",
         WorldTool.Lava => "left deposit +0.03, right clear",
         WorldTool.JumpStart => "left enable life and fill empty deep ocean with plankton",
@@ -1669,6 +1802,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         Wolf,
         Crab,
         WolfDen,
+        Teleporter,
         Stone,
         Lava,
         JumpStart,

@@ -160,6 +160,24 @@ public sealed class VolcanismTests
     }
 
     [Fact]
+    public void VolcanoToolOperationRefusesRingWorldWall()
+    {
+        var world = new SimulationWorld(8, 5, Terrain.Plains, seed: 38)
+        {
+            Body = WorldBody.RingWorld,
+        };
+        TerrainClassifier.RebuildAll(world);
+        var wall = new GridPosition(4, 0);
+        var elevation = world.GetElevation(wall);
+
+        Assert.Equal(Terrain.RingWorldWall, world.GetTerrain(wall));
+        Assert.False(Volcanism.SpawnVolcano(world, wall));
+        Assert.Equal(0, world.VolcanoCount);
+        Assert.Equal(elevation, world.GetElevation(wall));
+        Assert.Equal(SurfaceCover.None, world.GetSurfaceCover(wall));
+    }
+
+    [Fact]
     public void StoneToolCoversOnlyClickedTileWithoutChangingElevation()
     {
         var world = CreateLandWorld();

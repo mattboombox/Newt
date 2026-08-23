@@ -120,6 +120,7 @@ public static class WorldGenerator
         SelectOceanSeeds(world, includeLargeSecondaryBasins: isRingWorld);
 
         TerrainClassifier.RebuildAll(world);
+        SeedRingWorldTeleporters(world);
         SeedNaturalVolcanoes(world, options.Seed);
         StartNaturalSprings(world, options.Seed);
         return world;
@@ -158,6 +159,7 @@ public static class WorldGenerator
 
         OpenEarthSeaPassage(world, westLongitude: -6.1, eastLongitude: -4.7, latitude: 35.9);
         TerrainClassifier.RebuildAll(world);
+        StartNaturalSprings(world, options.Seed);
         return world;
     }
 
@@ -227,6 +229,22 @@ public static class WorldGenerator
                     break;
                 }
             }
+        }
+    }
+
+    private static void SeedRingWorldTeleporters(SimulationWorld world)
+    {
+        if (world.Body is not WorldBody.RingWorld)
+        {
+            return;
+        }
+
+        const int teleporterCount = 4;
+        var y = world.Height / 2;
+        for (var index = 0; index < teleporterCount; index++)
+        {
+            var x = world.Width * (index * 2 + 1) / (teleporterCount * 2);
+            world.TryPlaceTeleporter(new GridPosition(x, y));
         }
     }
 

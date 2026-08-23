@@ -55,7 +55,9 @@ independently. The current shapes are Continents, Pangaea, Archipelago, Water Wo
 Ring World, and Earth. Earth supports every regular size by resampling the embedded
 1280 × 642 NOAA relief grid; Large (320 × 192) is the practical default while
 Massive retains the full source detail. Ring World keeps its fixed 1280 × 40
-engineered dimensions.
+engineered dimensions. Each game launch chooses a fresh initial seed. Select the
+Seed row and type digits to replace it, or use Backspace and the left/right arrows
+to edit it. Reusing the displayed seed keeps world generation deterministic.
 
 Continents retains the balanced 38% land layout. Pangaea concentrates roughly
 48% land into one dominant, heavily lobed supercontinent. Archipelago lowers land
@@ -87,7 +89,8 @@ terrain ceiling, and terrain-changing events cannot permanently erode them.
 
 ## Prototype controls
 
-- `M`: open or close the world setup menu; use arrows and Enter to generate.
+- `M`: open or close the world setup menu; use arrows and Enter to generate. On
+  the Seed row, type digits to replace the seed and use Backspace to edit it.
 - `N`: increment the seed and generate a new world.
 - `Q` / `E`: cycle backward or forward through tools in the current category.
 - `R`: cycle tool categories.

@@ -110,6 +110,13 @@ public sealed class WorldGeneratorTests
         Assert.True(world.GetElevation(new GridPosition(640, 321)) < 0); // Gulf of Guinea
         Assert.True(world.GetTerrain(new GridPosition(693, 192)) is
             Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows); // Mediterranean
+        Assert.NotEmpty(world.SpringSources);
+        Assert.All(world.SpringSources, source =>
+        {
+            Assert.Equal(SpringOrigin.Natural, source.Origin);
+            Assert.True(world.GetTerrain(source.Position) is Terrain.Hills or Terrain.Mountain);
+            Assert.Equal(SurfaceWaterKind.River, world.GetSurfaceWater(source.Position));
+        });
     }
 
     [Fact]
@@ -205,7 +212,35 @@ public sealed class WorldGeneratorTests
             Assert.Equal(SimulationWorld.RingWorldWallElevation, world.GetElevation(top));
             Assert.Equal(SimulationWorld.RingWorldWallElevation, world.GetElevation(bottom));
         }
+        Assert.Equal(4, world.TeleporterCount);
+        for (var index = 0; index < 4; index++)
+        {
+            var x = world.Width * (index * 2 + 1) / 8;
+            Assert.True(world.HasTeleporter(new GridPosition(x, world.Height / 2)));
+        }
         Assert.True(SimulationWorld.RingWorldWallElevation > SimulationWorld.MaximumGroundElevation);
+    }
+
+    [Fact]
+    public void RingWorldWallsDoNotCreateShallowsAlongTheirEdges()
+    {
+        var world = new SimulationWorld(8, 5, Terrain.DeepOcean, seed: 9)
+        {
+            Body = WorldBody.RingWorld,
+            OceanSeed = new GridPosition(0, 2),
+        };
+        foreach (var position in AllPositions(world))
+        {
+            world.SetElevation(position, -0.1f);
+        }
+
+        TerrainClassifier.RebuildAll(world);
+
+        for (var x = 0; x < world.Width; x++)
+        {
+            Assert.NotEqual(Terrain.Shallows, world.GetTerrain(new GridPosition(x, 1)));
+            Assert.NotEqual(Terrain.Shallows, world.GetTerrain(new GridPosition(x, world.Height - 2)));
+        }
     }
 
     [Fact]
@@ -258,7 +293,7 @@ public sealed class WorldGeneratorTests
     }
 
     [Fact]
-    public void NaturalSpringsStartOnMountains()
+    public void NaturalSpringsStartOnHillsOrMountains()
     {
         var world = WorldGenerator.Generate(new WorldGenerationOptions(WorldPreset.Micro, Seed: 42));
         var sources = AllPositions(world)
@@ -269,7 +304,7 @@ public sealed class WorldGeneratorTests
         Assert.Equal(sources.Count, world.ActiveSpringCount);
         foreach (var source in sources)
         {
-            Assert.Equal(Terrain.Mountain, world.GetTerrain(source));
+            Assert.True(world.GetTerrain(source) is Terrain.Hills or Terrain.Mountain);
         }
     }
 

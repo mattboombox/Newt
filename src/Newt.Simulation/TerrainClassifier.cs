@@ -16,6 +16,13 @@ public static class TerrainClassifier
     {
         ArgumentNullException.ThrowIfNull(world);
         ClimateSystem.RebuildTemperature(world);
+        RebuildLandformsFromCurrentTemperature(world);
+    }
+
+    /// <summary>Rebuilds physical terrain after temperature has already been refreshed.</summary>
+    internal static void RebuildLandformsFromCurrentTemperature(SimulationWorld world)
+    {
+        ArgumentNullException.ThrowIfNull(world);
 
         var ocean = FindOceanConnectedTiles(world);
 
@@ -31,8 +38,8 @@ public static class TerrainClassifier
             }
         }
 
-        AddCoasts(world);
         ApplyRingWorldWalls(world);
+        AddCoasts(world);
     }
 
     internal static void ApplyRingWorldWalls(SimulationWorld world)
