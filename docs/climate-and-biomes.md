@@ -59,7 +59,7 @@ temperature = latitude warmth - elevation lapse + broad seeded variation
 - Higher elevation is colder than nearby lowlands.
 - Smooth seeded variation prevents perfectly uniform climate bands.
 
-Temperature is clamped to `0.0–1.0`. A six-minute seasonal cycle adds a gentle, smooth
+Temperature is clamped to `0.0–1.0`. A twelve-minute seasonal cycle adds a gentle, smooth
 temperature offset in opposite directions in the northern and southern hemispheres.
 The offset tapers to zero through the equatorial band, whose tiles display
 `PermanentSummer`. Seasons currently change temperature, but not moisture. The
@@ -109,6 +109,11 @@ Saltwater below `0.12` becomes physical sea ice at every depth, including deep
 ocean. Liquid water between `0.12` and `0.18` retains its depth terrain and uses
 the Freezing climate label. Moisture is not used to classify oceans because the
 tile is already water-covered.
+
+Ice Sheets are valid habitat for every critter. Aquatic species are interpreted
+as remaining beneath the ice, while terrestrial species travel across its surface.
+Ice above water deeper than `0.20` retains one unit of deep-ocean nutrition for
+Worms, Trilobites, and Nautiluses; shallower Ice Sheets have no natural nutrition.
 
 Cold ocean tiles render five percent darker than temperate water, freezing water
 ten percent darker, and warm water six percent lighter. These restrained changes

@@ -117,7 +117,7 @@ public static class WorldGenerator
         }
 
         TerrainClassifier.ApplyRingWorldWalls(world);
-        SelectOceanSeeds(world, includeLargeSecondaryBasins: isRingWorld);
+        SelectOceanSeeds(world, includeLargeSecondaryBasins: true);
 
         TerrainClassifier.RebuildAll(world);
         SeedRingWorldTeleporters(world);
@@ -128,7 +128,7 @@ public static class WorldGenerator
 
     private static SimulationWorld GenerateEarth(WorldGenerationOptions options)
     {
-        var preset = options.Preset == WorldPreset.Earth ? WorldPreset.Massive : options.Preset;
+        var preset = options.Preset == WorldPreset.Earth ? WorldPreset.Huge : options.Preset;
         var world = new SimulationWorld(preset.Width, preset.Height, Terrain.DeepOcean, options.Seed)
         {
             Body = WorldBody.Earth,
@@ -265,7 +265,7 @@ public static class WorldGenerator
 
         var random = new GeneratorRandom(seed ^ 0xD1B54A32D192ED03UL);
         Shuffle(candidates, ref random);
-        var targetCount = Math.Clamp(world.Width * world.Height / 5_000 + 1, 2, 6);
+        var targetCount = Math.Clamp(world.Width * world.Height / 2_500 + 1, 3, 12);
         var minimumDistance = Math.Max(6, Math.Min(world.Width, world.Height) / 8);
         var selected = new List<GridPosition>(targetCount);
 
@@ -345,8 +345,8 @@ public static class WorldGenerator
 
             // Very wide worlds need more shields, not horizontally stretched shields.
             // The height cap preserves the existing proportions of ordinary presets.
-            var featureWidth = Math.Min(width, WorldPreset.Standard.Width);
-            var featureHeight = Math.Min(height, WorldPreset.Standard.Height);
+            var featureWidth = Math.Min(width, WorldPreset.Small.Width);
+            var featureHeight = Math.Min(height, WorldPreset.Small.Height);
             var maximumRadiusX = Math.Min(
                 Math.Max(2.5, featureWidth * 0.038),
                 Math.Max(2.5, featureHeight * 0.078));
@@ -398,8 +398,8 @@ public static class WorldGenerator
     {
         var centerX = random.NextInt(width);
         var centerY = random.NextInt(height);
-        var featureWidth = Math.Min(width, WorldPreset.Standard.Width);
-        var featureHeight = Math.Min(height, WorldPreset.Standard.Height);
+        var featureWidth = Math.Min(width, WorldPreset.Small.Width);
+        var featureHeight = Math.Min(height, WorldPreset.Small.Height);
         var maximumRadiusX = Math.Min(featureWidth * 0.30, featureHeight * 1.35) * scale;
         var baseRadiusX = random.NextDouble(
             Math.Min(featureWidth * 0.14 * scale, maximumRadiusX),
@@ -471,7 +471,7 @@ public static class WorldGenerator
         int height,
         ulong seed)
     {
-        var featureSpan = Math.Min(Math.Min(width, height), WorldPreset.Standard.Height);
+        var featureSpan = Math.Min(Math.Min(width, height), WorldPreset.Small.Height);
         var scales = new (int CellSize, double Amplitude, ulong Salt)[]
         {
             (Math.Max(8, featureSpan / 3), 0.18, 0x9E3779B185EBCA87UL),
@@ -570,7 +570,7 @@ public static class WorldGenerator
         }
     }
 
-    private static void SelectOceanSeeds(
+    internal static void SelectOceanSeeds(
         SimulationWorld world,
         bool includeLargeSecondaryBasins)
     {

@@ -5,6 +5,13 @@ namespace Newt.Simulation.Tests;
 public sealed class ClimateTests
 {
     [Fact]
+    public void OneYearTakesTwelveMinutesAtNormalSpeed()
+    {
+        Assert.Equal(720, SeasonSystem.CycleSeconds);
+        Assert.Equal(14_400, SeasonSystem.TicksPerYear);
+    }
+
+    [Fact]
     public void LifelessWorldKeepsDesertAndArcticBiomes()
     {
         var world = new SimulationWorld(5, 1, Terrain.Plains);

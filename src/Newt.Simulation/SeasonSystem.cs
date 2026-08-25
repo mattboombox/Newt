@@ -3,7 +3,7 @@ namespace Newt.Simulation;
 /// <summary>Advances a simple axial season cycle and applies it to temperature.</summary>
 public static class SeasonSystem
 {
-    public const int CycleSeconds = 360;
+    public const int CycleSeconds = 720;
     public const int ClimateRefreshSeconds = 30;
     public const float EquatorialBand = 0.20f;
     public const float PolarTemperatureAmplitude = 0.10f;

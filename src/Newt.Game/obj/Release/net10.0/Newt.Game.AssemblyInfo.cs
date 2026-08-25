@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Newt.Game")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+0ebd6f2529e15f63023398d3f6ebcf62545a5dc5")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+0747972b33e200f76dba5773d2bb021ceaed4e4e")]
 [assembly: System.Reflection.AssemblyProductAttribute("Newt.Game")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Newt.Game")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

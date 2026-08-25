@@ -14,9 +14,11 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private const int HudPadding = 12;
     private const double ToolRepeatDelaySeconds = 0.25;
     private const double ToolRepeatIntervalSeconds = 0.075;
+    private const int PopulationSampleIntervalTicks = 5 * SimulationWorld.TicksPerSecond;
+    private const int PopulationHistoryLength = 90;
     private static readonly int[] ZoomLevels = [2, 4, 8, 16, 24];
     private static readonly WorldPreset[] MenuSizes =
-        [WorldPreset.Micro, WorldPreset.Standard, WorldPreset.Large, WorldPreset.Huge, WorldPreset.Massive];
+        [WorldPreset.Micro, WorldPreset.Small, WorldPreset.Standard, WorldPreset.Large, WorldPreset.Huge];
     private static readonly WorldMapType[] MenuMapTypes =
         [WorldMapType.Continents, WorldMapType.Pangaea, WorldMapType.Archipelago, WorldMapType.AllOcean,
             WorldMapType.RingWorld, WorldMapType.Earth];
@@ -70,10 +72,13 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private bool _setupMenuOpen;
     private bool _seedTypingActive;
     private int _setupRow;
-    private int _menuSizeIndex = 1;
+    private int _menuSizeIndex = 2;
     private int _menuMapTypeIndex;
     private CritterId _inspectedCritterId;
     private bool _populationWindowOpen;
+    private readonly Dictionary<CritterSpecies, List<int>> _populationHistory =
+        Enum.GetValues<CritterSpecies>().ToDictionary(species => species, _ => new List<int>());
+    private long _nextPopulationSampleTick;
 
     public NewtGame()
     {
@@ -135,6 +140,10 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             while (_accumulator >= SimulationStep)
             {
                 _world.AdvanceOneTick();
+                if (_world.Tick >= _nextPopulationSampleTick)
+                {
+                    RecordPopulationSample();
+                }
                 _accumulator -= SimulationStep;
             }
         }
@@ -246,7 +255,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             {
                 _menuMapTypeIndex = 0;
             }
-            var currentSize = _preset == WorldPreset.Earth ? WorldPreset.Massive : _preset;
+            var currentSize = _preset == WorldPreset.Earth ? WorldPreset.Huge : _preset;
             var sizeIndex = Array.IndexOf(MenuSizes, currentSize);
             if (sizeIndex >= 0)
             {
@@ -718,7 +727,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         const int padding = 16;
         const int headerHeight = 58;
         const int rowHeight = 20;
-        const int preferredColumnWidth = 190;
+        const int preferredColumnWidth = 300;
         var maximumRows = Math.Max(1, (MapViewportHeight - 24 - headerHeight - padding) / rowHeight);
         var columns = Math.Max(1, (populations.Length + maximumRows - 1) / maximumRows);
         var rows = populations.Length == 0
@@ -744,7 +753,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             new Color(126, 190, 213));
         _spriteBatch.DrawString(
             _hudFont,
-            $"Total {_world.CritterCount:N0}",
+            $"Total {_world.CritterCount:N0}   5s samples / 7.5m history",
             new Vector2(bounds.X + padding, bounds.Y + 30),
             new Color(175, 184, 190));
 
@@ -777,11 +786,93 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 new Color(220, 225, 228));
             var countText = entry.Count.ToString("N0");
             var countWidth = _hudFont.MeasureString(countText).X;
+            var graphWidth = Math.Clamp(columnWidth / 3, 48, 96);
+            var graphBounds = new Rectangle(
+                x + columnWidth - graphWidth - 8,
+                y + 2,
+                graphWidth,
+                15);
             _spriteBatch.DrawString(
                 _hudFont,
                 countText,
-                new Vector2(x + columnWidth - countWidth - 8, y),
+                new Vector2(graphBounds.X - countWidth - 8, y),
                 new Color(245, 210, 120));
+            DrawPopulationSparkline(entry.Species, entry.Count, graphBounds);
+        }
+    }
+
+    private void RecordPopulationSample()
+    {
+        foreach (var species in Enum.GetValues<CritterSpecies>())
+        {
+            var history = _populationHistory[species];
+            history.Add(_world.GetCritterCount(species));
+            if (history.Count > PopulationHistoryLength)
+            {
+                history.RemoveAt(0);
+            }
+        }
+        _nextPopulationSampleTick = _world.Tick + PopulationSampleIntervalTicks;
+    }
+
+    private void DrawPopulationSparkline(
+        CritterSpecies species,
+        int currentCount,
+        Rectangle bounds)
+    {
+        if (_spriteBatch is null || _pixel is null)
+        {
+            return;
+        }
+
+        _spriteBatch.Draw(_pixel, bounds, new Color(31, 39, 45));
+        _spriteBatch.Draw(
+            _pixel,
+            new Rectangle(bounds.X, bounds.Bottom - 1, bounds.Width, 1),
+            new Color(65, 76, 84));
+
+        var history = _populationHistory[species];
+        var pointCount = history.Count + 1;
+        var maximum = Math.Max(1, Math.Max(currentCount, history.Count == 0 ? 0 : history.Max()));
+        var color = GetCritterColor(species);
+        var previous = GetPoint(0);
+        for (var index = 1; index < pointCount; index++)
+        {
+            var current = GetPoint(index);
+            DrawPixelLine(previous, current, color);
+            previous = current;
+        }
+
+        Point GetPoint(int index)
+        {
+            var value = index < history.Count ? history[index] : currentCount;
+            var x = pointCount <= 1
+                ? bounds.Right - 1
+                : bounds.X + index * (bounds.Width - 1) / (pointCount - 1);
+            var y = bounds.Bottom - 2 -
+                (int)MathF.Round(value / (float)maximum * (bounds.Height - 3));
+            return new Point(x, y);
+        }
+    }
+
+    private void DrawPixelLine(Point start, Point end, Color color)
+    {
+        if (_spriteBatch is null || _pixel is null)
+        {
+            return;
+        }
+
+        var steps = Math.Max(Math.Abs(end.X - start.X), Math.Abs(end.Y - start.Y));
+        if (steps == 0)
+        {
+            _spriteBatch.Draw(_pixel, new Rectangle(start.X, start.Y, 1, 1), color);
+            return;
+        }
+        for (var step = 0; step <= steps; step++)
+        {
+            var x = start.X + (end.X - start.X) * step / steps;
+            var y = start.Y + (end.Y - start.Y) * step / steps;
+            _spriteBatch.Draw(_pixel, new Rectangle(x, y, 1, 1), color);
         }
     }
 
@@ -934,7 +1025,13 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                     $"Wood {_world.GetApeVillageWood(position)} / {_world.GetApeVillageWoodCapacity(position)}",
                     "Behavior Settlement",
                 ]
-                : ["ENTITY", GetApeStructureDisplayName(apeStructure), "Behavior Village district"];
+                : [
+                    "ENTITY",
+                    GetApeStructureDisplayName(apeStructure),
+                    _world.IsApeStructureOperational(position)
+                        ? "Behavior Village district"
+                        : "Behavior Inactive (out of season)",
+                ];
         }
 
         return ["ENTITY", "None"];
@@ -958,18 +1055,18 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         CritterSpecies.Plankton => "ambient nutrients",
         CritterSpecies.Worm => "deep-ocean, shallow, river, and lake detritus",
         CritterSpecies.Trilobite => "deep-sea detritus",
-        CritterSpecies.SeaScorpion => "aquatic prey and shoreline grazers",
+        CritterSpecies.SeaScorpion => "broad aquatic and shoreline prey; adjacent worms, trilobites, and nautiluses",
         CritterSpecies.Nautilus => "plankton plus ocean and deep-ocean forage",
-        CritterSpecies.Squid => "aquatic prey and grazers entering shallows",
+        CritterSpecies.Squid => "aquatic prey and grazers entering shallows; adjacent worms and nautiluses",
         CritterSpecies.SquidEgg => "hatches when squid prey approaches",
         CritterSpecies.Jellyfish => "plankton only",
-        CritterSpecies.Fish => "shallow/freshwater forage and plankton; worms and crabs as fallback",
+        CritterSpecies.Fish => "shallow/freshwater forage and plankton",
         CritterSpecies.Newt => "freshwater food; feeds and breeds in swamps and jungles",
-        CritterSpecies.MegaToad => "fish and broad prey; cannibalism cannot sustain a closed population",
+        CritterSpecies.MegaToad => "fish and broad prey; adjacent cannibalism cannot sustain a closed population",
         CritterSpecies.Therapsid => "prefers wetland forage; fish as fallback",
         CritterSpecies.Monkey => "swamp and jungle foliage only",
-        CritterSpecies.Ape => "every other critter species",
-        CritterSpecies.ApeSailor => "sea life except plankton",
+        CritterSpecies.Ape => "prey except plankton, worms, and its civilization; plus wetland foliage",
+        CritterSpecies.ApeSailor => "sea life except plankton and worms",
         CritterSpecies.Deer => "grassland and forest foliage",
         CritterSpecies.Elk => "grassland, tundra, and taiga foliage",
         CritterSpecies.Gazelle => "arid, forest, and grassland foliage",
@@ -1003,7 +1100,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 CritterSpecies.MegaToad => "Ambushing aquatic prey",
                 CritterSpecies.Therapsid => "Hunting or foraging in lush wetlands",
                 CritterSpecies.Monkey => "Seeking wetland foliage or fleeing predators",
-                CritterSpecies.Ape => "Hunting or returning to its village",
+                CritterSpecies.Ape => "Hunting below 10 village food, wetland foraging, or returning",
                 CritterSpecies.ApeSailor => "Hunting at sea or returning food to harbor",
                 CritterSpecies.Deer => "Grazing or fleeing predators",
                 CritterSpecies.Elk => "Grazing or fleeing predators",
@@ -1029,7 +1126,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             CritterSpecies.MegaToad => "Patrolling the water's edge",
             CritterSpecies.Therapsid => "Patrolling terrestrial hunting grounds",
             CritterSpecies.Monkey => "Foraging while watching for predators",
-            CritterSpecies.Ape => "Hunting from its village",
+            CritterSpecies.Ape => "Hunting below 10 village food or wetland foraging",
             CritterSpecies.ApeSailor => "Patrolling village waters",
             CritterSpecies.Deer => "Roaming while watching for predators",
             CritterSpecies.Elk => "Slowly roaming while watching for predators",
@@ -1072,6 +1169,11 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         _inspectedCritterId = default;
         _accumulator = TimeSpan.Zero;
         LifeSystem.SetEnabled(_world, _lifeEnabled);
+        foreach (var history in _populationHistory.Values)
+        {
+            history.Clear();
+        }
+        RecordPopulationSample();
     }
 
     private void HandleSetupMenu(KeyboardState keyboard)
@@ -1536,17 +1638,18 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         {
             return GetStoneColor(terrain);
         }
-        if (IsSaltwaterTerrain(terrain))
-        {
-            return GetTerrainColor(terrain, biome, temperatureBand);
-        }
-        return GetTerrainColor(terrain, biome, temperatureBand);
+        return GetTerrainColor(
+            terrain,
+            biome,
+            temperatureBand,
+            _world.GetElevation(position));
     }
 
     private static Color GetTerrainColor(
         Terrain terrain,
         Biome biome,
-        TemperatureBand temperatureBand) => terrain switch
+        TemperatureBand temperatureBand,
+        float elevation) => terrain switch
     {
         Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows => GetOceanColor(terrain, temperatureBand),
         Terrain.Beach => GetBeachColor(temperatureBand),
@@ -1568,9 +1671,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             Biome.Jungle => new Color(35, 82, 48),
             _ => new Color(115, 115, 105),
         },
-        Terrain.Mountain => biome is Biome.Arctic
-            ? new Color(210, 222, 225)
-            : new Color(78, 72, 68),
+        Terrain.Mountain => GetMountainColor(elevation, biome is Biome.Arctic),
         Terrain.Ice => new Color(165, 220, 235),
         Terrain.RingWorldWall => new Color(112, 126, 136),
         _ => Color.Magenta,
@@ -1586,9 +1687,6 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         Terrain.Trench => new Color(62, 61, 59),
         _ => new Color(104, 101, 96),
     };
-
-    private static bool IsSaltwaterTerrain(Terrain terrain) => terrain is
-        Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows or Terrain.Ice;
 
     private static Color GetOceanColor(Terrain terrain, TemperatureBand temperatureBand)
     {
@@ -1617,6 +1715,23 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         TemperatureBand.Hot => new Color(226, 181, 103),
         _ => new Color(215, 195, 135),
     };
+
+    private static Color GetMountainColor(float elevation, bool snowy)
+    {
+        var elevationShade = Math.Clamp(
+            (elevation - TerrainClassifier.MountainElevationThreshold) /
+                (SimulationWorld.MaximumGroundElevation -
+                    TerrainClassifier.MountainElevationThreshold),
+            0f,
+            1f);
+        var baseColor = snowy
+            ? new Color(210, 222, 225)
+            : new Color(78, 72, 68);
+        var brightness = snowy
+            ? 0.88f + 0.25f * elevationShade
+            : 0.90f + 0.75f * elevationShade;
+        return ScaleColor(baseColor, brightness);
+    }
 
     private static Color GetBiomeLandColor(Biome biome) => biome switch
     {

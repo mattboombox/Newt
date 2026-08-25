@@ -47,6 +47,13 @@ public static class CritterHabitats
             return false;
         }
 
+        // Land critters travel on top of an ice sheet, while aquatic critters
+        // are treated as moving through the water beneath it.
+        if (terrain is Terrain.Ice)
+        {
+            return true;
+        }
+
         return habitat switch
         {
             CritterHabitat.OceanDweller =>

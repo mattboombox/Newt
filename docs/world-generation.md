@@ -19,16 +19,17 @@ fraction. Identical options produce identical terrain.
    relief that gives shores sharper inlets and projections. Larger presets add
    more continents and ranges instead of stretching these features.
 4. Select an elevation threshold that approximates the requested land fraction.
-5. Find the largest connected below-sea-level basin and place the world's single
-   saltwater seed at its deepest tile. Smaller disconnected depressions remain
-   dry inland basins rather than becoming separate saltwater oceans.
-5. Build a seeded temperature field from latitude and elevation.
-6. Classify physical landforms and saltwater coastlines.
-7. Build moisture from saltwater distance, freshwater, elevation, and seeded
+5. Find the largest connected below-sea-level basin and place the world's primary
+   saltwater seed at its deepest tile. Disconnected basins covering at least one
+   percent of the map, with a 64-tile minimum, receive secondary saltwater seeds.
+   Smaller enclosed depressions remain eligible freshwater lakes.
+6. Build a seeded temperature field from latitude and elevation.
+7. Classify physical landforms and saltwater coastlines.
+8. Build moisture from saltwater distance, freshwater, elevation, and seeded
    regional variation.
-8. Classify biomes and choose the visible lowland surface.
-9. Seed spaced active volcanoes on mountain chains.
-10. Select a small, spaced set of mountain tiles and start animated springs from them.
+9. Classify biomes and choose the visible lowland surface.
+10. Seed spaced active volcanoes on mountain chains.
+11. Select a small, spaced set of mountain tiles and start animated springs from them.
 
 Elevation remains part of world state after generation. It is stored as a signed
 absolute value against the original zero datum and compared with the mutable sea
@@ -53,8 +54,8 @@ the same tile-by-tile travel animation as springs created with `F`.
 Press `M` to open the new-world menu. World size and map shape are selected
 independently. The current shapes are Continents, Pangaea, Archipelago, Water World,
 Ring World, and Earth. Earth supports every regular size by resampling the embedded
-1280 × 642 NOAA relief grid; Large (320 × 192) is the practical default while
-Massive retains the full source detail. Ring World keeps its fixed 1280 × 40
+1280 × 642 NOAA relief grid; Standard (320 × 192) is the default while
+Huge retains the full source detail. Ring World keeps its fixed 1280 × 40
 engineered dimensions. Each game launch chooses a fresh initial seed. Select the
 Seed row and type digits to replace it, or use Backspace and the left/right arrows
 to edit it. Reusing the displayed seed keeps world generation deterministic.
@@ -67,12 +68,12 @@ keeps every tile submerged while retaining varied bathymetry and polar sea ice.
 | Key | Preset | Dimensions |
 | --- | --- | --- |
 | 1 | Micro | 80 × 48 |
-| 2 | Standard | 160 × 96 |
-| 3 | Large | 320 × 192 |
-| 4 | Huge | 640 × 311 |
-| 5 | Ring World | 1280 × 40 |
-| 6 | Earth | 1280 × 642 |
-| 7 | Massive (stress test) | 1280 × 642 |
+| 2 | Small | 160 × 96 |
+| 3 | Standard (default) | 320 × 192 |
+| 4 | Large | 640 × 311 |
+| 5 | Huge (stress test) | 1280 × 642 |
+| 6 | Ring World | 1280 × 40 |
+| 7 | Earth | 1280 × 642 |
 
 Ring World is an artificial megastructure conservatory rather than a planet.
 Every large disconnected below-sea-level basin receives a saltwater source, while
@@ -118,7 +119,8 @@ terrain ceiling, and terrain-changing events cannot permanently erode them.
   to support their Monkey, Deer, and Wolf descendant branches.
   Ambient feeding draws from finite tile nutrition. Land capacity is Jungle 6,
   Swamp 5, Forest 4, Grassland/Taiga 3, Bog/Arid 2, Tundra 1, and
-  Desert/Arctic/Ice Sheet 0. Beaches are 0 freezing and 1 otherwise; Shallows are
+  Desert/Arctic 0. Ice Sheets over Deep Ocean hold 1, while shallower Ice Sheets
+  hold 0. Beaches are 0 freezing and 1 otherwise; Shallows are
   2 freezing, 3 cold, and 4 temperate/hot; Ocean is 0; Deep Ocean is 2 cold and
   1 otherwise. Rivers and Lakes both replace the underlying tile with a flat
   capacity of 2, independent of biome and temperature. Tiles regenerate one unit
@@ -128,11 +130,14 @@ terrain ceiling, and terrain-changing events cannot permanently erode them.
   remaining indefinitely in dense stationary clusters. A critter that starves deposits
   one edible nutrient on its tile, including terrain with zero natural capacity; this
   uses a separate byte per tile and requires no additional world scan. Plankton photosynthesize,
-  so their ambient feeding neither checks nor consumes tile nutrition.
+  so their ambient feeding neither checks nor consumes tile nutrition. Complete
+  Plankton extinction recovers one Deep Ocean Plankton after 15,000 ticks while life is enabled.
   Trilobites continue to Crab or Sea Scorpion. Worms move every eight seconds,
   four times slower than Fish, traverse Rivers and
   Freshwater Lakes as well as saltwater, and scavenge detritus in Deep Ocean,
-  Shallows, Rivers, and unfrozen Freshwater Lakes;
+  Shallows, Rivers, unfrozen Freshwater Lakes, and Ice Sheets over Deep Ocean. Their stomach holds four energy,
+  and reproduction costs two energy once full. Squid and Sea Scorpions consume
+  Worms only when adjacent, preserving most of the Fish and Nautilus branches.
   jellyfish consume only plankton on contact and leave worms and fish alone; fish consume or seek
   available terrain food first, then pursue Plankton as their only animal prey.
   Fish can shove smaller worms into adjacent valid habitat, but blocked worms survive, and
@@ -143,25 +148,30 @@ terrain ceiling, and terrain-changing events cannot permanently erode them.
   Fish flee nearby Sea Scorpions, Squid, and Mega Toads before hunting. Crabs may
   travel through ordinary Ocean, Shallows, Beaches, and non-Arctic land, but not
   Deep Ocean. They feed during normal actions on Beaches and Shallows, remain there
-  while building energy, and reproduce directly on either coastal terrain,
-  creating a rapidly renewing coastal population. Fish do not eat Crabs. Cold and freezing Beaches remain valid crab habitat, but ice sheets
-  and other Arctic terrain do not. Trilobites graze terrain nutrition in Deep Ocean
-  and Shallows, while ordinary Ocean remains transit-only, and flee predators detected
+  while building energy, detect coastal feeding terrain within five Manhattan tiles,
+  move back toward it when hungry, and reproduce directly on either coastal terrain,
+  creating a rapidly renewing coastal population. Every crab predator consumes
+  Crabs only on adjacent encounters and does not pursue them at range. Fish do
+  not eat Crabs. Cold and freezing Beaches and Ice Sheets remain valid crab habitat,
+  while other Arctic terrain does not. Trilobites graze terrain nutrition in Deep Ocean
+  and Shallows, including Ice Sheets over Deep Ocean, while ordinary Ocean remains transit-only, and flee predators detected
   within three Manhattan tiles. Larger critters can shove smaller blockers into adjacent open
   habitat rather than losing their movement step; Worms and Trilobites can push
   through chains of up to four Plankton in dense blooms. Active Plankton hunters still eat them.
-  Slow shelled Nautiluses eat Deep Ocean or Shallows terrain food before hunting the nearest legal prey,
-  flee visible predators, and are protected from Jellyfish
-  and Sea Scorpions. Squid hunt fish, trilobites, crabs, newts,
-  Nautiluses, Sea Scorpions, Deer, Elk, and Gazelles in shared saltwater habitat.
+  Slow shelled Nautiluses eat terrain food in Deep Ocean, Shallows, or deep-ocean Ice Sheets before hunting nearby Plankton,
+  flee visible predators, and are protected from Jellyfish. Sea Scorpions and Squid
+  consume Nautiluses only on adjacent encounters.
+  Squid hunt fish, trilobites, crabs, newts, Sea Scorpions, Deer, Elk, and Gazelles
+  in shared saltwater habitat. They consume Worms and Nautiluses only when already adjacent.
   They lay drifting eggs that move like Plankton and hatch when Squid prey comes
   within two tiles or when they enter Shallows. Squid and Sea Scorpions resolve mutual attacks with a 50/50
   roll that deals one energy damage rather than instant predation. Sea Scorpions
-  move every four seconds and hunt fish, worms, trilobites, crabs, newts, Squid, Deer, Elk, and Gazelles
-  across saltwater and Beaches, while
-  Mega Toads hunt worms, trilobites, fish, crabs, Monkeys, Deer, Elk, and Gazelles,
-  choosing the nearest legal prey without species preference tiers. Therapsids hunt only Worms, Fish, and
-  Newts, including strikes against those prey in adjacent lakes, and move every
+  move every four seconds and hunt Fish, Crabs, Newts, Squid,
+  Therapsids, Monkeys, Apes, Wolves, Ape Sailors, Deer, Elk, and Gazelles
+  across saltwater and Beaches; they consume Worms, Trilobites, and Nautiluses only when adjacent, while
+  Mega Toads hunt trilobites, fish, crabs, Monkeys, Deer, Elk, and Gazelles,
+  choosing the nearest legal prey without species preference tiers. Therapsids hunt only Fish,
+  including strikes against that prey in adjacent lakes, and move every
   six seconds, and use available Jungle, Swamp, or Arid forage within four tiles while
   below breeding energy. They eat terrain food on their normal action and hunt when
   no usable forage is available. They do not hunt Mega Toads or Wolves, but defend
@@ -179,8 +189,10 @@ terrain ceiling, and terrain-changing events cannot permanently erode them.
   biomes do not feed them.
   Deer, Elk, and Gazelles use the same open, habitable offspring placement rule
   as other ordinary species.
-  Apes evolve from Monkeys, hunt all critters outside their own civilization in
-  shared habitat, and must found or join a village before producing offspring.
+  Apes evolve from Monkeys, hunt all non-Plankton, non-Worm critters outside their own civilization in
+  shared habitat, forage from Swamp and Jungle foliage, and must found or join a
+  village before producing offspring. Assigned Apes stop hunting while their home
+  village has at least ten stored food; unassigned Apes continue hunting normally.
   A founder spends its first reproduction event creating only a Village beside
   an available Grassland or Beach district site. At five residents the village
   adds a Grassland Farm, Swamp Rice Paddy, or Forest Orchard when possible, otherwise
@@ -199,14 +211,18 @@ terrain ceiling, and terrain-changing events cannot permanently erode them.
   allowing one Sailor per five residents up to four at twenty residents. Sailors
   draw from village food every tick until their energy is full, traverse Beach and
   saltwater, never reproduce, and hunt all implemented
-  sea life except Plankton, and return their catches to a connected Harbor. Villages
+  sea life except Plankton and Worms, and return their catches to a connected Harbor. Villages
   remain more than twelve tiles apart.
   Village food storage is capped at five plus ten per Farm, Rice Paddy, or Orchard.
   Villages start with six of a maximum thirty wood. A single three-food Lumber Camp
   can harvest connected Jungle every ten seconds, Forest every fourteen, or Taiga
-  every eighteen. The first food district is free; later ones cost two wood.
+  every eighteen; low-yield Swamp camps produce every twenty-four seconds. The first
+  food district is free; later ones cost two wood.
   Residential Districts cost five food and four wood, Harbors cost six wood, and each
   Sailor after the Harbor's included first boat costs two wood.
+  Seasonal biome changes leave Farms, Rice Paddies, and Orchards standing but pause
+  their production until the matching biome returns. Coastline refreshes preserve
+  Harbors through intermediate Beach reclassification.
   Terrestrial critters can traverse exposed Lowlands, Canyons, and Trenches.
   Wolves form a third Therapsid branch. They are fast hunters with the
   broad terrestrial diet, including Deer, Elk, and Gazelles. They engage
@@ -224,7 +240,8 @@ terrain ceiling, and terrain-changing events cannot permanently erode them.
   Other / Jump Start enables life and fills every unoccupied Deep Ocean tile with
   one Plankton, preserving any critters already occupying those tiles.
   Other / Population opens a live, non-pausing window of extant species counts;
-  species disappear from the list when their population reaches zero.
+  each count has a colored population-history sparkline, and species disappear
+  from the list when their population reaches zero.
   Monkeys, Deer, Elk, and Gazelles flee any
   nearby species capable of eating them. Six body-size levels determine both
   displacement and prey energy: Tiny 1, Small 2, Medium 3, Big 4, Large 5, and Huge 8.
@@ -236,12 +253,17 @@ terrain ceiling, and terrain-changing events cannot permanently erode them.
   Newts flee nearby Toads. Reproduction has no species-specific terrain gate.
   Mega Toad reproduction requires fourteen energy and costs nine. Both a new
   offspring and its threshold-level parent have five energy, while cannibalism
-  restores eight, leaving the survivor one energy short of another birth.
+  is limited to adjacent encounters. A cannibalistic meal restores eight, leaving
+  the survivor one energy short of another birth.
   Newts live on land and feed in swamps, jungles, rivers, and freshwater lakes.
   They seek only nearby tiles with nutrition remaining and do not make a map-wide
   freshwater migration after birth or evolution. Mega
-  Toads hunt worms, fish, and newts locally. Toads can enter land, shallows, and
+  Toads hunt fish and newts locally. Toads can enter land, shallows, and
   freshwater lakes, but not open ocean.
+- Every species may occupy Ice Sheets: aquatic critters are treated as moving
+  beneath them and land critters on top. Critters stranded by terrain or climate
+  changes survive and move at one quarter speed toward nearby valid habitat. They
+  never voluntarily enter invalid terrain from a valid tile.
 - Elevation tool: left click raises terrain and right click lowers it.
 - Sea-level tool: left click raises the ocean and right click lowers it.
 - Ocean-seed tool: click a tile to move the world's single saltwater source.

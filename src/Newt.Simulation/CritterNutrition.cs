@@ -73,18 +73,18 @@ public static class CritterNutritions
         BodySize: CritterBodySize.Medium,
         FeedingStrategy: CritterFeedingStrategy.TerrainOnly,
         InitialEnergy: 2,
-        MaximumEnergy: 5,
+        MaximumEnergy: 4,
         HungryThreshold: 1,
         MetabolismIntervalTicks: 60 * SimulationWorld.TicksPerSecond,
         MetabolismCost: 1,
-        ReproductionThreshold: 5,
-        ReproductionCost: 3);
+        ReproductionThreshold: 4,
+        ReproductionCost: 2);
 
     private static readonly CritterNutrition Trilobite = new(
         BodySize: CritterBodySize.Big,
         FeedingStrategy: CritterFeedingStrategy.TerrainOnly,
         InitialEnergy: 2,
-        MaximumEnergy: 5,
+        MaximumEnergy: 7,
         HungryThreshold: 1,
         MetabolismIntervalTicks: 60 * SimulationWorld.TicksPerSecond,
         MetabolismCost: 1,

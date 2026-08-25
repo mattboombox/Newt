@@ -151,6 +151,17 @@ public sealed class TileNutritionTests
     }
 
     [Fact]
+    public void IceSheetOverDeepOceanHasOneNutrition()
+    {
+        var world = new SimulationWorld(1, 1, Terrain.Ice);
+        var position = new GridPosition(0, 0);
+        world.SetElevation(position, -0.3f);
+
+        Assert.Equal(1, world.GetTileNutritionCapacity(position));
+        Assert.Equal(1, world.GetTileNutrition(position));
+    }
+
+    [Fact]
     public void FeedingDepletesAndLazilyRegeneratesTileNutrition()
     {
         var world = new SimulationWorld(1, 1, Terrain.Mountain, seed: 2001);

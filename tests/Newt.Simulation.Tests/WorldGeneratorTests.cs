@@ -60,11 +60,44 @@ public sealed class WorldGeneratorTests
     }
 
     [Fact]
+    public void LargeDisconnectedBelowSeaLevelBasinBecomesASecondaryOcean()
+    {
+        var world = new SimulationWorld(24, 20, Terrain.Plains, seed: 84);
+        world.HasOceans = true;
+        foreach (var position in AllPositions(world))
+        {
+            world.SetElevation(position, 0.5f);
+        }
+
+        for (var y = 2; y < 12; y++)
+        {
+            for (var x = 1; x < 11; x++)
+            {
+                world.SetElevation(new GridPosition(x, y), -0.2f);
+            }
+        }
+        for (var y = 4; y < 12; y++)
+        {
+            for (var x = 14; x < 22; x++)
+            {
+                world.SetElevation(new GridPosition(x, y), -0.1f);
+            }
+        }
+
+        WorldGenerator.SelectOceanSeeds(world, includeLargeSecondaryBasins: true);
+        TerrainClassifier.RebuildAll(world);
+
+        Assert.Single(world.AdditionalOceanSeeds);
+        Assert.True(world.GetTerrain(world.AdditionalOceanSeeds[0]) is
+            Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows or Terrain.Ice);
+    }
+
+    [Fact]
     public void PresetsProduceTheirDocumentedDimensions()
     {
         WorldPreset[] presets =
-            [WorldPreset.Micro, WorldPreset.Standard, WorldPreset.Large, WorldPreset.Huge,
-                WorldPreset.Ring, WorldPreset.Earth, WorldPreset.Massive];
+            [WorldPreset.Micro, WorldPreset.Small, WorldPreset.Standard, WorldPreset.Large,
+                WorldPreset.Huge, WorldPreset.Ring, WorldPreset.Earth];
         foreach (var preset in presets)
         {
             var world = WorldGenerator.Generate(new WorldGenerationOptions(preset, Seed: 9));
@@ -72,29 +105,34 @@ public sealed class WorldGeneratorTests
             Assert.Equal(preset.Height, world.Height);
             if (preset != WorldPreset.Earth)
             {
-                Assert.InRange(world.ActiveSpringCount, 1, 6);
+                Assert.InRange(world.ActiveSpringCount, 1, 12);
             }
         }
     }
 
     [Fact]
-    public void LargeAndHugePresetsUseTheirDocumentedDimensions()
+    public void RenamedPresetsUseTheirDocumentedNamesAndDimensions()
     {
-        Assert.Equal(320, WorldPreset.Large.Width);
-        Assert.Equal(192, WorldPreset.Large.Height);
-        Assert.Equal(640, WorldPreset.Huge.Width);
-        Assert.Equal(311, WorldPreset.Huge.Height);
-        Assert.Equal(2560, WorldPreset.Huge.Width * 4);
-        Assert.True(WorldPreset.Huge.Height * 4 < 1440 - 156);
+        Assert.Equal(new WorldPreset("Small", 160, 96), WorldPreset.Small);
+        Assert.Equal(new WorldPreset("Standard", 320, 192), WorldPreset.Standard);
+        Assert.Equal(new WorldPreset("Large", 640, 311), WorldPreset.Large);
+        Assert.Equal(new WorldPreset("Huge", 1280, 642), WorldPreset.Huge);
+
+        Assert.Equal(320, WorldPreset.Standard.Width);
+        Assert.Equal(192, WorldPreset.Standard.Height);
+        Assert.Equal(640, WorldPreset.Large.Width);
+        Assert.Equal(311, WorldPreset.Large.Height);
+        Assert.Equal(2560, WorldPreset.Large.Width * 4);
+        Assert.True(WorldPreset.Large.Height * 4 < 1440 - 156);
     }
 
     [Fact]
-    public void MassivePresetFillsA1440pViewportAtFarthestZoom()
+    public void HugePresetFillsA1440pViewportAtFarthestZoom()
     {
-        Assert.Equal(1280, WorldPreset.Massive.Width);
-        Assert.Equal(642, WorldPreset.Massive.Height);
-        Assert.Equal(2560, WorldPreset.Massive.Width * 2);
-        Assert.Equal(1440 - 156, WorldPreset.Massive.Height * 2);
+        Assert.Equal(1280, WorldPreset.Huge.Width);
+        Assert.Equal(642, WorldPreset.Huge.Height);
+        Assert.Equal(2560, WorldPreset.Huge.Width * 2);
+        Assert.Equal(1440 - 156, WorldPreset.Huge.Height * 2);
     }
 
     [Fact]
@@ -127,8 +165,8 @@ public sealed class WorldGeneratorTests
             Seed: 9,
             MapType: WorldMapType.Earth));
 
-        Assert.Equal(320, world.Width);
-        Assert.Equal(192, world.Height);
+        Assert.Equal(640, world.Width);
+        Assert.Equal(311, world.Height);
         Assert.Equal(WorldBody.Earth, world.Body);
         Assert.Contains(AllPositions(world), position => world.GetElevation(position) > 0.58f);
         Assert.Contains(AllPositions(world), position => world.GetElevation(position) < -0.20f);
@@ -192,7 +230,7 @@ public sealed class WorldGeneratorTests
     {
         Assert.Equal(1280, WorldPreset.Ring.Width);
         Assert.Equal(40, WorldPreset.Ring.Height);
-        Assert.True(WorldPreset.Ring.Width > WorldPreset.Huge.Width);
+        Assert.Equal(WorldPreset.Ring.Width, WorldPreset.Huge.Width);
 
         var world = WorldGenerator.Generate(new WorldGenerationOptions(WorldPreset.Ring, Seed: 9));
         Assert.Equal(WorldPreset.Ring.Width, world.Width);

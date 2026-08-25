@@ -2,7 +2,7 @@
 
 ## Initial targets
 
-- Reference world: Huge preset at 640 × 311 tiles.
+- Reference world: Large preset at 640 × 311 tiles.
 - Reference population: 10,000 active critters.
 - Simulation rate: 20 ticks per second.
 - Presentation target: 60 frames per second on the development machine.
@@ -10,7 +10,7 @@
 
 These are engineering targets, not final hardware requirements. Each substantial
 system needs a representative benchmark before its population scale increases.
-The 1280 × 642 Massive preset is an intentionally demanding stress-test world.
+The 1280 × 642 Huge preset is an intentionally demanding stress-test world.
 
 ## Rules
 

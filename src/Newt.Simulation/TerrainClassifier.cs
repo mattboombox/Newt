@@ -3,6 +3,9 @@ namespace Newt.Simulation;
 /// <summary>Derives physical terrain from elevation and the climate fields.</summary>
 public static class TerrainClassifier
 {
+    public const float MountainElevationThreshold = 0.58f;
+    internal const float DeepOceanDepthThreshold = 0.20f;
+
     /// <summary>Rebuilds climate, terrain, coastlines, and biome surfaces.</summary>
     public static void RebuildAll(SimulationWorld world)
     {
@@ -32,7 +35,7 @@ public static class TerrainClassifier
             {
                 var position = new GridPosition(x, y);
                 var index = y * world.Width + x;
-                world.SetTerrain(position, ocean[index]
+                world.SetClimateTerrain(position, ocean[index]
                     ? ClassifyOcean(world.SeaLevel - world.GetElevation(position), world.GetTemperature(position))
                     : ClassifyDryLand(world.GetElevation(position)));
             }
@@ -40,6 +43,7 @@ public static class TerrainClassifier
 
         ApplyRingWorldWalls(world);
         AddCoasts(world);
+        world.RevalidateApeStructures();
     }
 
     internal static void ApplyRingWorldWalls(SimulationWorld world)
@@ -114,7 +118,7 @@ public static class TerrainClassifier
             return Terrain.Ice;
         }
 
-        if (depth > 0.20f)
+        if (depth > DeepOceanDepthThreshold)
         {
             return Terrain.DeepOcean;
         }
@@ -139,7 +143,7 @@ public static class TerrainClassifier
             return Terrain.Lowlands;
         }
 
-        if (elevation > 0.58)
+        if (elevation > MountainElevationThreshold)
         {
             return Terrain.Mountain;
         }
@@ -174,7 +178,7 @@ public static class TerrainClassifier
 
         foreach (var replacement in replacements)
         {
-            world.SetTerrain(replacement.Position, replacement.Terrain);
+            world.SetClimateTerrain(replacement.Position, replacement.Terrain);
         }
     }
 

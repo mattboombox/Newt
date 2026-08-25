@@ -24,17 +24,13 @@ C:\Users\1Matt\Desktop\Newt\src\Newt.Game\bin\Release\net10.0\runtimes\win-arm64
 C:\Users\1Matt\Desktop\Newt\src\Newt.Game\bin\Release\net10.0\runtimes\win-x64\native\SDL2.dll
 C:\Users\1Matt\Desktop\Newt\src\Newt.Game\bin\Release\net10.0\Newt.Simulation.dll
 C:\Users\1Matt\Desktop\Newt\src\Newt.Game\bin\Release\net10.0\Newt.Simulation.pdb
-C:\Users\1Matt\Desktop\Newt\src\Newt.Game\obj\Release\net10.0\mgcb.tool.restore
 C:\Users\1Matt\Desktop\Newt\src\Newt.Game\obj\Release\net10.0\Newt.Game.csproj.AssemblyReference.cache
 C:\Users\1Matt\Desktop\Newt\src\Newt.Game\obj\Release\net10.0\Newt.Game.GeneratedMSBuildEditorConfig.editorconfig
 C:\Users\1Matt\Desktop\Newt\src\Newt.Game\obj\Release\net10.0\Newt.Game.AssemblyInfoInputs.cache
 C:\Users\1Matt\Desktop\Newt\src\Newt.Game\obj\Release\net10.0\Newt.Game.AssemblyInfo.cs
-C:\Users\1Matt\Desktop\Newt\src\Newt.Game\obj\Release\net10.0\Newt.Game.csproj.CoreCompileInputs.cache
-C:\Users\1Matt\Desktop\Newt\src\Newt.Game\obj\Release\net10.0\Newt.Game.sourcelink.json
 C:\Users\1Matt\Desktop\Newt\src\Newt.Game\obj\Release\net10.0\Newt.Game.csproj.Up2Date
 C:\Users\1Matt\Desktop\Newt\src\Newt.Game\obj\Release\net10.0\Newt.Game.dll
 C:\Users\1Matt\Desktop\Newt\src\Newt.Game\obj\Release\net10.0\refint\Newt.Game.dll
 C:\Users\1Matt\Desktop\Newt\src\Newt.Game\obj\Release\net10.0\Newt.Game.pdb
 C:\Users\1Matt\Desktop\Newt\src\Newt.Game\obj\Release\net10.0\Newt.Game.genruntimeconfig.cache
 C:\Users\1Matt\Desktop\Newt\src\Newt.Game\obj\Release\net10.0\ref\Newt.Game.dll
-C:\Users\1Matt\Desktop\Newt\src\Newt.Game\bin\Release\net10.0\Content\HudFont.xnb

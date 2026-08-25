@@ -6,7 +6,7 @@ public static class Hydrology
     private const float ElevationTolerance = 0.000_001f;
     // A maximum-magnitude crater on the 1280 x 642 presets can contain more
     // than 40,000 bowl tiles. These bounds cover that local feature without
-    // permitting an outletless depression to flood an entire massive world.
+    // permitting an outletless depression to flood an entire maximum-size world.
     private const int DefaultBasinSearchBudget = 1_048_576;
     private const int DefaultLakeTileBudget = 65_536;
     private const int TerminalLakeTileBudget = 128;
