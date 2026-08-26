@@ -105,7 +105,7 @@ public sealed class WorldGeneratorTests
             Assert.Equal(preset.Height, world.Height);
             if (preset != WorldPreset.Earth)
             {
-                Assert.InRange(world.ActiveSpringCount, 1, 12);
+                Assert.InRange(world.ActiveSpringCount, 1, 24);
             }
         }
     }
@@ -344,6 +344,20 @@ public sealed class WorldGeneratorTests
         {
             Assert.True(world.GetTerrain(source) is Terrain.Hills or Terrain.Mountain);
         }
+    }
+
+    [Theory]
+    [InlineData(80, 48, 6)]
+    [InlineData(160, 96, 14)]
+    [InlineData(320, 192, 24)]
+    [InlineData(640, 311, 24)]
+    [InlineData(1280, 642, 24)]
+    public void NaturalRiverTargetsAreDoubledForEveryMapSize(
+        int width,
+        int height,
+        int expectedCount)
+    {
+        Assert.Equal(expectedCount, WorldGenerator.GetNaturalSpringTargetCount(width, height));
     }
 
     private static Dictionary<Terrain, int> CountTerrains(SimulationWorld world)

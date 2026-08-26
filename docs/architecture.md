@@ -75,7 +75,11 @@ Ocean holds 2 when cold and 1 otherwise.
 
 Rivers and Freshwater Lakes both replace underlying tile nutrition with a flat
 capacity of 2. Since freshwater determines the tile's ecological role, its value
-does not stack with the biome and does not vary with temperature. Feeding consumes one unit. Regeneration is
+does not stack with the biome and does not vary with temperature. Only Worms, Crabs,
+Fish, and Newts consume freshwater nutrition; Therapsids, Apes, Monkeys, Deer, Elk,
+and Gazelles may cross supported freshwater habitat but do not graze it. This rule
+also prevents those terrestrial feeders from consuming deposited nutrients in freshwater.
+Feeding consumes one unit. Regeneration is
 computed lazily only when a tile is queried, at `480 / capacity` seconds per unit,
 so no world-sized nutrition update runs each tick. Capacity differences are retained
 instead of flattening biomes; only the shared regeneration curve is slower. Jungle
@@ -93,7 +97,7 @@ without consuming tile nutrition and still drift on the same action.
 
 Critter evolution is represented as a parent/child tree. The current primitive
 branches are Plankton -> Jellyfish; Plankton -> Worm -> Fish -> Newt -> Mega Toad
-or Therapsid -> Monkey -> Ape, Deer -> Elk or Gazelle, or Wolf;
+or Therapsid -> Monkey -> Ape, Deer -> Elk or Gazelle, Wolf, or Toothed Whale -> Baleen Whale;
 Plankton -> Worm -> Nautilus -> Squid; and Plankton -> Trilobite -> Crab or Sea Scorpion.
 Manual Evolve
 events select an available child branch; de-evolution follows the species' unique
@@ -101,7 +105,7 @@ parent without replacing or moving the critter. Each world stores an evolution
 chance from 0 to 100 percent in exact half-percent steps; reproduction rolls that
 chance before selecting a birth tile, so an evolved offspring's own habitat rules
 are used for placement. Therapsid offspring use twice the configured world chance,
-capped at 100 percent, because Therapsids support three important descendant branches.
+capped at 100 percent, because Therapsids support four important descendant branches.
 Terminal species reproduce as themselves.
 
 Critters move to any of the eight surrounding tiles. This lets amphibians follow
@@ -143,12 +147,13 @@ Jellyfish remain collision predators but consume only Plankton; Worms and Fish
 are excluded from their diet to protect those lineages. Neither
 Sea Scorpions nor Squid hunt them, preserving Jellyfish control of Plankton. Adult
 crabs can roam across ordinary Ocean, Shallows, Beach, Ice Sheets, and non-Arctic land while
-Deep Ocean remains impassable. All crab predators consume them only on adjacent
-encounters rather than pursuing them at range. Crabs consume detritus from Beach and Shallows on
+Deep Ocean remains impassable. Every active predator except Fish may consume Crabs only on adjacent
+encounters rather than pursuing them at range, including strikes across habitat boundaries.
+Crabs consume detritus from Beaches, Shallows, Rivers, Freshwater Lakes, Swamps, and Jungles on
 their normal movement action, remain there while building breeding energy,
 and reproduce directly on those coastal tiles at five energy for a cost of three,
 leaving the parent safely fed. Feeding remains
-coastal, but hungry Crabs detect Beach and Shallows food within five Manhattan tiles
+wetland and coastal, and hungry Crabs detect suitable food within five Manhattan tiles
 and move back toward it. Reproduction and offspring placement may occur anywhere Crabs can live.
 
 Fish are terrain-first omnivores. Every two seconds, a fish searches
@@ -262,7 +267,7 @@ Reproduction has no species-specific terrain requirement. Parents still need an
 open adjacent tile that is valid habitat for the offspring.
 
 Therapsids form the terrestrial amniote branch from Newts and evolve into
-Monkeys, Deer, or Wolves; Deer continue into Elk or Gazelle. Deer and Gazelles
+Monkeys, Deer, Wolves, or Toothed Whales; Deer continue into Elk or Gazelle. Deer and Gazelles
 move every three seconds, while Elk move every six seconds. Gazelles graze Arid
 and Grassland foliage, but not Forest or Desert. Therapsids hunt only Fish within
 a Manhattan radius of four; Monkeys and larger animals are not prey.
@@ -279,6 +284,16 @@ Mega Toads and Wolves can hunt Therapsids, but the Therapsid has a 20 percent ch
 to win each one-damage combat exchange, a 60 percent penalty from the usual chance. Therapsids
 still do not include either species in their hunting diet, so they defend themselves
 without pursuing them.
+Toothed Whales are the marine Therapsid branch. They inhabit Deep Ocean, Ocean,
+and Shallows, move every four seconds, and scan seven Manhattan tiles for
+animal-eating marine prey: Sea Scorpions, Nautiluses, Fish, Squid, and Ape Sailors.
+They also consume feeder Crabs only when adjacent, following the universal Crab rule.
+Large land animals are eligible only while standing in Shallows; the whale will not
+pursue them on land or in deeper water. Toothed Whales ignore Jellyfish, Plankton,
+Worms, Squid Eggs, and smaller land animals.
+Baleen Whales evolve from Toothed Whales and reuse their saltwater habitat, huge
+body size, energy economy, four-second movement interval, and seven-tile perception
+radius. Their diet contains only Plankton.
 The critter that loses any mutual-predator combat roll exposes a deterministic
 half-second damage-flash state. The presentation renders that critter white for
 the duration without changing combat timing or movement.
@@ -311,15 +326,17 @@ Their first reproduction
 is settlement-mediated: the Ape searches within 28 tiles for a village site adjacent
 to an unoccupied Grassland or Beach tile. The founding event creates only the Village,
 consumes the reproduction cost, and produces no offspring. New villages must be more
-than twelve tiles apart.
+than twelve tiles apart. Rivers reject Village and land-district construction,
+allowing waterways to remain natural borders while freshwater Harbors provide the exception.
 
 Ordinary Apes take Fish only when already adjacent instead of chasing faster Fish
 through Shallows. Ape Sailors move on the same two-second interval as Fish and remain
 the civilization's active marine hunters.
 
 Villages begin with capacity for five residents. At five residents they build a
-Grassland Farm, Swamp Rice Paddy, or Forest Orchard when possible, otherwise a Beach
-Harbor. All three food districts add one stored food every fourteen seconds. An assigned Ape's kill is
+Grassland Farm, Swamp Rice Paddy, or Forest Orchard when possible, otherwise a Harbor
+on a Beach, River, or Freshwater Lake tile. Freshwater Harbors require adjacent dry
+land and remain connected to the village building network. All three food districts add one stored food every fourteen seconds. An assigned Ape's kill is
 conserved rather than counted twice: meal energy first raises the hunter toward its
 reproduction threshold, and only the unused remainder becomes carried settlement
 food. Residents return that remainder to the Village or any connected district.
@@ -360,13 +377,13 @@ is one Sailor at five residents, two at ten, three at fifteen, and four at twent
 more. An assigned Sailor checks village stores every tick and consumes enough food to
 repair combat losses up to maximum energy whenever supplies permit. Ape Sailors never
 reproduce, so this naval food priority affects survival rather than population growth. Sailors
-occupy Beach and saltwater, hunt every implemented sea species except Plankton and Worms, and
+occupy Beach, saltwater, Rivers, and Freshwater Lakes, hunt every implemented sea species except Plankton and Worms, and
 return their catches through a connected Harbor. Village, Farm, Harbor, and Residential
 District tiles are simulation-owned structures exposed to rendering and inspection;
 destructive terrain and surface-cover changes remove invalid structures.
 Each village is limited to one Harbor. A village that originally founded beside a food
 biome may add that Harbor later once its connected district network reaches an open
-Beach tile and the settlement has at least five residents.
+Beach or land-adjacent freshwater tile and the settlement has at least five residents.
 When a village loses its final living resident, the Village and every connected
 district are removed. Each former structure tile receives one deposited nutrient,
 representing scavengers reclaiming the abandoned settlement even on terrain that

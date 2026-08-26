@@ -245,6 +245,17 @@ public static class CritterNutritions
         ReproductionThreshold: 11,
         ReproductionCost: 8);
 
+    private static readonly CritterNutrition ToothedWhale = new(
+        BodySize: CritterBodySize.Huge,
+        FeedingStrategy: CritterFeedingStrategy.Hunter,
+        InitialEnergy: 6,
+        MaximumEnergy: 18,
+        HungryThreshold: 5,
+        MetabolismIntervalTicks: 90 * SimulationWorld.TicksPerSecond,
+        MetabolismCost: 1,
+        ReproductionThreshold: 16,
+        ReproductionCost: 11);
+
     public static CritterNutrition Get(CritterSpecies species) => species switch
     {
         CritterSpecies.Plankton => Plankton,
@@ -267,6 +278,8 @@ public static class CritterNutritions
         CritterSpecies.Elk => Elk,
         CritterSpecies.Gazelle => Deer,
         CritterSpecies.Wolf => Wolf,
+        CritterSpecies.ToothedWhale => ToothedWhale,
+        CritterSpecies.BaleenWhale => ToothedWhale,
         _ => throw new ArgumentOutOfRangeException(nameof(species)),
     };
 }

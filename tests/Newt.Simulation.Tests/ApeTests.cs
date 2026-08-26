@@ -86,6 +86,67 @@ public sealed class ApeTests
     }
 
     [Fact]
+    public void ApeVillageFoundingTreatsRiversAsNaturalBorders()
+    {
+        var world = CreateFedApeWorld(hasGrassland: true);
+        NaturalEvents.SetEnabled(world, false);
+        foreach (var position in AllPositions(world))
+        {
+            world.SetSurfaceWater(position, SurfaceWaterKind.River);
+        }
+
+        for (var tick = 0; tick < 15 * SimulationWorld.TicksPerSecond; tick++)
+        {
+            world.AdvanceOneTick();
+        }
+
+        Assert.Equal(0, world.ApeVillageCount);
+
+        var drySite = AllPositions(world).First(position => !world.IsOccupied(position));
+        var dryDistrict = GetCardinalNeighbors(world, drySite)
+            .First(position => !world.IsOccupied(position));
+        world.SetSurfaceWater(drySite, SurfaceWaterKind.None);
+        world.SetSurfaceWater(dryDistrict, SurfaceWaterKind.None);
+
+        for (var tick = 0;
+            tick < 30 * SimulationWorld.TicksPerSecond && world.ApeVillageCount == 0;
+            tick++)
+        {
+            world.AdvanceOneTick();
+        }
+
+        Assert.Equal(1, world.ApeVillageCount);
+        Assert.All(
+            AllPositions(world).Where(position => world.GetApeStructure(position) is not null),
+            position => Assert.NotEqual(SurfaceWaterKind.River, world.GetSurfaceWater(position)));
+    }
+
+    [Fact]
+    public void VillageAndOwnedDistrictExposeStableWorldLocalIdentity()
+    {
+        var world = CreateFedApeWorld(hasGrassland: true);
+        NaturalEvents.SetEnabled(world, false);
+        AdvanceUntilVillage(world);
+        var village = FindStructure(world, ApeStructureKind.Village);
+
+        Assert.Equal(1, world.GetApeVillageId(village));
+        Assert.Equal(village, world.GetApeStructureVillage(village));
+
+        AddAssignedResidents(world, village, 4);
+        world.AdvanceOneTick();
+        var farm = FindStructure(world, ApeStructureKind.Farm);
+
+        Assert.Equal(village, world.GetApeStructureVillage(farm));
+        Assert.Equal(world.GetApeVillageId(village), world.GetApeVillageId(farm));
+
+        var otherWorld = CreateFedApeWorld(hasGrassland: true);
+        AdvanceUntilVillage(otherWorld);
+        Assert.Equal(
+            1,
+            otherWorld.GetApeVillageId(FindStructure(otherWorld, ApeStructureKind.Village)));
+    }
+
+    [Fact]
     public void FirstReproductionFoundsVillageBesideBeachWithoutHarbor()
     {
         var world = CreateFedApeWorld(hasGrassland: false);
@@ -422,6 +483,72 @@ public sealed class ApeTests
         Assert.Equal(1, CountStructures(world, ApeStructureKind.NavalDistrict));
         Assert.Equal(1, world.GetCritterCount(CritterSpecies.ApeSailor));
         Assert.Equal(5, world.GetApeVillageResidentCount(village));
+    }
+
+    [Theory]
+    [InlineData(SurfaceWaterKind.River)]
+    [InlineData(SurfaceWaterKind.FreshwaterLake)]
+    public void FiveResidentsCanBuildFreshwaterHarborBesideLand(SurfaceWaterKind water)
+    {
+        var world = CreateFedApeWorld(hasGrassland: false);
+        var harborTile = new GridPosition(0, 1);
+        world.SetSurfaceWater(harborTile, water);
+        AdvanceUntilVillage(world);
+        var village = FindStructure(world, ApeStructureKind.Village);
+        AddAssignedResidents(world, village, 4);
+
+        for (var tick = 0;
+            tick < 45 * SimulationWorld.TicksPerSecond &&
+                CountStructures(world, ApeStructureKind.NavalDistrict) == 0;
+            tick++)
+        {
+            world.AdvanceOneTick();
+        }
+
+        var harbor = FindStructure(world, ApeStructureKind.NavalDistrict);
+        Assert.Equal(water, world.GetSurfaceWater(harbor));
+        Assert.Contains(
+            GetCardinalNeighbors(world, harbor),
+            neighbor => world.GetSurfaceWater(neighbor) is SurfaceWaterKind.None);
+    }
+
+    [Theory]
+    [InlineData(SurfaceWaterKind.River)]
+    [InlineData(SurfaceWaterKind.FreshwaterLake)]
+    public void ApeSailorsCanEnterFreshwater(SurfaceWaterKind water)
+    {
+        var world = new SimulationWorld(1, 1, Terrain.Plains, seed: 5201);
+        var position = new GridPosition(0, 0);
+        world.SetSurfaceWater(position, water);
+
+        Assert.True(world.TryAddCritter(CritterSpecies.ApeSailor, position));
+    }
+
+    [Theory]
+    [InlineData(SurfaceWaterKind.River)]
+    [InlineData(SurfaceWaterKind.FreshwaterLake)]
+    public void ApeSailorsMoveAndHuntThroughFreshwater(SurfaceWaterKind water)
+    {
+        var world = new SimulationWorld(5, 1, Terrain.Plains, seed: 5202);
+        world.SeasonsEnabled = false;
+        NaturalEvents.SetEnabled(world, false);
+        foreach (var position in AllPositions(world))
+        {
+            world.SetSurfaceWater(position, water);
+        }
+        world.AddCritter(CritterSpecies.ApeSailor, new GridPosition(0, 0));
+        Assert.True(world.TrySpawnCritter(CritterSpecies.SquidEgg, new GridPosition(2, 0)));
+
+        for (var tick = 0;
+            tick < 8 * SimulationWorld.TicksPerSecond &&
+                world.GetCritterCount(CritterSpecies.SquidEgg) > 0;
+            tick++)
+        {
+            world.AdvanceOneTick();
+        }
+
+        Assert.Equal(0, world.GetCritterCount(CritterSpecies.SquidEgg));
+        Assert.Equal(1, world.GetCritterCount(CritterSpecies.ApeSailor));
     }
 
     [Fact]
@@ -880,6 +1007,17 @@ public sealed class ApeTests
             tick++)
         {
             world.AdvanceOneTick();
+        }
+    }
+
+    private static IEnumerable<GridPosition> AllPositions(SimulationWorld world)
+    {
+        for (var y = 0; y < world.Height; y++)
+        {
+            for (var x = 0; x < world.Width; x++)
+            {
+                yield return new GridPosition(x, y);
+            }
         }
     }
 

@@ -27,9 +27,10 @@ public static class CritterEvolution
         CritterSpecies.Nautilus => 1,
         CritterSpecies.Fish => 1,
         CritterSpecies.Newt => 2,
-        CritterSpecies.Therapsid => 3,
+        CritterSpecies.Therapsid => 4,
         CritterSpecies.Monkey => 1,
         CritterSpecies.Deer => 2,
+        CritterSpecies.ToothedWhale => 1,
         _ => 0,
     };
 
@@ -54,9 +55,11 @@ public static class CritterEvolution
             (CritterSpecies.Therapsid, 0) => CritterSpecies.Monkey,
             (CritterSpecies.Therapsid, 1) => CritterSpecies.Deer,
             (CritterSpecies.Therapsid, 2) => CritterSpecies.Wolf,
+            (CritterSpecies.Therapsid, 3) => CritterSpecies.ToothedWhale,
             (CritterSpecies.Monkey, 0) => CritterSpecies.Ape,
             (CritterSpecies.Deer, 0) => CritterSpecies.Elk,
             (CritterSpecies.Deer, 1) => CritterSpecies.Gazelle,
+            (CritterSpecies.ToothedWhale, 0) => CritterSpecies.BaleenWhale,
             _ => species,
         };
         return evolvedSpecies != species;
@@ -85,6 +88,8 @@ public static class CritterEvolution
             CritterSpecies.Elk => CritterSpecies.Deer,
             CritterSpecies.Gazelle => CritterSpecies.Deer,
             CritterSpecies.Wolf => CritterSpecies.Therapsid,
+            CritterSpecies.ToothedWhale => CritterSpecies.Therapsid,
+            CritterSpecies.BaleenWhale => CritterSpecies.ToothedWhale,
             _ => species,
         };
         return devolvedSpecies != species;

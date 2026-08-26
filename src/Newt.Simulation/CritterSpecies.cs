@@ -23,4 +23,6 @@ public enum CritterSpecies : byte
     Elk,
     Wolf,
     Gazelle,
+    ToothedWhale,
+    BaleenWhale,
 }

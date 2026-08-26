@@ -265,7 +265,7 @@ public static class WorldGenerator
 
         var random = new GeneratorRandom(seed ^ 0xD1B54A32D192ED03UL);
         Shuffle(candidates, ref random);
-        var targetCount = Math.Clamp(world.Width * world.Height / 2_500 + 1, 3, 12);
+        var targetCount = GetNaturalSpringTargetCount(world.Width, world.Height);
         var minimumDistance = Math.Max(6, Math.Min(world.Width, world.Height) / 8);
         var selected = new List<GridPosition>(targetCount);
 
@@ -287,6 +287,9 @@ public static class WorldGenerator
             }
         }
     }
+
+    internal static int GetNaturalSpringTargetCount(int width, int height) =>
+        2 * Math.Clamp(width * height / 2_500 + 1, 3, 12);
 
     private static int WrappedDistanceSquared(
         SimulationWorld world,

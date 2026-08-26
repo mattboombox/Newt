@@ -17,7 +17,7 @@ public static class CritterHabitats
     {
         CritterSpecies.Plankton or CritterSpecies.Jellyfish or CritterSpecies.Trilobite or
             CritterSpecies.Nautilus or CritterSpecies.Fish or CritterSpecies.Squid or
-            CritterSpecies.SquidEgg =>
+            CritterSpecies.SquidEgg or CritterSpecies.ToothedWhale or CritterSpecies.BaleenWhale =>
             CritterHabitat.OceanDweller,
         CritterSpecies.SeaScorpion => CritterHabitat.ShorelineHunter,
         CritterSpecies.ApeSailor => CritterHabitat.ShorelineHunter,

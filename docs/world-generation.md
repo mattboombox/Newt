@@ -44,8 +44,8 @@ generation. Each newly spawned volcano raises a compact mountain shoulder around
 its vent and a lower skirt of hills. That footprint remains after dormancy or
 extinction, allowing successive adjacent volcanoes to grow natural-looking ridges.
 
-Natural spring selection is seeded and scales from two requested sources on a
-Micro world to at most six on a Large world. Fewer are used when the generated
+Natural spring selection is seeded and requests six sources on a Micro world,
+fourteen on Small, and up to twenty-four on Standard and larger worlds. Fewer are used when the generated
 snow line does not contain enough suitably spaced candidates. These springs use
 the same tile-by-tile travel animation as springs created with `F`.
 
@@ -90,6 +90,8 @@ terrain ceiling, and terrain-changing events cannot permanently erode them.
 
 ## Prototype controls
 
+The game starts in Critter Tools with Plankton selected.
+
 - `M`: open or close the world setup menu; use arrows and Enter to generate. On
   the Seed row, type digits to replace the seed and use Backspace to edit it.
 - `N`: increment the seed and generate a new world.
@@ -106,24 +108,29 @@ terrain ceiling, and terrain-changing events cannot permanently erode them.
   either cover.
 - Critter Tools: left click an empty valid habitat tile to spawn the selected
   Plankton, Jellyfish, Worm, Trilobite, Sea Scorpion, Nautilus, Squid, Squid Egg,
-  Fish, Newt, Mega Toad, Therapsid, Monkey, Ape, Deer, Elk, Gazelle, Wolf, or Crab. The Plankton tool retains its stricter Deep Ocean
+  Fish, Newt, Mega Toad, Therapsid, Monkey, Ape, Deer, Elk, Gazelle, Wolf, Crab,
+  Toothed Whale, or Baleen Whale. The Plankton tool retains its stricter Deep Ocean
   requirement.
 - Primitive evolution currently branches from Plankton to Jellyfish, Worm, or
   Trilobite. Worms continue to Fish or Nautilus, Nautilus to Squid, and Fish to
   Newt. Newts branch to Mega Toad or Therapsid, Therapsids branch to Monkey,
-  Deer, or Wolf, and Monkeys continue to Ape; Deer continue to Elk or Gazelle.
+  Deer, Wolf, or Toothed Whale, Toothed Whales continue to Baleen Whales, and
+  Monkeys continue to Ape; Deer continue to Elk or Gazelle.
   Every natural offspring receives a thirty-second truce with its parent's
   species. The protection works in both directions, so mutant children cannot
   immediately eat their parents and parents cannot immediately eat mutants.
   Therapsid offspring use twice the configured evolution chance, capped at 100%,
-  to support their Monkey, Deer, and Wolf descendant branches.
+  to support their Monkey, Deer, Wolf, and Toothed Whale descendant branches.
   Ambient feeding draws from finite tile nutrition. Land capacity is Jungle 6,
   Swamp 5, Forest 4, Grassland/Taiga 3, Bog/Arid 2, Tundra 1, and
   Desert/Arctic 0. Ice Sheets over Deep Ocean hold 1, while shallower Ice Sheets
   hold 0. Beaches are 0 freezing and 1 otherwise; Shallows are
   2 freezing, 3 cold, and 4 temperate/hot; Ocean is 0; Deep Ocean is 2 cold and
   1 otherwise. Rivers and Lakes both replace the underlying tile with a flat
-  capacity of 2, independent of biome and temperature. Tiles regenerate one unit
+  capacity of 2, independent of biome and temperature. Only Worms, Crabs, Fish,
+  and Newts consume this freshwater nutrition; terrestrial foliage feeders may
+  cross supported freshwater tiles but cannot graze natural or deposited food there.
+  Tiles regenerate one unit
   every `480 / capacity` seconds. Even Jungle takes 80 seconds per unit, so dense
   terrain-feeder populations consume nutrients faster than occupied tiles recover. Nutrition updates
   lazily when queried, and hungry critters leave depleted feeding tiles instead of
@@ -147,12 +154,12 @@ terrain ceiling, and terrain-changing events cannot permanently erode them.
   can shove blocking Newts into adjacent valid empty habitat.
   Fish flee nearby Sea Scorpions, Squid, and Mega Toads before hunting. Crabs may
   travel through ordinary Ocean, Shallows, Beaches, and non-Arctic land, but not
-  Deep Ocean. They feed during normal actions on Beaches and Shallows, remain there
-  while building energy, detect coastal feeding terrain within five Manhattan tiles,
-  move back toward it when hungry, and reproduce directly on either coastal terrain,
-  creating a rapidly renewing coastal population. Every crab predator consumes
-  Crabs only on adjacent encounters and does not pursue them at range. Fish do
-  not eat Crabs. Cold and freezing Beaches and Ice Sheets remain valid crab habitat,
+  Deep Ocean. They feed during normal actions on Beaches, Shallows, Rivers, Freshwater
+  Lakes, Swamps, and Jungles, detect feeding terrain within five Manhattan tiles,
+  move back toward it when hungry, and reproduce throughout valid habitat,
+  creating a rapidly renewing feeder population. Every active predator except Fish consumes
+  Crabs only on adjacent encounters and does not pursue them at range, including
+  strikes across habitat boundaries. Cold and freezing Beaches and Ice Sheets remain valid crab habitat,
   while other Arctic terrain does not. Trilobites graze terrain nutrition in Deep Ocean
   and Shallows, including Ice Sheets over Deep Ocean, while ordinary Ocean remains transit-only, and flee predators detected
   within three Manhattan tiles. Larger critters can shove smaller blockers into adjacent open
@@ -194,9 +201,10 @@ terrain ceiling, and terrain-changing events cannot permanently erode them.
   village before producing offspring. Assigned Apes stop hunting while their home
   village has at least ten stored food; unassigned Apes continue hunting normally.
   A founder spends its first reproduction event creating only a Village beside
-  an available Grassland or Beach district site. At five residents the village
+  an available Grassland or Beach district site. Rivers block placement of Villages
+  and land districts, while Harbors are the sole exception. At five residents the village
   adds a Grassland Farm, Swamp Rice Paddy, or Forest Orchard when possible, otherwise
-  a Beach Harbor. Assigned Apes apply each kill's food energy to themselves until reaching reproduction
+  a Harbor on a Beach or freshwater tile. Assigned Apes apply each kill's food energy to themselves until reaching reproduction
   energy, then carry only the remaining portion back to the Village or a connected district;
   a return that makes no progress for thirty seconds transfers its carried food
   automatically, preventing resident crowds from trapping food-bearing Apes forever;
@@ -207,10 +215,11 @@ terrain ceiling, and terrain-changing events cannot permanently erode them.
   Grassland, Swamp, or Forest site remains; Farms, Rice Paddies, and Orchards each
   produce one food every fourteen seconds. A Residential District increases capacity
   by five. Each village may add one Harbor later if its connected building network
-  reaches an open Beach tile. Harbors recruit without changing total population,
+  reaches an open Beach, River, or Freshwater Lake tile; freshwater Harbors must
+  border dry land. Harbors recruit without changing total population,
   allowing one Sailor per five residents up to four at twenty residents. Sailors
-  draw from village food every tick until their energy is full, traverse Beach and
-  saltwater, never reproduce, and hunt all implemented
+  draw from village food every tick until their energy is full, traverse Beach,
+  saltwater, Rivers, and Freshwater Lakes, never reproduce, and hunt all implemented
   sea life except Plankton and Worms, and return their catches to a connected Harbor. Villages
   remain more than twelve tiles apart.
   Village food storage is capped at five plus ten per Farm, Rice Paddy, or Orchard.
@@ -235,6 +244,15 @@ terrain ceiling, and terrain-changing events cannot permanently erode them.
   moves beside the den. Stored charges decay by one every two simulation minutes,
   and an empty unassociated den disappears. Meteors, tsunami waves, and lava destroy
   dens and their stored charges immediately.
+  Toothed Whales form the fourth Therapsid branch. They inhabit Deep Ocean, Ocean,
+  and Shallows, move every four seconds, and scan seven tiles for animal-eating
+  marine prey: Sea Scorpions, Nautiluses, Fish, Squid, and Ape Sailors. They also
+  consume adjacent feeder Crabs. Large land animals become prey only while standing
+  in Shallows; whales ignore them on land or in deeper water. They do not eat
+  Jellyfish, Plankton, Worms, Squid Eggs, or smaller land animals.
+  Baleen Whales evolve from Toothed Whales with the same body size, energy,
+  metabolism, reproduction, movement timing, perception range, and saltwater
+  habitat. They eat only Plankton.
   Building Tools can be cycled like Critter Tools; the Wolf Den entry places a
   den with one charge on left click and removes one with right click.
   Other / Jump Start enables life and fills every unoccupied Deep Ocean tile with

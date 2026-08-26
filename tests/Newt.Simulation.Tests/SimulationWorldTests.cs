@@ -248,6 +248,24 @@ public sealed class SimulationWorldTests
     }
 
     [Theory]
+    [InlineData(CritterSpecies.Ape, Terrain.DeepOcean)]
+    [InlineData(CritterSpecies.Fish, Terrain.Plains)]
+    [InlineData(CritterSpecies.Deer, Terrain.Ocean)]
+    [InlineData(CritterSpecies.Plankton, Terrain.Mountain)]
+    public void PlayerSpawnBypassesHabitatWithoutWeakeningNormalAddition(
+        CritterSpecies species,
+        Terrain incompatibleTerrain)
+    {
+        var world = new SimulationWorld(1, 1, incompatibleTerrain, seed: 130);
+        var position = new GridPosition(0, 0);
+
+        Assert.False(world.TryAddCritter(species, position));
+        Assert.True(world.TrySpawnCritter(species, position));
+        Assert.Equal(species, world.GetCritter(0).Species);
+        Assert.False(world.TrySpawnCritter(species, position));
+    }
+
+    [Theory]
     [InlineData(CritterSpecies.Plankton)]
     [InlineData(CritterSpecies.Jellyfish)]
     [InlineData(CritterSpecies.ApeSailor)]
@@ -918,7 +936,7 @@ public sealed class SimulationWorldTests
     }
 
     [Fact]
-    public void CrabRoamsLandButFeedsOnlyOnBeachesAndShallows()
+    public void CrabRoamsLandButPlainTerrainDoesNotFeedIt()
     {
         var beach = new SimulationWorld(1, 1, Terrain.Beach, seed: 42);
         var shallows = new SimulationWorld(1, 1, Terrain.Shallows, seed: 42);
@@ -944,6 +962,30 @@ public sealed class SimulationWorldTests
             .TryAddCritter(CritterSpecies.Crab, new GridPosition(0, 0)));
         Assert.False(new SimulationWorld(1, 1, Terrain.DeepOcean)
             .TryAddCritter(CritterSpecies.Crab, new GridPosition(0, 0)));
+    }
+
+    [Theory]
+    [InlineData(SurfaceWaterKind.River, Biome.Grassland)]
+    [InlineData(SurfaceWaterKind.FreshwaterLake, Biome.Grassland)]
+    [InlineData(SurfaceWaterKind.None, Biome.Swamp)]
+    [InlineData(SurfaceWaterKind.None, Biome.Jungle)]
+    public void CrabFeedsInFreshwaterAndWetlandBiomes(
+        SurfaceWaterKind water,
+        Biome biome)
+    {
+        var world = new SimulationWorld(1, 1, Terrain.Plains, seed: 4202);
+        world.SeasonsEnabled = false;
+        var position = new GridPosition(0, 0);
+        world.SetSurfaceWater(position, water);
+        world.SetBiome(position, biome);
+        world.AddCritter(CritterSpecies.Crab, position);
+
+        for (var tick = 0; tick < 5 * SimulationWorld.TicksPerSecond; tick++)
+        {
+            world.AdvanceOneTick();
+        }
+
+        Assert.True(world.GetCritter(0).Energy > 3);
     }
 
     [Fact]
@@ -1096,6 +1138,25 @@ public sealed class SimulationWorldTests
     [Fact]
     public void EveryCrabPredatorCanPursueItOnlyWhenAdjacent()
     {
+        var expectedPredators = new HashSet<CritterSpecies>
+        {
+            CritterSpecies.Jellyfish,
+            CritterSpecies.SeaScorpion,
+            CritterSpecies.Nautilus,
+            CritterSpecies.Squid,
+            CritterSpecies.MegaToad,
+            CritterSpecies.Therapsid,
+            CritterSpecies.Ape,
+            CritterSpecies.ApeSailor,
+            CritterSpecies.Wolf,
+            CritterSpecies.ToothedWhale,
+        };
+        Assert.Equal(
+            expectedPredators,
+            Enum.GetValues<CritterSpecies>()
+                .Where(species => SimulationWorld.CanEat(species, CritterSpecies.Crab))
+                .ToHashSet());
+
         foreach (var predator in Enum.GetValues<CritterSpecies>()
             .Where(species => SimulationWorld.CanEat(species, CritterSpecies.Crab)))
         {
@@ -1108,6 +1169,28 @@ public sealed class SimulationWorldTests
                 CritterSpecies.Crab,
                 distance: 2));
         }
+    }
+
+    [Fact]
+    public void LandPredatorConsumesAdjacentLakeCrabWithoutEnteringLake()
+    {
+        var world = new SimulationWorld(2, 1, Terrain.Plains, seed: 4203);
+        world.SeasonsEnabled = false;
+        NaturalEvents.SetEnabled(world, false);
+        var shore = new GridPosition(0, 0);
+        var lake = new GridPosition(1, 0);
+        world.SetSurfaceWater(lake, SurfaceWaterKind.FreshwaterLake);
+        world.AddCritter(CritterSpecies.Wolf, shore);
+        world.AddCritter(CritterSpecies.Crab, lake);
+
+        for (var tick = 0; tick < 4 * SimulationWorld.TicksPerSecond; tick++)
+        {
+            world.AdvanceOneTick();
+        }
+
+        Assert.Equal(0, world.GetCritterCount(CritterSpecies.Crab));
+        Assert.True(world.TryGetCritterAt(shore, out var wolf));
+        Assert.Equal(CritterSpecies.Wolf, wolf.Species);
     }
 
     [Theory]
@@ -2204,7 +2287,7 @@ public sealed class SimulationWorldTests
     }
 
     [Fact]
-    public void FishDoesNotHuntCrabWhenNoForagingTerrainIsAvailable()
+    public void FishDoesNotConsumeAdjacentCrab()
     {
         var world = new SimulationWorld(1, 2, Terrain.Ocean, seed: 77);
         world.SeasonsEnabled = false;
@@ -2218,7 +2301,6 @@ public sealed class SimulationWorldTests
 
         Assert.Equal(1, world.GetCritterCount(CritterSpecies.Fish));
         Assert.Equal(1, world.GetCritterCount(CritterSpecies.Crab));
-        Assert.Equal(3, world.GetCritter(0).Energy);
     }
 
     [Fact]
@@ -2239,13 +2321,12 @@ public sealed class SimulationWorldTests
     }
 
     [Fact]
-    public void FishLeavesNewtsAndCrabsUneaten()
+    public void FishLeavesNewtsUneaten()
     {
-        var world = new SimulationWorld(1, 3, Terrain.Ocean, seed: 81);
+        var world = new SimulationWorld(1, 2, Terrain.Ocean, seed: 81);
         world.SeasonsEnabled = false;
         world.AddCritter(CritterSpecies.Newt, new GridPosition(0, 0));
         world.AddCritter(CritterSpecies.Fish, new GridPosition(0, 1));
-        world.AddCritter(CritterSpecies.Crab, new GridPosition(0, 2));
 
         for (var tick = 0; tick < 2 * SimulationWorld.TicksPerSecond; tick++)
         {
@@ -2253,7 +2334,6 @@ public sealed class SimulationWorldTests
         }
 
         Assert.Equal(1, world.GetCritterCount(CritterSpecies.Newt));
-        Assert.Equal(1, world.GetCritterCount(CritterSpecies.Crab));
         var fish = Enumerable.Range(0, world.CritterCount)
             .Select(world.GetCritter)
             .Single(critter => critter.Species is CritterSpecies.Fish);
@@ -2473,12 +2553,12 @@ public sealed class SimulationWorldTests
     }
 
     [Fact]
-    public void TherapsidHuntsOnlyFish()
+    public void TherapsidHuntsFishAndAdjacentFeederCrabs()
     {
         foreach (var prey in Enum.GetValues<CritterSpecies>())
         {
             Assert.Equal(
-                prey is CritterSpecies.Fish,
+                prey is CritterSpecies.Fish or CritterSpecies.Crab,
                 SimulationWorld.CanEat(CritterSpecies.Therapsid, prey));
         }
     }
