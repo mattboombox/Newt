@@ -31,7 +31,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             WorldTool.Moisture, WorldTool.EvolutionChance, WorldTool.Seasons, WorldTool.Life];
     private static readonly WorldTool[] EventToolOrder =
         [WorldTool.Meteor, WorldTool.Tsunami, WorldTool.WatershedShift,
-            WorldTool.Evolve, WorldTool.NaturalEvents];
+            WorldTool.Evolve, WorldTool.NaturalEvents, WorldTool.Plague, WorldTool.ZombiePlague];
     private static readonly WorldTool[] CritterToolOrder =
         [WorldTool.Plankton, WorldTool.Jellyfish, WorldTool.Worm, WorldTool.Trilobite,
             WorldTool.SeaScorpion, WorldTool.Nautilus, WorldTool.Squid, WorldTool.SquidEgg,
@@ -79,6 +79,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private bool _populationWindowOpen;
     private readonly Dictionary<CritterSpecies, List<int>> _populationHistory =
         Enum.GetValues<CritterSpecies>().ToDictionary(species => species, _ => new List<int>());
+    private readonly List<int> _sickApeHistory = [];
     private long _nextPopulationSampleTick;
 
     public NewtGame()
@@ -224,7 +225,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                     MapOffsetY + screenY * TileSize + GetCritterMarkerInset(),
                     GetCritterMarkerSize(),
                     GetCritterMarkerSize()),
-                critter.IsDamageFlashing ? Color.White : GetCritterColor(critter.Species));
+                GetCritterColor(critter));
         }
 
         DrawHud();
@@ -392,6 +393,12 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
 
         switch (CurrentTool)
         {
+            case WorldTool.Plague when primaryActivated:
+                _world.TryInfectApeAt(position.Value, PlagueKind.Plague);
+                break;
+            case WorldTool.ZombiePlague when primaryActivated:
+                _world.TryInfectApeAt(position.Value, PlagueKind.Zombie);
+                break;
             case WorldTool.Elevation when primaryActivated:
                 Geology.ApplyRadialUplift(_world, position.Value, radius: 7, strength: 0.36f);
                 break;
@@ -406,8 +413,14 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             case WorldTool.SeaLevel:
                 Geology.ChangeSeaLevel(_world, -Geology.SeaLevelEditStep);
                 break;
-            case WorldTool.OceanSeed:
+            case WorldTool.OceanSeed when primaryActivated:
                 Geology.MoveOceanSeed(_world, position.Value);
+                break;
+            case WorldTool.OceanSeed:
+                if (!Hydrology.TryConvertOversizedLakeToOcean(_world, position.Value))
+                {
+                    Geology.TryAddOceanSeed(_world, position.Value);
+                }
                 break;
             case WorldTool.Temperature when primaryActivated:
                 ClimateSystem.AdjustGlobalTemperature(_world, ClimateSystem.GlobalClimateEditStep);
@@ -721,18 +734,27 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         }
 
         var populations = Enum.GetValues<CritterSpecies>()
-            .Select(species => (Species: species, Count: _world.GetCritterCount(species)))
+            .Select(species => (Name: GetCritterDisplayName(species),
+                Count: _world.GetCritterCount(species), Color: GetCritterColor(species),
+                History: _populationHistory[species]))
             .Where(entry => entry.Count > 0)
-            .ToArray();
+            .ToList();
+        if (_world.GetCritterCount(CritterSpecies.Ape) > 0 ||
+            _world.GetCritterCount(CritterSpecies.ApeSailor) > 0 ||
+            _sickApeHistory.Any(count => count > 0))
+        {
+            populations.Add(("Sick Apes", _world.SickApeCount,
+                new Color(205, 195, 55), _sickApeHistory));
+        }
         const int padding = 16;
-        const int headerHeight = 58;
+        const int headerHeight = 74;
         const int rowHeight = 20;
         const int preferredColumnWidth = 300;
         var maximumRows = Math.Max(1, (MapViewportHeight - 24 - headerHeight - padding) / rowHeight);
-        var columns = Math.Max(1, (populations.Length + maximumRows - 1) / maximumRows);
-        var rows = populations.Length == 0
+        var columns = Math.Max(1, (populations.Count + maximumRows - 1) / maximumRows);
+        var rows = populations.Count == 0
             ? 1
-            : Math.Min(maximumRows, (populations.Length + columns - 1) / columns);
+            : Math.Min(maximumRows, (populations.Count + columns - 1) / columns);
         var windowWidth = Math.Min(
             GraphicsDevice.Viewport.Width - 24,
             padding * 2 + columns * preferredColumnWidth);
@@ -757,7 +779,13 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             new Vector2(bounds.X + padding, bounds.Y + 30),
             new Color(175, 184, 190));
 
-        if (populations.Length == 0)
+        _spriteBatch.DrawString(
+            _hudFont,
+            "Sick apes are included in totals",
+            new Vector2(bounds.X + padding, bounds.Y + 47),
+            new Color(175, 184, 190));
+
+        if (populations.Count == 0)
         {
             _spriteBatch.DrawString(
                 _hudFont,
@@ -768,7 +796,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         }
 
         var columnWidth = (bounds.Width - padding * 2) / columns;
-        for (var index = 0; index < populations.Length; index++)
+        for (var index = 0; index < populations.Count; index++)
         {
             var column = index / rows;
             var row = index % rows;
@@ -778,10 +806,10 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             _spriteBatch.Draw(
                 _pixel,
                 new Rectangle(x, y + 3, 10, 10),
-                GetCritterColor(entry.Species));
+                entry.Color);
             _spriteBatch.DrawString(
                 _hudFont,
-                GetCritterDisplayName(entry.Species),
+                entry.Name,
                 new Vector2(x + 16, y),
                 new Color(220, 225, 228));
             var countText = entry.Count.ToString("N0");
@@ -797,7 +825,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 countText,
                 new Vector2(graphBounds.X - countWidth - 8, y),
                 new Color(245, 210, 120));
-            DrawPopulationSparkline(entry.Species, entry.Count, graphBounds);
+            DrawPopulationSparkline(entry.History, entry.Color, entry.Count, graphBounds);
         }
     }
 
@@ -805,18 +833,24 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     {
         foreach (var species in Enum.GetValues<CritterSpecies>())
         {
-            var history = _populationHistory[species];
-            history.Add(_world.GetCritterCount(species));
-            if (history.Count > PopulationHistoryLength)
-            {
-                history.RemoveAt(0);
-            }
+            AppendPopulationSample(_populationHistory[species], _world.GetCritterCount(species));
         }
+        AppendPopulationSample(_sickApeHistory, _world.SickApeCount);
         _nextPopulationSampleTick = _world.Tick + PopulationSampleIntervalTicks;
     }
 
+    private static void AppendPopulationSample(List<int> history, int count)
+    {
+        history.Add(count);
+        if (history.Count > PopulationHistoryLength)
+        {
+            history.RemoveAt(0);
+        }
+    }
+
     private void DrawPopulationSparkline(
-        CritterSpecies species,
+        IReadOnlyList<int> history,
+        Color color,
         int currentCount,
         Rectangle bounds)
     {
@@ -831,10 +865,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             new Rectangle(bounds.X, bounds.Bottom - 1, bounds.Width, 1),
             new Color(65, 76, 84));
 
-        var history = _populationHistory[species];
         var pointCount = history.Count + 1;
         var maximum = Math.Max(1, Math.Max(currentCount, history.Count == 0 ? 0 : history.Max()));
-        var color = GetCritterColor(species);
         var previous = GetPoint(0);
         for (var index = 1; index < pointCount; index++)
         {
@@ -882,6 +914,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         CritterSpecies.SquidEgg => "Squid Egg",
         CritterSpecies.MegaToad => "Mega Toad",
         CritterSpecies.ApeSailor => "Ape Sailor",
+        CritterSpecies.UndeadApe => "Undead Ape",
         CritterSpecies.ToothedWhale => "Toothed Whale",
         CritterSpecies.BaleenWhale => "Baleen Whale",
         _ => species.ToString(),
@@ -939,8 +972,17 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             $"Temperature {_world.GetTemperature(position):0.000} ({SeasonSystem.GetTemperatureChange(_world, position):+0.000;-0.000;0.000} season)   {_world.GetTemperatureBand(position)}",
             $"Moisture {_world.GetMoisture(position):0.000} ({SeasonSystem.GetMoistureChange(_world, position):+0.000;-0.000;0.000} season)   {_world.GetMoistureBand(position)}",
             $"Fresh Water {waterText}",
+            .. water is SurfaceWaterKind.FreshwaterLake
+                ? new[] { GetLakeSizeLine(position) } : Array.Empty<string>(),
             $"Nutrition {_world.GetTileNutrition(position)} / {_world.GetTileNutritionCapacity(position)}",
         ];
+    }
+
+    private string GetLakeSizeLine(GridPosition position)
+    {
+        var tiles = _world.GetLakeTileCount(position);
+        var mapPercent = 100d * tiles / (_world.Width * _world.Height);
+        return $"Lake size {tiles:N0} tiles ({mapPercent:0.00}% of map)";
     }
 
     private string GetTileIdentity(GridPosition position, Terrain terrain)
@@ -1059,10 +1101,23 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         $"Hungry {(critter.IsHungry ? "yes" : "no")}   Reproduce {(critter.CanReproduce ? "ready" : "no")}",
         $"Habitat {CritterHabitats.GetHabitat(critter.Species)}",
         $"Diet {GetCritterDiet(critter.Species)}",
+        .. critter.Species is CritterSpecies.Ape or CritterSpecies.ApeSailor or CritterSpecies.UndeadApe
+            ? new[] { GetPlagueDescription(critter) } : Array.Empty<string>(),
     ];
+
+    private static string GetPlagueDescription(CritterSnapshot critter) =>
+        critter.Species is CritterSpecies.UndeadApe ? "Undead: contagious, cannot reproduce" :
+        critter.IsPlagueImmune ? "Plague immune: ID divisible by 5" :
+        critter.Plague switch
+        {
+            PlagueKind.Plague => "Plague: -1 energy / 10 seconds",
+            PlagueKind.Zombie => "Zombie plague: -1 energy / 10s, rises on death",
+            _ => "Plague: susceptible",
+        };
 
     private static string GetCritterDiet(CritterSpecies species) => species switch
     {
+        CritterSpecies.UndeadApe => "living apes and ape sailors",
         CritterSpecies.Plankton => "ambient nutrients",
         CritterSpecies.Worm => "deep-ocean, shallow, river, and lake detritus",
         CritterSpecies.Trilobite => "deep-sea detritus",
@@ -1090,6 +1145,10 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
 
     private static string GetCritterBehavior(CritterSnapshot critter)
     {
+        if (critter.Species is CritterSpecies.UndeadApe)
+        {
+            return "Hunting living apes and spreading zombie plague";
+        }
         if (critter.CanReproduce)
         {
             return critter.Species is CritterSpecies.Ape or CritterSpecies.ApeSailor
@@ -1190,6 +1249,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         {
             history.Clear();
         }
+        _sickApeHistory.Clear();
         RecordPopulationSample();
     }
 
@@ -1770,6 +1830,16 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         Math.Clamp((int)MathF.Round(color.G * brightness), 0, 255),
         Math.Clamp((int)MathF.Round(color.B * brightness), 0, 255));
 
+    private static Color GetCritterColor(CritterSnapshot critter) =>
+        critter.IsDamageFlashing ? Color.White :
+        critter.Species is CritterSpecies.UndeadApe ? GetCritterColor(critter.Species) :
+        critter.Plague switch
+        {
+            PlagueKind.Plague => new Color(205, 195, 55),
+            PlagueKind.Zombie => new Color(170, 85, 190),
+            _ => GetCritterColor(critter.Species),
+        };
+
     private static Color GetCritterColor(CritterSpecies species) => species switch
     {
         CritterSpecies.Plankton => new Color(160, 255, 180),
@@ -1787,6 +1857,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         CritterSpecies.Monkey => new Color(190, 135, 85),
         CritterSpecies.Ape => new Color(125, 95, 70),
         CritterSpecies.ApeSailor => new Color(75, 115, 155),
+        CritterSpecies.UndeadApe => new Color(95, 190, 100),
         CritterSpecies.Deer => new Color(181, 133, 82),
         CritterSpecies.Elk => new Color(112, 78, 48),
         CritterSpecies.Gazelle => new Color(220, 175, 95),
@@ -1819,7 +1890,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     {
         WorldTool.Elevation => "left raise, right lower",
         WorldTool.SeaLevel => _world.HasOceans ? "left raise, right lower" : "no oceans on this world",
-        WorldTool.OceanSeed => _world.HasOceans ? "click move seed" : "click create ocean seed",
+        WorldTool.OceanSeed => "left move primary; right add seed / convert large lake",
         WorldTool.Temperature => "left warmer, right cooler",
         WorldTool.Moisture => "left wetter, right drier",
         WorldTool.EvolutionChance =>
@@ -1835,6 +1906,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         WorldTool.Tsunami => $"left in ocean, right magnitude {_eventMagnitudeIndex / 10f:0.0}",
         WorldTool.WatershedShift => "left spawn or shift a natural river",
         WorldTool.Evolve => "left evolve critter, right de-evolve",
+        WorldTool.Plague => "left infect ape; yellow = plague, IDs divisible by 5 immune",
+        WorldTool.ZombiePlague => "left infect ape; purple = infected, green = undead",
         WorldTool.NaturalEvents => _world.NaturalEventsEnabled
             ? "left enabled, right disable"
             : "left enable, right disabled",
@@ -1877,6 +1950,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private static string GetToolName(WorldTool tool) => tool switch
     {
         WorldTool.JumpStart => "Jump Start",
+        WorldTool.ZombiePlague => "Zombie Plague",
         _ => tool.ToString(),
     };
 
@@ -1946,5 +2020,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         JumpStart,
         Population,
         Inspect,
+        Plague,
+        ZombiePlague,
     }
 }

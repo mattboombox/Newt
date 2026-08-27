@@ -22,7 +22,7 @@ public static class Geology
         Hydrology.RebuildFreshwater(world);
     }
 
-    /// <summary>Moves or creates the world's single saltwater source and rebuilds water connectivity.</summary>
+    /// <summary>Moves or creates the primary saltwater source without replacing additional sources.</summary>
     public static void MoveOceanSeed(SimulationWorld world, GridPosition position)
     {
         ArgumentNullException.ThrowIfNull(world);
@@ -32,9 +32,23 @@ public static class Geology
         }
 
         world.OceanSeed = position;
+        world.SetAdditionalOceanSeeds(world.AdditionalOceanSeeds);
         world.HasOceans = true;
         TerrainClassifier.RebuildLandforms(world);
         Hydrology.RebuildFreshwater(world);
+    }
+
+    /// <summary>Adds a distinct ocean source at or below sea level, preserving existing sources.</summary>
+    public static bool TryAddOceanSeed(SimulationWorld world, GridPosition position)
+    {
+        ArgumentNullException.ThrowIfNull(world);
+        if (!world.TryRegisterOceanSeed(position))
+        {
+            return false;
+        }
+        TerrainClassifier.RebuildLandforms(world);
+        Hydrology.RebuildFreshwater(world);
+        return true;
     }
 
     /// <summary>

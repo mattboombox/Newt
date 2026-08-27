@@ -4,11 +4,10 @@ namespace Newt.Simulation;
 public static class Hydrology
 {
     private const float ElevationTolerance = 0.000_001f;
-    // A maximum-magnitude crater on the 1280 x 642 presets can contain more
-    // than 40,000 bowl tiles. These bounds cover that local feature without
-    // permitting an outletless depression to flood an entire maximum-size world.
+    // Searching for the enclosing rim can cover a large region, but freshwater
+    // lakes have a separate, much smaller visual size limit.
     private const int DefaultBasinSearchBudget = 1_048_576;
-    private const int DefaultLakeTileBudget = 65_536;
+    public const int MaximumLakeTileCount = 1_500;
     private const int TerminalLakeTileBudget = 128;
 
     private static readonly GridPosition[] FlowDirections =
@@ -289,7 +288,7 @@ public static class Hydrology
         SimulationWorld world,
         GridPosition sink,
         int searchBudget = DefaultBasinSearchBudget,
-        int lakeTileBudget = DefaultLakeTileBudget)
+        int lakeTileBudget = MaximumLakeTileCount)
         => FillBasin(world, sink, searchBudget, lakeTileBudget, blocked: null);
 
     private static LakeFillResult FillBasin(
@@ -306,6 +305,7 @@ public static class Hydrology
         }
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(searchBudget);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(lakeTileBudget);
+        lakeTileBudget = Math.Min(lakeTileBudget, MaximumLakeTileCount);
 
         var tileCount = checked(world.Width * world.Height);
         var sinkIndex = ToIndex(world, sink);
@@ -407,8 +407,13 @@ public static class Hydrology
         var spillElevation = bestSpill[exitIndex];
         var path = ReconstructPath(world, previous, sinkIndex, exitIndex);
         var lakeTiles = FindLakeTiles(world, sink, spillElevation, lakeTileBudget, blocked);
-        if (lakeTiles is null || lakeTiles.Count == 0)
+        if (lakeTiles is null || lakeTiles.Count == 0 || !FitsConnectedLakeLimit(world, lakeTiles))
         {
+            var oceanSeed = TryPromoteOversizedBasin(world, sink, spillElevation, blocked);
+            if (oceanSeed is not null)
+            {
+                return OceanConversionResult(world, oceanSeed.Value);
+            }
             return CreateTerminalLake(world, sink, Math.Min(lakeTileBudget, TerminalLakeTileBudget));
         }
 
@@ -439,6 +444,10 @@ public static class Hydrology
     private static SpringResult? AdvanceSpring(SimulationWorld world, ActiveSpring spring)
     {
         var current = spring.Current;
+        if (IsOcean(world.GetTerrain(current)))
+        {
+            return Completed(SpringTermination.ReachedOcean, spring);
+        }
         if (spring.PlannedRoute.TryPeek(out var nextPlanned) &&
             world.GetElevation(nextPlanned) < world.GetElevation(current) - ElevationTolerance)
         {
@@ -519,8 +528,21 @@ public static class Hydrology
                     world,
                     current,
                     DefaultBasinSearchBudget,
-                    DefaultLakeTileBudget,
+                    MaximumLakeTileCount,
                     blocked);
+            }
+
+            if (lake.OceanSeed is not null)
+            {
+                if (IsOcean(world.GetTerrain(current)))
+                {
+                    return Completed(SpringTermination.ReachedOcean, spring);
+                }
+                // The sink may be above sea level even though a deeper part of
+                // its basin flooded. Re-route next tick against the new coastline.
+                spring.PlannedRoute.Clear();
+                spring.UpstreamLake.Clear();
+                return null;
             }
 
             if (lake.Created)
@@ -639,7 +661,16 @@ public static class Hydrology
         int tileBudget)
     {
         var surface = FindTerminalLakeSurface(world, sink, tileBudget);
+        var oceanSeed = TryPromoteOversizedBasin(world, sink, surface, blocked: null);
+        if (oceanSeed is not null)
+        {
+            return OceanConversionResult(world, oceanSeed.Value);
+        }
         var lakeTiles = FindBoundedTerminalLakeTiles(world, sink, surface, tileBudget);
+        if (!FitsConnectedLakeLimit(world, lakeTiles))
+        {
+            return default;
+        }
         foreach (var position in lakeTiles)
         {
             world.SetSurfaceWater(position, SurfaceWaterKind.FreshwaterLake);
@@ -647,6 +678,116 @@ public static class Hydrology
         }
 
         return new LakeFillResult(true, lakeTiles.Count, surface, null, null);
+    }
+
+    /// <summary>Converts an existing oversized lake, without following its rivers to other lakes.</summary>
+    public static bool TryConvertOversizedLakeToOcean(SimulationWorld world, GridPosition position)
+    {
+        ArgumentNullException.ThrowIfNull(world);
+        if (!world.Contains(position) || world.GetLakeTileCount(position) <= MaximumLakeTileCount)
+        {
+            return false;
+        }
+        var tiles = new HashSet<GridPosition>();
+        CaptureUpstreamLake(world, position, tiles);
+        return PromoteLakeToOcean(world, tiles) is not null;
+    }
+
+    private static LakeFillResult OceanConversionResult(SimulationWorld world, GridPosition seed) =>
+        new(false, 0, world.SeaLevel, null, null, OceanSeed: seed);
+
+    private static GridPosition? TryPromoteOversizedBasin(
+        SimulationWorld world,
+        GridPosition sink,
+        float surface,
+        IReadOnlySet<GridPosition>? blocked)
+    {
+        // The ordinary fill stops at its area cap. Survey the complete connected
+        // footprint here so the seed is the true lowest point, not just the lowest
+        // of the first 1,500 tiles. This event visits at most the world tile count.
+        var visited = new HashSet<GridPosition>();
+        var tiles = new HashSet<GridPosition>();
+        var frontier = new Queue<GridPosition>();
+        visited.Add(sink);
+        frontier.Enqueue(sink);
+        while (frontier.TryDequeue(out var current))
+        {
+            if (IsOcean(world.GetTerrain(current)) ||
+                current != sink && world.GetSurfaceWater(current) is not SurfaceWaterKind.FreshwaterLake &&
+                    world.GetElevation(current) >= surface - ElevationTolerance)
+            {
+                continue;
+            }
+            tiles.Add(current);
+            foreach (var direction in BasinDirections)
+            {
+                var neighbor = GetNeighbor(world, current, direction);
+                if (neighbor is not null &&
+                    (neighbor.Value == sink || blocked?.Contains(neighbor.Value) is not true) &&
+                    visited.Add(neighbor.Value))
+                {
+                    frontier.Enqueue(neighbor.Value);
+                }
+            }
+        }
+        return tiles.Count > MaximumLakeTileCount ? PromoteLakeToOcean(world, tiles) : null;
+    }
+
+    private static GridPosition? PromoteLakeToOcean(SimulationWorld world, HashSet<GridPosition> tiles)
+    {
+        GridPosition? lowest = null;
+        var minimumElevation = float.PositiveInfinity;
+        foreach (var tile in tiles)
+        {
+            var elevation = world.GetElevation(tile);
+            if (elevation < minimumElevation || elevation == minimumElevation &&
+                (lowest is null || ToIndex(world, tile) < ToIndex(world, lowest.Value)))
+            {
+                lowest = tile;
+                minimumElevation = elevation;
+            }
+        }
+        if (lowest is null || !world.TryRegisterOceanSeed(lowest.Value))
+        {
+            return null;
+        }
+        // Clear the old lake surface, including any shoreline above sea level.
+        // Never recursively rebuild freshwater while active springs are iterated.
+        foreach (var tile in tiles)
+        {
+            if (world.GetSurfaceWater(tile) is SurfaceWaterKind.FreshwaterLake)
+            {
+                world.ClearFreshwaterForTerrainRebuild(tile);
+            }
+        }
+        TerrainClassifier.RebuildAll(world);
+        return lowest;
+    }
+
+    private static bool FitsConnectedLakeLimit(SimulationWorld world, List<GridPosition> proposedTiles)
+    {
+        // Separate fills must not stitch several legal-sized lakes into one
+        // oversized lake. Count existing lake connections, but never rivers.
+        var connected = new HashSet<GridPosition>(proposedTiles);
+        var frontier = new Queue<GridPosition>(proposedTiles);
+        while (frontier.TryDequeue(out var current))
+        {
+            if (connected.Count > MaximumLakeTileCount)
+            {
+                return false;
+            }
+            foreach (var direction in BasinDirections)
+            {
+                var neighbor = GetNeighbor(world, current, direction);
+                if (neighbor is not null &&
+                    world.GetSurfaceWater(neighbor.Value) is SurfaceWaterKind.FreshwaterLake &&
+                    connected.Add(neighbor.Value))
+                {
+                    frontier.Enqueue(neighbor.Value);
+                }
+            }
+        }
+        return true;
     }
 
     private static float FindTerminalLakeSurface(
@@ -779,14 +920,14 @@ public static class Hydrology
 
         while (queue.TryDequeue(out var current))
         {
-            if (lake.Count >= tileBudget)
-            {
-                return null;
-            }
-
             if (current != sink && world.GetElevation(current) >= spillElevation - ElevationTolerance)
             {
                 continue;
+            }
+
+            if (lake.Count >= tileBudget)
+            {
+                return null;
             }
 
             lake.Add(current);

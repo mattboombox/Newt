@@ -298,6 +298,44 @@ public sealed class GeologyTests
     }
 
     [Fact]
+    public void AddingOceanSeedsPreservesOtherOceansAndRejectsDuplicatesAndDryGround()
+    {
+        var world = new SimulationWorld(12, 3, Terrain.Plains);
+        for (var y = 0; y < world.Height; y++)
+        {
+            for (var x = 0; x < world.Width; x++)
+            {
+                world.SetElevation(new GridPosition(x, y), 0.8f);
+            }
+        }
+        var primary = new GridPosition(1, 1);
+        var second = new GridPosition(5, 1);
+        var third = new GridPosition(9, 1);
+        world.OceanSeed = primary;
+        foreach (var position in new[] { primary, second, third })
+        {
+            world.SetElevation(position, -0.3f);
+        }
+        TerrainClassifier.RebuildAll(world);
+
+        Assert.True(Geology.TryAddOceanSeed(world, second));
+        Assert.True(Geology.TryAddOceanSeed(world, third));
+        Assert.Equal(primary, world.OceanSeed);
+        Assert.Equal(new[] { second, third }, world.AdditionalOceanSeeds);
+        foreach (var position in new[] { primary, second, third })
+        {
+            Assert.True(world.GetTerrain(position) is Terrain.Shallows or Terrain.Ocean or Terrain.DeepOcean or Terrain.Ice);
+        }
+        Assert.False(Geology.TryAddOceanSeed(world, third));
+        Assert.False(Geology.TryAddOceanSeed(world, new GridPosition(3, 1)));
+        Assert.False(Geology.TryAddOceanSeed(world, new GridPosition(-1, 1)));
+
+        Geology.MoveOceanSeed(world, second);
+        Assert.Equal(second, world.OceanSeed);
+        Assert.Equal(third, Assert.Single(world.AdditionalOceanSeeds));
+    }
+
+    [Fact]
     public void PlacingOceanSeedEnablesOceansOnDryWorld()
     {
         var world = new SimulationWorld(5, 5, Terrain.Plains)

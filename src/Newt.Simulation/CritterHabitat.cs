@@ -23,7 +23,7 @@ public static class CritterHabitats
         CritterSpecies.ApeSailor => CritterHabitat.ShorelineHunter,
         CritterSpecies.Worm => CritterHabitat.ShallowSeeker,
         CritterSpecies.Newt or CritterSpecies.MegaToad or CritterSpecies.Therapsid or
-            CritterSpecies.Monkey or CritterSpecies.Ape or CritterSpecies.Deer or CritterSpecies.Elk or
+            CritterSpecies.Monkey or CritterSpecies.Ape or CritterSpecies.UndeadApe or CritterSpecies.Deer or CritterSpecies.Elk or
             CritterSpecies.Gazelle or
             CritterSpecies.Wolf or CritterSpecies.Crab =>
             CritterHabitat.LandDweller,

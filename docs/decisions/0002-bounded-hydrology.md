@@ -70,8 +70,12 @@ This basin filler is implemented in the simulation hydrology system.
 
 - Basin and outlet searches have explicit tile budgets. Outlet searches may
   examine up to 1,048,576 tiles, covering the full largest preset, while lakes
-  may use up to 65,536 tiles, enough for maximum-size generated meteor craters;
-  genuinely terminal lakes retain a conservative 128-tile cap.
+  may use up to 1,500 tiles. Larger connected basins gain an additional ocean seed
+  at their lowest point when it is at or below sea level. The complete footprint
+  is surveyed only on these fill events, bounded by the world tile count. Higher
+  basins fall back to terminal lakes, which retain a conservative 128-tile cap.
+  Separate fills cannot merge existing
+  lakes beyond the 1,500-tile connected-lake limit.
 - A deliberately reduced search budget can still produce a terminal inland lake
   rather than causing an unbounded search; normal worlds permit a full-world search.
 - Lake filling is an event, not work repeated every simulation tick.

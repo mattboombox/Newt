@@ -79,6 +79,10 @@ Ring World is an artificial megastructure conservatory rather than a planet.
 Every large disconnected below-sea-level basin receives a saltwater source, while
 small enclosed depressions remain available for freshwater lakes. The primary
 source remains movable with OceanSeed; the other ocean sources remain fixed.
+The OceanSeed tool can also add sources with right-click without moving the primary.
+Oversized freshwater basins (more than 1,500 tiles) add a source automatically at
+their lowest point if it is at or below sea level. Right-click an existing oversized
+lake with OceanSeed to convert it by the same rule; this measurement excludes rivers.
 
 Its climate varies along the ring instead of by latitude. Repeating engineered
 hot, cold, wet, and dry longitudinal sections create distinct conservatory
@@ -127,8 +131,8 @@ The game starts in Critter Tools with Plankton selected.
   hold 0. Beaches are 0 freezing and 1 otherwise; Shallows are
   2 freezing, 3 cold, and 4 temperate/hot; Ocean is 0; Deep Ocean is 2 cold and
   1 otherwise. Rivers and Lakes both replace the underlying tile with a flat
-  capacity of 2, independent of biome and temperature. Only Worms, Crabs, Fish,
-  and Newts consume this freshwater nutrition; terrestrial foliage feeders may
+  capacity of 2, independent of biome and temperature. Only Worms, Fish,
+  and Newts consume this freshwater nutrition; Crabs and terrestrial foliage feeders may
   cross supported freshwater tiles but cannot graze natural or deposited food there.
   Tiles regenerate one unit
   every `480 / capacity` seconds. Even Jungle takes 80 seconds per unit, so dense
@@ -208,7 +212,7 @@ The game starts in Critter Tools with Plankton selected.
   energy, then carry only the remaining portion back to the Village or a connected district;
   a return that makes no progress for thirty seconds transfers its carried food
   automatically, preventing resident crowds from trapping food-bearing Apes forever;
-  hungry assigned Apes and Ape Sailors can consume one stored food from that village
+  hungry assigned land Apes can consume one stored food from that village
   on a metabolism tick regardless of distance, so they do not need to return home to eat;
   capped villages alternate five-food Residential Districts with additional
   biome-appropriate food districts, falling back to housing when no connected
@@ -216,10 +220,13 @@ The game starts in Critter Tools with Plankton selected.
   produce one food every fourteen seconds. A Residential District increases capacity
   by five. Each village may add one Harbor later if its connected building network
   reaches an open Beach, River, or Freshwater Lake tile; freshwater Harbors must
-  border dry land. Harbors recruit without changing total population,
+  border dry land, including diagonally. Harbor construction can also connect
+  diagonally to the village building network. Harbors recruit without changing total population,
   allowing one Sailor per five residents up to four at twenty residents. Sailors
-  draw from village food every tick until their energy is full, traverse Beach,
-  saltwater, Rivers, and Freshwater Lakes, never reproduce, and hunt all implemented
+  have 28 maximum energy and replenish by hunting, without automatic village refills.
+  They move in all eight directions through Beach, saltwater, Rivers, and Freshwater
+  Lakes, including diagonal freshwater Mountain corridors and horizontal map wrap.
+  They never reproduce and hunt all implemented
   sea life except Plankton and Worms, and return their catches to a connected Harbor. Villages
   remain more than twelve tiles apart.
   Village food storage is capped at five plus ten per Farm, Rice Paddy, or Orchard.
@@ -233,10 +240,12 @@ The game starts in Critter Tools with Plankton selected.
   their production until the matching biome returns. Coastline refreshes preserve
   Harbors through intermediate Beach reclassification.
   Terrestrial critters can traverse exposed Lowlands, Canyons, and Trenches.
-  Wolves form a third Therapsid branch. They are fast hunters with the
+  Wolves form a third Therapsid branch. They move every 2.5 seconds with the
   broad terrestrial diet, including Deer, Elk, and Gazelles. They engage
   Therapsids as ordinary vulnerable prey and never hunt Mega Toads, though
-  a Toad that hunts a Wolf still initiates combat. A Wolf's first reproduction
+  a Toad that hunts a Wolf still initiates combat. Wolves and Mega Toads may eat
+  adjacent Monkeys, including diagonal and horizontally wrapped neighbors, without
+  prioritizing them or pursuing them at range. A Wolf's first reproduction
   selects a den site, preferring nearby Hills, and the Wolf must return there for
   every later reproduction. Reproduction stores up to five charges instead of immediately
   producing pups; once the den is full, later reproduction creates an adjacent Wolf
@@ -340,6 +349,13 @@ Tile identity combines biome and landform in natural reading order, such as
 `Ice Sheet`. Elevation is shown separately as a numeric value.
 Freshwater lakes on Arctic tiles display as `Frozen Lake` in the water row while
 retaining their freshwater identity and numeric depth.
+Hovering any freshwater lake tile also shows `Lake size`: its connected tile count
+and percentage of the whole map. Only lake tiles connected north, south, east, or
+west are counted, including horizontal map wrap and frozen lake tiles. Rivers do
+not contribute to the count or join separate lakes; river hover has no lake-size
+row. Counts are cached per lake and refreshed when lake tiles change, so hovering
+large lakes does not repeat a flood fill every frame. This is an inspection aid;
+it does not add ocean seeds or change lake filling.
 
 Beaches use their temperature band rather than the inland biome label: `Freezing
 Beach`, `Cold Beach`, `Temperate Beach`, or `Hot Beach`. Their sand palette shifts

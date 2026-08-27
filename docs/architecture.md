@@ -49,6 +49,35 @@ cost. This prevents a hunger timer, starvation timer, and meal counter from
 drifting into contradictory states. Reproduction spends only surplus energy;
 if no adjacent habitat is open, the parent retains that energy for a later tick.
 
+The Events category includes Plague and Zombie Plague tools. Left-click a living
+Ape or Ape Sailor to infect it; stable critter IDs divisible by five resist both
+strains. Every simulation second, infected apes expose their eight neighboring
+tiles, including horizontal wrap. Newly infected apes cannot spread again in the
+same tick. Both strains drain one energy every ten simulation seconds, in addition
+to normal metabolism; feeding can prolong survival. Ordinary plague is yellow,
+zombie infection purple, and undead apes green. Inspection reports infection or
+immunity. Reapplying a strain does not reset its damage timer; zombie plague can
+upgrade ordinary plague, but not the reverse.
+
+With natural events enabled, each village with more than 200 assigned residents
+(including sailors) has a 1% chance per simulation minute to seed ordinary plague
+in one random non-immune resident. Villages at 200 or fewer residents are exempt;
+unassigned apes do not count. A village with any already infected resident skips
+the outbreak roll. These spontaneous outbreaks never create zombie plague.
+
+Zombie-infected apes that die from energy loss or predation rise on their current
+tile with the same ID as Undead Apes. Reanimation detaches village membership and
+carried food, resets energy to six, and does not also feed the killer. Destructive
+terrain tools and disasters remove the body completely and do not reanimate it.
+Undead spread zombie plague, including during contact with living apes in combat,
+and hunt only living Apes and Ape Sailors within six Manhattan tiles, even when
+full. They use land habitat, act every three seconds, and retain ordinary ape
+metabolism, but never reproduce, found villages, or collect village food. Immune
+apes can still be killed in combat. Undead can be killed and do not rise again.
+Sparse disease state uses stable IDs and is removed on death or transformation
+out of a living ape species. Spread uses eight occupancy lookups per carrier;
+there is no per-ape population search.
+
 Primitive ecological interactions are resolved in a deferred movement commit.
 A jellyfish that selects an adjacent plankton reserves that prey for the tick;
 the plankton cannot move, and the jellyfish consumes it before entering its tile.
@@ -75,8 +104,8 @@ Ocean holds 2 when cold and 1 otherwise.
 
 Rivers and Freshwater Lakes both replace underlying tile nutrition with a flat
 capacity of 2. Since freshwater determines the tile's ecological role, its value
-does not stack with the biome and does not vary with temperature. Only Worms, Crabs,
-Fish, and Newts consume freshwater nutrition; Therapsids, Apes, Monkeys, Deer, Elk,
+does not stack with the biome and does not vary with temperature. Only Worms,
+Fish, and Newts consume freshwater nutrition; Crabs, Therapsids, Apes, Monkeys, Deer, Elk,
 and Gazelles may cross supported freshwater habitat but do not graze it. This rule
 also prevents those terrestrial feeders from consuming deposited nutrients in freshwater.
 Feeding consumes one unit. Regeneration is
@@ -122,6 +151,11 @@ from valid habitat. Instead, they move at one quarter of their normal cadence an
 take bounded recovery steps toward the nearest open valid tile within sixteen
 tiles, wandering slowly until habitat comes within range.
 
+Adjacent-only prey rules restrict eligibility, never target priority. Active
+hunters select the nearest eligible prey and break equal-distance ties randomly,
+regardless of species or adjacency restrictions. Collision predators likewise
+have no species-specific priority for adjacent prey.
+
 Worms are marine and freshwater detritus seekers. They gain ambient food in Deep
 Ocean, Shallows, Rivers, unfrozen Freshwater Lakes, and Ice Sheets over Deep Ocean,
 while ordinary Ocean and frozen lakes remain transit-only habitat. They can follow freshwater across land
@@ -143,18 +177,20 @@ seconds they pursue Fish, Crabs, Newts, Squid, Therapsids, Monkeys,
 Apes, Wolves, Ape Sailors, Deer, Elk, and Gazelles within a Manhattan radius of
 four, while Worms, Trilobites, and Nautiluses are eligible only when already adjacent. They can cross Deep Ocean, Ocean, Shallows, and Beach, giving them a
 narrow shoreline overlap with crabs, newts, and grazers without allowing inland pursuit.
-Jellyfish remain collision predators but consume only Plankton; Worms and Fish
+Jellyfish remain collision predators that consume Plankton and adjacent Crabs; Worms and Fish
 are excluded from their diet to protect those lineages. Neither
 Sea Scorpions nor Squid hunt them, preserving Jellyfish control of Plankton. Adult
 crabs can roam across ordinary Ocean, Shallows, Beach, Ice Sheets, and non-Arctic land while
 Deep Ocean remains impassable. Every active predator except Fish may consume Crabs only on adjacent
 encounters rather than pursuing them at range, including strikes across habitat boundaries.
-Crabs consume detritus from Beaches, Shallows, Rivers, Freshwater Lakes, Swamps, and Jungles on
+Crabs consume detritus from Beaches, Shallows, Swamps, and Jungles without freshwater on
 their normal movement action, remain there while building breeding energy,
 and reproduce directly on those coastal tiles at five energy for a cost of three,
 leaving the parent safely fed. Feeding remains
 wetland and coastal, and hungry Crabs detect suitable food within five Manhattan tiles
-and move back toward it. Reproduction and offspring placement may occur anywhere Crabs can live.
+and move back toward it. Rivers and Freshwater Lakes remain traversable but provide no
+natural or deposited food for Crabs, even over Swamp or Jungle biomes.
+Reproduction and offspring placement may occur anywhere Crabs can live.
 
 Fish are terrain-first omnivores. Every two seconds, a fish searches
 within a Manhattan radius of six, examining at most 84
@@ -221,8 +257,8 @@ and may also enter shallows and freshwater lakes, but open and deep ocean are
 invalid habitat. Reproduction has no additional freshwater or terrain gate;
 offspring only need an adjacent tile in which they can survive.
 
-Wolves are a fast third branch from Therapsids. They scan six tiles and move every
-two seconds while hunting broad terrestrial prey, including Deer, Elk, and
+Wolves are a fast third branch from Therapsids. They scan five tiles and move every
+2.5 seconds while hunting broad terrestrial prey, including Deer, Elk, and
 Gazelles. Therapsids are held as last-resort targets. Wolves never pursue Mega
 Toads, but Mega Toads do hunt Wolves; a Toad-initiated encounter still uses the
 mutual-predator 50/50 damage roll rather than instant predation.
@@ -248,9 +284,13 @@ last associated or inbound Wolf is gone, the empty den is removed automatically.
 The Other category includes a global Jump Start action that enables life and fills
 every empty Deep Ocean tile with one Plankton without replacing existing critters.
 Its Population tool opens a live overlay built from the world's per-species counters.
-Only nonzero populations are rendered, with a responsive multi-column layout for
+Only nonzero species populations are rendered, with a responsive multi-column layout for
 short windows. Each row includes a colored five-second-sample sparkline retaining
 roughly seven and a half minutes of history; the simulation continues updating beneath it.
+An additional yellow Sick Apes row counts living Apes and Ape Sailors infected by
+either plague strain, excluding Undead Apes. It is a subset of the existing species
+totals, not an additional population. The row remains visible at zero while living
+apes or recent sickness history exist, and its history resets with a new world.
 
 Monkeys, Deer, Elk, and Gazelles scan five tiles for any species whose diet includes them
 and prioritize a step that increases their distance from the nearest threat.
@@ -314,7 +354,9 @@ Monkeys are non-predatory and eat available Swamp, Jungle, or Forest foliage on 
 five-second action. Their reproduction threshold is
 eight energy with a cost of five. A Monkey below breeding energy remains on
 Swamp, Jungle, or Forest foliage to keep feeding, while a hungry Monkey adjacent to
-one of those biomes moves toward it. Mega Toads may still eat Monkeys through ordinary predation.
+one of those biomes moves toward it. Wolves and Mega Toads may eat Monkeys only
+when adjacent, including diagonal neighbors and neighbors across the horizontal
+map seam. Monkeys receive no special target priority and are not pursued at range.
 
 Apes extend the Monkey branch and use the land habitat while hunting every species
 except Plankton and Worms outside their own civilization that enters shared terrain. They also forage directly
@@ -331,12 +373,16 @@ allowing waterways to remain natural borders while freshwater Harbors provide th
 
 Ordinary Apes take Fish only when already adjacent instead of chasing faster Fish
 through Shallows. Ape Sailors move on the same two-second interval as Fish and remain
-the civilization's active marine hunters.
+the civilization's active marine hunters. Their eight-direction movement follows
+diagonal Rivers into Freshwater Lakes, including freshwater corridors through
+Mountains and across horizontal map wrap.
 
 Villages begin with capacity for five residents. At five residents they build a
 Grassland Farm, Swamp Rice Paddy, or Forest Orchard when possible, otherwise a Harbor
-on a Beach, River, or Freshwater Lake tile. Freshwater Harbors require adjacent dry
-land and remain connected to the village building network. All three food districts add one stored food every fourteen seconds. An assigned Ape's kill is
+on a Beach, River, or Freshwater Lake tile. Harbor sites may connect diagonally to
+the village or its districts, and freshwater Harbors accept dry land in any of
+the eight neighboring tiles. Other districts retain cardinal construction links.
+All three food districts add one stored food every fourteen seconds. An assigned Ape's kill is
 conserved rather than counted twice: meal energy first raises the hunter toward its
 reproduction threshold, and only the unused remainder becomes carried settlement
 food. Residents return that remainder to the Village or any connected district.
@@ -346,7 +392,7 @@ Return trips track the closest distance reached. If an Ape spends thirty seconds
 without getting closer—such as when an equal-sized crowd blocks every step—the
 carried food transfers automatically and the Ape resumes ordinary behavior. Genuine
 long trips do not time out while they continue making progress.
-Whenever an assigned Ape or Ape Sailor becomes hungry on a metabolism tick, it may
+Whenever an assigned land Ape becomes hungry on a metabolism tick, it may
 consume one stored food from its home village remotely. This communication has no
 distance requirement, so residents do not starve merely because hunting carried them
 far from the settlement; unassigned Apes cannot draw from village stores.
@@ -374,9 +420,11 @@ so the temporary landform stage cannot demolish them.
 Harbors recruit ordinary residents into Ape Sailors at thirty-second intervals without
 changing total village population or the recruit's stable identity. The village quota
 is one Sailor at five residents, two at ten, three at fifteen, and four at twenty or
-more. An assigned Sailor checks village stores every tick and consumes enough food to
-repair combat losses up to maximum energy whenever supplies permit. Ape Sailors never
-reproduce, so this naval food priority affects survival rather than population growth. Sailors
+more. Sailors have a maximum energy reserve of 28, twice the ordinary Ape cap of 14.
+Recruitment preserves existing energy; sailors gain energy by hunting and no longer
+refill remotely from village stores. They keep catches until their own reserve reaches
+28 and carry surplus food home. Metabolism, combat, and plague drain that finite reserve,
+so village supplies cannot automatically cancel plague damage. Ape Sailors never reproduce. Sailors
 occupy Beach, saltwater, Rivers, and Freshwater Lakes, hunt every implemented sea species except Plankton and Worms, and
 return their catches through a connected Harbor. Village, Farm, Harbor, and Residential
 District tiles are simulation-owned structures exposed to rendering and inspection;

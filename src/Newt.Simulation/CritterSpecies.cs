@@ -25,4 +25,5 @@ public enum CritterSpecies : byte
     Gazelle,
     ToothedWhale,
     BaleenWhale,
+    UndeadApe,
 }

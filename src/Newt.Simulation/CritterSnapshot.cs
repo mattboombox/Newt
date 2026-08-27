@@ -9,4 +9,9 @@ public readonly record struct CritterSnapshot(
     int MaximumEnergy,
     bool IsHungry,
     bool CanReproduce,
-    bool IsDamageFlashing);
+    bool IsDamageFlashing,
+    PlagueKind Plague = PlagueKind.None)
+{
+    public bool IsPlagueImmune => Species is CritterSpecies.Ape or CritterSpecies.ApeSailor &&
+        Id.Value % 5 == 0;
+}

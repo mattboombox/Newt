@@ -5,6 +5,381 @@ namespace Newt.Simulation.Tests;
 public sealed class ApeTests
 {
     [Fact]
+    public void SickApeCountIncludesBothStrainsAndSailorsButNotHealthyImmuneOrUndeadApes()
+    {
+        var world = CreatePlagueWorld(5, 1, Terrain.Ice);
+        var ape = new GridPosition(0, 0);
+        var sailor = new GridPosition(1, 0);
+        var healthy = new GridPosition(2, 0);
+        var immune = new GridPosition(4, 0);
+        world.AddCritter(CritterSpecies.Ape, ape);
+        world.AddCritter(CritterSpecies.ApeSailor, sailor);
+        world.AddCritter(CritterSpecies.Ape, healthy);
+        world.AddCritter(CritterSpecies.UndeadApe, new GridPosition(3, 0));
+        world.AddCritter(CritterSpecies.Ape, immune);
+        Assert.Equal(0, world.SickApeCount);
+
+        Assert.True(world.TryInfectApeAt(ape, PlagueKind.Plague));
+        Assert.True(world.TryInfectApeAt(sailor, PlagueKind.Zombie));
+        Assert.False(world.TryInfectApeAt(immune, PlagueKind.Plague));
+        Assert.Equal(2, world.SickApeCount);
+        Assert.Equal(5, world.CritterCount);
+
+        Assert.True(world.TryInfectApeAt(ape, PlagueKind.Zombie));
+        Assert.False(world.TryInfectApeAt(sailor, PlagueKind.Zombie));
+        Assert.Equal(2, world.SickApeCount);
+        Assert.True(world.RemoveCritterAt(healthy));
+        Assert.Equal(2, world.SickApeCount);
+        Assert.True(world.RemoveCritterAt(ape));
+        Assert.Equal(1, world.SickApeCount);
+        Assert.True(world.RemoveCritterAt(sailor));
+        Assert.Equal(0, world.SickApeCount);
+    }
+
+    [Theory]
+    [InlineData(PlagueKind.Plague)]
+    [InlineData(PlagueKind.Zombie)]
+    public void PlagueSpreadsOneRingPerSecondIncludingDiagonalsAndHorizontalWrap(PlagueKind kind)
+    {
+        var world = CreatePlagueWorld(6, 3);
+        foreach (var position in AllPositions(world))
+        {
+            world.AddCritter(CritterSpecies.Ape, position);
+        }
+        Assert.True(world.TryInfectApeAt(new GridPosition(0, 0), kind));
+        AdvancePlagueTicks(world, SimulationWorld.PlagueSpreadIntervalTicks);
+
+        Assert.Equal(kind, CritterAt(world, new GridPosition(1, 0)).Plague);
+        Assert.Equal(kind, CritterAt(world, new GridPosition(1, 1)).Plague);
+        Assert.Equal(kind, CritterAt(world, new GridPosition(5, 0)).Plague);
+        Assert.Equal(kind, CritterAt(world, new GridPosition(5, 1)).Plague);
+        Assert.Equal(PlagueKind.None, CritterAt(world, new GridPosition(2, 0)).Plague);
+        Assert.Equal(PlagueKind.None, CritterAt(world, new GridPosition(0, 2)).Plague);
+        Assert.True(CritterAt(world, new GridPosition(4, 0)).IsPlagueImmune);
+        Assert.False(world.TryInfectApeAt(new GridPosition(4, 0), kind));
+        Assert.Equal(PlagueKind.None, CritterAt(world, new GridPosition(4, 0)).Plague);
+        Assert.Equal(PlagueKind.None, CritterAt(world, new GridPosition(4, 1)).Plague);
+
+        AdvancePlagueTicks(world, SimulationWorld.PlagueSpreadIntervalTicks);
+        Assert.Equal(kind, CritterAt(world, new GridPosition(2, 0)).Plague);
+        Assert.Equal(kind, CritterAt(world, new GridPosition(4, 1)).Plague);
+        Assert.Equal(PlagueKind.None, CritterAt(world, new GridPosition(4, 0)).Plague);
+    }
+
+    [Theory]
+    [InlineData(PlagueKind.Plague, CritterSpecies.Ape)]
+    [InlineData(PlagueKind.Zombie, CritterSpecies.Ape)]
+    [InlineData(PlagueKind.Plague, CritterSpecies.ApeSailor)]
+    [InlineData(PlagueKind.Zombie, CritterSpecies.ApeSailor)]
+    public void PlagueDrainsGraduallyAndOnlyZombieVictimsRise(PlagueKind kind, CritterSpecies species)
+    {
+        var world = CreatePlagueWorld(1, 1, Terrain.Ice);
+        var position = new GridPosition(0, 0);
+        var id = world.AddCritter(species, position);
+        Assert.True(world.TryInfectApeAt(position, kind));
+        Assert.Equal(1, world.SickApeCount);
+        AdvancePlagueTicks(world, SimulationWorld.PlagueDrainIntervalTicks - 1);
+        Assert.Equal(6, world.GetCritter(0).Energy);
+        world.AdvanceOneTick();
+        Assert.Equal(5, world.GetCritter(0).Energy);
+        AdvancePlagueTicks(world, 5 * SimulationWorld.PlagueDrainIntervalTicks);
+        Assert.Equal(0, world.SickApeCount);
+
+        if (kind is PlagueKind.Plague)
+        {
+            Assert.False(world.TryGetCritter(id, out _));
+            Assert.Equal(0, world.CritterCount);
+        }
+        else
+        {
+            Assert.True(world.TryGetCritter(id, out var undead));
+            Assert.Equal(CritterSpecies.UndeadApe, undead.Species);
+            Assert.Equal(position, undead.Position);
+            Assert.Equal(6, undead.Energy);
+            Assert.False(undead.CanReproduce);
+            Assert.Equal(0, world.GetCritterCount(CritterSpecies.Ape));
+            Assert.Equal(1, world.GetCritterCount(CritterSpecies.UndeadApe));
+            AdvancePlagueTicks(world, SimulationWorld.PlagueDrainIntervalTicks);
+            Assert.Equal(6, world.GetCritter(0).Energy);
+        }
+    }
+
+    [Fact]
+    public void PlagueRejectsOtherSpeciesAndInvalidTargets()
+    {
+        var world = CreatePlagueWorld(3, 1);
+        world.AddCritter(CritterSpecies.Monkey, new GridPosition(0, 0));
+        world.AddCritter(CritterSpecies.UndeadApe, new GridPosition(1, 0));
+        Assert.False(world.TryInfectApeAt(new GridPosition(0, 0), PlagueKind.Plague));
+        Assert.False(world.TryInfectApeAt(new GridPosition(1, 0), PlagueKind.Zombie));
+        Assert.False(world.TryInfectApeAt(new GridPosition(2, 0), PlagueKind.Plague));
+        Assert.False(world.TryInfectApeAt(new GridPosition(-1, 0), PlagueKind.Plague));
+        Assert.False(world.TryInfectApeAt(new GridPosition(0, 0), PlagueKind.None));
+    }
+
+    [Fact]
+    public void InfectionSurvivesCompactionAndUpgradingDoesNotDelayDrain()
+    {
+        var world = CreatePlagueWorld(2, 1);
+        var first = new GridPosition(0, 0);
+        var second = new GridPosition(1, 0);
+        world.AddCritter(CritterSpecies.Ape, first);
+        var id = world.AddCritter(CritterSpecies.Ape, second);
+        Assert.True(world.TryInfectApeAt(second, PlagueKind.Plague));
+        AdvancePlagueTicks(world, SimulationWorld.PlagueDrainIntervalTicks - 1);
+        Assert.True(world.RemoveCritterAt(first));
+        Assert.True(world.TryInfectApeAt(second, PlagueKind.Zombie));
+        Assert.False(world.TryInfectApeAt(second, PlagueKind.Plague));
+        Assert.False(world.TryInfectApeAt(second, PlagueKind.Zombie));
+        world.AdvanceOneTick();
+        Assert.True(world.TryGetCritter(id, out var infected));
+        Assert.Equal(PlagueKind.Zombie, infected.Plague);
+        Assert.Equal(5, infected.Energy);
+        Assert.True(world.RemoveCritterAt(infected.Position));
+        world.AddCritter(CritterSpecies.Ape, infected.Position);
+        Assert.Equal(PlagueKind.None, world.GetCritter(0).Plague);
+    }
+
+    [Fact]
+    public void UndeadHuntOnlyLivingApesAndKeepHuntingWhenFullWithoutReproducing()
+    {
+        foreach (var species in Enum.GetValues<CritterSpecies>())
+        {
+            Assert.Equal(species is CritterSpecies.Ape or CritterSpecies.ApeSailor,
+                SimulationWorld.CanEat(CritterSpecies.UndeadApe, species));
+        }
+        var world = CreatePlagueWorld(2, 1, Terrain.Ice);
+        var undeadId = world.AddCritter(CritterSpecies.UndeadApe, new GridPosition(0, 0));
+        for (var meal = 0; meal < 3; meal++)
+        {
+            var empty = AllPositions(world).Single(position => !world.IsOccupied(position));
+            CritterId preyId;
+            do
+            {
+                preyId = world.AddCritter(CritterSpecies.ApeSailor, empty);
+                if (preyId.Value % 5 != 0)
+                {
+                    world.RemoveCritterAt(empty);
+                }
+            } while (preyId.Value % 5 != 0);
+
+            AdvancePlagueTicks(world, 3 * SimulationWorld.TicksPerSecond);
+            Assert.False(world.TryGetCritter(preyId, out _));
+            Assert.True(world.TryGetCritter(undeadId, out var undead));
+            Assert.False(undead.CanReproduce);
+            Assert.Equal(1, world.CritterCount);
+        }
+        Assert.Equal(14, world.GetCritter(0).Energy);
+        AdvancePlagueTicks(world, 30 * SimulationWorld.TicksPerSecond);
+        Assert.Equal(1, world.CritterCount);
+        Assert.Equal(0, world.ApeVillageCount);
+    }
+
+    [Fact]
+    public void UndeadInfectAndReanimateSailorsKilledBeforePlagueDrainsTheirEnergy()
+    {
+        var world = CreatePlagueWorld(2, 1, Terrain.Ice);
+        world.AddCritter(CritterSpecies.UndeadApe, new GridPosition(0, 0));
+        var sailorId = world.AddCritter(CritterSpecies.ApeSailor, new GridPosition(1, 0));
+        AdvancePlagueTicks(world, 3 * SimulationWorld.TicksPerSecond);
+        Assert.True(world.TryGetCritter(sailorId, out var risen));
+        Assert.Equal(CritterSpecies.UndeadApe, risen.Species);
+        Assert.Equal(2, world.GetCritterCount(CritterSpecies.UndeadApe));
+        Assert.NotEqual(world.GetCritter(0).Position, world.GetCritter(1).Position);
+    }
+
+    [Fact]
+    public void ReanimatedResidentsLeaveTheirVillage()
+    {
+        var world = CreateFedApeWorld(hasGrassland: true);
+        AdvanceUntilVillage(world);
+        RemoveAllExcept(world, CritterSpecies.Ape);
+        var village = FindStructure(world, ApeStructureKind.Village);
+        var ape = world.GetCritter(0);
+        Assert.True(world.TryInfectApeAt(ape.Position, PlagueKind.Zombie));
+        foreach (var position in AllPositions(world))
+        {
+            world.SetBiome(position, Biome.Desert);
+        }
+        for (var tick = 0; tick < 5 * 60 * SimulationWorld.TicksPerSecond; tick++)
+        {
+            world.AdvanceOneTick();
+            if (world.TryGetCritter(ape.Id, out var current) && current.Species is CritterSpecies.UndeadApe)
+            {
+                Assert.Equal(0, world.GetApeVillageResidentCount(village));
+                Assert.False(world.TryAssignApeToVillage(ape.Id, village));
+                return;
+            }
+        }
+        Assert.Fail("The infected village resident never reanimated.");
+    }
+
+    [Fact]
+    public void ZombieOutbreakIsDeterministicAndPreservesUniqueOccupancy()
+    {
+        var first = CreatePlagueWorld(8, 4);
+        var second = CreatePlagueWorld(8, 4);
+        foreach (var world in new[] { first, second })
+        {
+            foreach (var position in AllPositions(world))
+            {
+                world.AddCritter(CritterSpecies.Ape, position);
+            }
+            world.TryInfectApeAt(new GridPosition(0, 0), PlagueKind.Zombie);
+        }
+        for (var tick = 0; tick < 100 * SimulationWorld.TicksPerSecond; tick++)
+        {
+            first.AdvanceOneTick();
+            second.AdvanceOneTick();
+            Assert.Equal(first.CritterCount, second.CritterCount);
+            for (var index = 0; index < first.CritterCount; index++)
+            {
+                var critter = first.GetCritter(index);
+                Assert.Equal(critter, second.GetCritter(index));
+                Assert.Equal(critter, CritterAt(first, critter.Position));
+            }
+        }
+        Assert.True(first.GetCritterCount(CritterSpecies.UndeadApe) > 0);
+    }
+
+    [Theory]
+    [InlineData(CritterSpecies.Ape)]
+    [InlineData(CritterSpecies.ApeSailor)]
+    public void SpontaneousPlagueRequiresMoreThanTwoHundredAssignedResidents(CritterSpecies extraSpecies)
+    {
+        var (world, village) = CreateVillageForPlague(200);
+        var villageTile = village.Y * world.Width + village.X;
+        // A large world population must not substitute for this village's residents.
+        var unassignedPosition = AllPositions(world).First(position =>
+            !world.IsOccupied(position) && world.GetApeStructure(position) is null);
+        world.SetTerrain(unassignedPosition, Terrain.Beach);
+        var extraApe = world.AddCritter(extraSpecies, unassignedPosition);
+        for (var attempt = 0; attempt < 1000; attempt++)
+        {
+            Assert.False(world.TryStartVillagePlague(villageTile));
+        }
+        Assert.All(Enumerable.Range(0, world.CritterCount).Select(world.GetCritter),
+            critter => Assert.Equal(PlagueKind.None, critter.Plague));
+
+        Assert.True(world.TryAssignApeToVillage(extraApe, village));
+        Assert.Equal(201, world.GetApeVillageResidentCount(village));
+        var missedRolls = 0;
+        while (missedRolls < 1000 && !world.TryStartVillagePlague(villageTile))
+        {
+            missedRolls++;
+        }
+
+        Assert.InRange(missedRolls, 1, 999);
+        var infected = Assert.Single(Enumerable.Range(0, world.CritterCount)
+            .Select(world.GetCritter), critter => critter.Plague is not PlagueKind.None);
+        Assert.Equal(PlagueKind.Plague, infected.Plague);
+        Assert.False(infected.IsPlagueImmune);
+    }
+
+    [Theory]
+    [InlineData(PlagueKind.Plague)]
+    [InlineData(PlagueKind.Zombie)]
+    public void VillageWithActiveInfectionDoesNotSeedAnotherOutbreak(PlagueKind kind)
+    {
+        var (world, village) = CreateVillageForPlague(201);
+        var target = Enumerable.Range(0, world.CritterCount).Select(world.GetCritter)
+            .First(critter => !critter.IsPlagueImmune);
+        Assert.True(world.TryInfectApeAt(target.Position, kind));
+
+        for (var attempt = 0; attempt < 1000; attempt++)
+        {
+            Assert.False(world.TryStartVillagePlague(village.Y * world.Width + village.X));
+        }
+
+        var infected = Assert.Single(Enumerable.Range(0, world.CritterCount)
+            .Select(world.GetCritter), critter => critter.Plague is not PlagueKind.None);
+        Assert.Equal(kind, infected.Plague);
+        Assert.Equal(target.Id, infected.Id);
+    }
+
+    [Fact]
+    public void DisablingNaturalEventsPreventsSpontaneousVillagePlague()
+    {
+        var (world, village) = CreateVillageForPlague(201);
+        NaturalEvents.SetEnabled(world, false);
+        for (var attempt = 0; attempt < 1000; attempt++)
+        {
+            Assert.False(world.TryStartVillagePlague(village.Y * world.Width + village.X));
+        }
+        Assert.All(Enumerable.Range(0, world.CritterCount).Select(world.GetCritter),
+            critter => Assert.Equal(PlagueKind.None, critter.Plague));
+    }
+
+    [Fact]
+    public void VillagePlagueRollsOnlyAtMinuteBoundaries()
+    {
+        var (world, _) = CreateVillageForPlague(201);
+        Assert.NotEqual(0, world.Tick % SimulationWorld.VillagePlagueCheckIntervalTicks);
+        for (var attempt = 0; attempt < 1000; attempt++)
+        {
+            world.AdvanceVillagePlagueOutbreaks();
+        }
+        Assert.All(Enumerable.Range(0, world.CritterCount).Select(world.GetCritter),
+            critter => Assert.Equal(PlagueKind.None, critter.Plague));
+
+        NaturalEvents.SetEnabled(world, false);
+        var ticksUntilCheck = SimulationWorld.VillagePlagueCheckIntervalTicks -
+            (int)(world.Tick % SimulationWorld.VillagePlagueCheckIntervalTicks);
+        AdvancePlagueTicks(world, ticksUntilCheck);
+        NaturalEvents.SetEnabled(world, true);
+        // Exercise the rare roll at a check boundary without simulating hundreds
+        // of minutes of unrelated village growth and movement.
+        for (var attempt = 0; attempt < 1000 &&
+            Enumerable.Range(0, world.CritterCount).All(index =>
+                world.GetCritter(index).Plague is PlagueKind.None); attempt++)
+        {
+            world.AdvanceVillagePlagueOutbreaks();
+        }
+        Assert.Single(Enumerable.Range(0, world.CritterCount).Select(world.GetCritter),
+            critter => critter.Plague is PlagueKind.Plague);
+    }
+
+    private static (SimulationWorld World, GridPosition Village) CreateVillageForPlague(int population)
+    {
+        var world = CreateFedApeWorld(hasGrassland: true, width: 50, height: 30);
+        NaturalEvents.SetEnabled(world, false);
+        AdvanceUntilVillage(world);
+        var village = FindStructure(world, ApeStructureKind.Village);
+        RemoveAllExcept(world, CritterSpecies.Ape);
+        // Build housing directly so disease tests do not depend on years of economic growth.
+        while (world.GetApeVillagePopulationCapacity(village) < 205)
+        {
+            Assert.True(world.TryBuildApeStructure(
+                village.Y * world.Width + village.X, ApeStructureKind.ResidentialDistrict));
+        }
+        AddAssignedResidents(world, village, population - world.GetApeVillageResidentCount(village));
+        Assert.Equal(population, world.GetApeVillageResidentCount(village));
+        NaturalEvents.SetEnabled(world, true);
+        return (world, village);
+    }
+    private static SimulationWorld CreatePlagueWorld(int width, int height, Terrain terrain = Terrain.Plains)
+    {
+        var world = new SimulationWorld(width, height, terrain, seed: 2101);
+        world.SeasonsEnabled = false;
+        NaturalEvents.SetEnabled(world, false);
+        return world;
+    }
+
+    private static CritterSnapshot CritterAt(SimulationWorld world, GridPosition position)
+    {
+        Assert.True(world.TryGetCritterAt(position, out var critter));
+        return critter;
+    }
+
+    private static void AdvancePlagueTicks(SimulationWorld world, int ticks)
+    {
+        for (var tick = 0; tick < ticks; tick++)
+        {
+            world.AdvanceOneTick();
+        }
+    }
+
+    [Fact]
     public void MonkeyEvolvesIntoApe()
     {
         Assert.Equal(1, CritterEvolution.GetEvolvedSpeciesCount(CritterSpecies.Monkey));
@@ -157,7 +532,8 @@ public sealed class ApeTests
         Assert.True(world.ApeVillageCount == 1, DescribeWorld(world));
         Assert.Equal(0, CountStructures(world, ApeStructureKind.Farm));
         var village = FindStructure(world, ApeStructureKind.Village);
-        Assert.True(HasAdjacentTerrain(world, village, Terrain.Beach));
+        Assert.Contains(GetSurroundingNeighbors(world, village),
+            position => world.GetTerrain(position) is Terrain.Beach);
         Assert.Equal(0, CountStructures(world, ApeStructureKind.NavalDistrict));
         Assert.Equal(1, world.GetCritterCount(CritterSpecies.Ape));
     }
@@ -527,6 +903,77 @@ public sealed class ApeTests
     [Theory]
     [InlineData(SurfaceWaterKind.River)]
     [InlineData(SurfaceWaterKind.FreshwaterLake)]
+    public void VillageBuildsAndRecruitsFromFreshwaterHarborWithOnlyDiagonalLandAccess(SurfaceWaterKind water)
+    {
+        var world = CreateFedApeWorld(hasGrassland: true);
+        NaturalEvents.SetEnabled(world, false);
+        AdvanceUntilVillage(world);
+        var village = FindStructure(world, ApeStructureKind.Village);
+        RemoveAllExcept(world, CritterSpecies.Ape);
+        var harbor = GetSurroundingNeighbors(world, village)
+            .First(position => WrappedDistance(world, position, village) == 2 &&
+                !world.IsOccupied(position) && world.GetApeStructure(position) is null);
+        world.SetTerrain(harbor, Terrain.Mountain);
+        world.SetSurfaceWater(harbor, water);
+        foreach (var neighbor in GetCardinalNeighbors(world, harbor))
+        {
+            world.SetTerrain(neighbor, Terrain.Mountain);
+        }
+        AddAssignedResidents(world, village, 4);
+
+        for (var tick = 0; tick < 45 * SimulationWorld.TicksPerSecond &&
+            world.GetApeVillageSailorCount(village) == 0; tick++)
+        {
+            world.AdvanceOneTick();
+        }
+
+        Assert.Equal(ApeStructureKind.NavalDistrict, world.GetApeStructure(harbor));
+        Assert.True(world.IsApeStructureOperational(harbor));
+        Assert.Equal(village, world.GetApeStructureVillage(harbor));
+        Assert.Equal(1, world.GetApeVillageSailorCount(village));
+        Assert.True(world.TryGetCritterAt(harbor, out var sailor));
+        Assert.Equal(CritterSpecies.ApeSailor, sailor.Species);
+
+        world.RevalidateApeStructures();
+        Assert.Equal(ApeStructureKind.NavalDistrict, world.GetApeStructure(harbor));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void SailorLeavesBeachThroughDiagonalMountainRiverAndHuntsInLake(bool wraps)
+    {
+        var world = new SimulationWorld(5, 4, Terrain.Mountain, seed: 5203);
+        world.SeasonsEnabled = false;
+        NaturalEvents.SetEnabled(world, false);
+        var start = new GridPosition(wraps ? 4 : 0, 0);
+        var river = new GridPosition(wraps ? 0 : 1, 1);
+        var lake = new GridPosition(wraps ? 1 : 2, 2);
+        world.SetTerrain(start, Terrain.Beach);
+        world.SetSurfaceWater(river, SurfaceWaterKind.River);
+        world.SetSurfaceWater(lake, SurfaceWaterKind.FreshwaterLake);
+        var sailorId = world.AddCritter(CritterSpecies.ApeSailor, start);
+        var fishId = world.AddCritter(CritterSpecies.Fish, lake);
+        var usedRiver = false;
+
+        for (var tick = 0; tick < 8 * SimulationWorld.TicksPerSecond &&
+            world.TryGetCritter(fishId, out _); tick++)
+        {
+            world.AdvanceOneTick();
+            Assert.True(world.TryGetCritter(sailorId, out var sailor));
+            Assert.Contains(sailor.Position, new[] { start, river, lake });
+            usedRiver |= sailor.Position == river;
+        }
+
+        Assert.True(usedRiver);
+        Assert.False(world.TryGetCritter(fishId, out _));
+        Assert.True(world.TryGetCritter(sailorId, out var hunter));
+        Assert.Equal(lake, hunter.Position);
+    }
+
+    [Theory]
+    [InlineData(SurfaceWaterKind.River)]
+    [InlineData(SurfaceWaterKind.FreshwaterLake)]
     public void ApeSailorsMoveAndHuntThroughFreshwater(SurfaceWaterKind water)
     {
         var world = new SimulationWorld(5, 1, Terrain.Plains, seed: 5202);
@@ -613,8 +1060,10 @@ public sealed class ApeTests
         Assert.True(SimulationWorld.CanSpeciesReproduce(CritterSpecies.Ape));
     }
 
-    [Fact]
-    public void AssignedSailorFillsItsEnergyFromVillageFoodAfterRecruitment()
+    [Theory]
+    [InlineData(PlagueKind.Plague)]
+    [InlineData(PlagueKind.Zombie)]
+    public void AssignedSailorHasDoubleEnergyCapButVillageFoodDoesNotPreventPlagueDeath(PlagueKind kind)
     {
         var world = CreateFedApeWorld(hasGrassland: true);
         AdvanceUntilVillage(world);
@@ -642,13 +1091,38 @@ public sealed class ApeTests
         }
         Assert.Equal(1, world.GetApeVillageSailorCount(village));
 
-        world.AdvanceOneTick();
-
         var sailor = Enumerable.Range(0, world.CritterCount)
             .Select(world.GetCritter)
             .Single(critter => critter.Species is CritterSpecies.ApeSailor);
-        Assert.Equal(sailor.MaximumEnergy, sailor.Energy);
+        Assert.Equal(28, sailor.MaximumEnergy);
+        Assert.True(sailor.Energy <= CritterNutritions.Get(CritterSpecies.Ape).MaximumEnergy);
         Assert.False(sailor.CanReproduce);
+
+        // Leave the sailor assigned to a stocked village, but remove all prey.
+        RemoveAllExcept(world, CritterSpecies.ApeSailor);
+        world.StoreApeVillageFood(village, world.GetApeVillageFoodCapacity(village));
+        AdvancePlagueTicks(world, SimulationWorld.PlagueDrainIntervalTicks);
+        Assert.True(world.TryGetCritter(sailor.Id, out var healthy));
+        Assert.Equal(sailor.Energy, healthy.Energy);
+        Assert.True(world.TryInfectApeAt(healthy.Position, kind));
+
+        for (var tick = 0; tick < sailor.Energy * SimulationWorld.PlagueDrainIntervalTicks; tick++)
+        {
+            // Even unlimited village supplies must not replace plague losses.
+            world.StoreApeVillageFood(village, world.GetApeVillageFoodCapacity(village));
+            world.AdvanceOneTick();
+            if (!world.TryGetCritter(sailor.Id, out var current))
+            {
+                Assert.Equal(PlagueKind.Plague, kind);
+                return;
+            }
+            if (current.Species is CritterSpecies.UndeadApe)
+            {
+                Assert.Equal(PlagueKind.Zombie, kind);
+                return;
+            }
+        }
+        Assert.Fail("Village supplies prevented the infected sailor from dying.");
     }
 
     [Fact]
@@ -683,6 +1157,41 @@ public sealed class ApeTests
         }
 
         Assert.Equal(1, CountStructures(world, ApeStructureKind.NavalDistrict));
+    }
+
+    [Fact]
+    public void AssignedSailorFillsItsLargerReserveByHuntingBeforeCarryingSurplus()
+    {
+        var world = CreateFedApeWorld(hasGrassland: true);
+        AdvanceUntilVillage(world);
+        var village = FindStructure(world, ApeStructureKind.Village);
+        RemoveAllExcept(world, CritterSpecies.Ape);
+        var sea = AllPositions(world)
+            .Where(position => !world.IsOccupied(position) && world.GetApeStructure(position) is null)
+            .SelectMany(position => GetCardinalNeighbors(world, position)
+                .Where(neighbor => !world.IsOccupied(neighbor) && world.GetApeStructure(neighbor) is null)
+                .Select(neighbor => new[] { position, neighbor }))
+            .First();
+        foreach (var position in sea)
+        {
+            world.SetTerrain(position, Terrain.Ocean);
+        }
+        var sailorId = world.AddCritter(CritterSpecies.ApeSailor, sea[0]);
+        Assert.True(world.TryAssignApeToVillage(sailorId, village));
+        RemoveAllExcept(world, CritterSpecies.ApeSailor);
+
+        for (var meal = 0; meal < 6; meal++)
+        {
+            var empty = sea.Single(position => !world.IsOccupied(position));
+            var fishId = world.AddCritter(CritterSpecies.Fish, empty);
+            AdvancePlagueTicks(world, 2 * SimulationWorld.TicksPerSecond);
+            Assert.False(world.TryGetCritter(fishId, out _));
+        }
+
+        Assert.True(world.TryGetCritter(sailorId, out var sailor));
+        Assert.Equal(28, sailor.Energy);
+        Assert.Equal(2, world.GetApeCarriedFood(sailorId));
+        Assert.False(sailor.CanReproduce);
     }
 
     [Fact]
@@ -976,9 +1485,9 @@ public sealed class ApeTests
         Assert.Equal(2, world.GetApeVillageResidentCount(village));
     }
 
-    private static SimulationWorld CreateFedApeWorld(bool hasGrassland)
+    private static SimulationWorld CreateFedApeWorld(bool hasGrassland, int width = 9, int height = 3)
     {
-        var world = new SimulationWorld(9, 3, Terrain.Plains, seed: 1701);
+        var world = new SimulationWorld(width, height, Terrain.Plains, seed: 1701);
         world.SeasonsEnabled = false;
         world.AdjustEvolutionChance(-CritterEvolution.MaximumChanceSteps);
         if (hasGrassland)
@@ -1116,12 +1625,6 @@ public sealed class ApeTests
         GridPosition position,
         Biome biome) => GetCardinalNeighbors(world, position)
         .Any(neighbor => world.GetBiome(neighbor) == biome);
-
-    private static bool HasAdjacentTerrain(
-        SimulationWorld world,
-        GridPosition position,
-        Terrain terrain) => GetCardinalNeighbors(world, position)
-        .Any(neighbor => world.GetTerrain(neighbor) == terrain);
 
     private static IEnumerable<GridPosition> GetCardinalNeighbors(
         SimulationWorld world,

@@ -35,6 +35,11 @@ public static class TerrainClassifier
             {
                 var position = new GridPosition(x, y);
                 var index = y * world.Width + x;
+                if (ocean[index])
+                {
+                    // Saltwater replaces freshwater, including frozen lake overlays.
+                    world.ClearFreshwaterForTerrainRebuild(position);
+                }
                 world.SetClimateTerrain(position, ocean[index]
                     ? ClassifyOcean(world.SeaLevel - world.GetElevation(position), world.GetTemperature(position))
                     : ClassifyDryLand(world.GetElevation(position)));

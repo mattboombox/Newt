@@ -50,12 +50,16 @@ unaffected by the seasonal temperature change.
 
 The SeaLevel tool uses the same mouse buttons as Elevation: left click raises the
 global sea surface by 0.01 and right click lowers it by 0.01. Ground elevation is
-not changed. Each world has one persistent saltwater seed, initially at the map
-center. Sea water flood-fills outward from that tile wherever ground is at or
-below sea level. The OceanSeed tool moves it to the clicked tile and immediately
-rebuilds saltwater and freshwater. If the seed itself is above sea level there is
-no ocean until the sea rises above it or the seed is moved. East and west wrap,
-matching the world geometry.
+not changed. Worlds support a primary saltwater seed and multiple additional seeds.
+Sea water flood-fills outward from all seeds wherever ground is at or below sea
+level. With OceanSeed selected, left-click moves the primary seed and rebuilds
+water connectivity; right-click adds a seed without replacing existing seeds.
+Right-clicking an existing lake larger than 1,500 tiles instead selects that lake's
+lowest point, without following rivers into other lakes. New seeds must be at or
+below sea level, and already flooded ocean tiles do not gain duplicate seeds.
+Moving the primary onto an additional seed removes the duplicate entry. A seed
+raised above sea level stops flooding until sea level or terrain makes it eligible
+again; the other seeds keep working. East and west wrap, matching world geometry.
 
 Exposed seabed keeps its elevation and becomes Lowlands, Canyon, or Trench as it
 gets progressively deeper below the original zero datum. Existing biome rules are
@@ -68,8 +72,20 @@ Arctic mountain climate even at the equator.
 
 Closed river basins form bounded terminal lakes instead of falling back to a
 single wet tile. A genuinely outletless terminal lake can cover at most 128
-tiles. Overflowing lakes may cover up to 65,536 tiles so the largest generated
-meteor craters can fill to their rims. A terminal lake's surface is set by the
+tiles. Overflowing lakes may cover up to 1,500 tiles, inclusive. If filling to
+the spill elevation would exceed that cap, the complete connected lake footprint
+is surveyed for its lowest point. If that point is at or below sea level, a new
+ocean seed is added there, preserving existing seeds. This also applies to oversized
+terminal basins. Tied lowest points use the smallest row-major tile index. The old
+freshwater overlay is cleared, and saltwater floods to global sea level, not to the
+former lake surface; higher shoreline tiles can become dry land. Active rivers
+continue routing against the new coastline without recursively rebuilding their
+own collection. Basins entirely above sea level still fall back to a terminal
+lake of at most 128 tiles. A fill is rejected if it would connect existing lakes
+into a freshwater body larger than 1,500 tiles; rivers do not join lakes for this
+check. The limit applies to new or rebuilt freshwater, not retroactive trimming
+of an already-running world's lakes; use OceanSeed right-click for those lakes.
+A terminal lake's surface is set by the
 lowest elevations needed to consume its area budget, without an independent
 depth cap. This allows compact deep craters to fill while preventing one spring
 from flooding a continent-sized shallow depression.

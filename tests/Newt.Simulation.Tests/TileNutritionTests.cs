@@ -207,8 +207,13 @@ public sealed class TileNutritionTests
         Assert.Equal(1, world.GetTileNutrition(position));
     }
 
-    [Fact]
-    public void TerrainFeederCanConsumeDepositedNutritionFromNaturallyEmptyTerrain()
+    [Theory]
+    [InlineData(SurfaceWaterKind.None, 4)]
+    [InlineData(SurfaceWaterKind.River, 3)]
+    [InlineData(SurfaceWaterKind.FreshwaterLake, 3)]
+    public void CrabConsumesDepositedNutritionOnlyOutsideFreshwater(
+        SurfaceWaterKind water,
+        int expectedEnergy)
     {
         var world = new SimulationWorld(1, 1, Terrain.Ocean, seed: 2003);
         world.SeasonsEnabled = false;
@@ -219,13 +224,17 @@ public sealed class TileNutritionTests
             world.AdvanceOneTick();
         }
 
+        world.SetSurfaceWater(position, water);
+        var nutritionBeforeFeeding = world.GetTileNutrition(position);
         world.AddCritter(CritterSpecies.Crab, position);
         for (var tick = 0; tick < 4 * SimulationWorld.TicksPerSecond; tick++)
         {
             world.AdvanceOneTick();
         }
 
-        Assert.Equal(4, world.GetCritter(0).Energy);
-        Assert.Equal(0, world.GetTileNutrition(position));
+        Assert.Equal(expectedEnergy, world.GetCritter(0).Energy);
+        Assert.Equal(
+            nutritionBeforeFeeding - (water is SurfaceWaterKind.None ? 1 : 0),
+            world.GetTileNutrition(position));
     }
 }
