@@ -59,9 +59,9 @@ zombie infection purple, and undead apes green. Inspection reports infection or
 immunity. Reapplying a strain does not reset its damage timer; zombie plague can
 upgrade ordinary plague, but not the reverse.
 
-With natural events enabled, each village with more than 200 assigned residents
+With natural events enabled, each village with at least 200 assigned residents
 (including sailors) has a 1% chance per simulation minute to seed ordinary plague
-in one random non-immune resident. Villages at 200 or fewer residents are exempt;
+in one random non-immune resident. Villages with fewer than 200 residents are exempt;
 unassigned apes do not count. A village with any already infected resident skips
 the outbreak roll. These spontaneous outbreaks never create zombie plague.
 
@@ -212,7 +212,7 @@ eat available terrain food in Deep Ocean, deep-ocean Ice Sheets, or Shallows bef
 Plankton within a Manhattan radius of five. Like Trilobites, they roam Ocean and
 Deep Ocean, return from depleted Shallows toward adjacent deep-sea terrain, and flee
 visible predators within three tiles. Ordinary Ocean is transit and hunting habitat only.
-Jellyfish cannot eat Nautiluses. Sea Scorpions and Squid can consume them only on
+Jellyfish cannot eat Nautiluses. Sea Scorpions, Squid, and Toothed Whales can consume them only on
 adjacent encounters; Mega Toads can still attempt to swallow
 Nautiluses encountered in Shallows. Nautiluses evolve into Squid, which
 hunt fish, trilobites, crabs, newts, Sea Scorpions, Deer, Elk, and Gazelles every
@@ -326,7 +326,8 @@ still do not include either species in their hunting diet, so they defend themse
 without pursuing them.
 Toothed Whales are the marine Therapsid branch. They inhabit Deep Ocean, Ocean,
 and Shallows, move every four seconds, and scan seven Manhattan tiles for
-animal-eating marine prey: Sea Scorpions, Nautiluses, Fish, Squid, and Ape Sailors.
+animal-eating marine prey: Sea Scorpions, Fish, Squid, and Ape Sailors.
+Nautiluses are eligible only on adjacent encounters, never for pursuit at range.
 They also consume feeder Crabs only when adjacent, following the universal Crab rule.
 Large land animals are eligible only while standing in Shallows; the whale will not
 pursue them on land or in deeper water. Toothed Whales ignore Jellyfish, Plankton,

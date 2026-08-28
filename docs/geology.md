@@ -4,6 +4,18 @@ Newt treats terrain as a visible classification derived from persistent elevatio
 Geological operations change elevation first; terrain is then rebuilt from the
 new physical state.
 
+Ordinary land and stone use elevation shading, capped at a 10%
+brightness change. Higher ground is slightly lighter; exposed depressions are
+slightly darker. Ocean, shallows, and sea ice use a smaller depth cue, capped at
+3%, with deeper water darker. These shades preserve the existing biome colors.
+Hills use the same biome palette as plains at 92% base brightness. Lowlands,
+canyons, and trenches use 92%, 84%, and 76%, respectively, before elevation
+shading. Stone follows the same progression, keeping landform boundaries gentler
+while making the continuous elevation differences easier to see.
+Mountains and freshwater lakes retain their stronger existing elevation/depth
+shading; lava, rivers, and artificial walls keep their existing appearance.
+This is presentation only and adds no simulation work or neighbor scans.
+
 ## First live operation: elevation tool
 
 Elevation is the first Terrain Tools selection. Left click a world tile to raise
@@ -13,15 +25,34 @@ edge receives almost none. World X coordinates wrap, so a change at the left edg
 continues naturally at the right edge. Terrain and coastlines are reclassified
 immediately.
 
+Smoothing is the next Terrain Tools selection. Hold left click to soften peaks
+and fill small dips toward the surrounding 3-by-3 average, using the same soft
+circular falloff. Each pass reads the original heights before applying changes.
+The brush wraps horizontally, leaves artificial ring walls untouched, and
+rebuilds terrain and freshwater after edits.
+
+Elevation and Smoothing share a magnitude from 0.0 to 1.0 in 0.1 steps, displayed
+in the tool hint. Right click cycles Smoothing magnitude; Shift+right click cycles
+Elevation magnitude, preserving ordinary right click for lowering. A magnitude
+click never edits terrain or repeats while held. Higher magnitude increases
+radius from 1 to 21 tiles and brush strength. Magnitude 0.0 is the smallest brush,
+not an off switch. The default 0.3 retains Elevation's original radius of 7 and
+strength of 0.36; Smoothing blends by 0.34 at its center at that setting.
+
 `Q` and `E` cycle tools. World Tools contains SeaLevel, OceanSeed, Temperature,
-Moisture, Seasons, and Life. Terrain Tools contains Elevation, River, Volcano,
+Moisture, Seasons, and Life. Terrain Tools contains Elevation, Smoothing, River, Volcano,
 Stone, and Lava. Events contains Meteor, Tsunami, and NaturalEvents. `R` cycles
 between categories.
 
 Natural terrain events are deterministic and occur rarely in simulation time.
-They create a random meteor impact or volcano roughly every 6 to 16 simulated
-minutes. The NaturalEvents tool enables them with left click and disables them
-with right click.
+They attempt a random meteor impact, volcano, watershed shift, or tsunami roughly
+every 6 to 16 simulated minutes. Tsunamis only start when the randomly selected
+tile is ocean (including sea ice); land selections are skipped. The NaturalEvents
+tool enables them with left click and disables them with right click.
+
+NaturalEvents also enables random ordinary-plague outbreaks: each village with
+at least 200 assigned residents (including sailors) has a 1% chance per simulated
+minute, provided none of its residents is already infected.
 
 The Tsunami tool starts a wave only when left-clicked over ocean. Right click
 cycles magnitude. It reuses the impact-wave animation with a blue front and
@@ -31,13 +62,20 @@ lowers the elevation of land reached by the wave.
 8x, 16x, and 32x. `P` pauses or resumes simulation time without disabling tools or
 camera controls. The current rate and pause state appear beside the world tick.
 
+At 16x or 32x, sustained slow updates automatically reduce the rate directly to
+8x. The guard waits for about one second of slow updates and ignores isolated
+stalls. The HUD marks the fallback as `8x (auto)`; changing speed manually clears
+the marker and restarts the guard. Speed never increases automatically. Pausing,
+opening the setup menu, or generating a world resets the slowdown history.
+Rendering quality is unchanged, and no automatic reductions occur at 8x or below.
+
 Temperature and Moisture are global climate tools. Left click adds 0.05 and right
 click subtracts 0.05 from the corresponding world-wide climate offset. Each
 offset is capped to the range -1.00 through +1.00, while final per-tile climate
 values remain normalized from zero to one. Temperature changes can create or melt
 sea ice; both tools immediately rebuild biome classifications.
 
-Elevation, SeaLevel, Temperature, and Moisture may also be adjusted continuously
+Elevation, Smoothing, SeaLevel, Temperature, and Moisture may also be adjusted continuously
 by holding the corresponding mouse button. Repetition starts after a short delay;
 River and OceanSeed remain deliberate single-click actions.
 

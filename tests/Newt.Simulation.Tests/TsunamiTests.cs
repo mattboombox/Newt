@@ -47,13 +47,48 @@ public sealed class TsunamiTests
     }
 
     [Fact]
+    public void NaturalEventsCanSpawnTsunamisAndScheduleNextEvent()
+    {
+        // Seed 3 selects a tsunami for the first natural event.
+        var world = new SimulationWorld(31, 21, Terrain.DeepOcean, seed: 3);
+        world.NextNaturalEventTick = 0;
+
+        NaturalEvents.Advance(world);
+
+        Assert.Equal(1, world.ActiveImpactWaveCount);
+        var wave = world.GetImpactWave(0);
+        Assert.Equal(WaveKind.Tsunami, wave.Kind);
+        Assert.Equal(Terrain.DeepOcean, world.GetTerrain(wave.Center));
+        Assert.InRange(world.NextNaturalEventTick,
+            6L * 60 * SimulationWorld.TicksPerSecond,
+            16L * 60 * SimulationWorld.TicksPerSecond);
+    }
+
+    [Fact]
+    public void RandomTsunamiDoesNotStartOnLand()
+    {
+        var world = new SimulationWorld(31, 21, Terrain.Plains, seed: 3);
+        world.NextNaturalEventTick = 0;
+
+        NaturalEvents.Advance(world);
+
+        Assert.Equal(0, world.ActiveImpactWaveCount);
+        Assert.Equal(0, world.VolcanoCount);
+        Assert.True(world.NextNaturalEventTick > world.Tick);
+    }
+
+    [Fact]
     public void NaturalEventsCanBeDisabled()
     {
-        var world = CreateCoastalWorld();
+        var world = new SimulationWorld(31, 21, Terrain.DeepOcean, seed: 3);
+        world.NextNaturalEventTick = 0;
 
         NaturalEvents.SetEnabled(world, false);
+        NaturalEvents.Advance(world);
 
         Assert.False(world.NaturalEventsEnabled);
+        Assert.Equal(0, world.ActiveImpactWaveCount);
+        Assert.Equal(0, world.NextNaturalEventTick);
     }
 
     private static SimulationWorld CreateCoastalWorld()

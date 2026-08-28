@@ -4101,7 +4101,8 @@ public sealed partial class SimulationWorld
                 predator is CritterSpecies.Ape && prey is CritterSpecies.Fish ||
                 (predator is CritterSpecies.Squid or CritterSpecies.SeaScorpion) &&
                     prey is CritterSpecies.Worm ||
-                predator is CritterSpecies.Squid && prey is CritterSpecies.Nautilus ||
+                (predator is CritterSpecies.Squid or CritterSpecies.ToothedWhale) &&
+                    prey is CritterSpecies.Nautilus ||
                 predator is CritterSpecies.SeaScorpion &&
                     prey is CritterSpecies.Trilobite or CritterSpecies.Nautilus));
 
@@ -4145,7 +4146,9 @@ public sealed partial class SimulationWorld
             }
         }
 
-        if (_species[preyIndex] is CritterSpecies.Crab &&
+        if ((_species[preyIndex] is CritterSpecies.Crab ||
+                _species[predatorIndex] is CritterSpecies.ToothedWhale &&
+                _species[preyIndex] is CritterSpecies.Nautilus) &&
             WrappedManhattanDistance(
                 _positions[predatorIndex],
                 _positions[preyIndex]) != 1)

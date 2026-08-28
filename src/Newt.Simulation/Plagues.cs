@@ -50,7 +50,7 @@ public sealed partial class SimulationWorld
     {
         if (!NaturalEventsEnabled || Tick == 0 ||
             Tick % VillagePlagueCheckIntervalTicks != 0 ||
-            _apeVillageHomes.Count <= VillagePlaguePopulationThreshold)
+            _apeVillageHomes.Count < VillagePlaguePopulationThreshold)
         {
             return;
         }
@@ -69,7 +69,7 @@ public sealed partial class SimulationWorld
         if (!NaturalEventsEnabled ||
             !_apeStructures.TryGetValue(villageTile, out var structure) ||
             structure is not ApeStructureKind.Village ||
-            GetApeVillageResidentCountByTile(villageTile) <= VillagePlaguePopulationThreshold)
+            GetApeVillageResidentCountByTile(villageTile) < VillagePlaguePopulationThreshold)
         {
             return false;
         }

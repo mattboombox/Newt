@@ -79,6 +79,91 @@ public static class Geology
         return ApplyRadialElevationChange(world, center, radius, -strength);
     }
 
+    /// <summary>
+    /// Blends heights toward their local 3-by-3 average with a soft circular falloff.
+    /// All averages use the original heights; returns the number of changed tiles.
+    /// </summary>
+    public static int ApplyRadialSmoothing(
+        SimulationWorld world,
+        GridPosition center,
+        int radius,
+        float strength)
+    {
+        ArgumentNullException.ThrowIfNull(world);
+        if (!world.Contains(center))
+        {
+            throw new ArgumentOutOfRangeException(nameof(center));
+        }
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(radius);
+        if (!float.IsFinite(strength) || strength is < 0 or > 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(strength));
+        }
+        if (strength == 0)
+        {
+            return 0;
+        }
+
+        var changes = new List<(GridPosition Position, float Elevation)>();
+        var radiusSquared = (double)radius * radius;
+        // Visit each wrapped column only once, even when the brush spans the world.
+        var firstX = -Math.Min(radius, world.Width / 2);
+        var lastX = Math.Min(radius, (world.Width - 1) / 2);
+        var firstY = -Math.Min(radius, center.Y);
+        var lastY = Math.Min(radius, world.Height - 1 - center.Y);
+        for (var dy = firstY; dy <= lastY; dy++)
+        {
+            for (var dx = firstX; dx <= lastX; dx++)
+            {
+                var distanceSquared = (double)dx * dx + (double)dy * dy;
+                if (distanceSquared >= radiusSquared)
+                {
+                    continue;
+                }
+                var position = new GridPosition(Mod(center.X + dx, world.Width), center.Y + dy);
+                if (world.GetTerrain(position) is Terrain.RingWorldWall)
+                {
+                    continue;
+                }
+
+                double sum = 0;
+                var samples = 0;
+                for (var ny = Math.Max(0, position.Y - 1); ny <= Math.Min(world.Height - 1, position.Y + 1); ny++)
+                {
+                    for (var nx = -Math.Min(1, world.Width / 2); nx <= Math.Min(1, (world.Width - 1) / 2); nx++)
+                    {
+                        var neighbor = new GridPosition(Mod(position.X + nx, world.Width), ny);
+                        if (world.GetTerrain(neighbor) is Terrain.RingWorldWall)
+                        {
+                            continue;
+                        }
+                        sum += world.GetElevation(neighbor);
+                        samples++;
+                    }
+                }
+
+                var original = world.GetElevation(position);
+                var falloff = 1 - distanceSquared / radiusSquared;
+                var smoothed = (float)(original + (sum / samples - original) * strength * falloff * falloff);
+                if (smoothed != original)
+                {
+                    changes.Add((position, smoothed));
+                }
+            }
+        }
+
+        foreach (var change in changes)
+        {
+            world.SetElevation(change.Position, change.Elevation);
+        }
+        if (changes.Count > 0)
+        {
+            TerrainClassifier.RebuildLandforms(world);
+            Hydrology.RebuildFreshwater(world);
+        }
+        return changes.Count;
+    }
+
     private static int ApplyRadialElevationChange(
         SimulationWorld world,
         GridPosition center,

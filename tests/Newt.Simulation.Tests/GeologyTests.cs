@@ -4,6 +4,67 @@ namespace Newt.Simulation.Tests;
 
 public sealed class GeologyTests
 {
+    [Theory]
+    [InlineData(0.9f)]
+    [InlineData(-0.9f)]
+    public void SmoothingSoftensPeaksAndDipsFromOriginalNeighborHeights(float height)
+    {
+        var world = new SimulationWorld(9, 9, Terrain.Plains);
+        var center = new GridPosition(4, 4);
+        world.SetElevation(center, height);
+
+        Geology.ApplyRadialSmoothing(world, center, 2, 1f);
+
+        Assert.Equal(height / 9, world.GetElevation(center), precision: 5);
+        Assert.Equal(height / 9 * 0.5625f, world.GetElevation(new GridPosition(5, 4)), precision: 5);
+        Assert.Equal(world.GetElevation(new GridPosition(3, 4)), world.GetElevation(new GridPosition(5, 4)));
+        Assert.Equal(0f, world.GetElevation(new GridPosition(6, 4)));
+    }
+
+    [Theory]
+    [InlineData(0f)]
+    [InlineData(0.25f)]
+    [InlineData(1f)]
+    public void SmoothingStrengthControlsBlend(float strength)
+    {
+        var world = new SimulationWorld(9, 9, Terrain.Plains);
+        var center = new GridPosition(4, 4);
+        world.SetElevation(center, 0.9f);
+
+        Geology.ApplyRadialSmoothing(world, center, 1, strength);
+
+        Assert.Equal(0.9f - 0.8f * strength, world.GetElevation(center), precision: 5);
+    }
+
+    [Fact]
+    public void SmoothingFlatGroundIsNoOp()
+    {
+        var world = new SimulationWorld(9, 9, Terrain.Plains);
+        Assert.Equal(0, Geology.ApplyRadialSmoothing(world, new GridPosition(4, 4), 3, 1f));
+    }
+
+    [Fact]
+    public void SmoothingWrapsAndDoesNotDuplicateSamplesInTinyWorlds()
+    {
+        var world = new SimulationWorld(2, 1, Terrain.Ocean);
+        world.SetElevation(new GridPosition(0, 0), 1f);
+        Geology.ApplyRadialSmoothing(world, new GridPosition(0, 0), 5, 1f);
+        Assert.Equal(0.5f, world.GetElevation(new GridPosition(0, 0)), precision: 5);
+        Assert.Equal(0.4608f, world.GetElevation(new GridPosition(1, 0)), precision: 5);
+    }
+
+    [Theory]
+    [InlineData(-0.1f)]
+    [InlineData(1.1f)]
+    [InlineData(float.NaN)]
+    [InlineData(float.PositiveInfinity)]
+    public void SmoothingRejectsInvalidStrength(float strength)
+    {
+        var world = new SimulationWorld(9, 9, Terrain.Plains);
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            Geology.ApplyRadialSmoothing(world, new GridPosition(4, 4), 3, strength));
+    }
+
     [Fact]
     public void UpliftRaisesCenterMoreThanEdge()
     {
@@ -16,6 +77,35 @@ public sealed class GeologyTests
         Assert.Equal(0.5f, world.GetElevation(center), precision: 5);
         Assert.InRange(world.GetElevation(edge), 0.01f, 0.5f);
         Assert.True(world.GetElevation(center) > world.GetElevation(edge));
+    }
+
+    [Fact]
+    public void SmoothingPreservesRingWallsAndExcludesThemFromAverages()
+    {
+        var world = new SimulationWorld(9, 5, Terrain.Plains);
+        world.Body = WorldBody.RingWorld;
+        TerrainClassifier.RebuildAll(world);
+        var center = new GridPosition(4, 1);
+        world.SetElevation(center, 0.9f);
+
+        Geology.ApplyRadialSmoothing(world, center, 2, 1f);
+
+        Assert.Equal(0.15f, world.GetElevation(center), precision: 5);
+        Assert.Equal(SimulationWorld.RingWorldWallElevation, world.GetElevation(new GridPosition(4, 0)));
+        Assert.Equal(Terrain.RingWorldWall, world.GetTerrain(new GridPosition(4, 0)));
+    }
+
+    [Fact]
+    public void SmoothingRetracesExistingRivers()
+    {
+        var world = CreateForkedValley();
+        Hydrology.TraceSpring(world, new GridPosition(7, 2));
+        world.LastCompletedSpring = null;
+
+        Assert.True(Geology.ApplyRadialSmoothing(world, new GridPosition(7, 6), 2, 0.5f) > 0);
+
+        Assert.NotNull(world.LastCompletedSpring);
+        Assert.Equal(0, world.ActiveSpringCount);
     }
 
     [Fact]

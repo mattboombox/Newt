@@ -33,7 +33,7 @@ public sealed class ToothedWhaleTests
     }
 
     [Fact]
-    public void ToothedWhaleHuntsOceanPredatorsAndAdjacentFeederCrabs()
+    public void ToothedWhaleHuntsOceanPredatorsAndAdjacentNautilusesAndCrabs()
     {
         var expectedPrey = new HashSet<CritterSpecies>
         {
@@ -107,6 +107,45 @@ public sealed class ToothedWhaleTests
 
         Assert.Equal(1, world.GetCritterCount(CritterSpecies.ToothedWhale));
         Assert.Equal(0, world.GetCritterCount(CritterSpecies.Squid));
+    }
+
+    [Theory]
+    [InlineData(1, true)]
+    [InlineData(2, false)]
+    [InlineData(7, false)]
+    [InlineData(19, true)]
+    public void ToothedWhaleTargetsNautilusOnlyWhenAdjacentIncludingWorldSeam(
+        int preyX, bool shouldTarget)
+    {
+        var world = new SimulationWorld(20, 1, Terrain.Ocean, seed: 5103);
+        world.AddCritter(CritterSpecies.ToothedWhale, new GridPosition(0, 0));
+        var prey = new GridPosition(preyX, 0);
+        world.AddCritter(CritterSpecies.Nautilus, prey);
+
+        var target = world.FindHunterPrey(
+            0, CritterSpecies.ToothedWhale, SimulationWorld.ToothedWhalePerceptionRadius, null);
+
+        Assert.Equal(shouldTarget ? prey : (GridPosition?)null, target);
+    }
+
+    [Theory]
+    [InlineData(CritterSpecies.Nautilus)]
+    [InlineData(CritterSpecies.Squid)]
+    public void ToothedWhaleCanConsumeAdjacentMarinePrey(CritterSpecies prey)
+    {
+        var world = new SimulationWorld(1, 2, Terrain.Ocean, seed: 42);
+        world.SeasonsEnabled = false;
+        NaturalEvents.SetEnabled(world, false);
+        world.AddCritter(CritterSpecies.ToothedWhale, new GridPosition(0, 0));
+        world.AddCritter(prey, new GridPosition(0, 1));
+
+        for (var tick = 0; tick < 4 * SimulationWorld.TicksPerSecond; tick++)
+        {
+            world.AdvanceOneTick();
+        }
+
+        Assert.Equal(0, world.GetCritterCount(prey));
+        Assert.Equal(1, world.GetCritterCount(CritterSpecies.ToothedWhale));
     }
 
     [Fact]

@@ -245,9 +245,9 @@ public sealed class ApeTests
     [Theory]
     [InlineData(CritterSpecies.Ape)]
     [InlineData(CritterSpecies.ApeSailor)]
-    public void SpontaneousPlagueRequiresMoreThanTwoHundredAssignedResidents(CritterSpecies extraSpecies)
+    public void SpontaneousPlagueRequiresAtLeastTwoHundredAssignedResidents(CritterSpecies extraSpecies)
     {
-        var (world, village) = CreateVillageForPlague(200);
+        var (world, village) = CreateVillageForPlague(199);
         var villageTile = village.Y * world.Width + village.X;
         // A large world population must not substitute for this village's residents.
         var unassignedPosition = AllPositions(world).First(position =>
@@ -262,7 +262,7 @@ public sealed class ApeTests
             critter => Assert.Equal(PlagueKind.None, critter.Plague));
 
         Assert.True(world.TryAssignApeToVillage(extraApe, village));
-        Assert.Equal(201, world.GetApeVillageResidentCount(village));
+        Assert.Equal(200, world.GetApeVillageResidentCount(village));
         var missedRolls = 0;
         while (missedRolls < 1000 && !world.TryStartVillagePlague(villageTile))
         {
@@ -297,10 +297,12 @@ public sealed class ApeTests
         Assert.Equal(target.Id, infected.Id);
     }
 
-    [Fact]
-    public void DisablingNaturalEventsPreventsSpontaneousVillagePlague()
+    [Theory]
+    [InlineData(200)]
+    [InlineData(201)]
+    public void DisablingNaturalEventsPreventsSpontaneousVillagePlague(int population)
     {
-        var (world, village) = CreateVillageForPlague(201);
+        var (world, village) = CreateVillageForPlague(population);
         NaturalEvents.SetEnabled(world, false);
         for (var attempt = 0; attempt < 1000; attempt++)
         {
@@ -310,10 +312,12 @@ public sealed class ApeTests
             critter => Assert.Equal(PlagueKind.None, critter.Plague));
     }
 
-    [Fact]
-    public void VillagePlagueRollsOnlyAtMinuteBoundaries()
+    [Theory]
+    [InlineData(200)]
+    [InlineData(201)]
+    public void VillagePlagueRollsOnlyAtMinuteBoundaries(int population)
     {
-        var (world, _) = CreateVillageForPlague(201);
+        var (world, village) = CreateVillageForPlague(population);
         Assert.NotEqual(0, world.Tick % SimulationWorld.VillagePlagueCheckIntervalTicks);
         for (var attempt = 0; attempt < 1000; attempt++)
         {
@@ -326,6 +330,7 @@ public sealed class ApeTests
         var ticksUntilCheck = SimulationWorld.VillagePlagueCheckIntervalTicks -
             (int)(world.Tick % SimulationWorld.VillagePlagueCheckIntervalTicks);
         AdvancePlagueTicks(world, ticksUntilCheck);
+        Assert.Equal(population, world.GetApeVillageResidentCount(village));
         NaturalEvents.SetEnabled(world, true);
         // Exercise the rare roll at a check boundary without simulating hundreds
         // of minutes of unrelated village growth and movement.

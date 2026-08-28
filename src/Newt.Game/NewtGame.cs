@@ -2,6 +2,7 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using Newt.Simulation;
+using System.Diagnostics;
 using System.Globalization;
 using System.Security.Cryptography;
 
@@ -43,7 +44,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private static readonly WorldTool[] OtherToolOrder =
         [WorldTool.JumpStart, WorldTool.Population, WorldTool.Inspect];
     private static readonly WorldTool[] TerrainToolOrder =
-        [WorldTool.Elevation, WorldTool.River, WorldTool.Volcano, WorldTool.Stone, WorldTool.Lava];
+        [WorldTool.Elevation, WorldTool.Smoothing, WorldTool.River, WorldTool.Volcano, WorldTool.Stone, WorldTool.Lava];
     private static readonly TimeSpan SimulationStep = TimeSpan.FromSeconds(1d / SimulationWorld.TicksPerSecond);
     private readonly GraphicsDeviceManager _graphics;
     private SimulationWorld _world = null!;
@@ -67,7 +68,14 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private double _toolHoldSeconds;
     private double _nextToolRepeatSeconds;
     private int _eventMagnitudeIndex = 3;
+    private int _terrainMagnitudeIndex = 3;
+    private bool _terrainMagnitudeClickConsumed;
+    private int TerrainBrushRadius => 1 + 2 * _terrainMagnitudeIndex;
+    private float ElevationBrushStrength => 0.12f + 0.08f * _terrainMagnitudeIndex;
+    private float SmoothingBrushStrength => 0.10f + 0.08f * _terrainMagnitudeIndex;
     private int _simulationRateIndex = 2;
+    private readonly SimulationSpeedGuard _simulationSpeedGuard = new();
+    private bool _speedAutomaticallyReduced;
     private bool _lifeEnabled = true;
     private bool _paused;
     private bool _setupMenuOpen;
@@ -115,10 +123,12 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
 
     protected override void Update(GameTime gameTime)
     {
+        var updateStarted = Stopwatch.GetTimestamp();
         var keyboard = Keyboard.GetState();
         var mouse = Mouse.GetState();
         if (_setupMenuOpen)
         {
+            _simulationSpeedGuard.Reset();
             HandleSetupMenu(keyboard);
             _previousKeyboard = keyboard;
             _previousMouse = mouse;
@@ -133,7 +143,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         }
 
         HandleWorldShortcuts(keyboard, mouse);
-        HandleActiveTool(mouse, gameTime.ElapsedGameTime.TotalSeconds);
+        HandleActiveTool(mouse, keyboard, gameTime.ElapsedGameTime.TotalSeconds);
         HandleCamera(keyboard, mouse);
 
         if (!_paused)
@@ -151,6 +161,21 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         }
 
         UpdateInspectedCritterFollow();
+
+        if (_paused || !IsActive)
+        {
+            _simulationSpeedGuard.Reset();
+        }
+        else if (_simulationSpeedGuard.ShouldReduce(
+            SimulationRates[_simulationRateIndex], Stopwatch.GetElapsedTime(updateStarted),
+            TargetElapsedTime, gameTime.IsRunningSlowly))
+        {
+            _simulationRateIndex = Array.IndexOf(SimulationRates, SimulationSpeedGuard.FallbackRate);
+            _speedAutomaticallyReduced = true;
+            // Discard catch-up time, not world ticks, so old overload cannot delay recovery.
+            _accumulator = TimeSpan.Zero;
+            ResetElapsedTime();
+        }
 
         _previousKeyboard = keyboard;
         _previousMouse = mouse;
@@ -299,23 +324,44 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         else if (WasPressed(keyboard, Keys.OemComma))
         {
             _simulationRateIndex = Math.Max(0, _simulationRateIndex - 1);
+            ResetSpeedGuard();
         }
         else if (WasPressed(keyboard, Keys.OemPeriod))
         {
             _simulationRateIndex = Math.Min(SimulationRates.Length - 1, _simulationRateIndex + 1);
+            ResetSpeedGuard();
         }
         else if (WasPressed(keyboard, Keys.P))
         {
             _paused = !_paused;
+            _simulationSpeedGuard.Reset();
         }
     }
 
-    private void HandleActiveTool(MouseState mouse, double elapsedSeconds)
+    private void HandleActiveTool(MouseState mouse, KeyboardState keyboard, double elapsedSeconds)
     {
         var primaryPressed = mouse.LeftButton is ButtonState.Pressed &&
             _previousMouse.LeftButton is ButtonState.Released;
         var secondaryPressed = mouse.RightButton is ButtonState.Pressed &&
             _previousMouse.RightButton is ButtonState.Released;
+        var shiftHeld = keyboard.IsKeyDown(Keys.LeftShift) || keyboard.IsKeyDown(Keys.RightShift);
+        if (mouse.RightButton is ButtonState.Released)
+        {
+            _terrainMagnitudeClickConsumed = false;
+        }
+        if (mouse.RightButton is ButtonState.Pressed &&
+            (_terrainMagnitudeClickConsumed || CurrentTool is WorldTool.Smoothing ||
+                CurrentTool is WorldTool.Elevation && shiftHeld))
+        {
+            // Changing magnitude never edits terrain or repeats while held.
+            if (secondaryPressed)
+            {
+                _terrainMagnitudeIndex = (_terrainMagnitudeIndex + 1) % 11;
+            }
+            _terrainMagnitudeClickConsumed = true;
+            ResetToolRepeat();
+            return;
+        }
         var primaryActivated = primaryPressed;
         var secondaryActivated = secondaryPressed;
         if (IsContinuousTool(CurrentTool))
@@ -400,10 +446,15 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 _world.TryInfectApeAt(position.Value, PlagueKind.Zombie);
                 break;
             case WorldTool.Elevation when primaryActivated:
-                Geology.ApplyRadialUplift(_world, position.Value, radius: 7, strength: 0.36f);
+                Geology.ApplyRadialUplift(_world, position.Value, TerrainBrushRadius, ElevationBrushStrength);
                 break;
             case WorldTool.Elevation:
-                Geology.ApplyRadialLowering(_world, position.Value, radius: 7, strength: 0.36f);
+                Geology.ApplyRadialLowering(_world, position.Value, TerrainBrushRadius, ElevationBrushStrength);
+                break;
+            case WorldTool.Smoothing when primaryActivated:
+                Geology.ApplyRadialSmoothing(_world, position.Value, TerrainBrushRadius, SmoothingBrushStrength);
+                break;
+            case WorldTool.Smoothing:
                 break;
             case WorldTool.SeaLevel when !_world.HasOceans:
                 break;
@@ -539,7 +590,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     }
 
     private static bool IsContinuousTool(WorldTool tool) => tool is
-        WorldTool.Elevation or WorldTool.SeaLevel or WorldTool.Temperature or
+        WorldTool.Elevation or WorldTool.Smoothing or WorldTool.SeaLevel or WorldTool.Temperature or
         WorldTool.Moisture or WorldTool.EvolutionChance;
 
     private static CritterSpecies GetCritterSpecies(WorldTool tool) => tool switch
@@ -936,7 +987,13 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
 
     private string GetSimulationRateText() => _paused
         ? $"Paused ({SimulationRates[_simulationRateIndex]:0.##}x)"
-        : $"{SimulationRates[_simulationRateIndex]:0.##}x";
+        : $"{SimulationRates[_simulationRateIndex]:0.##}x{(_speedAutomaticallyReduced ? " (auto)" : "")}";
+
+    private void ResetSpeedGuard()
+    {
+        _simulationSpeedGuard.Reset();
+        _speedAutomaticallyReduced = false;
+    }
 
     private void DrawHudLines(int x, int y, params string[] lines)
     {
@@ -1138,7 +1195,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         CritterSpecies.Gazelle => "arid, forest, and grassland foliage",
         CritterSpecies.Wolf => "broad terrestrial prey; therapsids last; never toads",
         CritterSpecies.Crab => "beach and shallow detritus",
-        CritterSpecies.ToothedWhale => "marine predators; large land animals only in shallows; adjacent crabs",
+        CritterSpecies.ToothedWhale => "marine predators; land prey in shallows; adjacent nautiluses/crabs",
         CritterSpecies.BaleenWhale => "plankton only",
         _ => "not implemented",
     };
@@ -1239,6 +1296,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
 
     private void GenerateWorld()
     {
+        ResetSpeedGuard();
         _world = WorldGenerator.Generate(new WorldGenerationOptions(_preset, _seed, MapType: _mapType));
         _cameraX = 0;
         _cameraY = 0;
@@ -1711,15 +1769,11 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             var glow = ((_world.Tick + position.X * 3L + position.Y * 5L) / 5) % 2 == 0;
             return glow ? new Color(245, 72, 20) : new Color(190, 35, 15);
         }
-        if (LifeSystem.IsStoneBiome(_world, position))
-        {
-            return GetStoneColor(terrain);
-        }
-        return GetTerrainColor(
-            terrain,
-            biome,
-            temperatureBand,
-            _world.GetElevation(position));
+        var elevation = _world.GetElevation(position);
+        var color = LifeSystem.IsStoneBiome(_world, position)
+            ? GetStoneColor(terrain)
+            : GetTerrainColor(terrain, biome, temperatureBand, elevation);
+        return ScaleColor(color, TerrainShading.GetBrightness(terrain, elevation, _world.SeaLevel));
     }
 
     private static Color GetTerrainColor(
@@ -1731,23 +1785,10 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows => GetOceanColor(terrain, temperatureBand),
         Terrain.Beach => GetBeachColor(temperatureBand),
         Terrain.Plains => GetBiomeLandColor(biome),
-        Terrain.Lowlands => ScaleColor(GetBiomeLandColor(biome), 0.82f),
-        Terrain.Canyon => ScaleColor(GetBiomeLandColor(biome), 0.65f),
-        Terrain.Trench => ScaleColor(GetBiomeLandColor(biome), 0.50f),
-        Terrain.Hills => biome switch
-        {
-            Biome.Arctic => new Color(205, 218, 218),
-            Biome.Tundra => new Color(112, 121, 105),
-            Biome.Taiga => new Color(45, 76, 60),
-            Biome.Bog => new Color(57, 70, 62),
-            Biome.Grassland => new Color(91, 117, 65),
-            Biome.Forest => new Color(45, 91, 56),
-            Biome.Swamp => new Color(42, 78, 62),
-            Biome.Desert => new Color(148, 122, 77),
-            Biome.Arid => new Color(129, 112, 67),
-            Biome.Jungle => new Color(35, 82, 48),
-            _ => new Color(115, 115, 105),
-        },
+        Terrain.Lowlands => ScaleColor(GetBiomeLandColor(biome), 0.92f),
+        Terrain.Canyon => ScaleColor(GetBiomeLandColor(biome), 0.84f),
+        Terrain.Trench => ScaleColor(GetBiomeLandColor(biome), 0.76f),
+        Terrain.Hills => ScaleColor(GetBiomeLandColor(biome), 0.92f),
         Terrain.Mountain => GetMountainColor(elevation, biome is Biome.Arctic),
         Terrain.Ice => new Color(165, 220, 235),
         Terrain.RingWorldWall => new Color(112, 126, 136),
@@ -1758,10 +1799,9 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     {
         Terrain.Beach => new Color(132, 129, 122),
         Terrain.Plains => new Color(122, 119, 113),
-        Terrain.Lowlands => new Color(108, 106, 101),
-        Terrain.Hills => new Color(101, 98, 93),
-        Terrain.Canyon => new Color(82, 80, 77),
-        Terrain.Trench => new Color(62, 61, 59),
+        Terrain.Lowlands or Terrain.Hills => ScaleColor(new Color(122, 119, 113), 0.92f),
+        Terrain.Canyon => ScaleColor(new Color(122, 119, 113), 0.84f),
+        Terrain.Trench => ScaleColor(new Color(122, 119, 113), 0.76f),
         _ => new Color(104, 101, 96),
     };
 
@@ -1888,7 +1928,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
 
     private string GetToolHint(WorldTool tool) => tool switch
     {
-        WorldTool.Elevation => "left raise, right lower",
+        WorldTool.Elevation => $"L raise, R lower; Shift+R magnitude {_terrainMagnitudeIndex / 10f:0.0}",
+        WorldTool.Smoothing => $"left smooth, right magnitude {_terrainMagnitudeIndex / 10f:0.0}",
         WorldTool.SeaLevel => _world.HasOceans ? "left raise, right lower" : "no oceans on this world",
         WorldTool.OceanSeed => "left move primary; right add seed / convert large lake",
         WorldTool.Temperature => "left warmer, right cooler",
@@ -1978,6 +2019,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private enum WorldTool
     {
         Elevation,
+        Smoothing,
         SeaLevel,
         OceanSeed,
         Temperature,

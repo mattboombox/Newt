@@ -30,7 +30,7 @@ public static class NaturalEvents
     internal static bool SpawnRandom(SimulationWorld world)
     {
         var position = new GridPosition(world.NextInt(world.Width), world.NextInt(world.Height));
-        var eventType = world.NextInt(3);
+        var eventType = world.NextInt(4);
         if (eventType == 0)
         {
             var magnitude = 0.08f + world.NextUnitFloat() * 0.57f;
@@ -41,6 +41,12 @@ public static class NaturalEvents
         if (eventType == 1)
         {
             return Volcanism.SpawnVolcano(world, position);
+        }
+
+        if (eventType == 3)
+        {
+            var magnitude = 0.08f + world.NextUnitFloat() * 0.57f;
+            return Tsunamis.Create(world, position, magnitude);
         }
 
         return Hydrology.ShiftNaturalWatershed(world) || Volcanism.SpawnVolcano(world, position);

@@ -20,6 +20,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Newt.Simulation\Newt.Simulation.csproj" />
+    <!-- Test host timing policy without loading MonoGame or a graphics device. -->
+    <Compile Include="..\..\src\Newt.Game\SimulationSpeedGuard.cs" Link="SimulationSpeedGuard.cs" />
+    <Compile Include="..\..\src\Newt.Game\TerrainShading.cs" Link="TerrainShading.cs" />
   </ItemGroup>
 
 </Project>
