@@ -217,7 +217,8 @@ The game starts in Critter Tools with Plankton selected.
   capped villages alternate five-food Residential Districts with additional
   biome-appropriate food districts, falling back to housing when no connected
   Grassland, Swamp, or Forest site remains; Farms, Rice Paddies, and Orchards each
-  produce one food every fourteen seconds. A Residential District increases capacity
+  produce one food every fourteen seconds. Construction strongly favors sites within
+  four tiles of the Village. A Residential District increases capacity
   by five. Each village may add one Harbor later if its connected building network
   reaches an open Beach, River, or Freshwater Lake tile; freshwater Harbors must
   border dry land, including diagonally. Harbor construction can also connect
@@ -237,8 +238,13 @@ The game starts in Critter Tools with Plankton selected.
   Residential Districts cost five food and four wood, Harbors cost six wood, and each
   Sailor after the Harbor's included first boat costs two wood.
   Seasonal biome changes leave Farms, Rice Paddies, and Orchards standing but pause
-  their production until the matching biome returns. Coastline refreshes preserve
+  their production until the matching biome returns; districts inactive for over two
+  simulated years are removed. Housing more than thirty capacity above the resident
+  population is trimmed one outer district per simulated year. Coastline refreshes preserve
   Harbors through intermediate Beach reclassification.
+  Villages with at least two hundred residents can rarely spend one hundred stored food to
+  send an unaffiliated Ape settler with five times normal maximum energy to a valid distant village site. Settlers
+  cross unobstructed land and water and found a new village when they arrive.
   Terrestrial critters can traverse exposed Lowlands, Canyons, and Trenches.
   Wolves form a third Therapsid branch. They move every 2.5 seconds with the
   broad terrestrial diet, including Deer, Elk, and Gazelles. They engage
@@ -314,8 +320,9 @@ The source data are public domain under CC0-1.0. Land and ocean heights use sepa
 display scaling so both mountain ranges and ocean basins remain readable at tile scale.
 
 - Volcano tool: left click spawns a new active volcano on an unoccupied tile.
-- Meteor tool: left click strikes the pointed tile; right click cycles magnitude
-  from `0.0` through `1.0` in `0.1` steps. The active magnitude appears in the HUD.
+- Meteor tool: left click strikes the pointed tile. Press `-` or `=` to adjust its
+  magnitude from `0.0` through `1.0` in `0.1` steps. The active magnitude appears
+  in the HUD.
 - Evolve event: left click a critter to move it one step down the evolution tree;
   right click moves it one step back toward its ancestor.
 - Watershed Shift event: left click dries one naturally generated river system
@@ -332,12 +339,13 @@ OceanSeed, Volcano, Meteor, Watershed Shift, Evolve, and River remain single-cli
 - Arrow keys or `WASD`: move the camera.
 - Hold Shift while moving: pan four times faster.
 - Mouse wheel: zoom toward or away from the tile beneath the pointer.
+- `H`: toggle the bottom HUD. When hidden, the map fills the full window.
 - Maps smaller than the available viewport are centered horizontally and
   vertically; larger maps retain normal panning and horizontal wrapping.
 - Hover a tile: inspect terrain, biome, water, elevation, temperature, moisture,
   and occupancy in the bottom HUD.
 
-The bottom HUD always reserves a fixed-height area below the map. Its World
+When visible, the bottom HUD reserves a fixed-height area below the map. Its World
 section shows the preset, dimensions, seed, tick, sea level, ocean seed, climate
 offsets. Active Tool shows controls and shortcuts. Tile shows
 the complete hovered-tile inspection. Map zoom changes only the map viewport and

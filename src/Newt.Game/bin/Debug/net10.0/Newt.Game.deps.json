@@ -8,14 +8,14 @@
     ".NETCoreApp,Version=v10.0": {
       "Newt.Game/1.0.0": {
         "dependencies": {
-          "MonoGame.Framework.DesktopGL": "3.8.5",
+          "MonoGame.Framework.DesktopGL": "3.8.5.1",
           "Newt.Simulation": "1.0.0"
         },
         "runtime": {
           "Newt.Game.dll": {}
         }
       },
-      "MonoGame.Framework.DesktopGL/3.8.5": {
+      "MonoGame.Framework.DesktopGL/3.8.5.1": {
         "dependencies": {
           "MonoGame.Library.OpenAL": "1.24.3.4",
           "MonoGame.Library.SDL": "2.32.10.2",
@@ -23,8 +23,8 @@
         },
         "runtime": {
           "lib/net8.0/MonoGame.Framework.dll": {
-            "assemblyVersion": "3.8.5.0",
-            "fileVersion": "3.8.5.0"
+            "assemblyVersion": "3.8.5.1",
+            "fileVersion": "3.8.5.1"
           }
         }
       },
@@ -145,12 +145,12 @@
       "serviceable": false,
       "sha512": ""
     },
-    "MonoGame.Framework.DesktopGL/3.8.5": {
+    "MonoGame.Framework.DesktopGL/3.8.5.1": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-oG5Thkic4i/6kX3OWtq2p6DEATflP71yM0p/1ymIoFaIp1xNFOqAd4jW2D9GIQLIMT6mn5RmJknYPqJnOQbi5w==",
-      "path": "monogame.framework.desktopgl/3.8.5",
-      "hashPath": "monogame.framework.desktopgl.3.8.5.nupkg.sha512"
+      "sha512": "sha512-za6tOSYT2xpks932wU/WcpPu2xkUyKwn251gkRuiJ/3XPZBdwds7RPXRhtcrZGnZ2jtjtwh4upRLd+EGrrWtFw==",
+      "path": "monogame.framework.desktopgl/3.8.5.1",
+      "hashPath": "monogame.framework.desktopgl.3.8.5.1.nupkg.sha512"
     },
     "MonoGame.Library.OpenAL/1.24.3.4": {
       "type": "package",

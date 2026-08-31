@@ -398,7 +398,9 @@ consume one stored food from its home village remotely. This communication has n
 distance requirement, so residents do not starve merely because hunting carried them
 far from the settlement; unassigned Apes cannot draw from village stores.
 At its population cap, a village alternates connected Residential Districts with
-additional biome-appropriate food districts. A Residential District costs five food
+additional biome-appropriate food districts. Construction strongly favors sites within
+four tiles of the Village, keeping settlements compact while allowing occasional outward
+growth. A Residential District costs five food
 and adds five capacity; Farms, Rice Paddies, and Orchards remain free to establish but
 require open connected Grassland, Swamp, and Forest tiles respectively. If no planned
 food district has a valid site, the village may fall back to housing. Expansion choice,
@@ -414,7 +416,17 @@ food district is free; later food districts cost two wood. Residential Districts
 five food and four wood, while a Harbor costs six wood. The Harbor includes its first
 boat and therefore its first Sailor; later Sailors cost two wood each.
 Food districts persist when seasons temporarily change their biome, but stop producing
-until Grassland returns for Farms, Swamp for Rice Paddies, or Forest for Orchards.
+until Grassland returns for Farms, Swamp for Rice Paddies, or Forest for Orchards. A food
+district that stays inactive for more than two simulated years is removed. Once housing
+capacity exceeds the resident population by more than thirty, one outer Residential
+District is removed each simulated year.
+
+Villages with at least two hundred residents may rarely spend one hundred stored food to
+send an Ape settler with five times normal maximum energy to a valid village site far from its origin. Settlers
+are not residents of their source village and cross unobstructed land and water without
+using its food stores. On arrival, the settler founds and joins a new village.
+The Colonist tool in Other manually sends one from a clicked Village, charging up to one
+hundred food and reducing a poorer village's food to zero.
 Climate coastline rebuilding validates Harbors only after Beach classification finishes,
 so the temporary landform stage cannot demolish them.
 

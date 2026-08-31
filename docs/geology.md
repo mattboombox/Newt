@@ -32,12 +32,11 @@ The brush wraps horizontally, leaves artificial ring walls untouched, and
 rebuilds terrain and freshwater after edits.
 
 Elevation and Smoothing share a magnitude from 0.0 to 1.0 in 0.1 steps, displayed
-in the tool hint. Right click cycles Smoothing magnitude; Shift+right click cycles
-Elevation magnitude, preserving ordinary right click for lowering. A magnitude
-click never edits terrain or repeats while held. Higher magnitude increases
-radius from 1 to 21 tiles and brush strength. Magnitude 0.0 is the smallest brush,
-not an off switch. The default 0.3 retains Elevation's original radius of 7 and
-strength of 0.36; Smoothing blends by 0.34 at its center at that setting.
+in the tool hint. Press `-` to decrease or `=` to increase it. Higher magnitude
+increases radius from 1 to 21 tiles and brush strength. Magnitude 0.0 is the
+smallest brush, not an off switch. The default 0.3 retains Elevation's original
+radius of 7 and strength of 0.36; Smoothing blends by 0.34 at its center at that
+setting.
 
 `Q` and `E` cycle tools. World Tools contains SeaLevel, OceanSeed, Temperature,
 Moisture, Seasons, and Life. Terrain Tools contains Elevation, Smoothing, River, Volcano,
@@ -54,8 +53,8 @@ NaturalEvents also enables random ordinary-plague outbreaks: each village with
 at least 200 assigned residents (including sailors) has a 1% chance per simulated
 minute, provided none of its residents is already infected.
 
-The Tsunami tool starts a wave only when left-clicked over ocean. Right click
-cycles magnitude. It reuses the impact-wave animation with a blue front and
+The Tsunami tool starts a wave only when left-clicked over ocean. Press `-` or `=`
+to adjust its magnitude. It reuses the impact-wave animation with a blue front and
 lowers the elevation of land reached by the wave.
 
 `<` and `>` step the simulation rate through 0.25x, 0.5x, 1x, 2x, 4x,

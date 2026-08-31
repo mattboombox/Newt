@@ -42,7 +42,29 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             WorldTool.BaleenWhale];
     private static readonly WorldTool[] BuildingToolOrder = [WorldTool.WolfDen, WorldTool.Teleporter];
     private static readonly WorldTool[] OtherToolOrder =
-        [WorldTool.JumpStart, WorldTool.Population, WorldTool.Inspect];
+        [WorldTool.JumpStart, WorldTool.Colonist, WorldTool.Population, WorldTool.Inspect, WorldTool.Controls];
+    private static readonly string[] ControlLines =
+    [
+        "?  open or close controls",
+        "Esc  quit",
+        "H  hide or show HUD",
+        "M  open world menu",
+        "N  generate next seed",
+        "Q / E  previous / next tool",
+        "R  next tool category",
+        ", / .  slower / faster simulation",
+        "- / =  decrease / increase magnitude",
+        "P  pause or resume",
+        "WASD / arrows  pan camera",
+        "Shift + pan  move faster",
+        "Mouse wheel  zoom toward pointer",
+        "F  create spring on hovered land",
+        "Left click  use selected tool",
+        "Right click  alternate tool action",
+        "World menu: arrows / WASD navigate",
+        "World menu: digits / Backspace edit seed",
+        "World menu: Enter / Space generate",
+    ];
     private static readonly WorldTool[] TerrainToolOrder =
         [WorldTool.Elevation, WorldTool.Smoothing, WorldTool.River, WorldTool.Volcano, WorldTool.Stone, WorldTool.Lava];
     private static readonly TimeSpan SimulationStep = TimeSpan.FromSeconds(1d / SimulationWorld.TicksPerSecond);
@@ -69,7 +91,6 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private double _nextToolRepeatSeconds;
     private int _eventMagnitudeIndex = 3;
     private int _terrainMagnitudeIndex = 3;
-    private bool _terrainMagnitudeClickConsumed;
     private int TerrainBrushRadius => 1 + 2 * _terrainMagnitudeIndex;
     private float ElevationBrushStrength => 0.12f + 0.08f * _terrainMagnitudeIndex;
     private float SmoothingBrushStrength => 0.10f + 0.08f * _terrainMagnitudeIndex;
@@ -78,6 +99,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private bool _speedAutomaticallyReduced;
     private bool _lifeEnabled = true;
     private bool _paused;
+    private bool _hudHidden;
     private bool _setupMenuOpen;
     private bool _seedTypingActive;
     private int _setupRow;
@@ -85,6 +107,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private int _menuMapTypeIndex;
     private CritterId _inspectedCritterId;
     private bool _populationWindowOpen;
+    private bool _controlsWindowOpen;
     private readonly Dictionary<CritterSpecies, List<int>> _populationHistory =
         Enum.GetValues<CritterSpecies>().ToDictionary(species => species, _ => new List<int>());
     private readonly List<int> _sickApeHistory = [];
@@ -143,7 +166,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         }
 
         HandleWorldShortcuts(keyboard, mouse);
-        HandleActiveTool(mouse, keyboard, gameTime.ElapsedGameTime.TotalSeconds);
+        HandleActiveTool(mouse, gameTime.ElapsedGameTime.TotalSeconds);
         HandleCamera(keyboard, mouse);
 
         if (!_paused)
@@ -253,10 +276,17 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 GetCritterColor(critter));
         }
 
-        DrawHud();
+        if (!_hudHidden)
+        {
+            DrawHud();
+        }
         if (_populationWindowOpen)
         {
             DrawPopulationWindow();
+        }
+        if (_controlsWindowOpen)
+        {
+            DrawControlsWindow();
         }
         if (_setupMenuOpen)
         {
@@ -275,7 +305,23 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
 
     private void HandleWorldShortcuts(KeyboardState keyboard, MouseState mouse)
     {
-        if (WasPressed(keyboard, Keys.M))
+        if (WasPressed(keyboard, Keys.OemQuestion))
+        {
+            _controlsWindowOpen = !_controlsWindowOpen;
+        }
+        else if (WasPressed(keyboard, Keys.OemMinus))
+        {
+            AdjustActiveToolMagnitude(-1);
+        }
+        else if (WasPressed(keyboard, Keys.OemPlus))
+        {
+            AdjustActiveToolMagnitude(1);
+        }
+        else if (WasPressed(keyboard, Keys.H))
+        {
+            _hudHidden = !_hudHidden;
+        }
+        else if (WasPressed(keyboard, Keys.M))
         {
             _menuMapTypeIndex = Array.IndexOf(MenuMapTypes, _mapType);
             if (_menuMapTypeIndex < 0)
@@ -338,30 +384,25 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         }
     }
 
-    private void HandleActiveTool(MouseState mouse, KeyboardState keyboard, double elapsedSeconds)
+    private void AdjustActiveToolMagnitude(int change)
+    {
+        switch (CurrentTool)
+        {
+            case WorldTool.Elevation or WorldTool.Smoothing:
+                _terrainMagnitudeIndex = Math.Clamp(_terrainMagnitudeIndex + change, 0, 10);
+                break;
+            case WorldTool.Meteor or WorldTool.Tsunami:
+                _eventMagnitudeIndex = Math.Clamp(_eventMagnitudeIndex + change, 0, 10);
+                break;
+        }
+    }
+
+    private void HandleActiveTool(MouseState mouse, double elapsedSeconds)
     {
         var primaryPressed = mouse.LeftButton is ButtonState.Pressed &&
             _previousMouse.LeftButton is ButtonState.Released;
         var secondaryPressed = mouse.RightButton is ButtonState.Pressed &&
             _previousMouse.RightButton is ButtonState.Released;
-        var shiftHeld = keyboard.IsKeyDown(Keys.LeftShift) || keyboard.IsKeyDown(Keys.RightShift);
-        if (mouse.RightButton is ButtonState.Released)
-        {
-            _terrainMagnitudeClickConsumed = false;
-        }
-        if (mouse.RightButton is ButtonState.Pressed &&
-            (_terrainMagnitudeClickConsumed || CurrentTool is WorldTool.Smoothing ||
-                CurrentTool is WorldTool.Elevation && shiftHeld))
-        {
-            // Changing magnitude never edits terrain or repeats while held.
-            if (secondaryPressed)
-            {
-                _terrainMagnitudeIndex = (_terrainMagnitudeIndex + 1) % 11;
-            }
-            _terrainMagnitudeClickConsumed = true;
-            ResetToolRepeat();
-            return;
-        }
         var primaryActivated = primaryPressed;
         var secondaryActivated = secondaryPressed;
         if (IsContinuousTool(CurrentTool))
@@ -421,6 +462,19 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             else if (secondaryActivated)
             {
                 _populationWindowOpen = false;
+            }
+            return;
+        }
+
+        if (CurrentTool is WorldTool.Controls)
+        {
+            if (primaryActivated)
+            {
+                _controlsWindowOpen = true;
+            }
+            else if (secondaryActivated)
+            {
+                _controlsWindowOpen = false;
             }
             return;
         }
@@ -511,14 +565,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             case WorldTool.Meteor when primaryActivated:
                 Impacts.CreateMeteorImpact(_world, position.Value, _eventMagnitudeIndex / 10f);
                 break;
-            case WorldTool.Meteor:
-                _eventMagnitudeIndex = (_eventMagnitudeIndex + 1) % 11;
-                break;
             case WorldTool.Tsunami when primaryActivated:
                 Tsunamis.Create(_world, position.Value, _eventMagnitudeIndex / 10f);
-                break;
-            case WorldTool.Tsunami:
-                _eventMagnitudeIndex = (_eventMagnitudeIndex + 1) % 11;
                 break;
             case WorldTool.WatershedShift when primaryActivated:
                 Hydrology.ShiftNaturalWatershed(_world);
@@ -577,6 +625,9 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 break;
             case WorldTool.Lava:
                 Volcanism.ClearGeologicalCover(_world, position.Value);
+                break;
+            case WorldTool.Colonist when primaryActivated:
+                _world.TrySendApeColonist(position.Value);
                 break;
             case WorldTool.Inspect when primaryActivated:
                 if (_world.TryGetCritterAt(position.Value, out var inspected))
@@ -719,7 +770,9 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             Math.Max(0, _world.Height - visibleRows));
     }
 
-    private int MapViewportHeight => Math.Max(1, GraphicsDevice.Viewport.Height - HudHeight);
+    private int MapViewportHeight => _hudHidden
+        ? GraphicsDevice.Viewport.Height
+        : Math.Max(1, GraphicsDevice.Viewport.Height - HudHeight);
 
     private void DrawHud()
     {
@@ -763,8 +816,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             "Q / E  cycle tools",
             "R  cycle categories",
             "< / >  speed   P  pause",
-            "Wheel  zoom",
-            "WASD / arrows  pan   M  world menu");
+            "M  world menu");
 
         var position = ScreenToWorld(mouse.X, mouse.Y);
         DrawHudLines(tileX + HudPadding, hudY + 8,
@@ -790,9 +842,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 History: _populationHistory[species]))
             .Where(entry => entry.Count > 0)
             .ToList();
-        if (_world.GetCritterCount(CritterSpecies.Ape) > 0 ||
-            _world.GetCritterCount(CritterSpecies.ApeSailor) > 0 ||
-            _sickApeHistory.Any(count => count > 0))
+        if (_world.SickApeCount > 0)
         {
             populations.Add(("Sick Apes", _world.SickApeCount,
                 new Color(205, 195, 55), _sickApeHistory));
@@ -810,8 +860,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             GraphicsDevice.Viewport.Width - 24,
             padding * 2 + columns * preferredColumnWidth);
         var windowHeight = headerHeight + rows * rowHeight + padding;
-        var windowX = Math.Max(0, (GraphicsDevice.Viewport.Width - windowWidth) / 2);
-        var windowY = Math.Max(0, (MapViewportHeight - windowHeight) / 2);
+        var windowX = 12;
+        var windowY = 12;
         var bounds = new Rectangle(windowX, windowY, windowWidth, windowHeight);
         _spriteBatch.Draw(_pixel, bounds, new Color(76, 91, 102));
         _spriteBatch.Draw(
@@ -826,14 +876,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             new Color(126, 190, 213));
         _spriteBatch.DrawString(
             _hudFont,
-            $"Total {_world.CritterCount:N0}   5s samples / 7.5m history",
+            $"Total {_world.CritterCount:N0}",
             new Vector2(bounds.X + padding, bounds.Y + 30),
-            new Color(175, 184, 190));
-
-        _spriteBatch.DrawString(
-            _hudFont,
-            "Sick apes are included in totals",
-            new Vector2(bounds.X + padding, bounds.Y + 47),
             new Color(175, 184, 190));
 
         if (populations.Count == 0)
@@ -877,6 +921,52 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 new Vector2(graphBounds.X - countWidth - 8, y),
                 new Color(245, 210, 120));
             DrawPopulationSparkline(entry.History, entry.Color, entry.Count, graphBounds);
+        }
+    }
+
+    private void DrawControlsWindow()
+    {
+        if (_spriteBatch is null || _pixel is null || _hudFont is null)
+        {
+            return;
+        }
+
+        const int padding = 16;
+        const int headerHeight = 50;
+        const int rowHeight = 18;
+        const int columns = 2;
+        var rows = (ControlLines.Length + columns - 1) / columns;
+        var windowWidth = Math.Min(GraphicsDevice.Viewport.Width - 24, 720);
+        var windowHeight = headerHeight + rows * rowHeight + padding;
+        var windowX = Math.Max(0, (GraphicsDevice.Viewport.Width - windowWidth) / 2);
+        var windowY = Math.Max(0, (MapViewportHeight - windowHeight) / 2);
+        var bounds = new Rectangle(windowX, windowY, windowWidth, windowHeight);
+        _spriteBatch.Draw(_pixel, bounds, new Color(76, 91, 102));
+        _spriteBatch.Draw(
+            _pixel,
+            new Rectangle(bounds.X + 2, bounds.Y + 2, bounds.Width - 4, bounds.Height - 4),
+            new Color(18, 23, 27, 244));
+        _spriteBatch.DrawString(
+            _hudFont,
+            "CONTROLS",
+            new Vector2(bounds.X + padding, bounds.Y + 11),
+            new Color(126, 190, 213));
+        _spriteBatch.DrawString(
+            _hudFont,
+            "Press ? or right-click the Controls tool to close",
+            new Vector2(bounds.X + padding, bounds.Y + 29),
+            new Color(175, 184, 190));
+
+        var columnWidth = (bounds.Width - padding * 2) / columns;
+        for (var index = 0; index < ControlLines.Length; index++)
+        {
+            var column = index / rows;
+            var row = index % rows;
+            _spriteBatch.DrawString(
+                _hudFont,
+                ControlLines[index],
+                new Vector2(bounds.X + padding + column * columnWidth, bounds.Y + headerHeight + row * rowHeight),
+                new Color(220, 225, 228));
         }
     }
 
@@ -1928,63 +2018,65 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
 
     private string GetToolHint(WorldTool tool) => tool switch
     {
-        WorldTool.Elevation => $"L raise, R lower; Shift+R magnitude {_terrainMagnitudeIndex / 10f:0.0}",
-        WorldTool.Smoothing => $"left smooth, right magnitude {_terrainMagnitudeIndex / 10f:0.0}",
-        WorldTool.SeaLevel => _world.HasOceans ? "left raise, right lower" : "no oceans on this world",
-        WorldTool.OceanSeed => "left move primary; right add seed / convert large lake",
-        WorldTool.Temperature => "left warmer, right cooler",
-        WorldTool.Moisture => "left wetter, right drier",
+        WorldTool.Elevation => $"L raise; R lower; -/= {_terrainMagnitudeIndex / 10f:0.0}",
+        WorldTool.Smoothing => $"L smooth; -/= {_terrainMagnitudeIndex / 10f:0.0}",
+        WorldTool.SeaLevel => _world.HasOceans ? "L raise; R lower" : "No oceans",
+        WorldTool.OceanSeed => "L move seed; R add seed",
+        WorldTool.Temperature => "L warmer; R cooler",
+        WorldTool.Moisture => "L wetter; R drier",
         WorldTool.EvolutionChance =>
-            $"left +0.5%, right -0.5%   {_world.EvolutionChancePercent:0.0}%",
+            $"L +0.5%; R -0.5%   {_world.EvolutionChancePercent:0.0}%",
         WorldTool.Seasons => _world.Body is WorldBody.RingWorld
-            ? "fixed engineered climate"
-            : "left enable, right disable",
+            ? "Fixed climate"
+            : "L on; R off",
         WorldTool.Life => _world.LifeEnabled
-            ? "left enabled, right make barren"
-            : "left restore life, right disabled",
-        WorldTool.Volcano => "left spawn active vent",
-        WorldTool.Meteor => $"left impact, right magnitude {_eventMagnitudeIndex / 10f:0.0}",
-        WorldTool.Tsunami => $"left in ocean, right magnitude {_eventMagnitudeIndex / 10f:0.0}",
-        WorldTool.WatershedShift => "left spawn or shift a natural river",
-        WorldTool.Evolve => "left evolve critter, right de-evolve",
-        WorldTool.Plague => "left infect ape; yellow = plague, IDs divisible by 5 immune",
-        WorldTool.ZombiePlague => "left infect ape; purple = infected, green = undead",
-        WorldTool.NaturalEvents => _world.NaturalEventsEnabled
-            ? "left enabled, right disable"
-            : "left enable, right disabled",
-        WorldTool.River => "left on mountain or hill, right remove",
-        WorldTool.Plankton => "left spawn in deep ocean",
-        WorldTool.Jellyfish => "left spawn in aquatic habitat",
-        WorldTool.Fish => "left spawn in saltwater, rivers, or lakes",
-        WorldTool.Worm => "left spawn in ocean or shallows",
-        WorldTool.Trilobite => "left spawn in ocean or shallows",
-        WorldTool.SeaScorpion => "left spawn in saltwater or on beach",
-        WorldTool.Nautilus => "left spawn in aquatic habitat",
-        WorldTool.Squid => "left spawn in aquatic habitat",
-        WorldTool.SquidEgg => "left spawn a drifting squid egg",
-        WorldTool.Newt => "left spawn in amphibious habitat",
-        WorldTool.MegaToad => "left spawn on land or shallow freshwater",
-        WorldTool.Therapsid => "left spawn a terrestrial predator",
-        WorldTool.Monkey => "left spawn on land or in jungle",
-        WorldTool.Ape => "left spawn an omnivorous village founder",
-        WorldTool.Deer => "left spawn a grassland and forest grazer",
-        WorldTool.Elk => "left spawn a grassland, tundra, and taiga grazer",
-        WorldTool.Gazelle => "left spawn a grassland and arid grazer",
-        WorldTool.Wolf => "left spawn a fast terrestrial predator",
-        WorldTool.Crab => "left spawn outside deep ocean, ice, or Arctic land",
-        WorldTool.ToothedWhale => "left spawn an ocean apex hunter",
-        WorldTool.BaleenWhale => "left spawn a plankton-filtering whale",
-        WorldTool.WolfDen => "left place den with 1 charge, right remove",
-        WorldTool.Teleporter => "left place portal, right remove",
-        WorldTool.Stone => "left place cover, right clear",
-        WorldTool.Lava => "left deposit +0.03, right clear",
-        WorldTool.JumpStart => "left enable life and fill empty deep ocean with plankton",
+            ? "L on; R barren"
+            : "L restore; R off",
+        WorldTool.Volcano => "L spawn vent",
+        WorldTool.Meteor => $"L strike; -/= {_eventMagnitudeIndex / 10f:0.0}",
+        WorldTool.Tsunami => $"L ocean; -/= {_eventMagnitudeIndex / 10f:0.0}",
+        WorldTool.WatershedShift => "L reroute river",
+        WorldTool.Evolve => "L evolve; R devolve",
+        WorldTool.Plague => "L infect ape",
+        WorldTool.ZombiePlague => "L infect ape",
+        WorldTool.NaturalEvents => "L on; R off",
+        WorldTool.River => "L add; R remove",
+        WorldTool.Plankton => "L spawn: deep ocean",
+        WorldTool.Jellyfish => "L spawn: water",
+        WorldTool.Fish => "L spawn: water",
+        WorldTool.Worm => "L spawn: ocean / shallows",
+        WorldTool.Trilobite => "L spawn: ocean / shallows",
+        WorldTool.SeaScorpion => "L spawn: water / beach",
+        WorldTool.Nautilus => "L spawn: water",
+        WorldTool.Squid => "L spawn: water",
+        WorldTool.SquidEgg => "L spawn egg",
+        WorldTool.Newt => "L spawn: amphibious",
+        WorldTool.MegaToad => "L spawn: land / shallows",
+        WorldTool.Therapsid => "L spawn: land",
+        WorldTool.Monkey => "L spawn: land / jungle",
+        WorldTool.Ape => "L spawn: land",
+        WorldTool.Deer => "L spawn: grass / forest",
+        WorldTool.Elk => "L spawn: grass / tundra / taiga",
+        WorldTool.Gazelle => "L spawn: grass / arid",
+        WorldTool.Wolf => "L spawn: land",
+        WorldTool.Crab => "L spawn: coast / land",
+        WorldTool.ToothedWhale => "L spawn: ocean",
+        WorldTool.BaleenWhale => "L spawn: ocean",
+        WorldTool.WolfDen => "L place; R remove",
+        WorldTool.Teleporter => "L place; R remove",
+        WorldTool.Stone => "L place; R clear",
+        WorldTool.Lava => "L add; R clear",
+        WorldTool.JumpStart => "L seed plankton",
+        WorldTool.Colonist => "L send colonist (100 food)",
         WorldTool.Population => _populationWindowOpen
-            ? "live population open, right close"
-            : "left open live extant-species counts",
+            ? "Open; R close"
+            : "L open counts",
+        WorldTool.Controls => _controlsWindowOpen
+            ? "Open; R close or ?"
+            : "L open or ?",
         WorldTool.Inspect => _inspectedCritterId.IsValid
-            ? "following critter, right clear"
-            : "left follow critter, right clear",
+            ? "Following; R clear"
+            : "L follow; R clear",
         _ => string.Empty,
     };
 
@@ -2060,7 +2152,9 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         Stone,
         Lava,
         JumpStart,
+        Colonist,
         Population,
+        Controls,
         Inspect,
         Plague,
         ZombiePlague,

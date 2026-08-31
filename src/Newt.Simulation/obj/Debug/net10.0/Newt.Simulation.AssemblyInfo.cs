@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Newt.Simulation")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+9db782aacf7496f34fd077ca34377208ac4b140a")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+c194c9b518d51f905d43d6ca6ed272ebde42f071")]
 [assembly: System.Reflection.AssemblyProductAttribute("Newt.Simulation")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Newt.Simulation")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

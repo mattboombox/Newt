@@ -2,14 +2,14 @@
   "version": 4,
   "targets": {
     "net10.0": {
-      "MonoGame.Content.Builder.Task/3.8.5": {
+      "MonoGame.Content.Builder.Task/3.8.5.1": {
         "type": "package",
         "build": {
           "build/MonoGame.Content.Builder.Task.props": {},
           "build/MonoGame.Content.Builder.Task.targets": {}
         }
       },
-      "MonoGame.Framework.DesktopGL/3.8.5": {
+      "MonoGame.Framework.DesktopGL/3.8.5.1": {
         "type": "package",
         "dependencies": {
           "MonoGame.Library.OpenAL": "1.24.3.4",
@@ -134,24 +134,24 @@
     }
   },
   "libraries": {
-    "MonoGame.Content.Builder.Task/3.8.5": {
-      "sha512": "J+iCTYSkmQLI5WMVxJ/PSidUesd/A3izDVn8JlUTlMrBI/hOeGjGSIux497zVWlNGlmvoIWDunKTwRbkAXYFHA==",
+    "MonoGame.Content.Builder.Task/3.8.5.1": {
+      "sha512": "9isFjZSi87Fy8Hv0qLeol27xUNdt3EzGYdBabR/qHVT7ujVGebWQzfgjDhJaT3M8tJEazpeA+ftYAgokmIZUbQ==",
       "type": "package",
-      "path": "monogame.content.builder.task/3.8.5",
+      "path": "monogame.content.builder.task/3.8.5.1",
       "files": [
         ".nupkg.metadata",
         ".signature.p7s",
         "Icon.png",
         "build/MonoGame.Content.Builder.Task.props",
         "build/MonoGame.Content.Builder.Task.targets",
-        "monogame.content.builder.task.3.8.5.nupkg.sha512",
+        "monogame.content.builder.task.3.8.5.1.nupkg.sha512",
         "monogame.content.builder.task.nuspec"
       ]
     },
-    "MonoGame.Framework.DesktopGL/3.8.5": {
-      "sha512": "oG5Thkic4i/6kX3OWtq2p6DEATflP71yM0p/1ymIoFaIp1xNFOqAd4jW2D9GIQLIMT6mn5RmJknYPqJnOQbi5w==",
+    "MonoGame.Framework.DesktopGL/3.8.5.1": {
+      "sha512": "za6tOSYT2xpks932wU/WcpPu2xkUyKwn251gkRuiJ/3XPZBdwds7RPXRhtcrZGnZ2jtjtwh4upRLd+EGrrWtFw==",
       "type": "package",
-      "path": "monogame.framework.desktopgl/3.8.5",
+      "path": "monogame.framework.desktopgl/3.8.5.1",
       "files": [
         ".nupkg.metadata",
         ".signature.p7s",
@@ -160,7 +160,7 @@
         "build/MonoGame.Framework.DesktopGL.targets",
         "lib/net8.0/MonoGame.Framework.dll",
         "lib/net8.0/MonoGame.Framework.xml",
-        "monogame.framework.desktopgl.3.8.5.nupkg.sha512",
+        "monogame.framework.desktopgl.3.8.5.1.nupkg.sha512",
         "monogame.framework.desktopgl.nuspec"
       ]
     },
@@ -244,11 +244,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\1Matt\\Desktop\\Newt\\src\\Newt.Game\\Newt.Game.csproj",
+      "projectUniqueName": "C:\\Users\\1Matt\\Desktop\\Newt\\Newt\\src\\Newt.Game\\Newt.Game.csproj",
       "projectName": "Newt.Game",
-      "projectPath": "C:\\Users\\1Matt\\Desktop\\Newt\\src\\Newt.Game\\Newt.Game.csproj",
+      "projectPath": "C:\\Users\\1Matt\\Desktop\\Newt\\Newt\\src\\Newt.Game\\Newt.Game.csproj",
       "packagesPath": "C:\\Users\\1Matt\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\1Matt\\Desktop\\Newt\\src\\Newt.Game\\obj\\",
+      "outputPath": "C:\\Users\\1Matt\\Desktop\\Newt\\Newt\\src\\Newt.Game\\obj\\",
       "projectStyle": "PackageReference",
       "configFilePaths": [
         "C:\\Users\\1Matt\\AppData\\Roaming\\NuGet\\NuGet.Config",
@@ -266,8 +266,8 @@
           "framework": "net10.0",
           "targetAlias": "net10.0",
           "projectReferences": {
-            "C:\\Users\\1Matt\\Desktop\\Newt\\src\\Newt.Simulation\\Newt.Simulation.csproj": {
-              "projectPath": "C:\\Users\\1Matt\\Desktop\\Newt\\src\\Newt.Simulation\\Newt.Simulation.csproj"
+            "C:\\Users\\1Matt\\Desktop\\Newt\\Newt\\src\\Newt.Simulation\\Newt.Simulation.csproj": {
+              "projectPath": "C:\\Users\\1Matt\\Desktop\\Newt\\Newt\\src\\Newt.Simulation\\Newt.Simulation.csproj"
             }
           }
         }
