@@ -32,7 +32,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             WorldTool.Moisture, WorldTool.EvolutionChance, WorldTool.Seasons, WorldTool.Life];
     private static readonly WorldTool[] EventToolOrder =
         [WorldTool.Meteor, WorldTool.Tsunami, WorldTool.WatershedShift,
-            WorldTool.Evolve, WorldTool.NaturalEvents, WorldTool.Plague, WorldTool.ZombiePlague];
+            WorldTool.Evolve, WorldTool.NaturalEvents, WorldTool.Colonist,
+            WorldTool.Plague, WorldTool.ZombiePlague];
     private static readonly WorldTool[] CritterToolOrder =
         [WorldTool.Plankton, WorldTool.Jellyfish, WorldTool.Worm, WorldTool.Trilobite,
             WorldTool.SeaScorpion, WorldTool.Nautilus, WorldTool.Squid, WorldTool.SquidEgg,
@@ -42,7 +43,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             WorldTool.BaleenWhale];
     private static readonly WorldTool[] BuildingToolOrder = [WorldTool.WolfDen, WorldTool.Teleporter];
     private static readonly WorldTool[] OtherToolOrder =
-        [WorldTool.JumpStart, WorldTool.Colonist, WorldTool.Population, WorldTool.Inspect, WorldTool.Controls];
+        [WorldTool.JumpStart, WorldTool.Population, WorldTool.Inspect, WorldTool.Controls];
     private static readonly string[] ControlLines =
     [
         "?  open or close controls",
@@ -55,6 +56,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         ", / .  slower / faster simulation",
         "- / =  decrease / increase magnitude",
         "P  pause or resume",
+        "G  toggle automatic slowdown",
         "WASD / arrows  pan camera",
         "Shift + pan  move faster",
         "Mouse wheel  zoom toward pointer",
@@ -190,7 +192,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             _simulationSpeedGuard.Reset();
         }
         else if (_simulationSpeedGuard.ShouldReduce(
-            SimulationRates[_simulationRateIndex], Stopwatch.GetElapsedTime(updateStarted),
+            SimulationRates[_simulationRateIndex], _world.CritterCount,
+            Stopwatch.GetElapsedTime(updateStarted),
             TargetElapsedTime, gameTime.IsRunningSlowly))
         {
             _simulationRateIndex = Array.IndexOf(SimulationRates, SimulationSpeedGuard.FallbackRate);
@@ -366,6 +369,11 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             {
                 Hydrology.StartSnowmeltSpring(_world, position.Value, SpringOrigin.Player);
             }
+        }
+        else if (WasPressed(keyboard, Keys.G))
+        {
+            _simulationSpeedGuard.Enabled = !_simulationSpeedGuard.Enabled;
+            _speedAutomaticallyReduced = false;
         }
         else if (WasPressed(keyboard, Keys.OemComma))
         {
@@ -816,7 +824,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             "Q / E  cycle tools",
             "R  cycle categories",
             "< / >  speed   P  pause",
-            "M  world menu");
+            $"M menu   G auto-slow {(_simulationSpeedGuard.Enabled ? "ON" : "OFF")}");
 
         var position = ScreenToWorld(mouse.X, mouse.Y);
         DrawHudLines(tileX + HudPadding, hudY + 8,
@@ -1227,6 +1235,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                     GetApeStructureDisplayName(apeStructure),
                     villageId.HasValue ? $"Village #{villageId.Value}" : "Village",
                     $"Residents {_world.GetApeVillageResidentCount(owner)} / {_world.GetApeVillagePopulationCapacity(owner)}",
+                    .. GetApeStructureProductionLines(position, apeStructure),
                     _world.IsApeStructureOperational(position)
                         ? "Behavior Village district"
                         : "Behavior Inactive (out of season)",
@@ -1237,10 +1246,26 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         return ["ENTITY", "None"];
     }
 
+    private string[] GetApeStructureProductionLines(
+        GridPosition position,
+        ApeStructureKind structure)
+    {
+        if (_world.GetApeStructureProductionPerMinute(position) is not { } rate)
+        {
+            return [];
+        }
+
+        var resource = structure is ApeStructureKind.LumberCamp ? "wood" : "food";
+        var production = $"{rate:0.#} {resource}/simulated min";
+        return _world.IsApeStructureOperational(position)
+            ? [$"Production {production}"]
+            : [$"Production inactive ({production} when active)"];
+    }
+
     private static string[] GetCritterInspectionLines(CritterSnapshot critter, bool following) =>
     [
         following ? "ENTITY (FOLLOWING)" : "ENTITY",
-        $"{critter.Species} #{critter.Id.Value}   {critter.Position}",
+        $"{GetCritterDisplayName(critter)} #{critter.Id.Value}   {critter.Position}",
         $"Behavior {GetCritterBehavior(critter)}",
         critter.MaximumEnergy > 0
             ? $"Energy {critter.Energy} / {critter.MaximumEnergy}"
@@ -1251,6 +1276,9 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         .. critter.Species is CritterSpecies.Ape or CritterSpecies.ApeSailor or CritterSpecies.UndeadApe
             ? new[] { GetPlagueDescription(critter) } : Array.Empty<string>(),
     ];
+
+    private static string GetCritterDisplayName(CritterSnapshot critter) =>
+        critter.IsColonist ? "Colonist Ape" : GetCritterDisplayName(critter.Species);
 
     private static string GetPlagueDescription(CritterSnapshot critter) =>
         critter.Species is CritterSpecies.UndeadApe ? "Undead: contagious, cannot reproduce" :
@@ -1266,7 +1294,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     {
         CritterSpecies.UndeadApe => "living apes and ape sailors",
         CritterSpecies.Plankton => "ambient nutrients",
-        CritterSpecies.Worm => "deep-ocean, shallow, river, and lake detritus",
+        CritterSpecies.Worm => "deep-ocean, shallow, and beach detritus",
         CritterSpecies.Trilobite => "deep-sea detritus",
         CritterSpecies.SeaScorpion => "broad aquatic and shoreline prey; adjacent worms, trilobites, and nautiluses",
         CritterSpecies.Nautilus => "plankton plus ocean and deep-ocean forage",
@@ -1292,6 +1320,12 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
 
     private static string GetCritterBehavior(CritterSnapshot critter)
     {
+        if (critter.IsColonist)
+        {
+            return critter.ColonistDestination is { } destination
+                ? $"Traveling to X {destination.X}, Y {destination.Y} to found a village"
+                : "Traveling to found a village";
+        }
         if (critter.Species is CritterSpecies.UndeadApe)
         {
             return "Hunting living apes and spreading zombie plague";
@@ -1307,7 +1341,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             return critter.Species switch
             {
                 CritterSpecies.Plankton => "Absorbing nutrients",
-                CritterSpecies.Worm => "Seeking marine or freshwater detritus",
+                CritterSpecies.Worm => "Seeking detritus or fleeing predators",
                 CritterSpecies.Trilobite => "Seeking detritus or fleeing predators",
                 CritterSpecies.SeaScorpion => "Hunting aquatic prey",
                 CritterSpecies.Nautilus => "Roaming deep water, hunting plankton, or fleeing",
@@ -1335,7 +1369,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         return critter.Species switch
         {
             CritterSpecies.Plankton => "Drifting and feeding",
-            CritterSpecies.Worm => "Scavenging marine and freshwater habitat",
+            CritterSpecies.Worm => "Scavenging while watching for predators",
             CritterSpecies.Trilobite => "Scavenging while watching for predators",
             CritterSpecies.SeaScorpion => "Patrolling coastal waters",
             CritterSpecies.Nautilus => "Roaming deep water for forage and plankton",
@@ -1701,11 +1735,21 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 _spriteBatch.Draw(_pixel, new Rectangle(x + size / 4, y, Math.Max(1, size / 2), Math.Max(1, size / 2)), new Color(112, 69, 45));
                 break;
             case ApeStructureKind.Farm:
-                _spriteBatch.Draw(_pixel, new Rectangle(x, y, size, size), new Color(173, 151, 66));
+                var aridFarm = _world.GetBiome(position) is Biome.Arid;
+                var fieldColor = aridFarm
+                    ? new Color(178, 126, 52)
+                    : new Color(173, 151, 66);
+                var cropColor = aridFarm
+                    ? new Color(128, 88, 38)
+                    : new Color(71, 112, 48);
+                _spriteBatch.Draw(_pixel, new Rectangle(x, y, size, size), fieldColor);
                 var rowWidth = Math.Max(1, size / 5);
                 for (var row = 1; row < size; row += Math.Max(2, rowWidth * 2))
                 {
-                    _spriteBatch.Draw(_pixel, new Rectangle(x, y + row, size, rowWidth), new Color(71, 112, 48));
+                    _spriteBatch.Draw(
+                        _pixel,
+                        new Rectangle(x, y + row, size, rowWidth),
+                        cropColor);
                 }
                 break;
             case ApeStructureKind.RicePaddy:
@@ -1722,6 +1766,21 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 _spriteBatch.Draw(_pixel, new Rectangle(x, y, treeSize, treeSize), new Color(61, 125, 55));
                 _spriteBatch.Draw(_pixel, new Rectangle(x + size - treeSize, y, treeSize, treeSize), new Color(61, 125, 55));
                 _spriteBatch.Draw(_pixel, new Rectangle(x + (size - treeSize) / 2, y + size - treeSize, treeSize, treeSize), new Color(61, 125, 55));
+                break;
+            case ApeStructureKind.Aquaculture:
+                _spriteBatch.Draw(
+                    _pixel,
+                    new Rectangle(x, y, size, size),
+                    new Color(48, 128, 145));
+                var penWidth = Math.Max(1, size / 6);
+                _spriteBatch.Draw(
+                    _pixel,
+                    new Rectangle(x + size / 4, y, penWidth, size),
+                    new Color(142, 205, 177));
+                _spriteBatch.Draw(
+                    _pixel,
+                    new Rectangle(x + size * 3 / 4, y, penWidth, size),
+                    new Color(142, 205, 177));
                 break;
             case ApeStructureKind.LumberCamp:
                 _spriteBatch.Draw(_pixel, new Rectangle(x, y + size / 2, size, Math.Max(1, size / 2)), new Color(111, 72, 42));
@@ -1745,6 +1804,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         ApeStructureKind.Farm => "Farm",
         ApeStructureKind.RicePaddy => "Rice Paddy",
         ApeStructureKind.Orchard => "Orchard",
+        ApeStructureKind.Aquaculture => "Aquaculture",
         ApeStructureKind.LumberCamp => "Lumber Camp",
         ApeStructureKind.NavalDistrict => "Harbor",
         ApeStructureKind.ResidentialDistrict => "Residential District",
@@ -1967,6 +2027,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         {
             PlagueKind.Plague => new Color(205, 195, 55),
             PlagueKind.Zombie => new Color(170, 85, 190),
+            _ when critter.IsColonist => new Color(215, 180, 65),
             _ => GetCritterColor(critter.Species),
         };
 
@@ -2067,7 +2128,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         WorldTool.Stone => "L place; R clear",
         WorldTool.Lava => "L add; R clear",
         WorldTool.JumpStart => "L seed plankton",
-        WorldTool.Colonist => "L send colonist (100 food)",
+        WorldTool.Colonist => "L village: auto; tile: target",
         WorldTool.Population => _populationWindowOpen
             ? "Open; R close"
             : "L open counts",

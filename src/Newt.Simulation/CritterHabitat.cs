@@ -15,13 +15,13 @@ public static class CritterHabitats
 {
     public static CritterHabitat GetHabitat(CritterSpecies species) => species switch
     {
-        CritterSpecies.Plankton or CritterSpecies.Jellyfish or CritterSpecies.Trilobite or
+        CritterSpecies.Plankton or CritterSpecies.Jellyfish or CritterSpecies.Worm or
+            CritterSpecies.Trilobite or
             CritterSpecies.Nautilus or CritterSpecies.Fish or CritterSpecies.Squid or
             CritterSpecies.SquidEgg or CritterSpecies.ToothedWhale or CritterSpecies.BaleenWhale =>
             CritterHabitat.OceanDweller,
         CritterSpecies.SeaScorpion => CritterHabitat.ShorelineHunter,
         CritterSpecies.ApeSailor => CritterHabitat.ShorelineHunter,
-        CritterSpecies.Worm => CritterHabitat.ShallowSeeker,
         CritterSpecies.Newt or CritterSpecies.MegaToad or CritterSpecies.Therapsid or
             CritterSpecies.Monkey or CritterSpecies.Ape or CritterSpecies.UndeadApe or CritterSpecies.Deer or CritterSpecies.Elk or
             CritterSpecies.Gazelle or

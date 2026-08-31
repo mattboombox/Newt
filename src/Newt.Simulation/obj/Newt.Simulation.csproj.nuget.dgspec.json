@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\1Matt\\Desktop\\Newt\\Newt\\src\\Newt.Simulation\\Newt.Simulation.csproj": {}
+    "C:\\Users\\1Matt\\Desktop\\Newt\\src\\Newt.Simulation\\Newt.Simulation.csproj": {}
   },
   "projects": {
-    "C:\\Users\\1Matt\\Desktop\\Newt\\Newt\\src\\Newt.Simulation\\Newt.Simulation.csproj": {
+    "C:\\Users\\1Matt\\Desktop\\Newt\\src\\Newt.Simulation\\Newt.Simulation.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\1Matt\\Desktop\\Newt\\Newt\\src\\Newt.Simulation\\Newt.Simulation.csproj",
+        "projectUniqueName": "C:\\Users\\1Matt\\Desktop\\Newt\\src\\Newt.Simulation\\Newt.Simulation.csproj",
         "projectName": "Newt.Simulation",
-        "projectPath": "C:\\Users\\1Matt\\Desktop\\Newt\\Newt\\src\\Newt.Simulation\\Newt.Simulation.csproj",
+        "projectPath": "C:\\Users\\1Matt\\Desktop\\Newt\\src\\Newt.Simulation\\Newt.Simulation.csproj",
         "packagesPath": "C:\\Users\\1Matt\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\1Matt\\Desktop\\Newt\\Newt\\src\\Newt.Simulation\\obj\\",
+        "outputPath": "C:\\Users\\1Matt\\Desktop\\Newt\\src\\Newt.Simulation\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "C:\\Users\\1Matt\\AppData\\Roaming\\NuGet\\NuGet.Config",

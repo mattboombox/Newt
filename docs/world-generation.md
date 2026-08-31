@@ -101,6 +101,8 @@ The game starts in Critter Tools with Plankton selected.
 - `N`: increment the seed and generate a new world.
 - `Q` / `E`: cycle backward or forward through tools in the current category.
 - `R`: cycle tool categories.
+- Events / Colonist: click a Village to choose a valid destination automatically,
+  or click a valid distant tile to send a colonist there from the nearest Village.
 - Other / Population: left click opens a live population window and right click
   closes it. The window lists only species whose current count is above zero.
 - Other / Inspect: left click a critter to show its full entity details and keep
@@ -143,16 +145,15 @@ The game starts in Critter Tools with Plankton selected.
   uses a separate byte per tile and requires no additional world scan. Plankton photosynthesize,
   so their ambient feeding neither checks nor consumes tile nutrition. Complete
   Plankton extinction recovers one Deep Ocean Plankton after 15,000 ticks while life is enabled.
-  Trilobites continue to Crab or Sea Scorpion. Worms move every eight seconds,
-  four times slower than Fish, traverse Rivers and
-  Freshwater Lakes as well as saltwater, and scavenge detritus in Deep Ocean,
-  Shallows, Rivers, unfrozen Freshwater Lakes, and Ice Sheets over Deep Ocean. Their stomach holds four energy,
-  and reproduction costs two energy once full. Squid and Sea Scorpions consume
+  Trilobites continue to Crab or Sea Scorpion. Worms share Trilobite survival behavior:
+  they move every six seconds, inhabit marine water and Beaches, seek feeding terrain
+  within five Manhattan tiles, and flee predators detected within three. They graze
+  detritus in Deep Ocean, Shallows, Beaches, and Ice Sheets over Deep Ocean, carry up
+  to seven energy, and reproduce at five energy for a cost of three. Squid and Sea Scorpions consume
   Worms only when adjacent, preserving most of the Fish and Nautilus branches.
   jellyfish consume only plankton on contact and leave worms and fish alone; fish consume or seek
   available terrain food first, then pursue Plankton as their only animal prey.
-  Fish can shove smaller worms into adjacent valid habitat, but blocked worms survive, and
-  forage on their normal action in Rivers, Freshwater Lakes, and
+  Fish forage on their normal action in Rivers, Freshwater Lakes, and
   all Shallows, seek those tiles when hungry, remain while building
   breeding energy, place offspring across diagonal River connections, and do not hunt Newts. Fish and Mega Toads
   can shove blocking Newts into adjacent valid empty habitat.
@@ -205,9 +206,10 @@ The game starts in Critter Tools with Plankton selected.
   village before producing offspring. Assigned Apes stop hunting while their home
   village has at least ten stored food; unassigned Apes continue hunting normally.
   A founder spends its first reproduction event creating only a Village beside
-  an available Grassland or Beach district site. Rivers block placement of Villages
+  an available Grassland, Arid, or Beach district site. Rivers block placement of Villages
   and land districts, while Harbors are the sole exception. At five residents the village
-  adds a Grassland Farm, Swamp Rice Paddy, or Forest Orchard when possible, otherwise
+  adds a Grassland or Arid Farm, Swamp Rice Paddy, Forest Orchard, or Shallows or
+  Freshwater Lake Aquaculture when possible, otherwise
   a Harbor on a Beach or freshwater tile. Assigned Apes apply each kill's food energy to themselves until reaching reproduction
   energy, then carry only the remaining portion back to the Village or a connected district;
   a return that makes no progress for thirty seconds transfers its carried food
@@ -216,8 +218,13 @@ The game starts in Critter Tools with Plankton selected.
   on a metabolism tick regardless of distance, so they do not need to return home to eat;
   capped villages alternate five-food Residential Districts with additional
   biome-appropriate food districts, falling back to housing when no connected
-  Grassland, Swamp, or Forest site remains; Farms, Rice Paddies, and Orchards each
-  produce one food every fourteen seconds. Construction strongly favors sites within
+  Grassland, Arid, Swamp, Forest, or Shallows site remains. Grassland Farms, Rice Paddies, and
+  Orchards produce one food every fourteen seconds; Arid Farms produce every twenty-eight
+  seconds and use a drier ochre palette. Aquaculture works in Shallows and Freshwater
+  Lakes, producing every ten seconds in Hot water, fourteen in Temperate, eighteen in
+  Cold, and twenty-four in Freezing water, and is rendered as a teal water pen. Hovering
+  a production district reports its food or wood output per simulated minute.
+  Construction strongly favors sites within
   four tiles of the Village. A Residential District increases capacity
   by five. Each village may add one Harbor later if its connected building network
   reaches an open Beach, River, or Freshwater Lake tile; freshwater Harbors must
@@ -230,21 +237,30 @@ The game starts in Critter Tools with Plankton selected.
   They never reproduce and hunt all implemented
   sea life except Plankton and Worms, and return their catches to a connected Harbor. Villages
   remain more than twelve tiles apart.
-  Village food storage is capped at five plus ten per Farm, Rice Paddy, or Orchard.
+  Village food storage is capped at five plus ten per Farm, Rice Paddy, Orchard, or Aquaculture district.
   Villages start with six of a maximum thirty wood. A single three-food Lumber Camp
-  can harvest connected Jungle every ten seconds, Forest every fourteen, or Taiga
-  every eighteen; low-yield Swamp camps produce every twenty-four seconds. The first
+  can harvest connected Jungle every ten seconds, Forest every fourteen, Taiga every
+  eighteen, or Swamp every twenty-four; low-yield Arid camps, including those on Beaches,
+  produce every twenty-eight seconds. The first
   food district is free; later ones cost two wood.
   Residential Districts cost five food and four wood, Harbors cost six wood, and each
   Sailor after the Harbor's included first boat costs two wood.
-  Seasonal biome changes leave Farms, Rice Paddies, and Orchards standing but pause
-  their production until the matching biome returns; districts inactive for over two
+  Seasonal biome changes leave Farms, Rice Paddies, Orchards, and Aquaculture standing but pause
+  their production until Grassland or Arid returns for Farms, Swamp for Rice Paddies,
+  Forest for Orchards, or Shallows or Freshwater Lakes for Aquaculture; districts inactive for over two
   simulated years are removed. Housing more than thirty capacity above the resident
   population is trimmed one outer district per simulated year. Coastline refreshes preserve
   Harbors through intermediate Beach reclassification.
   Villages with at least two hundred residents can rarely spend one hundred stored food to
-  send an unaffiliated Ape settler with five times normal maximum energy to a valid distant village site. Settlers
-  cross unobstructed land and water and found a new village when they arrive.
+  send an unaffiliated Ape settler with 100 energy to a valid distant village site. Settlers
+  ignore predators and cross all non-Mountain land and water terrain, including sea ice
+  and Stone, routing around Mountain barriers when a passable route exists. They push
+  through blocking Plankton chains and shove Newts into nearby valid
+  habitat; Mountains, Lava, and Ring World
+  walls remain impassable. Their label and lighter Ape color persist
+  until they found and join a new village. Clicking a Village with the Colonist tool
+  chooses a distant site automatically; clicking a valid non-Village tile sends one
+  there from the nearest Village. Inspection shows its destination X and Y coordinates.
   Terrestrial critters can traverse exposed Lowlands, Canyons, and Trenches.
   Wolves form a third Therapsid branch. They move every 2.5 seconds with the
   broad terrestrial diet, including Deer, Elk, and Gazelles. They engage

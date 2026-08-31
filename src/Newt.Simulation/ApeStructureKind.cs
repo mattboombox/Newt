@@ -10,4 +10,5 @@ public enum ApeStructureKind : byte
     LumberCamp,
     NavalDistrict,
     ResidentialDistrict,
+    Aquaculture,
 }

@@ -61,10 +61,13 @@ lowers the elevation of land reached by the wave.
 8x, 16x, and 32x. `P` pauses or resumes simulation time without disabling tools or
 camera controls. The current rate and pause state appear beside the world tick.
 
-At 16x or 32x, sustained slow updates automatically reduce the rate directly to
-8x. The guard waits for about one second of slow updates and ignores isolated
-stalls. The HUD marks the fallback as `8x (auto)`; changing speed manually clears
-the marker and restarts the guard. Speed never increases automatically. Pausing,
+Automatic slowdown is enabled by default and can be toggled with `G`. At 16x or
+32x, worlds with at least 5,000 critters automatically reduce the rate
+directly to 8x after sustained slow updates. Smaller populations never trigger
+the fallback. The guard waits for about one second of slow updates and ignores
+isolated stalls. The HUD marks the fallback as `8x (auto)`; changing speed
+manually clears the marker and restarts the guard. Speed never increases
+automatically. Pausing,
 opening the setup menu, or generating a world resets the slowdown history.
 Rendering quality is unchanged, and no automatic reductions occur at 8x or below.
 

@@ -1,0 +1,12 @@
+C:\Users\1Matt\Desktop\Newt\src\Newt.Simulation\bin\CodexFishNewtShoveGame\net10.0\Newt.Simulation.deps.json
+C:\Users\1Matt\Desktop\Newt\src\Newt.Simulation\bin\CodexFishNewtShoveGame\net10.0\Newt.Simulation.dll
+C:\Users\1Matt\Desktop\Newt\src\Newt.Simulation\bin\CodexFishNewtShoveGame\net10.0\Newt.Simulation.pdb
+C:\Users\1Matt\Desktop\Newt\src\Newt.Simulation\obj\CodexFishNewtShoveGame\net10.0\Newt.Simulation.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\1Matt\Desktop\Newt\src\Newt.Simulation\obj\CodexFishNewtShoveGame\net10.0\Newt.Simulation.AssemblyInfoInputs.cache
+C:\Users\1Matt\Desktop\Newt\src\Newt.Simulation\obj\CodexFishNewtShoveGame\net10.0\Newt.Simulation.AssemblyInfo.cs
+C:\Users\1Matt\Desktop\Newt\src\Newt.Simulation\obj\CodexFishNewtShoveGame\net10.0\Newt.Simulation.csproj.CoreCompileInputs.cache
+C:\Users\1Matt\Desktop\Newt\src\Newt.Simulation\obj\CodexFishNewtShoveGame\net10.0\Newt.Simulation.sourcelink.json
+C:\Users\1Matt\Desktop\Newt\src\Newt.Simulation\obj\CodexFishNewtShoveGame\net10.0\Newt.Simulation.dll
+C:\Users\1Matt\Desktop\Newt\src\Newt.Simulation\obj\CodexFishNewtShoveGame\net10.0\refint\Newt.Simulation.dll
+C:\Users\1Matt\Desktop\Newt\src\Newt.Simulation\obj\CodexFishNewtShoveGame\net10.0\Newt.Simulation.pdb
+C:\Users\1Matt\Desktop\Newt\src\Newt.Simulation\obj\CodexFishNewtShoveGame\net10.0\ref\Newt.Simulation.dll

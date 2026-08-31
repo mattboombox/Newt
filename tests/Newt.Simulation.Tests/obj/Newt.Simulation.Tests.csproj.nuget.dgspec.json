@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\1Matt\\Desktop\\Newt\\Newt\\tests\\Newt.Simulation.Tests\\Newt.Simulation.Tests.csproj": {}
+    "C:\\Users\\1Matt\\Desktop\\Newt\\tests\\Newt.Simulation.Tests\\Newt.Simulation.Tests.csproj": {}
   },
   "projects": {
-    "C:\\Users\\1Matt\\Desktop\\Newt\\Newt\\src\\Newt.Simulation\\Newt.Simulation.csproj": {
+    "C:\\Users\\1Matt\\Desktop\\Newt\\src\\Newt.Simulation\\Newt.Simulation.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\1Matt\\Desktop\\Newt\\Newt\\src\\Newt.Simulation\\Newt.Simulation.csproj",
+        "projectUniqueName": "C:\\Users\\1Matt\\Desktop\\Newt\\src\\Newt.Simulation\\Newt.Simulation.csproj",
         "projectName": "Newt.Simulation",
-        "projectPath": "C:\\Users\\1Matt\\Desktop\\Newt\\Newt\\src\\Newt.Simulation\\Newt.Simulation.csproj",
+        "projectPath": "C:\\Users\\1Matt\\Desktop\\Newt\\src\\Newt.Simulation\\Newt.Simulation.csproj",
         "packagesPath": "C:\\Users\\1Matt\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\1Matt\\Desktop\\Newt\\Newt\\src\\Newt.Simulation\\obj\\",
+        "outputPath": "C:\\Users\\1Matt\\Desktop\\Newt\\src\\Newt.Simulation\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "C:\\Users\\1Matt\\AppData\\Roaming\\NuGet\\NuGet.Config",
@@ -342,14 +342,14 @@
         }
       }
     },
-    "C:\\Users\\1Matt\\Desktop\\Newt\\Newt\\tests\\Newt.Simulation.Tests\\Newt.Simulation.Tests.csproj": {
+    "C:\\Users\\1Matt\\Desktop\\Newt\\tests\\Newt.Simulation.Tests\\Newt.Simulation.Tests.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\1Matt\\Desktop\\Newt\\Newt\\tests\\Newt.Simulation.Tests\\Newt.Simulation.Tests.csproj",
+        "projectUniqueName": "C:\\Users\\1Matt\\Desktop\\Newt\\tests\\Newt.Simulation.Tests\\Newt.Simulation.Tests.csproj",
         "projectName": "Newt.Simulation.Tests",
-        "projectPath": "C:\\Users\\1Matt\\Desktop\\Newt\\Newt\\tests\\Newt.Simulation.Tests\\Newt.Simulation.Tests.csproj",
+        "projectPath": "C:\\Users\\1Matt\\Desktop\\Newt\\tests\\Newt.Simulation.Tests\\Newt.Simulation.Tests.csproj",
         "packagesPath": "C:\\Users\\1Matt\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\1Matt\\Desktop\\Newt\\Newt\\tests\\Newt.Simulation.Tests\\obj\\",
+        "outputPath": "C:\\Users\\1Matt\\Desktop\\Newt\\tests\\Newt.Simulation.Tests\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "C:\\Users\\1Matt\\AppData\\Roaming\\NuGet\\NuGet.Config",
@@ -367,8 +367,8 @@
             "framework": "net10.0",
             "targetAlias": "net10.0",
             "projectReferences": {
-              "C:\\Users\\1Matt\\Desktop\\Newt\\Newt\\src\\Newt.Simulation\\Newt.Simulation.csproj": {
-                "projectPath": "C:\\Users\\1Matt\\Desktop\\Newt\\Newt\\src\\Newt.Simulation\\Newt.Simulation.csproj"
+              "C:\\Users\\1Matt\\Desktop\\Newt\\src\\Newt.Simulation\\Newt.Simulation.csproj": {
+                "projectPath": "C:\\Users\\1Matt\\Desktop\\Newt\\src\\Newt.Simulation\\Newt.Simulation.csproj"
               }
             }
           }

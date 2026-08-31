@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <PipelineBuildEvent xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
-  <SourceFile>C:/Users/1Matt/Desktop/Newt/Newt/src/Newt.Game/Content/HudFont.spritefont</SourceFile>
-  <SourceTime>2026-08-28T17:15:11.8316588-07:00</SourceTime>
-  <DestFile>C:/Users/1Matt/Desktop/Newt/Newt/src/Newt.Game/Content/bin/DesktopGL/Content/HudFont.xnb</DestFile>
-  <DestTime>2026-08-28T17:15:33.6486607-07:00</DestTime>
+  <SourceFile>C:/Users/1Matt/Desktop/Newt/src/Newt.Game/Content/HudFont.spritefont</SourceFile>
+  <SourceTime>2026-08-30T21:08:07.0097722-07:00</SourceTime>
+  <DestFile>C:/Users/1Matt/Desktop/Newt/src/Newt.Game/Content/bin/DesktopGL/Content/HudFont.xnb</DestFile>
+  <DestTime>2026-08-30T21:10:31.8667259-07:00</DestTime>
   <Importer>FontDescriptionImporter</Importer>
   <ImporterTime>2026-07-15T09:21:24-07:00</ImporterTime>
   <Processor>FontDescriptionProcessor</Processor>

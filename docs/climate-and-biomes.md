@@ -28,10 +28,12 @@ Elevation is not a third axis in the biome matrix. It has two narrower jobs:
 - It contributes cooling and a modest drying effect to the climate fields.
 - It classifies physical landform as plains, hills, or mountains.
 
-The biome classifier itself receives only temperature and moisture. This avoids
+The biome classifier primarily uses temperature and moisture. This avoids
 counting elevation twice and permits combinations such as grassland hills, tundra
-hills, or arid hills. At extreme cold, the Arctic biome changes the rendering to
-snow cover without replacing the underlying landform.
+hills, or arid hills. Swamp is the sole landform-constrained biome: it can occur
+on Plains and lower terrain, while a Swamp climate on Hills or Mountains falls
+back to Forest, the nearest option in the climate matrix. At extreme cold, the
+Arctic biome changes the rendering to snow cover without replacing the underlying landform.
 
 The current elevation stages are:
 
@@ -212,7 +214,8 @@ ecological model.
    moisture.
 5. Temperature and moisture classify biomes; extreme freezing maps all land
    moisture bands to Arctic.
-6. Plains and hills retain their landform and receive biome-specific colors.
+6. Swamp climates above Plains fall back to Forest; other land retains its
+   landform and receives biome-specific colors.
 7. Rivers and lakes remain surface-water overlays.
 
 When a lake finishes filling, climate is rebuilt immediately even if its overflow

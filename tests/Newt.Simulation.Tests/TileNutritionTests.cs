@@ -164,13 +164,12 @@ public sealed class TileNutritionTests
     [Fact]
     public void FeedingDepletesAndLazilyRegeneratesTileNutrition()
     {
-        var world = new SimulationWorld(1, 1, Terrain.Mountain, seed: 2001);
+        var world = new SimulationWorld(1, 1, Terrain.Shallows, seed: 2001);
         world.SeasonsEnabled = false;
         var position = new GridPosition(0, 0);
-        world.SetSurfaceWater(position, SurfaceWaterKind.FreshwaterLake);
         world.AddCritter(CritterSpecies.Worm, position);
 
-        for (var tick = 0; tick < 16 * SimulationWorld.TicksPerSecond; tick++)
+        for (var tick = 0; tick < 12 * SimulationWorld.TicksPerSecond; tick++)
         {
             world.AdvanceOneTick();
         }

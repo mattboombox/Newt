@@ -49,7 +49,7 @@ cost. This prevents a hunger timer, starvation timer, and meal counter from
 drifting into contradictory states. Reproduction spends only surplus energy;
 if no adjacent habitat is open, the parent retains that energy for a later tick.
 
-The Events category includes Plague and Zombie Plague tools. Left-click a living
+The Events category includes Colonist, Plague, and Zombie Plague tools. Left-click a living
 Ape or Ape Sailor to infect it; stable critter IDs divisible by five resist both
 strains. Every simulation second, infected apes expose their eight neighboring
 tiles, including horizontal wrap. Newly infected apes cannot spread again in the
@@ -156,22 +156,17 @@ hunters select the nearest eligible prey and break equal-distance ties randomly,
 regardless of species or adjacency restrictions. Collision predators likewise
 have no species-specific priority for adjacent prey.
 
-Worms are marine and freshwater detritus seekers. They gain ambient food in Deep
-Ocean, Shallows, Rivers, unfrozen Freshwater Lakes, and Ice Sheets over Deep Ocean,
-while ordinary Ocean and frozen lakes remain transit-only habitat. They can follow freshwater across land
-and Mountain tiles. They move once every eight seconds, four times slower than
-Fish. Outside a feeding zone, they inspect the eight surrounding
-tiles for a food cue before falling back to blind wandering. Their four-energy
-stomach supports reproduction at four energy for a cost of two. Worms can shove a chain of up to four
-Plankton through a dense bloom rather than remaining trapped behind it. Squid and
-Sea Scorpions may consume Worms only on adjacent encounters, preserving most of
-the Fish and Nautilus source population.
-Trilobites occupy the same broad saltwater range and graze terrain nutrition in
+Worms now use the same survival behavior as Trilobites: they occupy Deep Ocean,
+Ocean, Shallows, Beach, and sea ice; move every six seconds; seek food within five
+Manhattan tiles; flee visible predators within three tiles; and share the same
+seven-energy stomach and reproduction economy. They no longer use freshwater as
+habitat. Worms retain their own evolution branches and predator relationships.
+Both species can shove a chain of up to four Plankton through a dense bloom.
+Trilobites occupy this broad saltwater range and graze terrain nutrition in
 Deep Ocean, deep-ocean Ice Sheets, and Shallows. Ordinary Ocean remains transit-only because it has no
 terrain nutrition. Their simple eyes detect predators
 within three Manhattan tiles, prompting the trilobite to take the open eight-way
-step that maximizes its distance from the nearest threat. Like Worms, they can
-shove through a chain of up to four blocking Plankton.
+step that maximizes its distance from the nearest threat.
 Sea Scorpions are active aquatic hunters descended from Trilobites. Every four
 seconds they pursue Fish, Crabs, Newts, Squid, Therapsids, Monkeys,
 Apes, Wolves, Ape Sailors, Deer, Elk, and Gazelles within a Manhattan radius of
@@ -201,7 +196,8 @@ cost across simulation ticks. Shallows, Rivers, and Freshwater Lakes provide ter
 food. Fish eat or approach that food before hunting Plankton, their only animal prey.
 Fish can enter Rivers and Freshwater Lakes, including freshwater Mountain corridors.
 A Fish can shove a smaller Worm aside while travelling, but an immovable Worm blocks
-the route without being harmed. Crabs, Worms, and Newts are never converted into food.
+the route without being harmed. Fish also shove Newts into nearby valid habitat so
+Newts do not seal narrow River routes. Crabs, Worms, and Newts are never converted into food.
 Fish scan five Manhattan tiles for any species capable of eating them before
 they hunt. Sea Scorpions, Squid, Mega Toads, and Therapsids therefore make Fish choose the
 open eight-way move that maximizes distance from the nearest threat. Detecting
@@ -367,7 +363,7 @@ at ten or more they avoid prey while roaming. Unassigned Apes continue hunting s
 they can gather enough energy to found a village.
 Their first reproduction
 is settlement-mediated: the Ape searches within 28 tiles for a village site adjacent
-to an unoccupied Grassland or Beach tile. The founding event creates only the Village,
+to an unoccupied Grassland, Arid, or Beach tile. The founding event creates only the Village,
 consumes the reproduction cost, and produces no offspring. New villages must be more
 than twelve tiles apart. Rivers reject Village and land-district construction,
 allowing waterways to remain natural borders while freshwater Harbors provide the exception.
@@ -379,11 +375,17 @@ diagonal Rivers into Freshwater Lakes, including freshwater corridors through
 Mountains and across horizontal map wrap.
 
 Villages begin with capacity for five residents. At five residents they build a
-Grassland Farm, Swamp Rice Paddy, or Forest Orchard when possible, otherwise a Harbor
+Grassland or Arid Farm, Swamp Rice Paddy, Forest Orchard, or Shallows or Freshwater Lake
+Aquaculture when possible, otherwise a Harbor
 on a Beach, River, or Freshwater Lake tile. Harbor sites may connect diagonally to
 the village or its districts, and freshwater Harbors accept dry land in any of
 the eight neighboring tiles. Other districts retain cardinal construction links.
-All three food districts add one stored food every fourteen seconds. An assigned Ape's kill is
+Grassland Farms, Rice Paddies, and Orchards add one stored food every fourteen seconds;
+Arid Farms operate at half that rate, producing every twenty-eight seconds. Aquaculture
+produces every ten seconds in Hot Shallows, fourteen in Temperate, eighteen in Cold,
+and twenty-four in Freezing water, with the same temperature rates in Freshwater Lakes.
+Hovering a production district reports its current food or wood output per simulated minute.
+An assigned Ape's kill is
 conserved rather than counted twice: meal energy first raises the hunter toward its
 reproduction threshold, and only the unused remainder becomes carried settlement
 food. Residents return that remainder to the Village or any connected district.
@@ -401,32 +403,41 @@ At its population cap, a village alternates connected Residential Districts with
 additional biome-appropriate food districts. Construction strongly favors sites within
 four tiles of the Village, keeping settlements compact while allowing occasional outward
 growth. A Residential District costs five food
-and adds five capacity; Farms, Rice Paddies, and Orchards remain free to establish but
-require open connected Grassland, Swamp, and Forest tiles respectively. If no planned
+and adds five capacity; Farms, Rice Paddies, Orchards, and Aquaculture remain free to establish but
+require open connected Grassland or Arid, Swamp, Forest, and Shallows or Freshwater Lake tiles respectively. If no planned
 food district has a valid site, the village may fall back to housing. Expansion choice,
 construction cost, and placement remain separate so future building kinds can join the
 plan without rewriting village advancement.
 
 Villages store food up to a base pantry of five plus ten for each Farm, Rice Paddy,
-or Orchard. They begin with six wood and can store at most thirty. One Lumber Camp may
-be built for three food and no wood on a connected Forest, Jungle, Taiga, or Swamp tile. It
-produces one wood every fourteen, ten, eighteen, or twenty-four seconds respectively,
-making Swamp camps the lowest-yield option. The first
+Orchard, or Aquaculture district. They begin with six wood and can store at most thirty. One Lumber Camp may
+be built for three food and no wood on a connected Forest, Jungle, Taiga, Swamp, or Arid tile,
+including biome-compatible Beaches. It produces one wood every fourteen, ten, eighteen,
+twenty-four, or twenty-eight seconds respectively, making Arid camps the lowest-yield option.
+The first
 food district is free; later food districts cost two wood. Residential Districts cost
 five food and four wood, while a Harbor costs six wood. The Harbor includes its first
 boat and therefore its first Sailor; later Sailors cost two wood each.
 Food districts persist when seasons temporarily change their biome, but stop producing
-until Grassland returns for Farms, Swamp for Rice Paddies, or Forest for Orchards. A food
+until Grassland or Arid returns for Farms, Swamp for Rice Paddies, Forest for Orchards,
+or a Shallows or Freshwater Lake site returns for Aquaculture. A food
 district that stays inactive for more than two simulated years is removed. Once housing
 capacity exceeds the resident population by more than thirty, one outer Residential
 District is removed each simulated year.
 
 Villages with at least two hundred residents may rarely spend one hundred stored food to
-send an Ape settler with five times normal maximum energy to a valid village site far from its origin. Settlers
-are not residents of their source village and cross unobstructed land and water without
-using its food stores. On arrival, the settler founds and joins a new village.
-The Colonist tool in Other manually sends one from a clicked Village, charging up to one
-hundred food and reducing a poorer village's food to zero.
+send an Ape settler with 100 energy to a valid village site far from its origin. Settlers
+are not residents of their source village, ignore predators while traveling, and cross
+all non-Mountain land and water terrain, including sea ice and Stone, without using
+village food stores. Their route search detours around Mountain barriers while keeping
+Mountains impassable. They can push through blocking Plankton chains and displace Newts
+into nearby valid habitat, while Mountains,
+Lava, and Ring World walls remain impassable. Colonists are labeled separately
+and use a lighter Ape color until they found and join their new village.
+The Colonist tool in Events manually sends one from a clicked Village, charging up to one
+hundred food and reducing a poorer village's food to zero. Clicking a valid non-Village
+tile instead dispatches from the nearest Village to found at that exact destination.
+Inspection shows the destination X and Y coordinates while the Ape remains a colonist.
 Climate coastline rebuilding validates Harbors only after Beach classification finishes,
 so the temporary landform stage cannot demolish them.
 

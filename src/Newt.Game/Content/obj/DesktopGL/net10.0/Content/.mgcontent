@@ -4,7 +4,7 @@
   <Platform>DesktopGL</Platform>
   <Config />
   <SourceFiles>
-    <File>C:/Users/1Matt/Desktop/Newt/Newt/src/Newt.Game/Content/HudFont.spritefont</File>
+    <File>C:/Users/1Matt/Desktop/Newt/src/Newt.Game/Content/HudFont.spritefont</File>
   </SourceFiles>
   <DestFiles>
     <File xsi:nil="true" />

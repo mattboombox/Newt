@@ -444,6 +444,38 @@ public sealed class ClimateTests
         Assert.Equal(Terrain.Hills, world.GetTerrain(position));
     }
 
+    [Theory]
+    [InlineData(Terrain.Hills)]
+    [InlineData(Terrain.Mountain)]
+    public void SwampClimateFallsBackToForestAbovePlains(Terrain terrain)
+    {
+        var world = new SimulationWorld(1, 1, terrain, seed: 72);
+        var position = new GridPosition(0, 0);
+        world.SetTemperature(position, 0.55f);
+        world.SetMoisture(position, 0.80f);
+
+        ClimateSystem.RebuildBiomeAt(world, position);
+
+        Assert.Equal(Biome.Forest, world.GetBiome(position));
+    }
+
+    [Theory]
+    [InlineData(Terrain.Plains)]
+    [InlineData(Terrain.Lowlands)]
+    [InlineData(Terrain.Canyon)]
+    [InlineData(Terrain.Trench)]
+    public void SwampClimateRemainsSwampOnPlainsAndLowerTerrain(Terrain terrain)
+    {
+        var world = new SimulationWorld(1, 1, terrain, seed: 73);
+        var position = new GridPosition(0, 0);
+        world.SetTemperature(position, 0.55f);
+        world.SetMoisture(position, 0.80f);
+
+        ClimateSystem.RebuildBiomeAt(world, position);
+
+        Assert.Equal(Biome.Swamp, world.GetBiome(position));
+    }
+
     [Fact]
     public void ArcticBiomeDoesNotReplaceLandform()
     {

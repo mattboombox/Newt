@@ -69,17 +69,6 @@ public static class CritterNutritions
         ReproductionThreshold: 8,
         ReproductionCost: 6);
 
-    private static readonly CritterNutrition Worm = new(
-        BodySize: CritterBodySize.Medium,
-        FeedingStrategy: CritterFeedingStrategy.TerrainOnly,
-        InitialEnergy: 2,
-        MaximumEnergy: 4,
-        HungryThreshold: 1,
-        MetabolismIntervalTicks: 60 * SimulationWorld.TicksPerSecond,
-        MetabolismCost: 1,
-        ReproductionThreshold: 4,
-        ReproductionCost: 2);
-
     private static readonly CritterNutrition Trilobite = new(
         BodySize: CritterBodySize.Big,
         FeedingStrategy: CritterFeedingStrategy.TerrainOnly,
@@ -260,7 +249,7 @@ public static class CritterNutritions
     {
         CritterSpecies.Plankton => Plankton,
         CritterSpecies.Jellyfish => Jellyfish,
-        CritterSpecies.Worm => Worm,
+        CritterSpecies.Worm => Trilobite,
         CritterSpecies.Trilobite => Trilobite,
         CritterSpecies.SeaScorpion => SeaScorpion,
         CritterSpecies.Nautilus => Nautilus,

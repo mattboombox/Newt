@@ -80,7 +80,10 @@ public static class ClimateSystem
                 var terrain = world.GetTerrain(position);
                 var biome = IsSubmerged(terrain)
                     ? Biome.None
-                    : ClassifyBiome(world.GetTemperature(position), world.GetMoisture(position));
+                    : ClassifyBiomeForTerrain(
+                        terrain,
+                        world.GetTemperature(position),
+                        world.GetMoisture(position));
                 world.SetBiome(position, FilterBiomeForLife(world, position, biome));
             }
         }
@@ -100,7 +103,10 @@ public static class ClimateSystem
                 var terrain = world.GetTerrain(position);
                 var biome = IsSubmerged(terrain)
                     ? Biome.None
-                    : ClassifyBiome(world.GetTemperature(position), world.GetMoisture(position));
+                    : ClassifyBiomeForTerrain(
+                        terrain,
+                        world.GetTemperature(position),
+                        world.GetMoisture(position));
                 world.SetBiome(position, FilterBiomeForLife(world, position, biome));
             }
         }
@@ -111,8 +117,22 @@ public static class ClimateSystem
         var terrain = world.GetTerrain(position);
         var biome = IsSubmerged(terrain)
             ? Biome.None
-            : ClassifyBiome(world.GetTemperature(position), world.GetMoisture(position));
+            : ClassifyBiomeForTerrain(
+                terrain,
+                world.GetTemperature(position),
+                world.GetMoisture(position));
         world.SetBiome(position, FilterBiomeForLife(world, position, biome));
+    }
+
+    private static Biome ClassifyBiomeForTerrain(
+        Terrain terrain,
+        float temperature,
+        float moisture)
+    {
+        var biome = ClassifyBiome(temperature, moisture);
+        return biome is Biome.Swamp && terrain is Terrain.Hills or Terrain.Mountain
+            ? Biome.Forest
+            : biome;
     }
 
     private static Biome FilterBiomeForLife(
