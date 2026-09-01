@@ -4478,7 +4478,7 @@ public sealed partial class SimulationWorld
                 CritterSpecies.Newt or CritterSpecies.SeaScorpion or
                 CritterSpecies.ApeSailor or
                 CritterSpecies.Deer or CritterSpecies.Elk or CritterSpecies.Gazelle,
-        CritterSpecies.MegaToad => IsLargeLandPredatorPrey(prey),
+        CritterSpecies.MegaToad => IsMegaToadPrey(prey),
         CritterSpecies.Therapsid => prey is CritterSpecies.Fish,
         CritterSpecies.Monkey => false,
         CritterSpecies.UndeadApe => IsLivingApe(prey),
@@ -4507,8 +4507,12 @@ public sealed partial class SimulationWorld
         CritterSpecies.Wolf or CritterSpecies.ToothedWhale;
 
     internal static bool CanDefendAgainst(CritterSpecies defender, CritterSpecies attacker) =>
-        defender is CritterSpecies.Therapsid &&
-        attacker is CritterSpecies.MegaToad or CritterSpecies.Wolf;
+        defender switch
+        {
+            CritterSpecies.Therapsid => attacker is CritterSpecies.MegaToad or CritterSpecies.Wolf,
+            CritterSpecies.SeaScorpion or CritterSpecies.Squid => attacker is CritterSpecies.MegaToad,
+            _ => false,
+        };
 
     internal static int GetDefenderCombatWinChancePercent(
         CritterSpecies defender,
@@ -4523,6 +4527,7 @@ public sealed partial class SimulationWorld
         !(distance > 1 &&
             (prey is CritterSpecies.Crab ||
                 predator is CritterSpecies.MegaToad && prey is CritterSpecies.MegaToad ||
+                predator is CritterSpecies.MegaToad && prey is CritterSpecies.Worm ||
                 predator is CritterSpecies.Ape && prey is CritterSpecies.Fish ||
                 (predator is CritterSpecies.Squid or CritterSpecies.SeaScorpion) &&
                     prey is CritterSpecies.Worm ||
@@ -4543,6 +4548,10 @@ public sealed partial class SimulationWorld
             CritterSpecies.MegaToad or CritterSpecies.Therapsid or CritterSpecies.Monkey or
             CritterSpecies.Deer or CritterSpecies.Elk or CritterSpecies.Gazelle or
             CritterSpecies.Wolf or CritterSpecies.Ape or CritterSpecies.ApeSailor;
+
+    private static bool IsMegaToadPrey(CritterSpecies prey) =>
+        IsLargeLandPredatorPrey(prey) ||
+        prey is CritterSpecies.Worm or CritterSpecies.SeaScorpion or CritterSpecies.Squid;
 
     private static bool IsToothedWhaleShallowsPrey(CritterSpecies prey) => prey is
         CritterSpecies.MegaToad or CritterSpecies.Therapsid or CritterSpecies.Ape or

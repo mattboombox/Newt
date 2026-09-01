@@ -12,14 +12,10 @@
   </PropertyGroup>
   <ItemGroup>
     <None Remove="Icon.ico" />
-    <None Remove="Icon.bmp" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Icon.ico">
       <LogicalName>Icon.ico</LogicalName>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Icon.bmp">
-      <LogicalName>Icon.bmp</LogicalName>
     </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>
@@ -28,5 +24,11 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Newt.Simulation\Newt.Simulation.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Update="Content\Sprites\Critters\**\*.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
   </ItemGroup>
 </Project>

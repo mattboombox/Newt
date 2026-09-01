@@ -2023,12 +2023,12 @@ public sealed class SimulationWorldTests
     }
 
     [Fact]
-    public void WormsArePreyOnlyForSquidAndSeaScorpions()
+    public void WormsArePreyOnlyForSquidSeaScorpionsAndMegaToads()
     {
         foreach (var predator in Enum.GetValues<CritterSpecies>())
         {
             Assert.Equal(
-                predator is CritterSpecies.Squid or CritterSpecies.SeaScorpion,
+                predator is CritterSpecies.Squid or CritterSpecies.SeaScorpion or CritterSpecies.MegaToad,
                 SimulationWorld.CanEat(predator, CritterSpecies.Worm));
         }
     }
@@ -2036,7 +2036,8 @@ public sealed class SimulationWorldTests
     [Theory]
     [InlineData(CritterSpecies.Squid)]
     [InlineData(CritterSpecies.SeaScorpion)]
-    public void ActiveMarineHuntersEatWormsOnlyWhenAdjacent(CritterSpecies predator)
+    [InlineData(CritterSpecies.MegaToad)]
+    public void WormPredatorsEatWormsOnlyWhenAdjacent(CritterSpecies predator)
     {
         Assert.True(SimulationWorld.CanPursuePreyAtDistance(
             predator,
@@ -2317,6 +2318,54 @@ public sealed class SimulationWorldTests
         Assert.Equal(1, world.GetCritterCount(CritterSpecies.MegaToad));
         Assert.Equal(0, world.GetCritterCount(CritterSpecies.Fish));
         Assert.Equal(9, world.GetCritter(0).Energy);
+    }
+
+    [Fact]
+    public void MegaToadEatsAdjacentWorm()
+    {
+        var world = new SimulationWorld(1, 2, Terrain.Shallows, seed: 72);
+        world.SeasonsEnabled = false;
+        world.AddCritter(CritterSpecies.MegaToad, new GridPosition(0, 0));
+        world.AddCritter(CritterSpecies.Worm, new GridPosition(0, 1));
+
+        for (var tick = 0; tick < 6 * SimulationWorld.TicksPerSecond; tick++)
+        {
+            world.AdvanceOneTick();
+        }
+
+        Assert.Equal(1, world.GetCritterCount(CritterSpecies.MegaToad));
+        Assert.Equal(0, world.GetCritterCount(CritterSpecies.Worm));
+        Assert.Equal(9, world.GetCritter(0).Energy);
+    }
+
+    [Theory]
+    [InlineData(CritterSpecies.SeaScorpion)]
+    [InlineData(CritterSpecies.Squid)]
+    public void MegaToadHuntsMarinePredatorsThatFightBack(CritterSpecies prey)
+    {
+        Assert.True(SimulationWorld.CanEat(CritterSpecies.MegaToad, prey));
+        Assert.False(SimulationWorld.CanEat(prey, CritterSpecies.MegaToad));
+        Assert.True(SimulationWorld.CanDefendAgainst(prey, CritterSpecies.MegaToad));
+        Assert.Equal(
+            20,
+            SimulationWorld.GetDefenderCombatWinChancePercent(prey, CritterSpecies.MegaToad));
+
+        var world = new SimulationWorld(1, 2, Terrain.Shallows, seed: 73);
+        world.SeasonsEnabled = false;
+        world.AddCritter(CritterSpecies.MegaToad, new GridPosition(0, 0));
+        world.AddCritter(prey, new GridPosition(0, 1));
+
+        for (var tick = 0; tick < 6 * SimulationWorld.TicksPerSecond; tick++)
+        {
+            world.AdvanceOneTick();
+        }
+
+        Assert.Equal(2, world.CritterCount);
+        Assert.Equal(
+            8,
+            Enumerable.Range(0, world.CritterCount)
+                .Select(world.GetCritter)
+                .Sum(critter => critter.Energy));
     }
 
     [Fact]

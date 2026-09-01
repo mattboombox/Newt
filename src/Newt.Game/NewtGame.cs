@@ -4,6 +4,7 @@ using Microsoft.Xna.Framework.Input;
 using Newt.Simulation;
 using System.Diagnostics;
 using System.Globalization;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 
 namespace Newt.Game;
@@ -17,7 +18,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private const double ToolRepeatIntervalSeconds = 0.075;
     private const int PopulationSampleIntervalTicks = 5 * SimulationWorld.TicksPerSecond;
     private const int PopulationHistoryLength = 90;
-    private static readonly int[] ZoomLevels = [2, 4, 8, 16, 24];
+    private static readonly int[] ZoomLevels = [2, 4, 8, 16, 24, 32, 48];
     private static readonly WorldPreset[] MenuSizes =
         [WorldPreset.Micro, WorldPreset.Small, WorldPreset.Standard, WorldPreset.Large, WorldPreset.Huge];
     private static readonly WorldMapType[] MenuMapTypes =
@@ -79,6 +80,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private SpriteBatch? _spriteBatch;
     private Texture2D? _pixel;
     private SpriteFont? _hudFont;
+    private readonly Dictionary<CritterSpecies, Texture2D> _critterSprites = [];
+    private readonly Dictionary<CritterSpecies, Texture2D> _critterFlashSprites = [];
     private TimeSpan _accumulator;
     private KeyboardState _previousKeyboard;
     private MouseState _previousMouse;
@@ -144,6 +147,16 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         _pixel = new Texture2D(GraphicsDevice, 1, 1);
         _pixel.SetData([Color.White]);
         _hudFont = Content.Load<SpriteFont>("HudFont");
+        LoadCritterSprite(CritterSpecies.Plankton, "plankton.png");
+        LoadCritterSprite(CritterSpecies.Newt, "newt.png");
+        LoadCritterSprite(CritterSpecies.MegaToad, "mega-toad.png");
+        LoadCritterSprite(CritterSpecies.Ape, "ape.png");
+        LoadCritterSprite(CritterSpecies.ApeSailor, "ape-sailor.png");
+        LoadCritterSprite(CritterSpecies.Deer, "deer.png");
+        LoadCritterSprite(CritterSpecies.Wolf, "wolf.png");
+        LoadCritterSprite(CritterSpecies.ToothedWhale, "toothed-whale.png");
+        LoadCritterSprite(CritterSpecies.BaleenWhale, "baleen-whale.png");
+        SetWindowIconFromNewtSprite();
     }
 
     protected override void Update(GameTime gameTime)
@@ -269,14 +282,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 continue;
             }
 
-            _spriteBatch.Draw(
-                _pixel,
-                new Rectangle(
-                    MapOffsetX + screenX * TileSize + GetCritterMarkerInset(),
-                    MapOffsetY + screenY * TileSize + GetCritterMarkerInset(),
-                    GetCritterMarkerSize(),
-                    GetCritterMarkerSize()),
-                GetCritterColor(critter));
+            DrawCritter(critter, screenX, screenY);
         }
 
         if (!_hudHidden)
@@ -298,6 +304,131 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
 
         _spriteBatch.End();
         base.Draw(gameTime);
+    }
+
+    private void LoadCritterSprite(CritterSpecies species, string fileName)
+    {
+        var path = Path.Combine(AppContext.BaseDirectory, "Content", "Sprites", "Critters", fileName);
+        if (!File.Exists(path))
+        {
+            return;
+        }
+
+        using var stream = File.OpenRead(path);
+        var sprite = Texture2D.FromStream(GraphicsDevice, stream);
+        _critterSprites.Add(species, sprite);
+
+        var flashPixels = new Color[sprite.Width * sprite.Height];
+        sprite.GetData(flashPixels);
+        for (var index = 0; index < flashPixels.Length; index++)
+        {
+            flashPixels[index] = new Color(255, 255, 255, (int)flashPixels[index].A);
+        }
+
+        var flashSprite = new Texture2D(GraphicsDevice, sprite.Width, sprite.Height);
+        flashSprite.SetData(flashPixels);
+        _critterFlashSprites.Add(species, flashSprite);
+    }
+
+    private void SetWindowIconFromNewtSprite()
+    {
+        if (!_critterSprites.TryGetValue(CritterSpecies.Newt, out var sprite))
+        {
+            return;
+        }
+
+        var colors = new Color[sprite.Width * sprite.Height];
+        sprite.GetData(colors);
+        var pixels = new byte[colors.Length * 4];
+        for (var index = 0; index < colors.Length; index++)
+        {
+            var pixelOffset = index * 4;
+            pixels[pixelOffset] = colors[index].R;
+            pixels[pixelOffset + 1] = colors[index].G;
+            pixels[pixelOffset + 2] = colors[index].B;
+            pixels[pixelOffset + 3] = colors[index].A;
+        }
+
+        var pinnedPixels = GCHandle.Alloc(pixels, GCHandleType.Pinned);
+        try
+        {
+            var surface = SdlCreateRgbSurfaceFrom(
+                pinnedPixels.AddrOfPinnedObject(),
+                sprite.Width,
+                sprite.Height,
+                32,
+                sprite.Width * 4,
+                0x000000ff,
+                0x0000ff00,
+                0x00ff0000,
+                0xff000000);
+            if (surface == IntPtr.Zero)
+            {
+                return;
+            }
+
+            try
+            {
+                SdlSetWindowIcon(Window.Handle, surface);
+            }
+            finally
+            {
+                SdlFreeSurface(surface);
+            }
+        }
+        finally
+        {
+            pinnedPixels.Free();
+        }
+    }
+
+    [DllImport("SDL2", EntryPoint = "SDL_CreateRGBSurfaceFrom", CallingConvention = CallingConvention.Cdecl)]
+    private static extern IntPtr SdlCreateRgbSurfaceFrom(
+        IntPtr pixels,
+        int width,
+        int height,
+        int depth,
+        int pitch,
+        uint redMask,
+        uint greenMask,
+        uint blueMask,
+        uint alphaMask);
+
+    [DllImport("SDL2", EntryPoint = "SDL_SetWindowIcon", CallingConvention = CallingConvention.Cdecl)]
+    private static extern void SdlSetWindowIcon(IntPtr window, IntPtr icon);
+
+    [DllImport("SDL2", EntryPoint = "SDL_FreeSurface", CallingConvention = CallingConvention.Cdecl)]
+    private static extern void SdlFreeSurface(IntPtr surface);
+
+    private void DrawCritter(CritterSnapshot critter, int screenX, int screenY)
+    {
+        if (_critterSprites.TryGetValue(critter.Species, out var sprite))
+        {
+            if (critter.IsDamageFlashing &&
+                _critterFlashSprites.TryGetValue(critter.Species, out var flashSprite))
+            {
+                sprite = flashSprite;
+            }
+
+            _spriteBatch!.Draw(
+                sprite,
+                new Rectangle(
+                    MapOffsetX + screenX * TileSize,
+                    MapOffsetY + screenY * TileSize,
+                    TileSize,
+                    TileSize),
+                Color.White);
+            return;
+        }
+
+        _spriteBatch!.Draw(
+            _pixel,
+            new Rectangle(
+                MapOffsetX + screenX * TileSize + GetCritterMarkerInset(),
+                MapOffsetY + screenY * TileSize + GetCritterMarkerInset(),
+                GetCritterMarkerSize(),
+                GetCritterMarkerSize()),
+            GetCritterColor(critter));
     }
 
     private int GetCritterMarkerSize() => TileSize <= 2
@@ -1303,7 +1434,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         CritterSpecies.Jellyfish => "plankton only",
         CritterSpecies.Fish => "shallow/freshwater forage and plankton",
         CritterSpecies.Newt => "freshwater food; feeds and breeds in swamps and jungles",
-        CritterSpecies.MegaToad => "fish and broad prey; adjacent cannibalism cannot sustain a closed population",
+        CritterSpecies.MegaToad => "broad prey; adjacent worms/cannibalism; fights sea scorpions and squid",
         CritterSpecies.Therapsid => "prefers wetland forage; fish as fallback",
         CritterSpecies.Monkey => "swamp and jungle foliage only",
         CritterSpecies.Ape => "prey except plankton, worms, and its civilization; plus wetland foliage",
