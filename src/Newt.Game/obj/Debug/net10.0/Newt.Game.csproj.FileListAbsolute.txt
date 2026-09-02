@@ -533,3 +533,14 @@ C:\Users\1Matt\AppData\Local\Temp\NewtSpriteFlashBuild\Newt.Game.deps.json
 C:\Users\1Matt\AppData\Local\Temp\NewtSpriteFlashBuild\Newt.Game.runtimeconfig.json
 C:\Users\1Matt\AppData\Local\Temp\NewtSpriteFlashBuild\Newt.Game.dll
 C:\Users\1Matt\AppData\Local\Temp\NewtSpriteFlashBuild\Newt.Game.pdb
+C:\Users\1Matt\Desktop\Newt\src\Newt.Game\bin\Debug\net10.0\Content\Sprites\Critters\worm.png
+C:\Users\1Matt\Desktop\Newt\src\Newt.Game\bin\Debug\net10.0\Content\Sprites\Critters\crab.png
+C:\Users\1Matt\Desktop\Newt\src\Newt.Game\bin\Debug\net10.0\Content\Sprites\Critters\elk.png
+C:\Users\1Matt\Desktop\Newt\src\Newt.Game\bin\Debug\net10.0\Content\Sprites\Critters\fish.png
+C:\Users\1Matt\Desktop\Newt\src\Newt.Game\bin\Debug\net10.0\Content\Sprites\Critters\gazelle.png
+C:\Users\1Matt\Desktop\Newt\src\Newt.Game\bin\Debug\net10.0\Content\Sprites\Critters\jellyfish.png
+C:\Users\1Matt\Desktop\Newt\src\Newt.Game\bin\Debug\net10.0\Content\Sprites\Critters\nautilus.png
+C:\Users\1Matt\Desktop\Newt\src\Newt.Game\bin\Debug\net10.0\Content\Sprites\Critters\sea-scorpion.png
+C:\Users\1Matt\Desktop\Newt\src\Newt.Game\bin\Debug\net10.0\Content\Sprites\Critters\squid.png
+C:\Users\1Matt\Desktop\Newt\src\Newt.Game\bin\Debug\net10.0\Content\Sprites\Critters\therapsid.png
+C:\Users\1Matt\Desktop\Newt\src\Newt.Game\bin\Debug\net10.0\Content\Sprites\Critters\trilobite.png
