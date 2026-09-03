@@ -3,6 +3,8 @@
 Place transparent PNG critter sprites in this folder. The game currently recognizes:
 
 - `ape.png`
+- `ape-colonist.png`
+- `ape-colonist-sailor.png`
 - `ape-sailor.png`
 - `baleen-whale.png`
 - `crab.png`
@@ -12,14 +14,17 @@ Place transparent PNG critter sprites in this folder. The game currently recogni
 - `gazelle.png`
 - `jellyfish.png`
 - `mega-toad.png`
+- `monkey.png`
 - `nautilus.png`
 - `newt.png`
 - `plankton.png`
 - `sea-scorpion.png`
+- `sick-ape.png`
 - `squid.png`
 - `therapsid.png`
 - `toothed-whale.png`
 - `trilobite.png`
+- `undead-ape.png`
 - `wolf.png`
 - `worm.png`
 

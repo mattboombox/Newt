@@ -198,11 +198,14 @@ The game starts in Critter Tools with Plankton selected.
   every three seconds, and graze Arid and Grassland
   biomes, but not Forests or Deserts.
   Deer remain valid inhabitants of Swamps and Jungles even though those wetland
-  biomes do not feed them.
+  biomes do not feed them. Deer feed only on Grassland and Forest, Elk only on
+  Grassland, Tundra, and Taiga, and Gazelles only on Grassland and Arid. These
+  restrictions apply to natural and deposited nutrition alike.
   Deer, Elk, and Gazelles use the same open, habitable offspring placement rule
   as other ordinary species.
   Apes evolve from Monkeys, hunt all non-Plankton, non-Worm critters outside their own civilization in
-  shared habitat, forage from Swamp and Jungle foliage, and must found or join a
+  shared habitat, with assigned land Apes also hunting Worms when their home village has zero stored food.
+  They forage from Swamp and Jungle foliage and must found or join a
   village before producing offspring. Assigned Apes stop hunting while their home
   village has at least ten stored food; unassigned Apes continue hunting normally.
   A founder spends its first reproduction event creating only a Village beside
@@ -221,12 +224,13 @@ The game starts in Critter Tools with Plankton selected.
   Grassland, Arid, Swamp, Forest, or Shallows site remains. Grassland Farms, Rice Paddies, and
   Orchards produce one food every fourteen seconds; Arid Farms produce every twenty-eight
   seconds and use a drier ochre palette. Aquaculture works in Shallows and Freshwater
-  Lakes, producing every ten seconds in Hot water, fourteen in Temperate, eighteen in
-  Cold, and twenty-four in Freezing water, and is rendered as a teal water pen. Hovering
+  Lakes, producing every thirty seconds in Hot water, thirty-four in Temperate, thirty-eight
+  in Cold, and forty-four in Freezing water, and is rendered as a teal water pen. Hovering
   a production district reports its food or wood output per simulated minute.
   Construction strongly favors sites within
   four tiles of the Village. A Residential District increases capacity
-  by five. Each village may add one Harbor later if its connected building network
+  by five. Housing beyond the amount needed by the current population becomes a ruin
+  after two simulated minutes of continuous underuse. Each village may add one Harbor later if its connected building network
   reaches an open Beach, River, or Freshwater Lake tile; freshwater Harbors must
   border dry land, including diagonally. Harbor construction can also connect
   diagonally to the village building network. Harbors recruit without changing total population,
@@ -238,18 +242,22 @@ The game starts in Critter Tools with Plankton selected.
   sea life except Plankton and Worms, and return their catches to a connected Harbor. Villages
   remain more than twelve tiles apart.
   Village food storage is capped at five plus ten per Farm, Rice Paddy, Orchard, or Aquaculture district.
-  Villages start with six of a maximum thirty wood. A single three-food Lumber Camp
+  Food districts inactive for more than two simulated years become ruins. When a village
+  loses every resident, its Village and all connected buildings become unowned ruins.
+  Ruins are non-operational, can be replaced by compatible Ape construction, and decay
+  completely after two simulated years if they remain undisturbed.
+  Every newly founded village starts with twenty of a maximum thirty wood. A single three-food Lumber Camp
   can harvest connected Jungle every ten seconds, Forest every fourteen, Taiga every
-  eighteen, or Swamp every twenty-four; low-yield Arid camps, including those on Beaches,
-  produce every twenty-eight seconds. The first
+  eighteen, or Swamp every twenty-four; low-yield Grassland and Arid camps produce every
+  thirty-six seconds, including on biome-compatible Beaches. The first
   food district is free; later ones cost two wood.
   Residential Districts cost five food and four wood, Harbors cost six wood, and each
   Sailor after the Harbor's included first boat costs two wood.
   Seasonal biome changes leave Farms, Rice Paddies, Orchards, and Aquaculture standing but pause
   their production until Grassland or Arid returns for Farms, Swamp for Rice Paddies,
   Forest for Orchards, or Shallows or Freshwater Lakes for Aquaculture; districts inactive for over two
-  simulated years are removed. Housing more than thirty capacity above the resident
-  population is trimmed one outer district per simulated year. Coastline refreshes preserve
+  simulated years become ruins. Housing that remains unneeded for two simulated minutes
+  also becomes ruins. Coastline refreshes preserve
   Harbors through intermediate Beach reclassification.
   Villages with at least two hundred residents can rarely spend one hundred stored food to
   send an unaffiliated Ape settler with 100 energy to a valid distant village site. Settlers
@@ -258,9 +266,14 @@ The game starts in Critter Tools with Plankton selected.
   through blocking Plankton chains and shove Newts into nearby valid
   habitat; Mountains, Lava, and Ring World
   walls remain impassable. Their label and lighter Ape color persist
-  until they found and join a new village. Clicking a Village with the Colonist tool
+  until they found and join a new village. Founding resets the colonist to ordinary Ape
+  starting energy and creates exactly one companion Ape; later growth requires normal
+  reproduction. Clicking a Village with the Colonist tool
   chooses a distant site automatically; clicking a valid non-Village tile sends one
   there from the nearest Village. Inspection shows its destination X and Y coordinates.
+  A Sailor left as a village's only resident for sixty simulated seconds converts into
+  a same-ID colonist and seeks a valid distant site, leaving the old settlement as ruins.
+  If no destination exists, it remains a Sailor and retries sixty seconds later.
   Terrestrial critters can traverse exposed Lowlands, Canyons, and Trenches.
   Wolves form a third Therapsid branch. They move every 2.5 seconds with the
   broad terrestrial diet, including Deer, Elk, and Gazelles. They engage

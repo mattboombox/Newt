@@ -312,8 +312,9 @@ Below breeding energy they remain on, or seek within four tiles, available Jungl
 Swamp, or Arid foliage before hunting. Forest and Bog nutrition is reserved for other
 ecological niches. They eat one available terrain nutrient
 on their normal six-second action; Therapsids resume hunting when no supported forage is available.
-Deer can occupy Forests, Swamps, and Jungles but receive ambient food only from Grassland.
-Elk likewise cannot feed from Forest nutrition.
+Deer feed only on Grassland and Forest, Elk only on Grassland, Tundra, and Taiga,
+and Gazelles only on Grassland and Arid. These restrictions apply to both natural
+and deposited tile nutrition.
 From shore, a Therapsid can strike an immediately adjacent Fish
 in a Freshwater Lake and eat it without entering the lake itself.
 Mega Toads and Wolves can hunt Therapsids, but the Therapsid has a 20 percent chance
@@ -356,7 +357,8 @@ when adjacent, including diagonal neighbors and neighbors across the horizontal
 map seam. Monkeys receive no special target priority and are not pursued at range.
 
 Apes extend the Monkey branch and use the land habitat while hunting every species
-except Plankton and Worms outside their own civilization that enters shared terrain. They also forage directly
+except Plankton and Worms outside their own civilization that enters shared terrain. As an emergency
+exception, assigned land Apes hunt Worms while their home village has no stored food. They also forage directly
 from productive Swamp and Jungle foliage, moving onto adjacent wetland food when hungry.
 Village residents hunt only while their home village stores fewer than ten food;
 at ten or more they avoid prey while roaming. Unassigned Apes continue hunting so
@@ -382,8 +384,9 @@ the village or its districts, and freshwater Harbors accept dry land in any of
 the eight neighboring tiles. Other districts retain cardinal construction links.
 Grassland Farms, Rice Paddies, and Orchards add one stored food every fourteen seconds;
 Arid Farms operate at half that rate, producing every twenty-eight seconds. Aquaculture
-produces every ten seconds in Hot Shallows, fourteen in Temperate, eighteen in Cold,
-and twenty-four in Freezing water, with the same temperature rates in Freshwater Lakes.
+is slightly less productive than an Arid Farm even in ideal conditions: it produces every
+thirty seconds in Hot Shallows, thirty-four in Temperate, thirty-eight in Cold, and
+forty-four in Freezing water, with the same temperature rates in Freshwater Lakes.
 Hovering a production district reports its current food or wood output per simulated minute.
 An assigned Ape's kill is
 conserved rather than counted twice: meal energy first raises the hunter toward its
@@ -410,20 +413,22 @@ construction cost, and placement remain separate so future building kinds can jo
 plan without rewriting village advancement.
 
 Villages store food up to a base pantry of five plus ten for each Farm, Rice Paddy,
-Orchard, or Aquaculture district. They begin with six wood and can store at most thirty. One Lumber Camp may
-be built for three food and no wood on a connected Forest, Jungle, Taiga, Swamp, or Arid tile,
-including biome-compatible Beaches. It produces one wood every fourteen, ten, eighteen,
-twenty-four, or twenty-eight seconds respectively, making Arid camps the lowest-yield option.
+Orchard, or Aquaculture district. Every newly founded village begins with twenty wood and can store at most thirty. One Lumber Camp may
+be built for three food and no wood on a connected Jungle, Forest, Taiga, Swamp, Grassland, or Arid tile,
+including biome-compatible Beaches. It produces one wood every ten, fourteen, eighteen,
+twenty-four, thirty-six, or thirty-six seconds respectively, making Grassland and Arid camps the
+equally lowest-yield options.
 The first
 food district is free; later food districts cost two wood. Residential Districts cost
 five food and four wood, while a Harbor costs six wood. The Harbor includes its first
 boat and therefore its first Sailor; later Sailors cost two wood each.
 Food districts persist when seasons temporarily change their biome, but stop producing
 until Grassland or Arid returns for Farms, Swamp for Rice Paddies, Forest for Orchards,
-or a Shallows or Freshwater Lake site returns for Aquaculture. A food
-district that stays inactive for more than two simulated years is removed. Once housing
-capacity exceeds the resident population by more than thirty, one outer Residential
-District is removed each simulated year.
+or a Shallows or Freshwater Lake site returns for Aquaculture. A food district that stays
+inactive for more than two simulated years becomes a ruin. Residential Districts beyond
+the number needed for the current population begin an underuse timer; if still unused after
+two simulated minutes, they become ruins, replacing the former annual removal of housing
+only when excess capacity exceeded thirty.
 
 Villages with at least two hundred residents may rarely spend one hundred stored food to
 send an Ape settler with 100 energy to a valid village site far from its origin. Settlers
@@ -433,7 +438,9 @@ village food stores. Their route search detours around Mountain barriers while k
 Mountains impassable. They can push through blocking Plankton chains and displace Newts
 into nearby valid habitat, while Mountains,
 Lava, and Ring World walls remain impassable. Colonists are labeled separately
-and use a lighter Ape color until they found and join their new village.
+and use a lighter Ape color until they found and join their new village. Founding
+resets the traveler's energy to ordinary Ape starting energy and creates exactly one
+companion Ape on a neighboring habitable tile; later population growth uses normal reproduction.
 The Colonist tool in Events manually sends one from a clicked Village, charging up to one
 hundred food and reducing a poorer village's food to zero. Clicking a valid non-Village
 tile instead dispatches from the nearest Village to found at that exact destination.
@@ -448,18 +455,22 @@ more. Sailors have a maximum energy reserve of 28, twice the ordinary Ape cap of
 Recruitment preserves existing energy; sailors gain energy by hunting and no longer
 refill remotely from village stores. They keep catches until their own reserve reaches
 28 and carry surplus food home. Metabolism, combat, and plague drain that finite reserve,
-so village supplies cannot automatically cancel plague damage. Ape Sailors never reproduce. Sailors
+so village supplies cannot automatically cancel plague damage. Ape Sailors never reproduce. If a
+Sailor remains the only village resident for sixty simulated seconds, it becomes a same-ID Ape
+colonist with normal settler travel energy and departs for a valid distant site. Its former settlement
+becomes ruins immediately. When no destination exists, the Sailor remains and retries after another
+sixty seconds. Sailors
 occupy Beach, saltwater, Rivers, and Freshwater Lakes, hunt every implemented sea species except Plankton and Worms, and
-return their catches through a connected Harbor. Village, Farm, Harbor, and Residential
-District tiles are simulation-owned structures exposed to rendering and inspection;
+return their catches through a connected Harbor. Village, Farm, Harbor, Residential
+District, and Ruin tiles are simulation-owned structures exposed to rendering and inspection;
 destructive terrain and surface-cover changes remove invalid structures.
 Each village is limited to one Harbor. A village that originally founded beside a food
 biome may add that Harbor later once its connected district network reaches an open
 Beach or land-adjacent freshwater tile and the settlement has at least five residents.
-When a village loses its final living resident, the Village and every connected
-district are removed. Each former structure tile receives one deposited nutrient,
-representing scavengers reclaiming the abandoned settlement even on terrain that
-normally stores no natural nutrition.
+When a village loses its final living resident, the Village and every connected district
+become unowned ruins. Ruins are non-operational and add no population or storage capacity.
+Any Ape settlement may build directly over an unoccupied ruin when the tile otherwise suits
+the new structure. Ruins that remain undisturbed decay away after two simulated years.
 
 Deer, Elk, and Gazelles use the same reproduction placement rule as other
 ordinary species; only the chosen offspring tile must be open and habitable.

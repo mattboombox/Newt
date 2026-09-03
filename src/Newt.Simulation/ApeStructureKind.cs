@@ -11,4 +11,5 @@ public enum ApeStructureKind : byte
     NavalDistrict,
     ResidentialDistrict,
     Aquaculture,
+    Ruin,
 }

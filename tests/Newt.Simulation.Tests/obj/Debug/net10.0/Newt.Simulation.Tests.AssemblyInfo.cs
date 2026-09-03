@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Newt.Simulation.Tests")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+30292400fe50a0e204f919c999ed8e18f21912f2")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+6b90d8e90186dde0c25014a26532e941a8f3ecdf")]
 [assembly: System.Reflection.AssemblyProductAttribute("Newt.Simulation.Tests")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Newt.Simulation.Tests")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

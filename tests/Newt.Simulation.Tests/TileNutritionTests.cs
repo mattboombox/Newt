@@ -236,4 +236,49 @@ public sealed class TileNutritionTests
             nutritionBeforeFeeding - (water is SurfaceWaterKind.None ? 1 : 0),
             world.GetTileNutrition(position));
     }
+
+    [Theory]
+    [InlineData(CritterSpecies.Deer)]
+    [InlineData(CritterSpecies.Elk)]
+    [InlineData(CritterSpecies.Gazelle)]
+    public void GrazersCannotConsumeDepositedNutritionOutsideSupportedBiomes(
+        CritterSpecies species)
+    {
+        foreach (var biome in Enum.GetValues<Biome>())
+        {
+            if (IsSupportedGrazerBiome(species, biome))
+            {
+                continue;
+            }
+
+            var world = new SimulationWorld(1, 1, Terrain.Plains, seed: 2004);
+            world.SeasonsEnabled = false;
+            var position = new GridPosition(0, 0);
+            world.SetBiome(position, biome);
+            world.AddCritter(CritterSpecies.Wolf, position);
+            for (var tick = 0; tick < 5 * 60 * SimulationWorld.TicksPerSecond; tick++)
+            {
+                world.AdvanceOneTick();
+            }
+
+            var nutritionBeforeFeeding = world.GetTileNutrition(position);
+            world.AddCritter(species, position);
+            for (var tick = 0; tick < 7 * SimulationWorld.TicksPerSecond; tick++)
+            {
+                world.AdvanceOneTick();
+            }
+
+            Assert.Equal(CritterNutritions.Get(species).InitialEnergy, world.GetCritter(0).Energy);
+            Assert.Equal(nutritionBeforeFeeding, world.GetTileNutrition(position));
+        }
+    }
+
+    private static bool IsSupportedGrazerBiome(CritterSpecies species, Biome biome) =>
+        species switch
+        {
+            CritterSpecies.Deer => biome is Biome.Grassland or Biome.Forest,
+            CritterSpecies.Elk => biome is Biome.Grassland or Biome.Tundra or Biome.Taiga,
+            CritterSpecies.Gazelle => biome is Biome.Grassland or Biome.Arid,
+            _ => false,
+        };
 }

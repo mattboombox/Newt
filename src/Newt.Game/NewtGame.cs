@@ -82,6 +82,12 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private SpriteFont? _hudFont;
     private readonly Dictionary<CritterSpecies, Texture2D> _critterSprites = [];
     private readonly Dictionary<CritterSpecies, Texture2D> _critterFlashSprites = [];
+    private Texture2D? _sickApeSprite;
+    private Texture2D? _sickApeFlashSprite;
+    private Texture2D? _apeColonistSprite;
+    private Texture2D? _apeColonistFlashSprite;
+    private Texture2D? _apeColonistSailorSprite;
+    private Texture2D? _apeColonistSailorFlashSprite;
     private TimeSpan _accumulator;
     private KeyboardState _previousKeyboard;
     private MouseState _previousMouse;
@@ -158,8 +164,11 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         LoadCritterSprite(CritterSpecies.Newt, "newt.png");
         LoadCritterSprite(CritterSpecies.MegaToad, "mega-toad.png");
         LoadCritterSprite(CritterSpecies.Therapsid, "therapsid.png");
+        LoadCritterSprite(CritterSpecies.Monkey, "monkey.png");
         LoadCritterSprite(CritterSpecies.Ape, "ape.png");
         LoadCritterSprite(CritterSpecies.ApeSailor, "ape-sailor.png");
+        LoadCritterSprite(CritterSpecies.UndeadApe, "undead-ape.png");
+        LoadApeVariantSprites();
         LoadCritterSprite(CritterSpecies.Deer, "deer.png");
         LoadCritterSprite(CritterSpecies.Elk, "elk.png");
         LoadCritterSprite(CritterSpecies.Gazelle, "gazelle.png");
@@ -319,26 +328,61 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
 
     private void LoadCritterSprite(CritterSpecies species, string fileName)
     {
-        var path = Path.Combine(AppContext.BaseDirectory, "Content", "Sprites", "Critters", fileName);
-        if (!File.Exists(path))
+        if (!TryLoadCritterSprite(fileName, out var sprite, out var flashSprite))
         {
             return;
         }
 
-        using var stream = File.OpenRead(path);
-        var sprite = Texture2D.FromStream(GraphicsDevice, stream);
         _critterSprites.Add(species, sprite);
+        _critterFlashSprites.Add(species, flashSprite);
+    }
+
+    private void LoadApeVariantSprites()
+    {
+        if (TryLoadCritterSprite("sick-ape.png", out var sprite, out var flashSprite))
+        {
+            _sickApeSprite = sprite;
+            _sickApeFlashSprite = flashSprite;
+        }
+        if (TryLoadCritterSprite("ape-colonist.png", out sprite, out flashSprite))
+        {
+            _apeColonistSprite = sprite;
+            _apeColonistFlashSprite = flashSprite;
+        }
+        if (TryLoadCritterSprite("ape-colonist-sailor.png", out sprite, out flashSprite))
+        {
+            _apeColonistSailorSprite = sprite;
+            _apeColonistSailorFlashSprite = flashSprite;
+        }
+    }
+
+    private bool TryLoadCritterSprite(
+        string fileName,
+        out Texture2D sprite,
+        out Texture2D flashSprite)
+    {
+        var path = Path.Combine(AppContext.BaseDirectory, "Content", "Sprites", "Critters", fileName);
+        if (!File.Exists(path))
+        {
+            sprite = null!;
+            flashSprite = null!;
+            return false;
+        }
+
+        using var stream = File.OpenRead(path);
+        sprite = Texture2D.FromStream(GraphicsDevice, stream);
 
         var flashPixels = new Color[sprite.Width * sprite.Height];
         sprite.GetData(flashPixels);
         for (var index = 0; index < flashPixels.Length; index++)
         {
-            flashPixels[index] = new Color(255, 255, 255, (int)flashPixels[index].A);
+            var alpha = flashPixels[index].A;
+            flashPixels[index] = new Color(alpha, alpha, alpha, alpha);
         }
 
-        var flashSprite = new Texture2D(GraphicsDevice, sprite.Width, sprite.Height);
+        flashSprite = new Texture2D(GraphicsDevice, sprite.Width, sprite.Height);
         flashSprite.SetData(flashPixels);
-        _critterFlashSprites.Add(species, flashSprite);
+        return true;
     }
 
     private void SetWindowIconFromNewtSprite()
@@ -413,10 +457,33 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
 
     private void DrawCritter(CritterSnapshot critter, int screenX, int screenY)
     {
-        if (_critterSprites.TryGetValue(critter.Species, out var sprite))
+        Texture2D? sprite;
+        Texture2D? flashSprite;
+        var colonistInWater = critter.IsColonist && IsWaterTile(critter.Position);
+        if (critter.Species is CritterSpecies.Ape or CritterSpecies.ApeSailor &&
+            critter.Plague is PlagueKind.Plague or PlagueKind.Zombie &&
+            _sickApeSprite is not null)
         {
-            if (critter.IsDamageFlashing &&
-                _critterFlashSprites.TryGetValue(critter.Species, out var flashSprite))
+            sprite = _sickApeSprite;
+            flashSprite = _sickApeFlashSprite;
+        }
+        else if (critter.IsColonist &&
+            (colonistInWater ? _apeColonistSailorSprite : _apeColonistSprite) is not null)
+        {
+            sprite = colonistInWater ? _apeColonistSailorSprite : _apeColonistSprite;
+            flashSprite = colonistInWater
+                ? _apeColonistSailorFlashSprite
+                : _apeColonistFlashSprite;
+        }
+        else
+        {
+            _critterSprites.TryGetValue(critter.Species, out sprite);
+            _critterFlashSprites.TryGetValue(critter.Species, out flashSprite);
+        }
+
+        if (sprite is not null)
+        {
+            if (critter.IsDamageFlashing && flashSprite is not null)
             {
                 sprite = flashSprite;
             }
@@ -441,6 +508,10 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 GetCritterMarkerSize()),
             GetCritterColor(critter));
     }
+
+    private bool IsWaterTile(GridPosition position) =>
+        _world.GetTerrain(position) is Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows ||
+        _world.GetSurfaceWater(position) is SurfaceWaterKind.River or SurfaceWaterKind.FreshwaterLake;
 
     private int GetCritterMarkerSize() => TileSize <= 2
         ? 1
@@ -1937,6 +2008,21 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 _spriteBatch.Draw(_pixel, new Rectangle(x, y + size / 3, size, Math.Max(1, size * 2 / 3)), new Color(151, 105, 72));
                 _spriteBatch.Draw(_pixel, new Rectangle(x + size / 5, y, Math.Max(1, size * 3 / 5), Math.Max(1, size / 2)), new Color(92, 61, 45));
                 break;
+            case ApeStructureKind.Ruin:
+                var rubbleColor = new Color(91, 84, 78);
+                _spriteBatch.Draw(
+                    _pixel,
+                    new Rectangle(x, y + size * 2 / 3, Math.Max(1, size / 2), Math.Max(1, size / 3)),
+                    rubbleColor);
+                _spriteBatch.Draw(
+                    _pixel,
+                    new Rectangle(x + size * 2 / 3, y + size / 2, Math.Max(1, size / 3), Math.Max(1, size / 2)),
+                    rubbleColor);
+                _spriteBatch.Draw(
+                    _pixel,
+                    new Rectangle(x + size / 3, y + size * 3 / 4, Math.Max(1, size / 3), Math.Max(1, size / 4)),
+                    new Color(126, 112, 98));
+                break;
         }
     }
 
@@ -1950,6 +2036,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         ApeStructureKind.LumberCamp => "Lumber Camp",
         ApeStructureKind.NavalDistrict => "Harbor",
         ApeStructureKind.ResidentialDistrict => "Residential District",
+        ApeStructureKind.Ruin => "Ruins",
         _ => structure.ToString(),
     };
 
