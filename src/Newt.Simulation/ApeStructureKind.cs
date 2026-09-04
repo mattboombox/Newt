@@ -9,6 +9,7 @@ public enum ApeStructureKind : byte
     Orchard,
     LumberCamp,
     NavalDistrict,
+    MilitaryDistrict,
     ResidentialDistrict,
     Aquaculture,
     Ruin,

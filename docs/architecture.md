@@ -253,11 +253,26 @@ and may also enter shallows and freshwater lakes, but open and deep ocean are
 invalid habitat. Reproduction has no additional freshwater or terrain gate;
 offspring only need an adjacent tile in which they can survive.
 
+Mega Spiders evolve from Sea Scorpions into huge land predators that can also
+occupy Shallows. They hunt every other critter species with a six-tile perception
+radius, but never cannibalize. Attacks on other predators use ordinary 50/50 combat
+instead of instant predation; a Mega Spider win deals two energy damage. A target
+already caught in the owner's Web is stored without a combat roll. Their first
+reproduction event creates one passable Web on their tile or
+a neighboring valid land/Shallows tile instead of producing offspring. A
+non-spider entering a Web cannot move until released or collected; its owner
+returns, converts the trapped critter's body size into stored food, and consumes
+one stored unit on each metabolism interval. Later reproduction is ordinary
+while the Web exists. Removing the Web makes the owner's next reproduction build
+a replacement, while removing or evolving the owner removes its now-orphaned Web
+immediately. Lava, stone, and invalid terrain changes also destroy Webs.
+
 Wolves are a fast third branch from Therapsids. They scan five tiles and move every
 2.5 seconds while hunting broad terrestrial prey, including Deer, Elk, and
 Gazelles. Therapsids are held as last-resort targets. Wolves never pursue Mega
 Toads, but Mega Toads do hunt Wolves; a Toad-initiated encounter still uses the
-mutual-predator 50/50 damage roll rather than instant predation.
+mutual-predator 50/50 roll rather than instant predation, with the winner dealing
+two energy damage.
 
 Wolf reproduction is structure-mediated. On first reaching reproduction energy,
 a Wolf reserves the nearest suitable Hill within eight tiles, falling back to its
@@ -317,10 +332,11 @@ and Gazelles only on Grassland and Arid. These restrictions apply to both natura
 and deposited tile nutrition.
 From shore, a Therapsid can strike an immediately adjacent Fish
 in a Freshwater Lake and eat it without entering the lake itself.
-Mega Toads and Wolves can hunt Therapsids, but the Therapsid has a 20 percent chance
-to win each one-damage combat exchange, a 60 percent penalty from the usual chance. Therapsids
-still do not include either species in their hunting diet, so they defend themselves
-without pursuing them.
+Mega Toads and Wolves can hunt Therapsids, and the Therapsid uses the same 50/50
+combat roll as every other combatant. Therapsids still do not include either
+species in their hunting diet, so they defend themselves without pursuing them.
+A Therapsid win deals one energy damage; a win by a Toothed Whale, Sea Scorpion,
+Mega Toad, Mega Spider, Wolf, or Squid deals two. Apes also remain at one damage.
 Toothed Whales are the marine Therapsid branch. They inhabit Deep Ocean, Ocean,
 and Shallows, move every four seconds, and scan seven Manhattan tiles for
 animal-eating marine prey: Sea Scorpions, Fish, Squid, and Ape Sailors.
@@ -413,14 +429,14 @@ construction cost, and placement remain separate so future building kinds can jo
 plan without rewriting village advancement.
 
 Villages store food up to a base pantry of five plus ten for each Farm, Rice Paddy,
-Orchard, or Aquaculture district. Every newly founded village begins with twenty wood and can store at most thirty. One Lumber Camp may
+Orchard, or Aquaculture district. Every newly founded village begins with twenty wood and can store at most thirty. A Lumber Camp may
 be built for three food and no wood on a connected Jungle, Forest, Taiga, Swamp, Grassland, or Arid tile,
 including biome-compatible Beaches. It produces one wood every ten, fourteen, eighteen,
 twenty-four, thirty-six, or thirty-six seconds respectively, making Grassland and Arid camps the
 equally lowest-yield options.
 The first
 food district is free; later food districts cost two wood. Residential Districts cost
-five food and four wood, while a Harbor costs six wood. The Harbor includes its first
+five food and four wood, while Harbors and Military Districts cost six wood. A Harbor includes its first
 boat and therefore its first Sailor; later Sailors cost two wood each.
 Food districts persist when seasons temporarily change their biome, but stop producing
 until Grassland or Arid returns for Farms, Swamp for Rice Paddies, Forest for Orchards,
@@ -430,7 +446,7 @@ the number needed for the current population begin an underuse timer; if still u
 two simulated minutes, they become ruins, replacing the former annual removal of housing
 only when excess capacity exceeded thirty.
 
-Villages with at least two hundred residents may rarely spend one hundred stored food to
+Villages with at least one hundred residents may rarely spend one hundred stored food to
 send an Ape settler with 100 energy to a valid village site far from its origin. Settlers
 are not residents of their source village, ignore predators while traveling, and cross
 all non-Mountain land and water terrain, including sea ice and Stone, without using
@@ -449,9 +465,10 @@ Climate coastline rebuilding validates Harbors only after Beach classification f
 so the temporary landform stage cannot demolish them.
 
 Harbors recruit ordinary residents into Ape Sailors at thirty-second intervals without
-changing total village population or the recruit's stable identity. The village quota
+changing total village population or the recruit's stable identity. With one Harbor, the village quota
 is one Sailor at five residents, two at ten, three at fifteen, and four at twenty or
-more. Sailors have a maximum energy reserve of 28, twice the ordinary Ape cap of 14.
+more; each additional Harbor raises the ceiling by four. Sailors have a maximum energy reserve
+of 28, twice the ordinary Ape cap of 14.
 Recruitment preserves existing energy; sailors gain energy by hunting and no longer
 refill remotely from village stores. They keep catches until their own reserve reaches
 28 and carry surplus food home. Metabolism, combat, and plague drain that finite reserve,
@@ -461,11 +478,23 @@ colonist with normal settler travel energy and departs for a valid distant site.
 becomes ruins immediately. When no destination exists, the Sailor remains and retries after another
 sixty seconds. Sailors
 occupy Beach, saltwater, Rivers, and Freshwater Lakes, hunt every implemented sea species except Plankton and Worms, and
-return their catches through a connected Harbor. Village, Farm, Harbor, Residential
+return their catches through a connected Harbor. Each Harbor supports up to four Sailors;
+a village can support one Harbor and one Lumber Camp initially, then one additional building
+of each kind per 150 residents.
+
+Every complete group of 50 residents allows one Military District. Like a Harbor, it converts
+ordinary residents at thirty-second intervals without changing population or stable identity,
+and each district supports four Ape Warriors. The first Warrior supplied by each district is
+free; subsequent Warriors cost two wood. Warriors cannot reproduce, remain land dwellers,
+hunt Sea Scorpions, Mega Spiders, Mega Toads, Wolves, Toothed Whales, and Undead Apes, and
+deal three energy damage on each successful combat roll. If either plague infects a Warrior,
+it immediately becomes a regular sick Ape while retaining its village membership.
+
+Village, Farm, Harbor, Military District, Residential
 District, and Ruin tiles are simulation-owned structures exposed to rendering and inspection;
 destructive terrain and surface-cover changes remove invalid structures.
-Each village is limited to one Harbor. A village that originally founded beside a food
-biome may add that Harbor later once its connected district network reaches an open
+An eligible village that originally founded beside a food
+biome may add a Harbor later once its connected district network reaches an open
 Beach or land-adjacent freshwater tile and the settlement has at least five residents.
 When a village loses its final living resident, the Village and every connected district
 become unowned ruins. Ruins are non-operational and add no population or storage capacity.

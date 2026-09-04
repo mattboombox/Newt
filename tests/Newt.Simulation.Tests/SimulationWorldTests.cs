@@ -1163,6 +1163,7 @@ public sealed class SimulationWorldTests
         {
             CritterSpecies.Jellyfish,
             CritterSpecies.SeaScorpion,
+            CritterSpecies.MegaSpider,
             CritterSpecies.Nautilus,
             CritterSpecies.Squid,
             CritterSpecies.MegaToad,
@@ -1439,7 +1440,7 @@ public sealed class SimulationWorldTests
     }
 
     [Fact]
-    public void MutualPredatorCombatDealsOneDamageInsteadOfInstantlyEatingTheLoser()
+    public void HeavyMutualPredatorCombatDealsTwoDamageInsteadOfInstantPredation()
     {
         var world = new SimulationWorld(1, 2, Terrain.Shallows, seed: 52);
         world.SeasonsEnabled = false;
@@ -1461,7 +1462,7 @@ public sealed class SimulationWorldTests
         Assert.Equal(1, world.GetCritterCount(CritterSpecies.Squid));
         Assert.Equal(1, world.GetCritterCount(CritterSpecies.SeaScorpion));
         Assert.Equal(
-            7,
+            6,
             Enumerable.Range(0, world.CritterCount)
                 .Select(world.GetCritter)
                 .Sum(critter => critter.Energy));
@@ -2023,12 +2024,13 @@ public sealed class SimulationWorldTests
     }
 
     [Fact]
-    public void WormsArePreyOnlyForSquidSeaScorpionsAndMegaToads()
+    public void WormsArePreyOnlyForEstablishedWormPredatorsAndMegaSpiders()
     {
         foreach (var predator in Enum.GetValues<CritterSpecies>())
         {
             Assert.Equal(
-                predator is CritterSpecies.Squid or CritterSpecies.SeaScorpion or CritterSpecies.MegaToad,
+                predator is CritterSpecies.Squid or CritterSpecies.SeaScorpion or
+                    CritterSpecies.MegaToad or CritterSpecies.MegaSpider,
                 SimulationWorld.CanEat(predator, CritterSpecies.Worm));
         }
     }
@@ -2345,10 +2347,8 @@ public sealed class SimulationWorldTests
     {
         Assert.True(SimulationWorld.CanEat(CritterSpecies.MegaToad, prey));
         Assert.False(SimulationWorld.CanEat(prey, CritterSpecies.MegaToad));
-        Assert.True(SimulationWorld.CanDefendAgainst(prey, CritterSpecies.MegaToad));
-        Assert.Equal(
-            20,
-            SimulationWorld.GetDefenderCombatWinChancePercent(prey, CritterSpecies.MegaToad));
+        Assert.True(SimulationWorld.CanFightBackAgainst(prey, CritterSpecies.MegaToad));
+        Assert.Equal(2, SimulationWorld.GetCombatDamage(prey));
 
         var world = new SimulationWorld(1, 2, Terrain.Shallows, seed: 73);
         world.SeasonsEnabled = false;
@@ -2362,7 +2362,7 @@ public sealed class SimulationWorldTests
 
         Assert.Equal(2, world.CritterCount);
         Assert.Equal(
-            8,
+            7,
             Enumerable.Range(0, world.CritterCount)
                 .Select(world.GetCritter)
                 .Sum(critter => critter.Energy));
@@ -2872,34 +2872,33 @@ public sealed class SimulationWorldTests
     }
 
     [Fact]
-    public void TherapsidDefenseDoesNotExpandItsHuntingDiet()
+    public void TherapsidCanFightBackWithoutExpandingItsHuntingDiet()
     {
         Assert.True(SimulationWorld.CanEat(CritterSpecies.MegaToad, CritterSpecies.Therapsid));
         Assert.False(SimulationWorld.CanEat(CritterSpecies.Therapsid, CritterSpecies.MegaToad));
-        Assert.True(SimulationWorld.CanDefendAgainst(
+        Assert.True(SimulationWorld.CanFightBackAgainst(
             CritterSpecies.Therapsid,
             CritterSpecies.MegaToad));
-        Assert.True(SimulationWorld.CanDefendAgainst(
+        Assert.True(SimulationWorld.CanFightBackAgainst(
             CritterSpecies.Therapsid,
             CritterSpecies.Wolf));
-        Assert.False(SimulationWorld.CanDefendAgainst(
+        Assert.False(SimulationWorld.CanFightBackAgainst(
             CritterSpecies.Therapsid,
             CritterSpecies.Fish));
-        Assert.Equal(
-            20,
-            SimulationWorld.GetDefenderCombatWinChancePercent(
-                CritterSpecies.Therapsid,
-                CritterSpecies.MegaToad));
-        Assert.Equal(
-            20,
-            SimulationWorld.GetDefenderCombatWinChancePercent(
-                CritterSpecies.Therapsid,
-                CritterSpecies.Wolf));
-        Assert.Equal(
-            50,
-            SimulationWorld.GetDefenderCombatWinChancePercent(
-                CritterSpecies.SeaScorpion,
-                CritterSpecies.Squid));
+        Assert.Equal(1, SimulationWorld.GetCombatDamage(CritterSpecies.Therapsid));
+        Assert.Equal(1, SimulationWorld.GetCombatDamage(CritterSpecies.Ape));
+    }
+
+    [Theory]
+    [InlineData(CritterSpecies.ToothedWhale)]
+    [InlineData(CritterSpecies.SeaScorpion)]
+    [InlineData(CritterSpecies.MegaToad)]
+    [InlineData(CritterSpecies.MegaSpider)]
+    [InlineData(CritterSpecies.Wolf)]
+    [InlineData(CritterSpecies.Squid)]
+    public void HeavyPredatorsDealTwoCombatDamage(CritterSpecies species)
+    {
+        Assert.Equal(2, SimulationWorld.GetCombatDamage(species));
     }
 
     [Fact]
@@ -2924,7 +2923,7 @@ public sealed class SimulationWorldTests
         }
 
         Assert.True(loser.Id.IsValid);
-        Assert.Equal(3, loser.Energy);
+        Assert.Equal(2, loser.Energy);
         for (var tick = 1; tick < SimulationWorld.CombatDamageFlashTicks; tick++)
         {
             world.AdvanceOneTick();
@@ -3379,7 +3378,7 @@ public sealed class SimulationWorldTests
         Assert.Equal(1, world.GetCritterCount(predator));
         Assert.Equal(1, world.GetCritterCount(CritterSpecies.Therapsid));
         Assert.Equal(
-            9,
+            8,
             Enumerable.Range(0, world.CritterCount)
                 .Select(world.GetCritter)
                 .Sum(critter => critter.Energy));
@@ -3404,7 +3403,7 @@ public sealed class SimulationWorldTests
         Assert.Equal(1, world.GetCritterCount(CritterSpecies.MegaToad));
         Assert.Equal(1, world.GetCritterCount(CritterSpecies.Wolf));
         Assert.Equal(
-            9,
+            8,
             Enumerable.Range(0, world.CritterCount)
                 .Select(world.GetCritter)
                 .Sum(critter => critter.Energy));

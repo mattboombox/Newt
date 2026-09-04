@@ -177,7 +177,7 @@ The game starts in Critter Tools with Plankton selected.
   in shared saltwater habitat. They consume Worms and Nautiluses only when already adjacent.
   They lay drifting eggs that move like Plankton and hatch when Squid prey comes
   within two tiles or when they enter Shallows. Squid and Sea Scorpions resolve mutual attacks with a 50/50
-  roll that deals one energy damage rather than instant predation. Sea Scorpions
+  roll; either species deals two energy damage when it wins. Sea Scorpions
   move every four seconds and hunt Fish, Crabs, Newts, Squid,
   Therapsids, Monkeys, Apes, Wolves, Ape Sailors, Deer, Elk, and Gazelles
   across saltwater and Beaches; they consume Worms, Trilobites, and Nautiluses only when adjacent, while
@@ -187,8 +187,10 @@ The game starts in Critter Tools with Plankton selected.
   six seconds, and use available Jungle, Swamp, or Arid forage within four tiles while
   below breeding energy. They eat terrain food on their normal action and hunt when
   no usable forage is available. They do not hunt Mega Toads or Wolves, but defend
-  themselves with a 20% chance to win each one-damage combat exchange when either
-  predator attacks.
+  themselves with the standard 50% chance to win when either predator attacks.
+  A Therapsid win deals one energy damage, while a win by a Toothed Whale, Sea
+  Scorpion, Mega Toad, Mega Spider, Wolf, or Squid deals two. Apes remain
+  one-damage combatants.
   Monkeys are non-predatory,
   feed and remain on Swamp, Jungle, or Forest foliage until ready to breed,
   and reproduce at eight energy for a cost of five. Deer evolve as a second
@@ -230,28 +232,34 @@ The game starts in Critter Tools with Plankton selected.
   Construction strongly favors sites within
   four tiles of the Village. A Residential District increases capacity
   by five. Housing beyond the amount needed by the current population becomes a ruin
-  after two simulated minutes of continuous underuse. Each village may add one Harbor later if its connected building network
+  after two simulated minutes of continuous underuse. Each village may add a Harbor later if its connected building network
   reaches an open Beach, River, or Freshwater Lake tile; freshwater Harbors must
   border dry land, including diagonally. Harbor construction can also connect
   diagonally to the village building network. Harbors recruit without changing total population,
   allowing one Sailor per five residents up to four at twenty residents. Sailors
   have 28 maximum energy and replenish by hunting, without automatic village refills.
   They move in all eight directions through Beach, saltwater, Rivers, and Freshwater
-  Lakes, including diagonal freshwater Mountain corridors and horizontal map wrap.
-  They never reproduce and hunt all implemented
-  sea life except Plankton and Worms, and return their catches to a connected Harbor. Villages
+  Lakes, including diagonal freshwater Mountain corridors and horizontal map wrap. They never
+  reproduce, hunt all implemented sea life except Plankton and Worms, and return their catches
+  to a connected Harbor. A village may
+  support one Harbor and one Lumber Camp initially, plus another of each for every 150 residents.
+  Every 50 residents permits one Military District, which converts up to four civilian Apes into
+  non-reproducing Ape Warriors without changing village population. Warriors hunt the species that
+  prey on ordinary Apes and deal three energy damage on a successful combat roll. A Military District
+  costs six wood; its first Warrior is free and later Warriors cost two wood. Infection immediately
+  converts a Warrior into a regular sick Ape, preserving its identity and village membership. Villages
   remain more than twelve tiles apart.
   Village food storage is capped at five plus ten per Farm, Rice Paddy, Orchard, or Aquaculture district.
   Food districts inactive for more than two simulated years become ruins. When a village
   loses every resident, its Village and all connected buildings become unowned ruins.
   Ruins are non-operational, can be replaced by compatible Ape construction, and decay
   completely after two simulated years if they remain undisturbed.
-  Every newly founded village starts with twenty of a maximum thirty wood. A single three-food Lumber Camp
+  Every newly founded village starts with twenty of a maximum thirty wood. A three-food Lumber Camp
   can harvest connected Jungle every ten seconds, Forest every fourteen, Taiga every
   eighteen, or Swamp every twenty-four; low-yield Grassland and Arid camps produce every
   thirty-six seconds, including on biome-compatible Beaches. The first
   food district is free; later ones cost two wood.
-  Residential Districts cost five food and four wood, Harbors cost six wood, and each
+  Residential Districts cost five food and four wood, Harbors and Military Districts cost six wood, and each
   Sailor after the Harbor's included first boat costs two wood.
   Seasonal biome changes leave Farms, Rice Paddies, Orchards, and Aquaculture standing but pause
   their production until Grassland or Arid returns for Farms, Swamp for Rice Paddies,
@@ -259,7 +267,7 @@ The game starts in Critter Tools with Plankton selected.
   simulated years become ruins. Housing that remains unneeded for two simulated minutes
   also becomes ruins. Coastline refreshes preserve
   Harbors through intermediate Beach reclassification.
-  Villages with at least two hundred residents can rarely spend one hundred stored food to
+  Villages with at least one hundred residents can rarely spend one hundred stored food to
   send an unaffiliated Ape settler with 100 energy to a valid distant village site. Settlers
   ignore predators and cross all non-Mountain land and water terrain, including sea ice
   and Stone, routing around Mountain barriers when a passable route exists. They push
@@ -322,6 +330,13 @@ The game starts in Critter Tools with Plankton selected.
   freshwater migration after birth or evolution. Mega
   Toads hunt fish and newts locally. Toads can enter land, shallows, and
   freshwater lakes, but not open ocean.
+  Mega Spiders evolve from Sea Scorpions as huge land predators that also use
+  Shallows. They hunt all other critters but never each other. Other predators
+  fight them with the standard 50/50 combat roll instead of being eaten outright;
+  Web-caught prey remains a guaranteed stored catch. Their first reproduction builds a single Web
+  instead of offspring; later reproduction is normal while that Web survives.
+  Passing non-spiders become stuck, prompting the owner to return and cache them
+  as food that offsets later metabolism. Orphaned and terrain-invalid Webs vanish.
 - Every species may occupy Ice Sheets: aquatic critters are treated as moving
   beneath them and land critters on top. Critters stranded by terrain or climate
   changes survive and move at one quarter speed toward nearby valid habitat. They

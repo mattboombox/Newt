@@ -91,6 +91,17 @@ public static class CritterNutritions
         ReproductionThreshold: 10,
         ReproductionCost: 7);
 
+    private static readonly CritterNutrition MegaSpider = new(
+        BodySize: CritterBodySize.Huge,
+        FeedingStrategy: CritterFeedingStrategy.Hunter,
+        InitialEnergy: 5,
+        MaximumEnergy: 16,
+        HungryThreshold: 4,
+        MetabolismIntervalTicks: 70 * SimulationWorld.TicksPerSecond,
+        MetabolismCost: 1,
+        ReproductionThreshold: 14,
+        ReproductionCost: 9);
+
     private static readonly CritterNutrition Nautilus = new(
         BodySize: CritterBodySize.Big,
         FeedingStrategy: CritterFeedingStrategy.TerrainFirst,
@@ -252,6 +263,7 @@ public static class CritterNutritions
         CritterSpecies.Worm => Trilobite,
         CritterSpecies.Trilobite => Trilobite,
         CritterSpecies.SeaScorpion => SeaScorpion,
+        CritterSpecies.MegaSpider => MegaSpider,
         CritterSpecies.Nautilus => Nautilus,
         CritterSpecies.Fish => Fish,
         CritterSpecies.Newt => Newt,
@@ -263,6 +275,7 @@ public static class CritterNutritions
         CritterSpecies.Monkey => Monkey,
         CritterSpecies.Ape => Ape,
         CritterSpecies.ApeSailor => Ape with { MaximumEnergy = 2 * Ape.MaximumEnergy },
+        CritterSpecies.ApeWarrior => Ape,
         CritterSpecies.UndeadApe => Ape with { ReproductionThreshold = 0, ReproductionCost = 0 },
         CritterSpecies.Deer => Deer,
         CritterSpecies.Elk => Elk,

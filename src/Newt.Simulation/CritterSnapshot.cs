@@ -14,6 +14,6 @@ public readonly record struct CritterSnapshot(
     bool IsColonist = false,
     GridPosition? ColonistDestination = null)
 {
-    public bool IsPlagueImmune => Species is CritterSpecies.Ape or CritterSpecies.ApeSailor &&
+    public bool IsPlagueImmune => Species is CritterSpecies.Ape or CritterSpecies.ApeSailor or CritterSpecies.ApeWarrior &&
         Id.Value % 5 == 0;
 }

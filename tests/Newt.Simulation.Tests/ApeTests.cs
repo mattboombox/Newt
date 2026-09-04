@@ -145,7 +145,7 @@ public sealed class ApeTests
     {
         foreach (var species in Enum.GetValues<CritterSpecies>())
         {
-            Assert.Equal(species is CritterSpecies.Ape or CritterSpecies.ApeSailor,
+            Assert.Equal(species is CritterSpecies.Ape or CritterSpecies.ApeSailor or CritterSpecies.ApeWarrior,
                 SimulationWorld.CanEat(CritterSpecies.UndeadApe, species));
         }
         var world = CreatePlagueWorld(2, 1, Terrain.Ice);
@@ -401,7 +401,7 @@ public sealed class ApeTests
         {
             var isApePrey = species is not
                 (CritterSpecies.Plankton or CritterSpecies.Worm or
-                    CritterSpecies.Ape or CritterSpecies.ApeSailor);
+                    CritterSpecies.Ape or CritterSpecies.ApeSailor or CritterSpecies.ApeWarrior);
             Assert.Equal(
                 isApePrey,
                 SimulationWorld.CanEat(CritterSpecies.Ape, species));
@@ -1184,9 +1184,115 @@ public sealed class ApeTests
     }
 
     [Fact]
-    public void ApeSailorsCannotReproduceEvenAtFullEnergy()
+    public void AdditionalHarborsEachRaiseTheSailorLimitByFour()
+    {
+        Assert.Equal(4, SimulationWorld.GetApeSailorLimitForPopulation(150, harborCount: 1));
+        Assert.Equal(8, SimulationWorld.GetApeSailorLimitForPopulation(150, harborCount: 2));
+        Assert.Equal(12, SimulationWorld.GetApeSailorLimitForPopulation(150, harborCount: 3));
+    }
+
+    [Theory]
+    [InlineData(149, 1)]
+    [InlineData(150, 2)]
+    [InlineData(299, 2)]
+    [InlineData(300, 3)]
+    public void HarborAndLumberCampLimitAddsOnePerOneHundredFiftyResidents(
+        int population,
+        int expectedLimit)
+    {
+        Assert.Equal(
+            expectedLimit,
+            SimulationWorld.GetApeInfrastructureLimitForPopulation(population));
+    }
+
+    [Theory]
+    [InlineData(49, 0)]
+    [InlineData(50, 1)]
+    [InlineData(99, 1)]
+    [InlineData(100, 2)]
+    public void MilitaryDistrictLimitAddsOnePerFiftyResidents(int population, int expectedLimit)
+    {
+        Assert.Equal(
+            expectedLimit,
+            SimulationWorld.GetApeMilitaryDistrictLimitForPopulation(population));
+    }
+
+    [Theory]
+    [InlineData(0, 0)]
+    [InlineData(1, 4)]
+    [InlineData(2, 8)]
+    public void EachMilitaryDistrictSupportsFourWarriors(int districts, int expectedLimit)
+    {
+        Assert.Equal(
+            expectedLimit,
+            SimulationWorld.GetApeWarriorLimitForMilitaryDistricts(districts));
+    }
+
+    [Fact]
+    public void MilitaryDistrictRecruitsFourWarriorsWithoutChangingPopulation()
+    {
+        var (world, village) = CreateVillageForPlague(50);
+        NaturalEvents.SetEnabled(world, false);
+        Assert.True(world.TryBuildApeStructure(
+            village.Y * world.Width + village.X,
+            ApeStructureKind.MilitaryDistrict));
+        foreach (var position in AllPositions(world))
+        {
+            world.SetBiome(position, Biome.Desert);
+        }
+
+        for (var tick = 0; tick < 125 * SimulationWorld.TicksPerSecond; tick++)
+        {
+            world.AdvanceOneTick();
+        }
+
+        Assert.Equal(50, world.GetApeVillageResidentCount(village));
+        Assert.Equal(46, world.GetApeVillageCivilianCount(village));
+        Assert.Equal(4, world.GetApeVillageWarriorCount(village));
+        Assert.Equal(4, world.GetCritterCount(CritterSpecies.ApeWarrior));
+    }
+
+    [Fact]
+    public void ApeWarriorsHuntApePredatorsDealThreeDamageAndCannotReproduce()
+    {
+        var expectedPrey = new HashSet<CritterSpecies>
+        {
+            CritterSpecies.SeaScorpion,
+            CritterSpecies.MegaSpider,
+            CritterSpecies.MegaToad,
+            CritterSpecies.Wolf,
+            CritterSpecies.ToothedWhale,
+            CritterSpecies.UndeadApe,
+        };
+        Assert.Equal(
+            expectedPrey,
+            Enum.GetValues<CritterSpecies>()
+                .Where(species => SimulationWorld.CanEat(CritterSpecies.ApeWarrior, species))
+                .ToHashSet());
+        Assert.Equal(3, SimulationWorld.GetCombatDamage(CritterSpecies.ApeWarrior));
+        Assert.False(SimulationWorld.CanSpeciesReproduce(CritterSpecies.ApeWarrior));
+    }
+
+    [Theory]
+    [InlineData(PlagueKind.Plague)]
+    [InlineData(PlagueKind.Zombie)]
+    public void InfectionImmediatelyConvertsWarriorToRegularSickApe(PlagueKind kind)
+    {
+        var world = CreatePlagueWorld(1, 1);
+        var position = new GridPosition(0, 0);
+        var warriorId = world.AddCritter(CritterSpecies.ApeWarrior, position);
+
+        Assert.True(world.TryInfectApeAt(position, kind));
+        Assert.True(world.TryGetCritter(warriorId, out var infected));
+        Assert.Equal(CritterSpecies.Ape, infected.Species);
+        Assert.Equal(kind, infected.Plague);
+    }
+
+    [Fact]
+    public void ApeSpecialistsCannotReproduceEvenAtFullEnergy()
     {
         Assert.False(SimulationWorld.CanSpeciesReproduce(CritterSpecies.ApeSailor));
+        Assert.False(SimulationWorld.CanSpeciesReproduce(CritterSpecies.ApeWarrior));
         Assert.True(SimulationWorld.CanSpeciesReproduce(CritterSpecies.Ape));
     }
 

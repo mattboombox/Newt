@@ -38,7 +38,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private static readonly WorldTool[] CritterToolOrder =
         [WorldTool.Plankton, WorldTool.Jellyfish, WorldTool.Worm, WorldTool.Trilobite,
             WorldTool.SeaScorpion, WorldTool.Nautilus, WorldTool.Squid, WorldTool.SquidEgg,
-            WorldTool.Fish, WorldTool.Newt, WorldTool.MegaToad, WorldTool.Therapsid,
+            WorldTool.Fish, WorldTool.Newt, WorldTool.MegaToad, WorldTool.MegaSpider, WorldTool.Therapsid,
             WorldTool.Monkey, WorldTool.Ape, WorldTool.Deer, WorldTool.Elk,
             WorldTool.Gazelle, WorldTool.Wolf, WorldTool.Crab, WorldTool.ToothedWhale,
             WorldTool.BaleenWhale];
@@ -158,6 +158,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         LoadCritterSprite(CritterSpecies.Worm, "worm.png");
         LoadCritterSprite(CritterSpecies.Trilobite, "trilobite.png");
         LoadCritterSprite(CritterSpecies.SeaScorpion, "sea-scorpion.png");
+        LoadCritterSprite(CritterSpecies.MegaSpider, "mega-spider.png");
         LoadCritterSprite(CritterSpecies.Nautilus, "nautilus.png");
         LoadCritterSprite(CritterSpecies.Squid, "squid.png");
         LoadCritterSprite(CritterSpecies.Fish, "fish.png");
@@ -167,6 +168,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         LoadCritterSprite(CritterSpecies.Monkey, "monkey.png");
         LoadCritterSprite(CritterSpecies.Ape, "ape.png");
         LoadCritterSprite(CritterSpecies.ApeSailor, "ape-sailor.png");
+        LoadCritterSprite(CritterSpecies.ApeWarrior, "ape-warrior.png");
         LoadCritterSprite(CritterSpecies.UndeadApe, "undead-ape.png");
         LoadApeVariantSprites();
         LoadCritterSprite(CritterSpecies.Deer, "deer.png");
@@ -286,6 +288,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 }
                 DrawApeStructure(screenX, screenY, position);
                 DrawWolfDen(screenX, screenY, position);
+                DrawMegaSpiderWeb(screenX, screenY, position);
                 DrawTeleporter(screenX, screenY, position);
                 DrawVolcanoVent(screenX, screenY, position);
                 DrawImpactWave(screenX, screenY, position);
@@ -816,6 +819,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 WorldTool.Trilobite or WorldTool.SeaScorpion or WorldTool.Nautilus or
                 WorldTool.Squid or WorldTool.SquidEgg or
                 WorldTool.Fish or WorldTool.Newt or WorldTool.MegaToad or
+                WorldTool.MegaSpider or
                 WorldTool.Therapsid or WorldTool.Monkey or WorldTool.Deer or
                 WorldTool.Ape or WorldTool.Elk or WorldTool.Gazelle or
                 WorldTool.Wolf or WorldTool.Crab or WorldTool.ToothedWhale or WorldTool.BaleenWhale
@@ -872,6 +876,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         WorldTool.Worm => CritterSpecies.Worm,
         WorldTool.Trilobite => CritterSpecies.Trilobite,
         WorldTool.SeaScorpion => CritterSpecies.SeaScorpion,
+        WorldTool.MegaSpider => CritterSpecies.MegaSpider,
         WorldTool.Nautilus => CritterSpecies.Nautilus,
         WorldTool.Squid => CritterSpecies.Squid,
         WorldTool.SquidEgg => CritterSpecies.SquidEgg,
@@ -1008,15 +1013,14 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         _spriteBatch.Draw(_pixel, new Rectangle(0, hudY, width, HudHeight), new Color(16, 19, 22));
         _spriteBatch.Draw(_pixel, new Rectangle(0, hudY, width, 2), new Color(76, 91, 102));
 
-        var worldWidth = Math.Max(220, width / 4);
-        var toolWidth = Math.Max(190, width / 5);
-        var toolX = worldWidth;
-        var tileX = Math.Min(width - 1, toolX + toolWidth);
-        var entityWidth = Math.Clamp(width / 3, 320, 460);
-        var entityX = Math.Max(tileX, width - entityWidth);
+        var toolX = width / 5;
+        var tileX = width * 2 / 5;
+        var critterX = width * 3 / 5;
+        var buildingX = width * 4 / 5;
         DrawHudDivider(toolX, hudY);
         DrawHudDivider(tileX, hudY);
-        DrawHudDivider(entityX, hudY);
+        DrawHudDivider(critterX, hudY);
+        DrawHudDivider(buildingX, hudY);
 
         DrawHudLines(HudPadding, hudY + 8,
             "WORLD",
@@ -1044,10 +1048,14 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             position is null
                 ? ["TILE", "Move the pointer over the map"]
                 : GetTileInspectionLines(position.Value));
-        DrawHudLines(entityX + HudPadding, hudY + 8,
+        DrawHudLines(critterX + HudPadding, hudY + 8,
             position is null
-                ? ["ENTITY", "None"]
-                : GetEntityInspectionLines(position.Value));
+                ? ["CRITTER", "None"]
+                : GetCritterInspectionLines(position.Value));
+        DrawHudLines(buildingX + HudPadding, hudY + 8,
+            position is null
+                ? ["BUILDING", "None"]
+                : GetBuildingInspectionLines(GetBuildingInspectionPosition(position.Value)));
     }
 
     private void DrawPopulationWindow()
@@ -1273,9 +1281,11 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private static string GetCritterDisplayName(CritterSpecies species) => species switch
     {
         CritterSpecies.SeaScorpion => "Sea Scorpion",
+        CritterSpecies.MegaSpider => "Mega Spider",
         CritterSpecies.SquidEgg => "Squid Egg",
         CritterSpecies.MegaToad => "Mega Toad",
         CritterSpecies.ApeSailor => "Ape Sailor",
+        CritterSpecies.ApeWarrior => "Ape Warrior",
         CritterSpecies.UndeadApe => "Undead Ape",
         CritterSpecies.ToothedWhale => "Toothed Whale",
         CritterSpecies.BaleenWhale => "Baleen Whale",
@@ -1387,7 +1397,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         _ => terrain.ToString(),
     };
 
-    private string[] GetEntityInspectionLines(GridPosition position)
+    private string[] GetCritterInspectionLines(GridPosition position)
     {
         if (_inspectedCritterId.IsValid &&
             _world.TryGetCritter(_inspectedCritterId, out var followedCritter))
@@ -1404,14 +1414,30 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             }
         }
 
+        return ["CRITTER", "None"];
+    }
+
+    private GridPosition GetBuildingInspectionPosition(GridPosition pointerPosition) =>
+        _inspectedCritterId.IsValid &&
+        _world.TryGetCritter(_inspectedCritterId, out var followedCritter)
+            ? followedCritter.Position
+            : pointerPosition;
+
+    private string[] GetBuildingInspectionLines(GridPosition position)
+    {
         if (_world.GetVolcanoState(position) is { } volcanoState)
         {
-            return ["ENTITY", "Volcano", $"Behavior {volcanoState}", "Energy None"];
+            return ["BUILDING", "Volcano", $"Behavior {volcanoState}", "Energy None"];
         }
 
         if (_world.GetWolfDenCharges(position) is { } charges)
         {
-            return ["ENTITY", "Wolf Den", $"Charges {charges}", "Behavior Ambush nursery"];
+            return ["BUILDING", "Wolf Den", $"Charges {charges}", "Behavior Ambush nursery"];
+        }
+
+        if (_world.GetMegaSpiderWebFood(position) is { } webFood)
+        {
+            return ["BUILDING", "Mega Spider Web", $"Stored food {webFood}", "Behavior Traps passing critters"];
         }
 
         if (_world.HasTeleporter(position))
@@ -1422,7 +1448,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 2 => "Linked portal pair",
                 _ => "Random linked portal",
             };
-            return ["ENTITY", "Teleporter", $"Network {_world.TeleporterCount}", $"Behavior {behavior}"];
+            return ["BUILDING", "Teleporter", $"Network {_world.TeleporterCount}", $"Behavior {behavior}"];
         }
 
         if (_world.GetApeStructure(position) is { } apeStructure)
@@ -1432,10 +1458,11 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             if (apeStructure is ApeStructureKind.Village)
             {
                 return [
-                    "ENTITY",
+                    "BUILDING",
                     villageId.HasValue ? $"Ape Village #{villageId.Value}" : "Ape Village",
                     $"Residents {_world.GetApeVillageResidentCount(position)} / {_world.GetApeVillagePopulationCapacity(position)}",
                     $"Civilians {_world.GetApeVillageCivilianCount(position)}   Sailors {_world.GetApeVillageSailorCount(position)}",
+                    $"Warriors {_world.GetApeVillageWarriorCount(position)}",
                     $"Food {_world.GetApeVillageFood(position)} / {_world.GetApeVillageFoodCapacity(position)}",
                     $"Wood {_world.GetApeVillageWood(position)} / {_world.GetApeVillageWoodCapacity(position)}",
                     "Behavior Settlement",
@@ -1444,7 +1471,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
 
             return village is { } owner
                 ? [
-                    "ENTITY",
+                    "BUILDING",
                     GetApeStructureDisplayName(apeStructure),
                     villageId.HasValue ? $"Village #{villageId.Value}" : "Village",
                     $"Residents {_world.GetApeVillageResidentCount(owner)} / {_world.GetApeVillagePopulationCapacity(owner)}",
@@ -1453,10 +1480,10 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                         ? "Behavior Village district"
                         : "Behavior Inactive (out of season)",
                 ]
-                : ["ENTITY", GetApeStructureDisplayName(apeStructure)];
+                : ["BUILDING", GetApeStructureDisplayName(apeStructure)];
         }
 
-        return ["ENTITY", "None"];
+        return ["BUILDING", "None"];
     }
 
     private string[] GetApeStructureProductionLines(
@@ -1475,9 +1502,9 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             : [$"Production inactive ({production} when active)"];
     }
 
-    private static string[] GetCritterInspectionLines(CritterSnapshot critter, bool following) =>
+    private string[] GetCritterInspectionLines(CritterSnapshot critter, bool following) =>
     [
-        following ? "ENTITY (FOLLOWING)" : "ENTITY",
+        following ? "CRITTER (FOLLOWING)" : "CRITTER",
         $"{GetCritterDisplayName(critter)} #{critter.Id.Value}   {critter.Position}",
         $"Behavior {GetCritterBehavior(critter)}",
         critter.MaximumEnergy > 0
@@ -1486,6 +1513,16 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         $"Hungry {(critter.IsHungry ? "yes" : "no")}   Reproduce {(critter.CanReproduce ? "ready" : "no")}",
         $"Habitat {CritterHabitats.GetHabitat(critter.Species)}",
         $"Diet {GetCritterDiet(critter.Species)}",
+        .. _world.IsCritterCaughtInMegaSpiderWeb(critter.Id)
+            ? new[] { "Web status Trapped" }
+            : Array.Empty<string>(),
+        .. critter.Species is CritterSpecies.MegaSpider &&
+            _world.GetMegaSpiderWeb(critter.Id) is { } web
+                ? new[]
+                {
+                    $"Web X {web.X}, Y {web.Y}   Stored food {_world.GetMegaSpiderWebFood(web)}",
+                }
+                : Array.Empty<string>(),
         .. critter.Species is CritterSpecies.Ape or CritterSpecies.ApeSailor or CritterSpecies.UndeadApe
             ? new[] { GetPlagueDescription(critter) } : Array.Empty<string>(),
     ];
@@ -1510,6 +1547,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         CritterSpecies.Worm => "deep-ocean, shallow, and beach detritus",
         CritterSpecies.Trilobite => "deep-sea detritus",
         CritterSpecies.SeaScorpion => "broad aquatic and shoreline prey; adjacent worms, trilobites, and nautiluses",
+        CritterSpecies.MegaSpider => "all other critters; web-caught prey is stored for later",
         CritterSpecies.Nautilus => "plankton plus ocean and deep-ocean forage",
         CritterSpecies.Squid => "aquatic prey and grazers entering shallows; adjacent worms and nautiluses",
         CritterSpecies.SquidEgg => "hatches when squid prey approaches",
@@ -1521,6 +1559,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         CritterSpecies.Monkey => "swamp and jungle foliage only",
         CritterSpecies.Ape => "prey except plankton, worms, and its civilization; plus wetland foliage",
         CritterSpecies.ApeSailor => "sea life except plankton and worms",
+        CritterSpecies.ApeWarrior => "predators that hunt apes",
         CritterSpecies.Deer => "grassland and forest foliage",
         CritterSpecies.Elk => "grassland, tundra, and taiga foliage",
         CritterSpecies.Gazelle => "arid, forest, and grassland foliage",
@@ -1557,6 +1596,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 CritterSpecies.Worm => "Seeking detritus or fleeing predators",
                 CritterSpecies.Trilobite => "Seeking detritus or fleeing predators",
                 CritterSpecies.SeaScorpion => "Hunting aquatic prey",
+                CritterSpecies.MegaSpider => "Hunting or checking its web",
                 CritterSpecies.Nautilus => "Roaming deep water, hunting plankton, or fleeing",
                 CritterSpecies.Squid => "Hunting aquatic prey",
                 CritterSpecies.SquidEgg => "Waiting for nearby prey",
@@ -1568,6 +1608,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 CritterSpecies.Monkey => "Seeking wetland foliage or fleeing predators",
                 CritterSpecies.Ape => "Hunting below 10 village food, wetland foraging, or returning",
                 CritterSpecies.ApeSailor => "Hunting at sea or returning food to harbor",
+                CritterSpecies.ApeWarrior => "Hunting predators of apes",
                 CritterSpecies.Deer => "Grazing or fleeing predators",
                 CritterSpecies.Elk => "Grazing or fleeing predators",
                 CritterSpecies.Gazelle => "Grazing or fleeing predators",
@@ -1585,6 +1626,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             CritterSpecies.Worm => "Scavenging while watching for predators",
             CritterSpecies.Trilobite => "Scavenging while watching for predators",
             CritterSpecies.SeaScorpion => "Patrolling coastal waters",
+            CritterSpecies.MegaSpider => "Hunting from its web territory",
             CritterSpecies.Nautilus => "Roaming deep water for forage and plankton",
             CritterSpecies.Squid => "Patrolling for aquatic prey",
             CritterSpecies.SquidEgg => "Drifting with the currents",
@@ -1596,6 +1638,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             CritterSpecies.Monkey => "Foraging while watching for predators",
             CritterSpecies.Ape => "Hunting below 10 village food or wetland foraging",
             CritterSpecies.ApeSailor => "Patrolling village waters",
+            CritterSpecies.ApeWarrior => "Defending its village from predators",
             CritterSpecies.Deer => "Roaming while watching for predators",
             CritterSpecies.Elk => "Slowly roaming while watching for predators",
             CritterSpecies.Gazelle => "Roaming while watching for predators",
@@ -1899,6 +1942,35 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         }
     }
 
+    private void DrawMegaSpiderWeb(int screenX, int screenY, GridPosition position)
+    {
+        if (_spriteBatch is null || _pixel is null ||
+            _world.GetMegaSpiderWebFood(position) is not { } storedFood)
+        {
+            return;
+        }
+
+        var x = MapOffsetX + screenX * TileSize;
+        var y = MapOffsetY + screenY * TileSize;
+        var center = new Point(x + TileSize / 2, y + TileSize / 2);
+        var inset = Math.Max(1, TileSize / 8);
+        var silk = storedFood > 0 ? new Color(245, 225, 175) : new Color(220, 220, 210);
+        DrawPixelLine(center, new Point(x + inset, y + inset), silk);
+        DrawPixelLine(center, new Point(x + TileSize - inset - 1, y + inset), silk);
+        DrawPixelLine(center, new Point(x + inset, y + TileSize - inset - 1), silk);
+        DrawPixelLine(center, new Point(x + TileSize - inset - 1, y + TileSize - inset - 1), silk);
+        DrawPixelLine(new Point(x + inset, center.Y), new Point(x + TileSize - inset - 1, center.Y), silk);
+        DrawPixelLine(new Point(center.X, y + inset), new Point(center.X, y + TileSize - inset - 1), silk);
+        if (storedFood > 0)
+        {
+            var cacheSize = Math.Max(1, TileSize / 5);
+            _spriteBatch.Draw(
+                _pixel,
+                new Rectangle(center.X - cacheSize / 2, center.Y - cacheSize / 2, cacheSize, cacheSize),
+                new Color(170, 85, 65));
+        }
+    }
+
     private void DrawTeleporter(int screenX, int screenY, GridPosition position)
     {
         if (_spriteBatch is null || _pixel is null || !_world.HasTeleporter(position))
@@ -2004,6 +2076,10 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 _spriteBatch.Draw(_pixel, new Rectangle(x, y + size / 3, size, Math.Max(1, size / 3)), new Color(117, 77, 46));
                 _spriteBatch.Draw(_pixel, new Rectangle(x + size / 4, y, Math.Max(1, size / 5), size), new Color(190, 155, 98));
                 break;
+            case ApeStructureKind.MilitaryDistrict:
+                _spriteBatch.Draw(_pixel, new Rectangle(x, y + size / 4, size, Math.Max(1, size * 3 / 4)), new Color(105, 94, 82));
+                _spriteBatch.Draw(_pixel, new Rectangle(x + size / 3, y, Math.Max(1, size / 3), size), new Color(154, 55, 45));
+                break;
             case ApeStructureKind.ResidentialDistrict:
                 _spriteBatch.Draw(_pixel, new Rectangle(x, y + size / 3, size, Math.Max(1, size * 2 / 3)), new Color(151, 105, 72));
                 _spriteBatch.Draw(_pixel, new Rectangle(x + size / 5, y, Math.Max(1, size * 3 / 5), Math.Max(1, size / 2)), new Color(92, 61, 45));
@@ -2035,6 +2111,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         ApeStructureKind.Aquaculture => "Aquaculture",
         ApeStructureKind.LumberCamp => "Lumber Camp",
         ApeStructureKind.NavalDistrict => "Harbor",
+        ApeStructureKind.MilitaryDistrict => "Military District",
         ApeStructureKind.ResidentialDistrict => "Residential District",
         ApeStructureKind.Ruin => "Ruins",
         _ => structure.ToString(),
@@ -2267,6 +2344,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         CritterSpecies.Worm => new Color(210, 105, 145),
         CritterSpecies.Trilobite => new Color(135, 92, 55),
         CritterSpecies.SeaScorpion => new Color(190, 145, 105),
+        CritterSpecies.MegaSpider => new Color(80, 55, 45),
         CritterSpecies.Nautilus => new Color(205, 185, 140),
         CritterSpecies.Squid => new Color(165, 70, 145),
         CritterSpecies.SquidEgg => new Color(225, 185, 230),
@@ -2277,6 +2355,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         CritterSpecies.Monkey => new Color(190, 135, 85),
         CritterSpecies.Ape => new Color(125, 95, 70),
         CritterSpecies.ApeSailor => new Color(75, 115, 155),
+        CritterSpecies.ApeWarrior => new Color(155, 65, 55),
         CritterSpecies.UndeadApe => new Color(95, 190, 100),
         CritterSpecies.Deer => new Color(181, 133, 82),
         CritterSpecies.Elk => new Color(112, 78, 48),
@@ -2337,6 +2416,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         WorldTool.Worm => "L spawn: ocean / shallows",
         WorldTool.Trilobite => "L spawn: ocean / shallows",
         WorldTool.SeaScorpion => "L spawn: water / beach",
+        WorldTool.MegaSpider => "L spawn: land / shallows",
         WorldTool.Nautilus => "L spawn: water",
         WorldTool.Squid => "L spawn: water",
         WorldTool.SquidEgg => "L spawn egg",
@@ -2421,6 +2501,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         Worm,
         Trilobite,
         SeaScorpion,
+        MegaSpider,
         Nautilus,
         Squid,
         SquidEgg,

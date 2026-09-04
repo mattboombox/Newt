@@ -46,6 +46,7 @@ public sealed class ToothedWhaleTests
             CritterSpecies.MegaToad,
             CritterSpecies.Therapsid,
             CritterSpecies.Ape,
+            CritterSpecies.ApeWarrior,
             CritterSpecies.Deer,
             CritterSpecies.Elk,
             CritterSpecies.Gazelle,

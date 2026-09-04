@@ -11,7 +11,7 @@ public sealed partial class SimulationWorld
     // Stable IDs keep sparse infections valid when the critter arrays compact.
     private readonly Dictionary<int, (PlagueKind Kind, long InfectedTick, long DrainTick)> _plagues = [];
 
-    /// <summary>Living apes and sailors infected by either strain; excludes undead.</summary>
+    /// <summary>Living apes and specialists infected by either strain; excludes undead.</summary>
     public int SickApeCount => _plagues.Count;
 
     /// <summary>Infects a living ape on the selected tile; IDs divisible by five resist both strains.</summary>
@@ -27,6 +27,14 @@ public sealed partial class SimulationWorld
             return false;
         }
         var id = _critterIds[index].Value;
+        if (_species[index] is CritterSpecies.ApeWarrior)
+        {
+            ChangeCritterSpecies(
+                index,
+                CritterSpecies.Ape,
+                preserveEnergy: true,
+                preserveApeVillage: true);
+        }
         if (_plagues.TryGetValue(id, out var infection))
         {
             // Zombie plague can supersede ordinary plague without resetting its damage clock.
@@ -44,7 +52,7 @@ public sealed partial class SimulationWorld
     }
 
     private static bool IsLivingApe(CritterSpecies species) =>
-        species is CritterSpecies.Ape or CritterSpecies.ApeSailor;
+        species is CritterSpecies.Ape or CritterSpecies.ApeSailor or CritterSpecies.ApeWarrior;
 
     internal void AdvanceVillagePlagueOutbreaks()
     {

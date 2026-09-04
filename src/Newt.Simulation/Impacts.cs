@@ -291,6 +291,7 @@ public static class Impacts
                 world.SetElevation(position, world.GetElevation(position) - erosion);
                 world.RemoveCritterAt(position);
                 world.RemoveWolfDenAt(position);
+                world.RemoveMegaSpiderWebAt(position);
                 world.RemoveTeleporterAt(position);
                 changed = true;
             }
@@ -307,6 +308,7 @@ public static class Impacts
     {
         world.RemoveCritterAt(position);
         world.RemoveWolfDenAt(position);
+        world.RemoveMegaSpiderWebAt(position);
         world.RemoveTeleporterAt(position);
         Volcanism.RemoveVolcanoAt(world, position);
     }
