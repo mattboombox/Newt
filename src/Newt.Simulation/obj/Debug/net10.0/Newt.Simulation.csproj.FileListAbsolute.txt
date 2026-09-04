@@ -163,4 +163,9 @@ C:\Users\1Matt\AppData\Local\Temp\NewtMegaToadBuild\Newt.Simulation.pdb
 C:\Users\1Matt\AppData\Local\Temp\NewtSpriteFlashBuild\Newt.Simulation.deps.json
 C:\Users\1Matt\AppData\Local\Temp\NewtSpriteFlashBuild\Newt.Simulation.dll
 C:\Users\1Matt\AppData\Local\Temp\NewtSpriteFlashBuild\Newt.Simulation.pdb
-C:\Users\1Matt\Desktop\Newt\src\Newt.Simulation\obj\Debug\net10.0\Newt.Sim.7DF46C68.Up2Date
+C:\Users\1Matt\Desktop\Newt\src\Newt.Simulation\bin\CodexSiegeVerify\Debug\net10.0\Newt.Simulation.deps.json
+C:\Users\1Matt\Desktop\Newt\src\Newt.Simulation\bin\CodexSiegeVerify\Debug\net10.0\Newt.Simulation.dll
+C:\Users\1Matt\Desktop\Newt\src\Newt.Simulation\bin\CodexSiegeVerify\Debug\net10.0\Newt.Simulation.pdb
+C:\Users\1Matt\Desktop\Newt\src\Newt.Simulation\bin\CodexPopulationSortVerify\Debug\net10.0\Newt.Simulation.deps.json
+C:\Users\1Matt\Desktop\Newt\src\Newt.Simulation\bin\CodexPopulationSortVerify\Debug\net10.0\Newt.Simulation.dll
+C:\Users\1Matt\Desktop\Newt\src\Newt.Simulation\bin\CodexPopulationSortVerify\Debug\net10.0\Newt.Simulation.pdb

@@ -47,6 +47,7 @@ public sealed class ToothedWhaleTests
             CritterSpecies.Therapsid,
             CritterSpecies.Ape,
             CritterSpecies.ApeWarrior,
+            CritterSpecies.ApeChieftain,
             CritterSpecies.Deer,
             CritterSpecies.Elk,
             CritterSpecies.Gazelle,

@@ -169,6 +169,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         LoadCritterSprite(CritterSpecies.Ape, "ape.png");
         LoadCritterSprite(CritterSpecies.ApeSailor, "ape-sailor.png");
         LoadCritterSprite(CritterSpecies.ApeWarrior, "ape-warrior.png");
+        LoadCritterSprite(CritterSpecies.ApeChieftain, "ape-chieftain.png");
         LoadCritterSprite(CritterSpecies.UndeadApe, "undead-ape.png");
         LoadApeVariantSprites();
         LoadCritterSprite(CritterSpecies.Deer, "deer.png");
@@ -1076,6 +1077,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             populations.Add(("Sick Apes", _world.SickApeCount,
                 new Color(205, 195, 55), _sickApeHistory));
         }
+        populations.Sort(static (left, right) =>
+            StringComparer.OrdinalIgnoreCase.Compare(left.Name, right.Name));
         const int padding = 16;
         const int headerHeight = 74;
         const int rowHeight = 20;
@@ -1286,6 +1289,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         CritterSpecies.MegaToad => "Mega Toad",
         CritterSpecies.ApeSailor => "Ape Sailor",
         CritterSpecies.ApeWarrior => "Ape Warrior",
+        CritterSpecies.ApeChieftain => "Ape Chieftain",
         CritterSpecies.UndeadApe => "Undead Ape",
         CritterSpecies.ToothedWhale => "Toothed Whale",
         CritterSpecies.BaleenWhale => "Baleen Whale",
@@ -1462,7 +1466,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                     villageId.HasValue ? $"Ape Village #{villageId.Value}" : "Ape Village",
                     $"Residents {_world.GetApeVillageResidentCount(position)} / {_world.GetApeVillagePopulationCapacity(position)}",
                     $"Civilians {_world.GetApeVillageCivilianCount(position)}   Sailors {_world.GetApeVillageSailorCount(position)}",
-                    $"Warriors {_world.GetApeVillageWarriorCount(position)}",
+                    $"Chieftains {_world.GetApeVillageChieftainCount(position)}   Warriors {_world.GetApeVillageWarriorCount(position)}",
                     $"Food {_world.GetApeVillageFood(position)} / {_world.GetApeVillageFoodCapacity(position)}",
                     $"Wood {_world.GetApeVillageWood(position)} / {_world.GetApeVillageWoodCapacity(position)}",
                     "Behavior Settlement",
@@ -1523,7 +1527,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                     $"Web X {web.X}, Y {web.Y}   Stored food {_world.GetMegaSpiderWebFood(web)}",
                 }
                 : Array.Empty<string>(),
-        .. critter.Species is CritterSpecies.Ape or CritterSpecies.ApeSailor or CritterSpecies.UndeadApe
+        .. critter.Species is CritterSpecies.Ape or CritterSpecies.ApeSailor or CritterSpecies.ApeWarrior or CritterSpecies.ApeChieftain or CritterSpecies.UndeadApe
             ? new[] { GetPlagueDescription(critter) } : Array.Empty<string>(),
     ];
 
@@ -1560,6 +1564,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         CritterSpecies.Ape => "prey except plankton, worms, and its civilization; plus wetland foliage",
         CritterSpecies.ApeSailor => "sea life except plankton and worms",
         CritterSpecies.ApeWarrior => "predators that hunt apes",
+        CritterSpecies.ApeChieftain => "predators that hunt apes",
         CritterSpecies.Deer => "grassland and forest foliage",
         CritterSpecies.Elk => "grassland, tundra, and taiga foliage",
         CritterSpecies.Gazelle => "arid, forest, and grassland foliage",
@@ -1584,7 +1589,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         }
         if (critter.CanReproduce)
         {
-            return critter.Species is CritterSpecies.Ape or CritterSpecies.ApeSailor
+            return critter.Species is CritterSpecies.Ape or CritterSpecies.ApeSailor or
+                CritterSpecies.ApeWarrior or CritterSpecies.ApeChieftain
                 ? "Returning to found or reproduce at a village"
                 : "Seeking reproductive space";
         }
@@ -1609,6 +1615,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 CritterSpecies.Ape => "Hunting below 10 village food, wetland foraging, or returning",
                 CritterSpecies.ApeSailor => "Hunting at sea or returning food to harbor",
                 CritterSpecies.ApeWarrior => "Hunting predators of apes",
+                CritterSpecies.ApeChieftain => "Hunting predators of apes",
                 CritterSpecies.Deer => "Grazing or fleeing predators",
                 CritterSpecies.Elk => "Grazing or fleeing predators",
                 CritterSpecies.Gazelle => "Grazing or fleeing predators",
@@ -1639,6 +1646,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             CritterSpecies.Ape => "Hunting below 10 village food or wetland foraging",
             CritterSpecies.ApeSailor => "Patrolling village waters",
             CritterSpecies.ApeWarrior => "Defending its village from predators",
+            CritterSpecies.ApeChieftain => "Leading the defense of its village",
             CritterSpecies.Deer => "Roaming while watching for predators",
             CritterSpecies.Elk => "Slowly roaming while watching for predators",
             CritterSpecies.Gazelle => "Roaming while watching for predators",
@@ -2356,6 +2364,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         CritterSpecies.Ape => new Color(125, 95, 70),
         CritterSpecies.ApeSailor => new Color(75, 115, 155),
         CritterSpecies.ApeWarrior => new Color(155, 65, 55),
+        CritterSpecies.ApeChieftain => new Color(195, 105, 45),
         CritterSpecies.UndeadApe => new Color(95, 190, 100),
         CritterSpecies.Deer => new Color(181, 133, 82),
         CritterSpecies.Elk => new Color(112, 78, 48),

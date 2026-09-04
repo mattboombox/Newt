@@ -2893,12 +2893,17 @@ public sealed class SimulationWorldTests
     [InlineData(CritterSpecies.ToothedWhale)]
     [InlineData(CritterSpecies.SeaScorpion)]
     [InlineData(CritterSpecies.MegaToad)]
-    [InlineData(CritterSpecies.MegaSpider)]
     [InlineData(CritterSpecies.Wolf)]
     [InlineData(CritterSpecies.Squid)]
     public void HeavyPredatorsDealTwoCombatDamage(CritterSpecies species)
     {
         Assert.Equal(2, SimulationWorld.GetCombatDamage(species));
+    }
+
+    [Fact]
+    public void MegaSpiderDealsOneCombatDamage()
+    {
+        Assert.Equal(1, SimulationWorld.GetCombatDamage(CritterSpecies.MegaSpider));
     }
 
     [Fact]

@@ -106,7 +106,8 @@ public sealed partial class SimulationWorld
     private bool IsValidMegaSpiderWebTile(int tileIndex) =>
         tileIndex >= 0 && tileIndex < _terrain.Length &&
         _surfaceCovers[tileIndex] is SurfaceCover.None &&
-        _terrain[tileIndex] is Terrain.Shallows or Terrain.Beach or Terrain.Lowlands or
+        _surfaceWater[tileIndex] is SurfaceWaterKind.None &&
+        _terrain[tileIndex] is Terrain.Beach or Terrain.Lowlands or
             Terrain.Canyon or Terrain.Trench or Terrain.Plains or Terrain.Hills;
 
     private bool TryCreateMegaSpiderWeb(int spiderIndex)
@@ -155,7 +156,9 @@ public sealed partial class SimulationWorld
 
     private bool IsCaughtInMegaSpiderWeb(int critterIndex)
     {
-        if (_species[critterIndex] is CritterSpecies.MegaSpider)
+        if (_species[critterIndex] is CritterSpecies.MegaSpider or
+            CritterSpecies.Ape or CritterSpecies.ApeSailor or CritterSpecies.ApeWarrior or
+            CritterSpecies.ApeChieftain)
         {
             return false;
         }

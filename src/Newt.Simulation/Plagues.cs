@@ -27,7 +27,7 @@ public sealed partial class SimulationWorld
             return false;
         }
         var id = _critterIds[index].Value;
-        if (_species[index] is CritterSpecies.ApeWarrior)
+        if (_species[index] is CritterSpecies.ApeWarrior or CritterSpecies.ApeChieftain)
         {
             ChangeCritterSpecies(
                 index,
@@ -52,7 +52,8 @@ public sealed partial class SimulationWorld
     }
 
     private static bool IsLivingApe(CritterSpecies species) =>
-        species is CritterSpecies.Ape or CritterSpecies.ApeSailor or CritterSpecies.ApeWarrior;
+        species is CritterSpecies.Ape or CritterSpecies.ApeSailor or CritterSpecies.ApeWarrior or
+            CritterSpecies.ApeChieftain;
 
     internal void AdvanceVillagePlagueOutbreaks()
     {
