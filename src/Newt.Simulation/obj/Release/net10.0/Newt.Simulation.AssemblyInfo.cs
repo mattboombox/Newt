@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Newt.Simulation")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+0747972b33e200f76dba5773d2bb021ceaed4e4e")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+cc94b5e9413fb787d66a7c6eebb7015317170785")]
 [assembly: System.Reflection.AssemblyProductAttribute("Newt.Simulation")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Newt.Simulation")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

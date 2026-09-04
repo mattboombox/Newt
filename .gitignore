@@ -1,0 +1,8 @@
+# Generated game and simulation build output
+/src/Newt.Game/**/bin/
+/src/Newt.Game/**/obj/
+/src/Newt.Simulation/**/bin/
+/src/Newt.Simulation/**/obj/
+
+# Packaged releases
+/dist/
