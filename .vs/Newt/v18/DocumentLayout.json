@@ -72,7 +72,7 @@
               "RelativeDocumentMoniker": "src\\Newt.Game\\NewtGame.cs",
               "ToolTip": "C:\\Users\\1Matt\\Desktop\\Newt\\src\\Newt.Game\\NewtGame.cs",
               "RelativeToolTip": "src\\Newt.Game\\NewtGame.cs",
-              "ViewState": "AgIAAIgGAAAAAAAAAAAkwF4GAAAJAAAAAAAAAA==",
+              "ViewState": "AgIAAJQGAAAAAAAAAAAkwF4GAAAJAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2026-08-19T23:21:26.457Z",
               "EditorCaption": ""
@@ -87,8 +87,7 @@
               "RelativeToolTip": "src\\Newt.Simulation\\CritterNutrition.cs",
               "ViewState": "AgIAAEUAAAAAAAAAAAAYwEkAAAA1AAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-08-19T02:09:11.054Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-08-19T02:09:11.054Z"
             },
             {
               "$type": "Document",
@@ -100,8 +99,7 @@
               "RelativeToolTip": "src\\Newt.Simulation\\CritterEvolution.cs",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAADYAAABAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-08-19T02:08:43.117Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-08-19T02:08:43.117Z"
             },
             {
               "$type": "Document",
@@ -113,8 +111,7 @@
               "RelativeToolTip": "src\\Newt.Simulation\\CritterSnapshot.cs",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-08-19T02:08:33.785Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-08-19T02:08:33.785Z"
             },
             {
               "$type": "Document",
@@ -126,8 +123,7 @@
               "RelativeToolTip": "src\\Newt.Simulation\\CritterSpecies.cs",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAAAoAAAAPAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-08-19T02:08:26.373Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-08-19T02:08:26.373Z"
             },
             {
               "$type": "Document",
@@ -139,8 +135,7 @@
               "RelativeToolTip": "src\\Newt.Simulation\\WorldPreset.cs",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAAA8AAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-08-11T03:00:13.171Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-08-11T03:00:13.171Z"
             },
             {
               "$type": "Document",
@@ -152,8 +147,7 @@
               "RelativeToolTip": "src\\Newt.Simulation\\Biome.cs",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAAAsAAAAKAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-08-11T03:00:05.697Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-08-11T03:00:05.697Z"
             },
             {
               "$type": "Document",
@@ -165,8 +159,7 @@
               "RelativeToolTip": "src\\Newt.Simulation\\Season.cs",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-08-11T02:59:59.541Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-08-11T02:59:59.541Z"
             },
             {
               "$type": "Document",
@@ -178,8 +171,7 @@
               "RelativeToolTip": "src\\Newt.Simulation\\VolcanoActivity.cs",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-08-11T02:59:55.032Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-08-11T02:59:55.032Z"
             },
             {
               "$type": "Document",
@@ -191,8 +183,7 @@
               "RelativeToolTip": "src\\Newt.Simulation\\VolcanoState.cs",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-08-11T02:59:51.301Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-08-11T02:59:51.301Z"
             },
             {
               "$type": "Document",
@@ -204,8 +195,7 @@
               "RelativeToolTip": "src\\Newt.Simulation\\VolcanoSnapshot.cs",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-08-11T02:59:47.406Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-08-11T02:59:47.406Z"
             },
             {
               "$type": "Document",
@@ -217,8 +207,7 @@
               "RelativeToolTip": "src\\Newt.Simulation\\SpringResult.cs",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAAAcAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-08-11T02:59:31.525Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-08-11T02:59:31.525Z"
             }
           ]
         }

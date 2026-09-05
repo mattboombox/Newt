@@ -1042,7 +1042,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             "Q / E  cycle tools",
             "R  cycle categories",
             "< / >  speed   P  pause",
-            $"M menu   G auto-slow {(_simulationSpeedGuard.Enabled ? "ON" : "OFF")}");
+            $"M menu   G auto-slow {(_simulationSpeedGuard.Enabled ? "ON" : "OFF")}   ? key for help");
 
         var position = ScreenToWorld(mouse.X, mouse.Y);
         DrawHudLines(tileX + HudPadding, hudY + 8,

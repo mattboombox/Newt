@@ -40,6 +40,8 @@ and warm ocean environments.
 
 ## Project structure
 
+For a hands-on extension guide, see [Adding critters and buildings](docs/adding-critters-and-buildings.md).
+
 - `src/Newt.Simulation` — deterministic rules with no graphics dependency.
 - `src/Newt.Game` — MonoGame input, timing, rendering, audio, and platform host.
 - `tests/Newt.Simulation.Tests` — fast headless behavioral tests.

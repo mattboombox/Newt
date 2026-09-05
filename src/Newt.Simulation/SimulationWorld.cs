@@ -33,6 +33,7 @@ public sealed partial class SimulationWorld
     private const int ApeSettlerChancePercent = 1;
     private const int ApeSettlerMinimumDistance = 40;
     internal const int LoneApeSailorColonistDelayTicks = 60 * TicksPerSecond;
+    internal const int ApeReproductionStallTicks = 30 * TicksPerSecond;
     private const int ApeVillageBasePopulationCapacity = 5;
     private const int ApeResidentialPopulationCapacity = 5;
     internal const int ApeResidentialUnderuseTicks = 2 * 60 * TicksPerSecond;
@@ -58,6 +59,7 @@ public sealed partial class SimulationWorld
     private const int ApeWarriorsPerMilitaryDistrict = 4;
     private const int ApeMilitaryDistrictPopulationInterval = 50;
     private const int ApeInfrastructurePopulationInterval = 150;
+    private const int ApeLumberCampPopulationInterval = 50;
     internal const int WolfPerceptionRadius = 5;
     private const int WolfDenSearchRadius = 8;
     private const int NewtFreshwaterPerceptionRadius = 8;
@@ -139,7 +141,12 @@ public sealed partial class SimulationWorld
     private readonly Dictionary<int, int> _apeVillageTargets = [];
     private readonly Dictionary<int, (int OriginVillageTile, int TargetVillageTile)> _apeSettlerTargets = [];
     private readonly Dictionary<int, (int TargetVillageTile, Queue<int> Tiles)> _apeSettlerPaths = [];
+    private readonly Dictionary<int, (int VillageTile, Queue<int> Tiles)> _apeSailorReturnPaths = [];
+    private readonly Dictionary<int, Queue<int>> _apeSailorOceanPaths = [];
+    private readonly Dictionary<int, long> _apeSailorOceanRetryTicks = [];
+    private readonly Dictionary<int, (int VillageTile, GridPosition Position, long SinceTick)> _apeReproductionStalls = [];
     private readonly Dictionary<int, int> _apeVillageFood = [];
+    private readonly Dictionary<int, int> _apeVillageGrowthFeedTargets = [];
     private readonly Dictionary<int, int> _apeVillageWood = [];
     private readonly Dictionary<int, int> _apeVillageIds = [];
     private readonly Dictionary<int, int> _apeCarriedFood = [];
@@ -969,6 +976,7 @@ public sealed partial class SimulationWorld
         }
 
         _apeVillageFood.Remove(tileIndex);
+        _apeVillageGrowthFeedTargets.Remove(tileIndex);
         _apeVillageWood.Remove(tileIndex);
         _apeVillageIds.Remove(tileIndex);
         _loneApeSailorSinceTicks.Remove(tileIndex);
@@ -1010,6 +1018,10 @@ public sealed partial class SimulationWorld
         _apeVillageTargets.Remove(apeId);
         _apeSettlerTargets.Remove(apeId);
         _apeSettlerPaths.Remove(apeId);
+        _apeSailorReturnPaths.Remove(apeId);
+        _apeSailorOceanPaths.Remove(apeId);
+        _apeSailorOceanRetryTicks.Remove(apeId);
+        _apeReproductionStalls.Remove(apeId);
         _apeCarriedFood.Remove(apeId);
         _apeFoodReturnProgress.Remove(apeId);
     }
@@ -1420,10 +1432,13 @@ public sealed partial class SimulationWorld
                 {
                     TryFeedMegaSpiderFromWeb(index, nutrition);
                 }
-                if (!isStranded && species is CritterSpecies.Ape)
-                {
-                    TryFeedApeFromVillage(index, nutrition);
-                }
+            }
+
+            if (!isStranded && (metabolized || Tick % TicksPerSecond == 0) &&
+                species is (CritterSpecies.Ape or CritterSpecies.ApeSailor or
+                    CritterSpecies.ApeWarrior or CritterSpecies.ApeChieftain))
+            {
+                TryFeedApeFromVillage(index, nutrition);
             }
 
             DrainPlagueEnergy(index);
@@ -1451,6 +1466,7 @@ public sealed partial class SimulationWorld
             if (!CanSpeciesReproduce(species) ||
                 _energy[index] < nutrition.ReproductionThreshold)
             {
+                _apeReproductionStalls.Remove(_critterIds[index].Value);
                 continue;
             }
 
@@ -1519,6 +1535,7 @@ public sealed partial class SimulationWorld
                 species,
                 apeVillage));
             _energy[index] -= nutrition.ReproductionCost;
+            _apeReproductionStalls.Remove(_critterIds[index].Value);
         }
 
         if (deaths is not null)
@@ -1657,9 +1674,7 @@ public sealed partial class SimulationWorld
 
         if (hasVillage)
         {
-            return IsAtOrAdjacentToConnectedApeStructure(apeIndex, villageTile) &&
-                GetApeVillageResidentCountByTile(villageTile) <
-                    GetApeVillagePopulationCapacityByTile(villageTile);
+            return CanApeReproduceAtCurrentPosition(_critterIds[apeIndex], villageTile);
         }
 
         if (!_apeVillageTargets.TryGetValue(apeId, out villageTile) ||
@@ -1690,9 +1705,39 @@ public sealed partial class SimulationWorld
         return false;
     }
 
+    internal bool CanApeReproduceAtCurrentPosition(CritterId apeId, int villageTile)
+    {
+        if (!_critterIndicesById.TryGetValue(apeId.Value, out var index) ||
+            !IsLivingApe(_species[index]) ||
+            !_apeVillageHomes.TryGetValue(apeId.Value, out var home) || home != villageTile ||
+            _apeSettlerTargets.ContainsKey(apeId.Value) ||
+            _energy[index] < CritterNutritions.Get(_species[index]).ReproductionThreshold ||
+            GetApeVillageResidentCountByTile(villageTile) >=
+                GetApeVillagePopulationCapacityByTile(villageTile))
+        {
+            _apeReproductionStalls.Remove(apeId.Value);
+            return false;
+        }
+        if (IsAtOrAdjacentToConnectedApeStructure(index, villageTile))
+        {
+            _apeReproductionStalls.Remove(apeId.Value);
+            return true;
+        }
+        var position = _positions[index];
+        if (!_apeReproductionStalls.TryGetValue(apeId.Value, out var stall) ||
+            stall.VillageTile != villageTile || stall.Position != position)
+        {
+            _apeReproductionStalls[apeId.Value] = (villageTile, position, Tick);
+            return false;
+        }
+        return Tick - stall.SinceTick >= ApeReproductionStallTicks;
+    }
+
     private bool TryFeedApeFromVillage(int apeIndex, CritterNutrition nutrition)
     {
-        if (_energy[apeIndex] > nutrition.HungryThreshold ||
+        // Stored food must not replenish energy drained by an active plague.
+        if (_plagues.ContainsKey(_critterIds[apeIndex].Value) ||
+            _energy[apeIndex] > nutrition.HungryThreshold ||
             !_apeVillageHomes.TryGetValue(_critterIds[apeIndex].Value, out var villageTile) ||
             !_apeVillageFood.TryGetValue(villageTile, out var food) ||
             food <= 0)
@@ -1703,6 +1748,55 @@ public sealed partial class SimulationWorld
         _apeVillageFood[villageTile] = food - 1;
         _energy[apeIndex] = Math.Min(nutrition.MaximumEnergy, _energy[apeIndex] + 1);
         return true;
+    }
+
+    internal void FeedApeFromVillageSurplus(int villageTile)
+    {
+        if (GetApeVillageResidentCountByTile(villageTile) >=
+            GetApeVillagePopulationCapacityByTile(villageTile))
+        {
+            _apeVillageGrowthFeedTargets.Remove(villageTile);
+            return;
+        }
+
+        var nutrition = CritterNutritions.Get(CritterSpecies.Ape);
+        bool IsEligible(int id) =>
+            _critterIndicesById.TryGetValue(id, out var index) &&
+            _species[index] is CritterSpecies.Ape &&
+            _apeVillageHomes.TryGetValue(id, out var home) && home == villageTile &&
+            !_apeSettlerTargets.ContainsKey(id) &&
+            !_plagues.ContainsKey(id) &&
+            _energy[index] < nutrition.ReproductionThreshold;
+
+        if (_apeVillageGrowthFeedTargets.TryGetValue(villageTile, out var target) &&
+            !IsEligible(target))
+        {
+            _apeVillageGrowthFeedTargets.Remove(villageTile);
+        }
+
+        if (!_apeVillageFood.TryGetValue(villageTile, out var food) || food <= 0 ||
+            food * 10 < GetApeVillageFoodCapacityByTile(villageTile) * 9)
+        {
+            return;
+        }
+
+        if (!_apeVillageGrowthFeedTargets.TryGetValue(villageTile, out target))
+        {
+            var candidates = _apeVillageHomes.Keys.Where(IsEligible).Order().ToArray();
+            if (candidates.Length == 0)
+            {
+                return;
+            }
+            target = candidates[NextInt(candidates.Length)];
+            _apeVillageGrowthFeedTargets[villageTile] = target;
+        }
+
+        _apeVillageFood[villageTile] = food - 1;
+        _energy[_critterIndicesById[target]]++;
+        if (_energy[_critterIndicesById[target]] >= nutrition.ReproductionThreshold)
+        {
+            _apeVillageGrowthFeedTargets.Remove(villageTile);
+        }
     }
 
     private int FindClaimableApeVillage(int apeIndex)
@@ -2041,7 +2135,8 @@ public sealed partial class SimulationWorld
             TrySendApeSettler(villageTile, population);
             var infrastructureLimit = GetApeInfrastructureLimitForPopulation(population);
 
-            if (population >= ApeFoodDistrictPopulationThreshold &&
+            // Colonists need food production before growing beyond two residents.
+            if (population >= 2 &&
                 !HasApeFoodDistrict(villageTile) &&
                 !HasApeStructure(villageTile, ApeStructureKind.NavalDistrict))
             {
@@ -2052,8 +2147,11 @@ public sealed partial class SimulationWorld
             }
 
             if (population >= ApeFoodDistrictPopulationThreshold &&
-                population < GetApeVillagePopulationCapacityByTile(villageTile) &&
-                GetApeStructureCount(villageTile, ApeStructureKind.LumberCamp) < infrastructureLimit)
+                (population < GetApeVillagePopulationCapacityByTile(villageTile) ||
+                    !_apeVillageWood.TryGetValue(villageTile, out var availableWood) ||
+                    availableWood < ApeResidentialWoodCost) &&
+                GetApeStructureCount(villageTile, ApeStructureKind.LumberCamp) <
+                    GetApeLumberCampLimitForPopulation(population))
             {
                 TryPurchaseApeStructure(villageTile, ApeStructureKind.LumberCamp);
             }
@@ -2103,6 +2201,10 @@ public sealed partial class SimulationWorld
 
             population = GetApeVillageResidentCountByTile(villageTile);
             UpdateUnderusedApeResidentialDistricts(villageTile, population);
+            if (Tick % TicksPerSecond == 0)
+            {
+                FeedApeFromVillageSurplus(villageTile);
+            }
             if (population >= GetApeVillagePopulationCapacityByTile(villageTile))
             {
                 TryBuildNextApeVillageExpansion(villageTile);
@@ -2330,6 +2432,9 @@ public sealed partial class SimulationWorld
     internal static int GetApeInfrastructureLimitForPopulation(int population) =>
         1 + Math.Max(0, population) / ApeInfrastructurePopulationInterval;
 
+    internal static int GetApeLumberCampLimitForPopulation(int population) =>
+        1 + Math.Max(0, population) / ApeLumberCampPopulationInterval;
+
     private int GetApeFoodDistrictCount(int villageTile) =>
         _apeAuxiliaryVillages.Count(pair =>
             pair.Value == villageTile &&
@@ -2340,10 +2445,10 @@ public sealed partial class SimulationWorld
         GetApeFoodDistrictCount(villageTile) > 0;
 
     private bool TryBuildApeFoodDistrict(int villageTile) =>
-        TryBuildApeStructure(villageTile, ApeStructureKind.Farm) ||
-        TryBuildApeStructure(villageTile, ApeStructureKind.RicePaddy) ||
-        TryBuildApeStructure(villageTile, ApeStructureKind.Orchard) ||
-        TryBuildApeStructure(villageTile, ApeStructureKind.Aquaculture);
+        TryPurchaseApeStructure(villageTile, ApeStructureKind.Farm) ||
+        TryPurchaseApeStructure(villageTile, ApeStructureKind.RicePaddy) ||
+        TryPurchaseApeStructure(villageTile, ApeStructureKind.Orchard) ||
+        TryPurchaseApeStructure(villageTile, ApeStructureKind.Aquaculture);
 
     private static bool IsApeFoodDistrict(ApeStructureKind kind) =>
         kind is ApeStructureKind.Farm or ApeStructureKind.RicePaddy or ApeStructureKind.Orchard or
@@ -3397,6 +3502,11 @@ public sealed partial class SimulationWorld
         bool huntWhenFull = false)
     {
         var predatorSpecies = _species[critterIndex];
+        if (predatorSpecies is (CritterSpecies.ApeWarrior or CritterSpecies.ApeChieftain) &&
+            TryPrioritizeApeReproduction(critterIndex, reservedPrey))
+        {
+            return null;
+        }
         if (!huntWhenFull && predatorSpecies is not CritterSpecies.UndeadApe &&
             _energy[critterIndex] >= CritterNutritions.Get(predatorSpecies).MaximumEnergy)
         {
@@ -3922,8 +4032,11 @@ public sealed partial class SimulationWorld
         MoveCritter(apeIndex, destinationIndex, GetPosition(destinationIndex));
     }
 
-    private Queue<int>? FindApeSettlerPath(int apeIndex, int startTile, int targetTile)
+    private Queue<int>? FindApeSettlerPath(int apeIndex, int startTile, int targetTile,
+        HashSet<int>? sailorGoals = null, IReadOnlySet<GridPosition>? reservedPrey = null,
+        bool seekOcean = false)
     {
+        var sailorRoute = sailorGoals is not null || seekOcean;
         var cameFrom = new int[_terrain.Length];
         var stepsFromStart = new int[_terrain.Length];
         Array.Fill(cameFrom, -1);
@@ -3932,15 +4045,18 @@ public sealed partial class SimulationWorld
 
         var frontier = new PriorityQueue<(int Tile, int Steps), (int Estimate, int Order)>();
         var order = 0;
-        frontier.Enqueue((startTile, 0), (GetApeSettlerPathEstimate(startTile, targetTile), order++));
+        frontier.Enqueue((startTile, 0), (!sailorRoute ? GetApeSettlerPathEstimate(startTile, targetTile) : 0, order++));
+        var reachedTile = -1;
         while (frontier.TryDequeue(out var node, out _))
         {
             if (node.Steps != stepsFromStart[node.Tile])
             {
                 continue;
             }
-            if (node.Tile == targetTile)
+            if (seekOcean ? IsSailorOceanTile(node.Tile) :
+                sailorGoals is null ? node.Tile == targetTile : sailorGoals.Contains(node.Tile))
             {
+                reachedTile = node.Tile;
                 break;
             }
 
@@ -3954,9 +4070,11 @@ public sealed partial class SimulationWorld
                 }
                 var neighborTile = GetIndex(new GridPosition(Mod(position.X + direction.X, Width), y));
                 var nextSteps = node.Steps + 1;
-                if (!IsApeSettlerTransitTile(neighborTile) ||
+                if (!(!sailorRoute ? IsApeSettlerTransitTile(neighborTile) :
+                        CanLiveOn(CritterSpecies.ApeSailor, neighborTile)) ||
+                    reservedPrey?.Contains(GetPosition(neighborTile)) is true ||
                     (_occupants[neighborTile] >= 0 && _occupants[neighborTile] != apeIndex &&
-                        !CanShoveMovementBlocker(apeIndex, neighborTile)) ||
+                        !CanShoveMovementBlocker(apeIndex, neighborTile, reservedPrey)) ||
                     nextSteps >= stepsFromStart[neighborTile])
                 {
                     continue;
@@ -3966,17 +4084,17 @@ public sealed partial class SimulationWorld
                 stepsFromStart[neighborTile] = nextSteps;
                 frontier.Enqueue(
                     (neighborTile, nextSteps),
-                    (nextSteps + GetApeSettlerPathEstimate(neighborTile, targetTile), order++));
+                    (nextSteps + (!sailorRoute ? GetApeSettlerPathEstimate(neighborTile, targetTile) : 0), order++));
             }
         }
 
-        if (cameFrom[targetTile] < 0)
+        if (reachedTile < 0)
         {
             return null;
         }
 
         var reversePath = new Stack<int>();
-        for (var tile = targetTile; tile != startTile; tile = cameFrom[tile])
+        for (var tile = reachedTile; tile != startTile; tile = cameFrom[tile])
         {
             reversePath.Push(tile);
         }
@@ -4073,12 +4191,160 @@ public sealed partial class SimulationWorld
         int critterIndex,
         IReadOnlySet<GridPosition>? reservedPrey)
     {
+        if (TryMoveSailorToOcean(critterIndex, reservedPrey))
+        {
+            return null;
+        }
+        if (TryPrioritizeApeReproduction(critterIndex, reservedPrey))
+        {
+            return null;
+        }
         if (TryHandleApeSettlementReturn(critterIndex, reservedPrey, out var returnMovement))
         {
             return returnMovement;
         }
 
         return TryMoveHunter(critterIndex, ApePerceptionRadius, reservedPrey);
+    }
+
+    private bool IsSailorOceanTile(int tile) =>
+        _surfaceWater[tile] is SurfaceWaterKind.None &&
+        _terrain[tile] is (Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows);
+
+    private bool TryMoveSailorToOcean(int index, IReadOnlySet<GridPosition>? reservedPrey)
+    {
+        var id = _critterIds[index].Value;
+        var current = GetIndex(_positions[index]);
+        if (IsSailorOceanTile(current))
+        {
+            _apeSailorOceanPaths.Remove(id);
+            _apeSailorOceanRetryTicks.Remove(id);
+            return false;
+        }
+        if (_apeSailorOceanRetryTicks.TryGetValue(id, out var retry) && Tick < retry)
+        {
+            return false;
+        }
+        if (!_apeSailorOceanPaths.TryGetValue(id, out var path) || path.Count == 0 ||
+            !IsSailorOceanTile(path.Last()) ||
+            GetApeSettlerPathEstimate(current, path.Peek()) != 1 ||
+            !CanLiveOn(CritterSpecies.ApeSailor, path.Peek()) ||
+            reservedPrey?.Contains(GetPosition(path.Peek())) is true ||
+            (_occupants[path.Peek()] >= 0 && !CanShoveMovementBlocker(index, path.Peek(), reservedPrey)))
+        {
+            path = FindApeSettlerPath(index, current, current, reservedPrey: reservedPrey, seekOcean: true);
+            if (path is null || path.Count == 0)
+            {
+                _apeSailorOceanPaths.Remove(id);
+                _apeSailorOceanRetryTicks[id] = Tick + 10 * TicksPerSecond;
+                return false;
+            }
+            _apeSailorOceanPaths[id] = path;
+        }
+        var next = path.Peek();
+        _preyTargets[index] = -1;
+        if (CanEnterOrShoveMovementBlocker(index, next, reservedPrey))
+        {
+            path.Dequeue();
+            MoveCritter(index, next, GetPosition(next));
+        }
+        else
+        {
+            _apeSailorOceanPaths.Remove(id);
+        }
+        return true;
+    }
+
+    private bool TryPrioritizeApeReproduction(
+        int critterIndex,
+        IReadOnlySet<GridPosition>? reservedPrey)
+    {
+        var id = _critterIds[critterIndex].Value;
+        if (_energy[critterIndex] < CritterNutritions.Get(_species[critterIndex]).ReproductionThreshold ||
+            _apeSettlerTargets.ContainsKey(id) ||
+            !_apeVillageHomes.TryGetValue(id, out var villageTile) ||
+            GetApeVillageResidentCountByTile(villageTile) >=
+                GetApeVillagePopulationCapacityByTile(villageTile))
+        {
+            return false;
+        }
+
+        _preyTargets[critterIndex] = -1;
+        if (!IsAtOrAdjacentToConnectedApeStructure(critterIndex, villageTile))
+        {
+            if (_species[critterIndex] is CritterSpecies.ApeSailor)
+            {
+                MoveApeSailorTowardVillage(_critterIds[critterIndex], villageTile, reservedPrey);
+                return true;
+            }
+            var target = FindNearestConnectedApeStructure(critterIndex, villageTile);
+            if (target >= 0)
+            {
+                TryMoveTowardApeStructure(critterIndex, target, reservedPrey);
+            }
+        }
+        // Stay near the village so the lifecycle pass can create the offspring.
+        return true;
+    }
+
+    internal void MoveApeSailorTowardVillage(CritterId sailorId, int villageTile,
+        IReadOnlySet<GridPosition>? reservedPrey = null)
+    {
+        if (!_critterIndicesById.TryGetValue(sailorId.Value, out var index) ||
+            _species[index] is not CritterSpecies.ApeSailor)
+        {
+            return;
+        }
+        var goals = new HashSet<int>();
+        foreach (var structureTile in EnumerateConnectedApeStructureTiles(villageTile))
+        {
+            var position = GetPosition(structureTile);
+            foreach (var direction in CardinalDirections.Append(new GridPosition(0, 0)))
+            {
+                var y = position.Y + direction.Y;
+                if (y < 0 || y >= Height)
+                {
+                    continue;
+                }
+                var tile = GetIndex(new GridPosition(Mod(position.X + direction.X, Width), y));
+                if (CanLiveOn(CritterSpecies.ApeSailor, tile))
+                {
+                    goals.Add(tile);
+                }
+            }
+        }
+        var current = GetIndex(_positions[index]);
+        if (goals.Count == 0 || goals.Contains(current))
+        {
+            _apeSailorReturnPaths.Remove(sailorId.Value);
+            return;
+        }
+        if (!_apeSailorReturnPaths.TryGetValue(sailorId.Value, out var route) ||
+            route.VillageTile != villageTile || route.Tiles.Count == 0 ||
+            !goals.Contains(route.Tiles.Last()) ||
+            GetApeSettlerPathEstimate(current, route.Tiles.Peek()) != 1 ||
+            !CanLiveOn(CritterSpecies.ApeSailor, route.Tiles.Peek()) ||
+            reservedPrey?.Contains(GetPosition(route.Tiles.Peek())) is true ||
+            (_occupants[route.Tiles.Peek()] >= 0 &&
+                !CanShoveMovementBlocker(index, route.Tiles.Peek(), reservedPrey)))
+        {
+            var path = FindApeSettlerPath(index, current, villageTile, goals, reservedPrey);
+            if (path is null || path.Count == 0)
+            {
+                _apeSailorReturnPaths.Remove(sailorId.Value);
+                return;
+            }
+            route = (villageTile, path);
+            _apeSailorReturnPaths[sailorId.Value] = route;
+        }
+        var next = route.Tiles.Peek();
+        if (!CanEnterOrShoveMovementBlocker(index, next, reservedPrey))
+        {
+            _apeSailorReturnPaths.Remove(sailorId.Value);
+            return;
+        }
+        route.Tiles.Dequeue();
+        MoveCritter(index, next, GetPosition(next));
     }
 
     private bool TryHandleApeSettlementReturn(
@@ -4930,6 +5196,7 @@ public sealed partial class SimulationWorld
         {
             CritterSpecies.ApeChieftain => 4,
             CritterSpecies.ApeWarrior => 3,
+            CritterSpecies.ApeSailor => 2,
             _ => IsHeavyCombatPredator(species) ? 2 : 1,
         };
 
