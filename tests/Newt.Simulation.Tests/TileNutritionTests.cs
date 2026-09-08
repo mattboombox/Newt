@@ -169,7 +169,7 @@ public sealed class TileNutritionTests
         var position = new GridPosition(0, 0);
         world.AddCritter(CritterSpecies.Worm, position);
 
-        for (var tick = 0; tick < 12 * SimulationWorld.TicksPerSecond; tick++)
+        for (var tick = 0; tick < 2 * SimulationWorld.GetMovementIntervalTicks(CritterSpecies.Worm); tick++)
         {
             world.AdvanceOneTick();
         }

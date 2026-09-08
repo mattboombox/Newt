@@ -133,10 +133,10 @@ public sealed class SimulationWorldTests
     }
 
     [Fact]
-    public void WormsMatchTrilobiteSpeedStomachHabitatAndAwareness()
+    public void WormsMoveSlowerThanTrilobitesButMatchTheirStomachHabitatAndAwareness()
     {
         Assert.Equal(
-            SimulationWorld.GetMovementIntervalTicks(CritterSpecies.Trilobite),
+            SimulationWorld.GetMovementIntervalTicks(CritterSpecies.Trilobite) + SimulationWorld.TicksPerSecond,
             SimulationWorld.GetMovementIntervalTicks(CritterSpecies.Worm));
         Assert.Equal(
             CritterNutritions.Get(CritterSpecies.Trilobite),
@@ -614,7 +614,7 @@ public sealed class SimulationWorldTests
         world.SetTerrain(shallows, Terrain.Shallows);
         world.AddCritter(CritterSpecies.Worm, start);
 
-        for (var tick = 0; tick < 6 * SimulationWorld.TicksPerSecond - 1; tick++)
+        for (var tick = 0; tick < SimulationWorld.GetMovementIntervalTicks(CritterSpecies.Worm) - 1; tick++)
         {
             world.AdvanceOneTick();
         }
@@ -650,10 +650,10 @@ public sealed class SimulationWorldTests
     }
 
     [Theory]
-    [InlineData(CritterSpecies.Worm, 6)]
+    [InlineData(CritterSpecies.Worm, 7)]
     [InlineData(CritterSpecies.Trilobite, 6)]
     [InlineData(CritterSpecies.Nautilus, 6)]
-    public void DeepOceanIceFeedsItsTerrainForagers(
+    public void DeepOceanIceProvidesForageOnlyToWorms(
         CritterSpecies species,
         int movementSeconds)
     {
@@ -669,9 +669,9 @@ public sealed class SimulationWorldTests
         }
 
         Assert.Equal(
-            CritterNutritions.Get(species).InitialEnergy + 1,
+            CritterNutritions.Get(species).InitialEnergy + (species is CritterSpecies.Worm ? 1 : 0),
             world.GetCritter(0).Energy);
-        Assert.Equal(0, world.GetTileNutrition(position));
+        Assert.Equal(species is CritterSpecies.Worm ? 0 : 1, world.GetTileNutrition(position));
     }
 
     [Fact]
@@ -682,7 +682,7 @@ public sealed class SimulationWorldTests
         world.SetTerrain(deepOcean, Terrain.DeepOcean);
         world.AddCritter(CritterSpecies.Worm, new GridPosition(0, 0));
 
-        for (var tick = 0; tick < 6 * SimulationWorld.TicksPerSecond; tick++)
+        for (var tick = 0; tick < SimulationWorld.GetMovementIntervalTicks(CritterSpecies.Worm); tick++)
         {
             world.AdvanceOneTick();
         }
@@ -712,7 +712,7 @@ public sealed class SimulationWorldTests
         world.SetTemperature(beach, 0.5f);
         world.AddCritter(CritterSpecies.Worm, new GridPosition(0, 0));
 
-        for (var tick = 0; tick < 12 * SimulationWorld.TicksPerSecond; tick++)
+        for (var tick = 0; tick < 2 * SimulationWorld.GetMovementIntervalTicks(CritterSpecies.Worm); tick++)
         {
             world.AdvanceOneTick();
         }
@@ -737,7 +737,7 @@ public sealed class SimulationWorldTests
         }
         world.AddCritter(CritterSpecies.Plankton, blockedDestination);
 
-        for (var tick = 30; tick < 6 * SimulationWorld.TicksPerSecond; tick++)
+        for (var tick = 30; tick < SimulationWorld.GetMovementIntervalTicks(CritterSpecies.Worm); tick++)
         {
             world.AdvanceOneTick();
         }
@@ -756,7 +756,7 @@ public sealed class SimulationWorldTests
         world.AddCritter(CritterSpecies.Worm, new GridPosition(0, 0));
         world.AddCritter(CritterSpecies.Plankton, new GridPosition(1, 0));
 
-        for (var tick = 0; tick < 6 * SimulationWorld.TicksPerSecond; tick++)
+        for (var tick = 0; tick < SimulationWorld.GetMovementIntervalTicks(CritterSpecies.Worm); tick++)
         {
             world.AdvanceOneTick();
         }
@@ -825,8 +825,8 @@ public sealed class SimulationWorldTests
         world.AddCritter(CritterSpecies.Plankton, new GridPosition(2, 0));
         world.AddCritter(CritterSpecies.Plankton, new GridPosition(3, 0));
 
-        const int movementSeconds = 6;
-        for (var tick = 0; tick < movementSeconds * SimulationWorld.TicksPerSecond; tick++)
+        var movementTicks = SimulationWorld.GetMovementIntervalTicks(species);
+        for (var tick = 0; tick < movementTicks; tick++)
         {
             world.AdvanceOneTick();
         }
@@ -866,7 +866,7 @@ public sealed class SimulationWorldTests
         var critterStart = new GridPosition(5, 1);
         world.AddCritter(species, critterStart);
 
-        for (var tick = 1; tick < 6 * SimulationWorld.TicksPerSecond; tick++)
+        for (var tick = 1; tick < SimulationWorld.GetMovementIntervalTicks(species); tick++)
         {
             world.AdvanceOneTick();
         }
@@ -1466,6 +1466,35 @@ public sealed class SimulationWorldTests
             Enumerable.Range(0, world.CritterCount)
                 .Select(world.GetCritter)
                 .Sum(critter => critter.Energy));
+    }
+
+    [Theory]
+    [InlineData(CritterSpecies.Wolf)]
+    [InlineData(CritterSpecies.MegaToad)]
+    [InlineData(CritterSpecies.MegaSpider)]
+    [InlineData(CritterSpecies.Squid)]
+    [InlineData(CritterSpecies.SeaScorpion)]
+    public void ToothedWhaleHuntsPredatorsThroughCombat(CritterSpecies prey)
+    {
+        var world = new SimulationWorld(1, 2, Terrain.Shallows, seed: 52);
+        world.SeasonsEnabled = false;
+        world.AddCritter(CritterSpecies.ToothedWhale, new GridPosition(0, 0));
+        Assert.True(world.TrySpawnCritter(prey, new GridPosition(0, 1)));
+        Assert.True(SimulationWorld.CanEat(CritterSpecies.ToothedWhale, prey));
+        var initialEnergy = world.GetCritter(0).Energy + world.GetCritter(1).Energy;
+        var totalEnergy = initialEnergy;
+
+        for (var tick = 0; tick < 6 * SimulationWorld.TicksPerSecond; tick++)
+        {
+            world.AdvanceOneTick();
+            totalEnergy = Enumerable.Range(0, world.CritterCount)
+                .Select(world.GetCritter).Sum(critter => critter.Energy);
+            if (totalEnergy != initialEnergy || world.CritterCount != 2)
+                break;
+        }
+
+        Assert.Equal(2, world.CritterCount);
+        Assert.InRange(initialEnergy - totalEnergy, 1, 3);
     }
 
     [Fact]
@@ -2890,7 +2919,6 @@ public sealed class SimulationWorldTests
     }
 
     [Theory]
-    [InlineData(CritterSpecies.ToothedWhale)]
     [InlineData(CritterSpecies.SeaScorpion)]
     [InlineData(CritterSpecies.MegaToad)]
     [InlineData(CritterSpecies.Wolf)]

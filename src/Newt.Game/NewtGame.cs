@@ -169,6 +169,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         LoadCritterSprite(CritterSpecies.Ape, "ape.png");
         LoadCritterSprite(CritterSpecies.ApeSailor, "ape-sailor.png");
         LoadCritterSprite(CritterSpecies.ApeWarrior, "ape-warrior.png");
+        LoadCritterSprite(CritterSpecies.ApeScholar, "ape-scholar.png");
         LoadCritterSprite(CritterSpecies.ApeChieftain, "ape-chieftain.png");
         LoadCritterSprite(CritterSpecies.UndeadApe, "undead-ape.png");
         LoadApeVariantSprites();
@@ -1289,6 +1290,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         CritterSpecies.MegaToad => "Mega Toad",
         CritterSpecies.ApeSailor => "Ape Sailor",
         CritterSpecies.ApeWarrior => "Ape Warrior",
+        CritterSpecies.ApeScholar => "Ape Scholar",
         CritterSpecies.ApeChieftain => "Ape Chieftain",
         CritterSpecies.UndeadApe => "Undead Ape",
         CritterSpecies.ToothedWhale => "Toothed Whale",
@@ -1494,6 +1496,16 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         GridPosition position,
         ApeStructureKind structure)
     {
+        if (structure is ApeStructureKind.Library && _world.GetApeStructureVillage(position) is { } village)
+        {
+            var technologies = _world.GetApeVillageTechnologies(village);
+            return [
+                $"Scholars {_world.GetApeVillageScholarCount(village)} / 2",
+                "Researched technologies:",
+                .. technologies.Count == 0 ? new[] { "None yet" } : technologies.Select(technology =>
+                    ApeTechnologies.All.Single(definition => definition.Technology == technology).Name),
+            ];
+        }
         if (_world.GetApeStructureProductionPerMinute(position) is not { } rate)
         {
             return [];
@@ -1527,7 +1539,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                     $"Web X {web.X}, Y {web.Y}   Stored food {_world.GetMegaSpiderWebFood(web)}",
                 }
                 : Array.Empty<string>(),
-        .. critter.Species is CritterSpecies.Ape or CritterSpecies.ApeSailor or CritterSpecies.ApeWarrior or CritterSpecies.ApeChieftain or CritterSpecies.UndeadApe
+        .. critter.Species is CritterSpecies.Ape or CritterSpecies.ApeSailor or CritterSpecies.ApeWarrior or CritterSpecies.ApeScholar or CritterSpecies.ApeChieftain or CritterSpecies.UndeadApe
             ? new[] { GetPlagueDescription(critter) } : Array.Empty<string>(),
     ];
 
@@ -1564,6 +1576,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         CritterSpecies.Ape => "prey except plankton, worms, and its civilization; plus wetland foliage",
         CritterSpecies.ApeSailor => "sea life except plankton and worms",
         CritterSpecies.ApeWarrior => "predators that hunt apes",
+        CritterSpecies.ApeScholar => "village food stores",
         CritterSpecies.ApeChieftain => "predators that hunt apes",
         CritterSpecies.Deer => "grassland and forest foliage",
         CritterSpecies.Elk => "grassland, tundra, and taiga foliage",
@@ -1590,7 +1603,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         if (critter.CanReproduce)
         {
             return critter.Species is CritterSpecies.Ape or CritterSpecies.ApeSailor or
-                CritterSpecies.ApeWarrior or CritterSpecies.ApeChieftain
+                CritterSpecies.ApeWarrior or CritterSpecies.ApeScholar or CritterSpecies.ApeChieftain
                 ? "Returning to found or reproduce at a village"
                 : "Seeking reproductive space";
         }
@@ -2084,9 +2097,10 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 _spriteBatch.Draw(_pixel, new Rectangle(x, y + size / 3, size, Math.Max(1, size / 3)), new Color(117, 77, 46));
                 _spriteBatch.Draw(_pixel, new Rectangle(x + size / 4, y, Math.Max(1, size / 5), size), new Color(190, 155, 98));
                 break;
+            case ApeStructureKind.Library:
             case ApeStructureKind.MilitaryDistrict:
                 _spriteBatch.Draw(_pixel, new Rectangle(x, y + size / 4, size, Math.Max(1, size * 3 / 4)), new Color(105, 94, 82));
-                _spriteBatch.Draw(_pixel, new Rectangle(x + size / 3, y, Math.Max(1, size / 3), size), new Color(154, 55, 45));
+                _spriteBatch.Draw(_pixel, new Rectangle(x + size / 3, y, Math.Max(1, size / 3), size), structure is ApeStructureKind.Library ? new Color(145, 65, 175) : new Color(154, 55, 45));
                 break;
             case ApeStructureKind.ResidentialDistrict:
                 _spriteBatch.Draw(_pixel, new Rectangle(x, y + size / 3, size, Math.Max(1, size * 2 / 3)), new Color(151, 105, 72));
@@ -2120,6 +2134,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         ApeStructureKind.LumberCamp => "Lumber Camp",
         ApeStructureKind.NavalDistrict => "Harbor",
         ApeStructureKind.MilitaryDistrict => "Military District",
+        ApeStructureKind.Library => "Library",
         ApeStructureKind.ResidentialDistrict => "Residential District",
         ApeStructureKind.Ruin => "Ruins",
         _ => structure.ToString(),
@@ -2364,6 +2379,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         CritterSpecies.Ape => new Color(125, 95, 70),
         CritterSpecies.ApeSailor => new Color(75, 115, 155),
         CritterSpecies.ApeWarrior => new Color(155, 65, 55),
+        CritterSpecies.ApeScholar => new Color(150, 85, 185),
         CritterSpecies.ApeChieftain => new Color(195, 105, 45),
         CritterSpecies.UndeadApe => new Color(95, 190, 100),
         CritterSpecies.Deer => new Color(181, 133, 82),

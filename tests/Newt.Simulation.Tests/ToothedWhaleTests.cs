@@ -5,6 +5,46 @@ namespace Newt.Simulation.Tests;
 public sealed class ToothedWhaleTests
 {
     [Fact]
+    public void WhaleTracksMovingPreyBeyondDetectionRangeInsteadOfSwitchingToCloserFood()
+    {
+        var world = new SimulationWorld(40, 1, Terrain.Ocean, seed: 51);
+        world.AddCritter(CritterSpecies.ToothedWhale, new GridPosition(0, 0));
+        var preyPosition = new GridPosition(6, 0);
+        Assert.True(world.TryPlaceTeleporter(preyPosition));
+        var preyId = world.AddCritter(CritterSpecies.Squid, preyPosition);
+        Assert.Equal(preyPosition, world.FindToothedWhalePrey(0, null));
+        var distantPosition = new GridPosition(12, 0);
+        Assert.True(world.TryPlaceTeleporter(distantPosition));
+        Assert.True(world.TryActivateTeleporterAt(preyPosition));
+        Assert.True(world.TryGetCritter(preyId, out var movedPrey));
+        Assert.True(movedPrey.Position.X > SimulationWorld.ToothedWhalePerceptionRadius);
+        var fishPosition = new GridPosition(1, 0);
+        world.AddCritter(CritterSpecies.Fish, fishPosition);
+        Assert.Equal(movedPrey.Position, world.FindToothedWhalePrey(0, null));
+        // Removing the target compacts the critter arrays; its replacement is not the remembered prey.
+        world.RemoveCritterAt(movedPrey.Position);
+        Assert.Equal(fishPosition, world.FindToothedWhalePrey(0, null));
+    }
+
+    [Fact]
+    public void WhaleContinuesCombatAfterFirstExchange()
+    {
+        var world = new SimulationWorld(1, 2, Terrain.Ocean, seed: 5103);
+        world.SeasonsEnabled = false;
+        NaturalEvents.SetEnabled(world, false);
+        world.AddCritter(CritterSpecies.ToothedWhale, new GridPosition(0, 0));
+        world.AddCritter(CritterSpecies.Squid, new GridPosition(0, 1));
+        for (var tick = 0; tick < 4 * SimulationWorld.TicksPerSecond; tick++)
+            world.AdvanceOneTick();
+        Assert.Equal(2, world.CritterCount);
+        for (var tick = 0; tick < 30 * SimulationWorld.TicksPerSecond && world.CritterCount == 2; tick++)
+            world.AdvanceOneTick();
+        Assert.Equal(1, world.CritterCount);
+        Assert.Equal(3, SimulationWorld.GetCombatDamage(CritterSpecies.ToothedWhale));
+        Assert.Equal(1, SimulationWorld.GetCombatDamage(CritterSpecies.BaleenWhale));
+    }
+
+    [Fact]
     public void ToothedWhaleIsFourthTherapsidEvolutionBranch()
     {
         Assert.Equal(4, CritterEvolution.GetEvolvedSpeciesCount(CritterSpecies.Therapsid));
@@ -44,10 +84,12 @@ public sealed class ToothedWhaleTests
             CritterSpecies.ApeSailor,
             CritterSpecies.Crab,
             CritterSpecies.MegaToad,
+            CritterSpecies.MegaSpider,
             CritterSpecies.Therapsid,
             CritterSpecies.Ape,
             CritterSpecies.ApeWarrior,
             CritterSpecies.ApeChieftain,
+            CritterSpecies.ApeScholar,
             CritterSpecies.Deer,
             CritterSpecies.Elk,
             CritterSpecies.Gazelle,
@@ -94,7 +136,7 @@ public sealed class ToothedWhaleTests
     }
 
     [Fact]
-    public void ToothedWhalePursuesAndConsumesSquid()
+    public void ToothedWhalePursuesAndFightsSquid()
     {
         var world = new SimulationWorld(2, 1, Terrain.Ocean, seed: 5103);
         world.SeasonsEnabled = false;
@@ -108,7 +150,11 @@ public sealed class ToothedWhaleTests
         }
 
         Assert.Equal(1, world.GetCritterCount(CritterSpecies.ToothedWhale));
-        Assert.Equal(0, world.GetCritterCount(CritterSpecies.Squid));
+        Assert.Equal(1, world.GetCritterCount(CritterSpecies.Squid));
+        var damage = CritterNutritions.Get(CritterSpecies.ToothedWhale).InitialEnergy +
+            CritterNutritions.Get(CritterSpecies.Squid).InitialEnergy -
+            world.GetCritter(0).Energy - world.GetCritter(1).Energy;
+        Assert.InRange(damage, 2, 3);
     }
 
     [Theory]
@@ -132,7 +178,7 @@ public sealed class ToothedWhaleTests
 
     [Theory]
     [InlineData(CritterSpecies.Nautilus)]
-    [InlineData(CritterSpecies.Squid)]
+    [InlineData(CritterSpecies.Fish)]
     public void ToothedWhaleCanConsumeAdjacentMarinePrey(CritterSpecies prey)
     {
         var world = new SimulationWorld(1, 2, Terrain.Ocean, seed: 42);

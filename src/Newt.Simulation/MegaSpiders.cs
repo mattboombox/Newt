@@ -3,6 +3,38 @@ namespace Newt.Simulation;
 public sealed partial class SimulationWorld
 {
     private const int MegaSpiderPerceptionRadius = 6;
+
+    private bool CanMegaSpiderCannibalize(int spiderIndex)
+    {
+        if (_energy[spiderIndex] > CritterNutritions.Get(CritterSpecies.MegaSpider).HungryThreshold ||
+            (_megaSpiderWebHomes.TryGetValue(_critterIds[spiderIndex].Value, out var webTile) &&
+                _megaSpiderWebFood.GetValueOrDefault(webTile) > 0))
+        {
+            return false;
+        }
+
+        var current = _positions[spiderIndex];
+        for (var dy = -MegaSpiderPerceptionRadius; dy <= MegaSpiderPerceptionRadius; dy++)
+        {
+            if (current.Y + dy < 0 || current.Y + dy >= Height)
+                continue;
+            var reach = MegaSpiderPerceptionRadius - Math.Abs(dy);
+            for (var dx = -reach; dx <= reach; dx++)
+            {
+                var position = new GridPosition(Mod(current.X + dx, Width), current.Y + dy);
+                var tile = GetIndex(position);
+                var prey = _occupants[tile];
+                if (prey >= 0 && _species[prey] is not CritterSpecies.MegaSpider &&
+                    CanPursuePrey(spiderIndex, prey) &&
+                    IsPreyPursuitAllowedAtDistance(CritterSpecies.MegaSpider, _species[prey],
+                        WrappedManhattanDistance(current, position)) &&
+                    (CanLiveOn(CritterSpecies.MegaSpider, tile) ||
+                        CanStrikeAdjacentFeederCrab(spiderIndex, prey)))
+                    return false;
+            }
+        }
+        return true;
+    }
     private readonly Dictionary<int, int> _megaSpiderWebHomes = [];
     private readonly Dictionary<int, int> _megaSpiderWebFood = [];
 
@@ -107,6 +139,7 @@ public sealed partial class SimulationWorld
         tileIndex >= 0 && tileIndex < _terrain.Length &&
         _surfaceCovers[tileIndex] is SurfaceCover.None &&
         _surfaceWater[tileIndex] is SurfaceWaterKind.None &&
+        _biomes[tileIndex] is not (Biome.Taiga or Biome.Bog or Biome.Tundra or Biome.Arctic) &&
         _terrain[tileIndex] is Terrain.Beach or Terrain.Lowlands or
             Terrain.Canyon or Terrain.Trench or Terrain.Plains or Terrain.Hills;
 
@@ -156,9 +189,7 @@ public sealed partial class SimulationWorld
 
     private bool IsCaughtInMegaSpiderWeb(int critterIndex)
     {
-        if (_species[critterIndex] is CritterSpecies.MegaSpider or
-            CritterSpecies.Ape or CritterSpecies.ApeSailor or CritterSpecies.ApeWarrior or
-            CritterSpecies.ApeChieftain)
+        if (IsPredator(_species[critterIndex]) || IsLivingApe(_species[critterIndex]))
         {
             return false;
         }
@@ -190,7 +221,7 @@ public sealed partial class SimulationWorld
         {
             var trappedIndex = _occupants[webTile];
             if (trappedIndex >= 0 && trappedIndex != spiderIndex &&
-                _species[trappedIndex] is not CritterSpecies.MegaSpider)
+                IsCaughtInMegaSpiderWeb(trappedIndex))
             {
                 var webPosition = GetPosition(webTile);
                 if (WrappedManhattanDistance(_positions[spiderIndex], webPosition) <= 1)
@@ -210,7 +241,7 @@ public sealed partial class SimulationWorld
         var webTile = GetIndex(_positions[preyIndex]);
         if (!_megaSpiderWebHomes.TryGetValue(spiderId, out var homeTile) ||
             homeTile != webTile || !_megaSpiderWebFood.ContainsKey(webTile) ||
-            _species[preyIndex] is CritterSpecies.MegaSpider)
+            !IsCaughtInMegaSpiderWeb(preyIndex))
         {
             return false;
         }

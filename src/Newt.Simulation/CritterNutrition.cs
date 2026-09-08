@@ -277,6 +277,7 @@ public static class CritterNutritions
         CritterSpecies.ApeSailor => Ape with { MaximumEnergy = 2 * Ape.MaximumEnergy },
         CritterSpecies.ApeWarrior => Ape,
         CritterSpecies.ApeChieftain => Ape,
+        CritterSpecies.ApeScholar => Ape with { ReproductionThreshold = 0, ReproductionCost = 0 },
         CritterSpecies.UndeadApe => Ape with { ReproductionThreshold = 0, ReproductionCost = 0 },
         CritterSpecies.Deer => Deer,
         CritterSpecies.Elk => Elk,

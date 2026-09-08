@@ -4,6 +4,42 @@ namespace Newt.Simulation.Tests;
 
 public sealed class MegaSpiderTests
 {
+    [Theory]
+    [InlineData(Biome.Taiga)]
+    [InlineData(Biome.Bog)]
+    [InlineData(Biome.Tundra)]
+    [InlineData(Biome.Arctic)]
+    public void ColdBiomesRemoveAndPreventWebs(Biome biome)
+    {
+        var world = new SimulationWorld(2, 1, Terrain.Plains, seed: 301);
+        var position = new GridPosition(0, 0);
+        var spider = world.AddCritter(CritterSpecies.MegaSpider, position);
+        Assert.True(world.TryCreateMegaSpiderWeb(spider, position));
+        world.SetBiome(position, biome);
+        Assert.Equal(0, world.MegaSpiderWebCount);
+        Assert.False(world.TryCreateMegaSpiderWeb(spider, position));
+        world.SetTerrain(new GridPosition(1, 0), Terrain.Ice);
+        Assert.False(world.TryCreateMegaSpiderWeb(spider, new GridPosition(1, 0)));
+    }
+
+    [Fact]
+    public void SpidersOnlyCannibalizeWhenHungryAndOtherPreyIsAbsent()
+    {
+        var world = new SimulationWorld(3, 1, Terrain.Plains, seed: 302);
+        world.SeasonsEnabled = false;
+        world.AddCritter(CritterSpecies.MegaSpider, new GridPosition(0, 0));
+        world.AddCritter(CritterSpecies.MegaSpider, new GridPosition(1, 0));
+        Assert.Null(world.FindHunterPrey(0, CritterSpecies.MegaSpider, 6, null));
+        AdvanceUntil(world, () => world.GetCritter(0).Energy <= 4);
+        Assert.NotNull(world.FindHunterPrey(0, CritterSpecies.MegaSpider, 6, null));
+        var empty = Enumerable.Range(0, 3).Select(x => new GridPosition(x, 0))
+            .Single(position => !world.IsOccupied(position));
+        Assert.True(world.TrySpawnCritter(CritterSpecies.BaleenWhale, empty));
+        Assert.Equal(empty, world.FindHunterPrey(0, CritterSpecies.MegaSpider, 6, null));
+        world.RemoveCritterAt(empty);
+        AdvanceUntil(world, () => world.GetCritterCount(CritterSpecies.MegaSpider) == 1);
+    }
+
     [Fact]
     public void MegaSpiderEvolvesFromSeaScorpionAndDevolvesBack()
     {
@@ -101,7 +137,7 @@ public sealed class MegaSpiderTests
     }
 
     [Fact]
-    public void MegaSpidersNeverBecomeCaughtInWebsOrEatEachOther()
+    public void MegaSpidersAreImmuneToWebsAndCanEatEachOther()
     {
         var world = new SimulationWorld(2, 1, Terrain.Plains, seed: 206);
         var ownerId = world.AddCritter(CritterSpecies.MegaSpider, new GridPosition(0, 0));
@@ -110,7 +146,7 @@ public sealed class MegaSpiderTests
         var visitingSpiderId = world.AddCritter(CritterSpecies.MegaSpider, web);
 
         Assert.False(world.IsCritterCaughtInMegaSpiderWeb(visitingSpiderId));
-        Assert.False(SimulationWorld.CanEat(
+        Assert.True(SimulationWorld.CanEat(
             CritterSpecies.MegaSpider,
             CritterSpecies.MegaSpider));
         Assert.All(
@@ -123,6 +159,9 @@ public sealed class MegaSpiderTests
     [InlineData(CritterSpecies.ApeSailor)]
     [InlineData(CritterSpecies.ApeWarrior)]
     [InlineData(CritterSpecies.ApeChieftain)]
+    [InlineData(CritterSpecies.Wolf)]
+    [InlineData(CritterSpecies.MegaToad)]
+    [InlineData(CritterSpecies.Therapsid)]
     public void LivingApesAreImmuneToMegaSpiderWebs(CritterSpecies species)
     {
         var world = new SimulationWorld(2, 1, Terrain.Beach, seed: 2202);
@@ -136,7 +175,7 @@ public sealed class MegaSpiderTests
     }
 
     [Fact]
-    public void UndeadApesAreCaughtInMegaSpiderWebs()
+    public void UndeadApesAreImmuneToMegaSpiderWebs()
     {
         var world = new SimulationWorld(2, 1, Terrain.Beach, seed: 2204);
         var ownerId = world.AddCritter(CritterSpecies.MegaSpider, new GridPosition(0, 0));
@@ -145,7 +184,7 @@ public sealed class MegaSpiderTests
 
         var undeadId = world.AddCritter(CritterSpecies.UndeadApe, web);
 
-        Assert.True(world.IsCritterCaughtInMegaSpiderWeb(undeadId));
+        Assert.False(world.IsCritterCaughtInMegaSpiderWeb(undeadId));
     }
 
     [Fact]

@@ -29,4 +29,5 @@ public enum CritterSpecies : byte
     BaleenWhale,
     UndeadApe,
     ApeChieftain,
+    ApeScholar,
 }

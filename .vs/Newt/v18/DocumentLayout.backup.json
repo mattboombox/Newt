@@ -3,6 +3,30 @@
   "WorkspaceRootPath": "C:\\Users\\1Matt\\Desktop\\Newt\\",
   "Documents": [
     {
+      "AbsoluteMoniker": "D:0:0:{1E593B46-9B10-4AE5-A7D8-E6939C133584}|tests\\Newt.Simulation.Tests\\Newt.Simulation.Tests.csproj|c:\\users\\1matt\\desktop\\newt\\tests\\newt.simulation.tests\\apetests.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{1E593B46-9B10-4AE5-A7D8-E6939C133584}|tests\\Newt.Simulation.Tests\\Newt.Simulation.Tests.csproj|solutionrelative:tests\\newt.simulation.tests\\apetests.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{228BFD20-ED4C-4A59-A9A1-457E22762FB2}|src\\Newt.Simulation\\Newt.Simulation.csproj|c:\\users\\1matt\\desktop\\newt\\src\\newt.simulation\\assemblyinfo.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{228BFD20-ED4C-4A59-A9A1-457E22762FB2}|src\\Newt.Simulation\\Newt.Simulation.csproj|solutionrelative:src\\newt.simulation\\assemblyinfo.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{1E593B46-9B10-4AE5-A7D8-E6939C133584}|tests\\Newt.Simulation.Tests\\Newt.Simulation.Tests.csproj|c:\\users\\1matt\\desktop\\newt\\tests\\newt.simulation.tests\\baleenwhaletests.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{1E593B46-9B10-4AE5-A7D8-E6939C133584}|tests\\Newt.Simulation.Tests\\Newt.Simulation.Tests.csproj|solutionrelative:tests\\newt.simulation.tests\\baleenwhaletests.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{228BFD20-ED4C-4A59-A9A1-457E22762FB2}|src\\Newt.Simulation\\Newt.Simulation.csproj|c:\\users\\1matt\\desktop\\newt\\src\\newt.simulation\\apetechnology.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{228BFD20-ED4C-4A59-A9A1-457E22762FB2}|src\\Newt.Simulation\\Newt.Simulation.csproj|solutionrelative:src\\newt.simulation\\apetechnology.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{228BFD20-ED4C-4A59-A9A1-457E22762FB2}|src\\Newt.Simulation\\Newt.Simulation.csproj|c:\\users\\1matt\\desktop\\newt\\src\\newt.simulation\\aperesearch.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{228BFD20-ED4C-4A59-A9A1-457E22762FB2}|src\\Newt.Simulation\\Newt.Simulation.csproj|solutionrelative:src\\newt.simulation\\aperesearch.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{228BFD20-ED4C-4A59-A9A1-457E22762FB2}|src\\Newt.Simulation\\Newt.Simulation.csproj|c:\\users\\1matt\\desktop\\newt\\src\\newt.simulation\\apestructurekind.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{228BFD20-ED4C-4A59-A9A1-457E22762FB2}|src\\Newt.Simulation\\Newt.Simulation.csproj|solutionrelative:src\\newt.simulation\\apestructurekind.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
       "AbsoluteMoniker": "D:0:0:{D148C799-0E6D-41C6-BF4C-FDB7E746E4A9}|src\\Newt.Game\\Newt.Game.csproj|c:\\users\\1matt\\desktop\\newt\\src\\newt.game\\newtgame.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{D148C799-0E6D-41C6-BF4C-FDB7E746E4A9}|src\\Newt.Game\\Newt.Game.csproj|solutionrelative:src\\newt.game\\newtgame.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
@@ -67,19 +91,97 @@
             {
               "$type": "Document",
               "DocumentIndex": 0,
+              "Title": "ApeTests.cs",
+              "DocumentMoniker": "C:\\Users\\1Matt\\Desktop\\Newt\\tests\\Newt.Simulation.Tests\\ApeTests.cs",
+              "RelativeDocumentMoniker": "tests\\Newt.Simulation.Tests\\ApeTests.cs",
+              "ToolTip": "C:\\Users\\1Matt\\Desktop\\Newt\\tests\\Newt.Simulation.Tests\\ApeTests.cs",
+              "RelativeToolTip": "tests\\Newt.Simulation.Tests\\ApeTests.cs",
+              "ViewState": "AgIAANUJAAAAAAAAAAAAwOUJAAAuAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-09-08T05:09:41Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "BaleenWhaleTests.cs",
+              "DocumentMoniker": "C:\\Users\\1Matt\\Desktop\\Newt\\tests\\Newt.Simulation.Tests\\BaleenWhaleTests.cs",
+              "RelativeDocumentMoniker": "tests\\Newt.Simulation.Tests\\BaleenWhaleTests.cs",
+              "ToolTip": "C:\\Users\\1Matt\\Desktop\\Newt\\tests\\Newt.Simulation.Tests\\BaleenWhaleTests.cs",
+              "RelativeToolTip": "tests\\Newt.Simulation.Tests\\BaleenWhaleTests.cs",
+              "ViewState": "AgIAACYAAAAAAAAAAAAgwAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-09-08T05:09:32.04Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "AssemblyInfo.cs",
+              "DocumentMoniker": "C:\\Users\\1Matt\\Desktop\\Newt\\src\\Newt.Simulation\\AssemblyInfo.cs",
+              "RelativeDocumentMoniker": "src\\Newt.Simulation\\AssemblyInfo.cs",
+              "ToolTip": "C:\\Users\\1Matt\\Desktop\\Newt\\src\\Newt.Simulation\\AssemblyInfo.cs",
+              "RelativeToolTip": "src\\Newt.Simulation\\AssemblyInfo.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-09-08T05:09:11.274Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "ApeTechnology.cs",
+              "DocumentMoniker": "C:\\Users\\1Matt\\Desktop\\Newt\\src\\Newt.Simulation\\ApeTechnology.cs",
+              "RelativeDocumentMoniker": "src\\Newt.Simulation\\ApeTechnology.cs",
+              "ToolTip": "C:\\Users\\1Matt\\Desktop\\Newt\\src\\Newt.Simulation\\ApeTechnology.cs",
+              "RelativeToolTip": "src\\Newt.Simulation\\ApeTechnology.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-09-08T05:09:02.225Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 4,
+              "Title": "ApeResearch.cs",
+              "DocumentMoniker": "C:\\Users\\1Matt\\Desktop\\Newt\\src\\Newt.Simulation\\ApeResearch.cs",
+              "RelativeDocumentMoniker": "src\\Newt.Simulation\\ApeResearch.cs",
+              "ToolTip": "C:\\Users\\1Matt\\Desktop\\Newt\\src\\Newt.Simulation\\ApeResearch.cs",
+              "RelativeToolTip": "src\\Newt.Simulation\\ApeResearch.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAYAAAA3AAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-09-08T05:08:07.229Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 5,
+              "Title": "ApeStructureKind.cs",
+              "DocumentMoniker": "C:\\Users\\1Matt\\Desktop\\Newt\\src\\Newt.Simulation\\ApeStructureKind.cs",
+              "RelativeDocumentMoniker": "src\\Newt.Simulation\\ApeStructureKind.cs",
+              "ToolTip": "C:\\Users\\1Matt\\Desktop\\Newt\\src\\Newt.Simulation\\ApeStructureKind.cs",
+              "RelativeToolTip": "src\\Newt.Simulation\\ApeStructureKind.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-09-08T05:08:02.446Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 6,
               "Title": "NewtGame.cs",
               "DocumentMoniker": "C:\\Users\\1Matt\\Desktop\\Newt\\src\\Newt.Game\\NewtGame.cs",
               "RelativeDocumentMoniker": "src\\Newt.Game\\NewtGame.cs",
               "ToolTip": "C:\\Users\\1Matt\\Desktop\\Newt\\src\\Newt.Game\\NewtGame.cs",
               "RelativeToolTip": "src\\Newt.Game\\NewtGame.cs",
-              "ViewState": "AgIAAJQGAAAAAAAAAAAkwF4GAAAJAAAAAAAAAA==",
+              "ViewState": "AgIAAKIGAAAAAAAAAAAgwGsGAAAJAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2026-08-19T23:21:26.457Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 1,
+              "DocumentIndex": 7,
               "Title": "CritterNutrition.cs",
               "DocumentMoniker": "C:\\Users\\1Matt\\Desktop\\Newt\\src\\Newt.Simulation\\CritterNutrition.cs",
               "RelativeDocumentMoniker": "src\\Newt.Simulation\\CritterNutrition.cs",
@@ -91,7 +193,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 2,
+              "DocumentIndex": 8,
               "Title": "CritterEvolution.cs",
               "DocumentMoniker": "C:\\Users\\1Matt\\Desktop\\Newt\\src\\Newt.Simulation\\CritterEvolution.cs",
               "RelativeDocumentMoniker": "src\\Newt.Simulation\\CritterEvolution.cs",
@@ -103,7 +205,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 3,
+              "DocumentIndex": 9,
               "Title": "CritterSnapshot.cs",
               "DocumentMoniker": "C:\\Users\\1Matt\\Desktop\\Newt\\src\\Newt.Simulation\\CritterSnapshot.cs",
               "RelativeDocumentMoniker": "src\\Newt.Simulation\\CritterSnapshot.cs",
@@ -115,7 +217,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 4,
+              "DocumentIndex": 10,
               "Title": "CritterSpecies.cs",
               "DocumentMoniker": "C:\\Users\\1Matt\\Desktop\\Newt\\src\\Newt.Simulation\\CritterSpecies.cs",
               "RelativeDocumentMoniker": "src\\Newt.Simulation\\CritterSpecies.cs",
@@ -127,7 +229,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 5,
+              "DocumentIndex": 11,
               "Title": "WorldPreset.cs",
               "DocumentMoniker": "C:\\Users\\1Matt\\Desktop\\Newt\\src\\Newt.Simulation\\WorldPreset.cs",
               "RelativeDocumentMoniker": "src\\Newt.Simulation\\WorldPreset.cs",
@@ -139,7 +241,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 7,
+              "DocumentIndex": 13,
               "Title": "Biome.cs",
               "DocumentMoniker": "C:\\Users\\1Matt\\Desktop\\Newt\\src\\Newt.Simulation\\Biome.cs",
               "RelativeDocumentMoniker": "src\\Newt.Simulation\\Biome.cs",
@@ -151,7 +253,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 6,
+              "DocumentIndex": 12,
               "Title": "Season.cs",
               "DocumentMoniker": "C:\\Users\\1Matt\\Desktop\\Newt\\src\\Newt.Simulation\\Season.cs",
               "RelativeDocumentMoniker": "src\\Newt.Simulation\\Season.cs",
@@ -163,7 +265,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 8,
+              "DocumentIndex": 14,
               "Title": "VolcanoActivity.cs",
               "DocumentMoniker": "C:\\Users\\1Matt\\Desktop\\Newt\\src\\Newt.Simulation\\VolcanoActivity.cs",
               "RelativeDocumentMoniker": "src\\Newt.Simulation\\VolcanoActivity.cs",
@@ -175,7 +277,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 9,
+              "DocumentIndex": 15,
               "Title": "VolcanoState.cs",
               "DocumentMoniker": "C:\\Users\\1Matt\\Desktop\\Newt\\src\\Newt.Simulation\\VolcanoState.cs",
               "RelativeDocumentMoniker": "src\\Newt.Simulation\\VolcanoState.cs",
@@ -187,7 +289,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 11,
+              "DocumentIndex": 17,
               "Title": "VolcanoSnapshot.cs",
               "DocumentMoniker": "C:\\Users\\1Matt\\Desktop\\Newt\\src\\Newt.Simulation\\VolcanoSnapshot.cs",
               "RelativeDocumentMoniker": "src\\Newt.Simulation\\VolcanoSnapshot.cs",
@@ -199,7 +301,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 10,
+              "DocumentIndex": 16,
               "Title": "SpringResult.cs",
               "DocumentMoniker": "C:\\Users\\1Matt\\Desktop\\Newt\\src\\Newt.Simulation\\SpringResult.cs",
               "RelativeDocumentMoniker": "src\\Newt.Simulation\\SpringResult.cs",

@@ -6,6 +6,7 @@ Place transparent PNG critter sprites in this folder. The game currently recogni
 - `ape-colonist.png`
 - `ape-colonist-sailor.png`
 - `ape-sailor.png`
+- `ape-scholar.png`
 - `ape-warrior.png`
 - `ape-chieftain.png`
 - `baleen-whale.png`
