@@ -52,7 +52,7 @@ public sealed partial class SimulationWorld
     }
 
     private static bool IsLivingApe(CritterSpecies species) =>
-        species is CritterSpecies.Ape or CritterSpecies.ApeSailor or CritterSpecies.ApeWarrior or
+        species is CritterSpecies.Ape or CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack or CritterSpecies.ApeSailor or CritterSpecies.ApeWarrior or
             CritterSpecies.ApeScholar or CritterSpecies.ApeChieftain;
 
     internal void AdvanceVillagePlagueOutbreaks()

@@ -90,6 +90,8 @@ public sealed class ToothedWhaleTests
             CritterSpecies.ApeWarrior,
             CritterSpecies.ApeChieftain,
             CritterSpecies.ApeScholar,
+            CritterSpecies.ApeFarmer,
+            CritterSpecies.ApeLumberjack,
             CritterSpecies.Deer,
             CritterSpecies.Elk,
             CritterSpecies.Gazelle,

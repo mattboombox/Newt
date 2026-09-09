@@ -18,7 +18,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private const double ToolRepeatIntervalSeconds = 0.075;
     private const int PopulationSampleIntervalTicks = 5 * SimulationWorld.TicksPerSecond;
     private const int PopulationHistoryLength = 90;
-    private static readonly int[] ZoomLevels = [2, 4, 8, 16, 24, 32, 48];
+    private static readonly int[] ZoomLevels = [2, 4, 8, 16, 24, 32, 48, 64];
     private static readonly WorldPreset[] MenuSizes =
         [WorldPreset.Micro, WorldPreset.Small, WorldPreset.Standard, WorldPreset.Large, WorldPreset.Huge];
     private static readonly WorldMapType[] MenuMapTypes =
@@ -177,6 +177,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         LoadCritterSprite(CritterSpecies.ApeSailor, "ape-sailor.png");
         LoadCritterSprite(CritterSpecies.ApeWarrior, "ape-warrior.png");
         LoadCritterSprite(CritterSpecies.ApeScholar, "ape-scholar.png");
+        LoadCritterSprite(CritterSpecies.ApeFarmer, "ape-farmer.png");
+        LoadCritterSprite(CritterSpecies.ApeLumberjack, "ape-lumberjack.png");
         LoadCritterSprite(CritterSpecies.ApeChieftain, "ape-chieftain.png");
         LoadCritterSprite(CritterSpecies.UndeadApe, "undead-ape.png");
         LoadApeVariantSprites();
@@ -487,7 +489,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         Texture2D? sprite;
         Texture2D? flashSprite;
         var colonistInWater = critter.IsColonist && IsWaterTile(critter.Position);
-        if (critter.Species is CritterSpecies.Ape or CritterSpecies.ApeSailor &&
+        if (critter.Species is CritterSpecies.Ape or CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack or CritterSpecies.ApeSailor &&
             critter.Plague is PlagueKind.Plague or PlagueKind.Zombie &&
             _sickApeSprite is not null)
         {
@@ -1340,6 +1342,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         CritterSpecies.ApeSailor => "Ape Sailor",
         CritterSpecies.ApeWarrior => "Ape Warrior",
         CritterSpecies.ApeScholar => "Ape Scholar",
+        CritterSpecies.ApeFarmer => "Ape Farmer",
+        CritterSpecies.ApeLumberjack => "Ape Lumberjack",
         CritterSpecies.ApeChieftain => "Ape Chieftain",
         CritterSpecies.UndeadApe => "Undead Ape",
         CritterSpecies.ToothedWhale => "Toothed Whale",
@@ -1519,10 +1523,20 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                         ? $"{(isBarbarian ? "Barbarian Camp" : "Ape Village")} #{villageId.Value}"
                         : isBarbarian ? "Barbarian Camp" : "Ape Village",
                     $"Residents {_world.GetApeVillageResidentCount(position)} / {_world.GetApeVillagePopulationCapacity(position)}",
-                    $"Civilians {_world.GetApeVillageCivilianCount(position)}   Sailors {_world.GetApeVillageSailorCount(position)}",
-                    $"Chieftains {_world.GetApeVillageChieftainCount(position)}   Warriors {_world.GetApeVillageWarriorCount(position)}",
+                    .. isBarbarian
+                        ? new[]
+                        {
+                            $"Barbarians {_world.GetApeVillageResidentCount(position) - _world.GetApeVillageSailorCount(position) - _world.GetApeVillageChieftainCount(position)}   Pirates {_world.GetApeVillageSailorCount(position)}",
+                            $"Chieftains {_world.GetApeVillageChieftainCount(position)}",
+                        }
+                        : new[]
+                        {
+                            $"Civilians {_world.GetApeVillageCivilianCount(position)}   Sailors {_world.GetApeVillageSailorCount(position)}",
+                            $"Chieftains {_world.GetApeVillageChieftainCount(position)}   Warriors {_world.GetApeVillageWarriorCount(position)}",
+                        },
                     $"Food {_world.GetApeVillageFood(position)} / {_world.GetApeVillageFoodCapacity(position)}",
-                    $"Wood {_world.GetApeVillageWood(position)} / {_world.GetApeVillageWoodCapacity(position)}",
+                    .. isBarbarian ? Array.Empty<string>()
+                        : new[] { $"Wood {_world.GetApeVillageWood(position)} / {_world.GetApeVillageWoodCapacity(position)}" },
                     isBarbarian ? "Behavior Raiding camp" : "Behavior Settlement",
                 ];
             }
@@ -1574,7 +1588,6 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     [
         following ? "CRITTER (FOLLOWING)" : "CRITTER",
         $"{GetCritterDisplayName(critter)} #{critter.Id.Value}   {critter.Position}",
-        $"Behavior {GetCritterBehavior(critter)}",
         critter.MaximumEnergy > 0
             ? $"Energy {critter.Energy} / {critter.MaximumEnergy}"
             : "Energy None",
@@ -1591,8 +1604,6 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                     $"Web X {web.X}, Y {web.Y}   Stored food {_world.GetMegaSpiderWebFood(web)}",
                 }
                 : Array.Empty<string>(),
-        .. critter.Species is CritterSpecies.Ape or CritterSpecies.ApeSailor or CritterSpecies.ApeWarrior or CritterSpecies.ApeScholar or CritterSpecies.ApeChieftain or CritterSpecies.UndeadApe
-            ? new[] { GetPlagueDescription(critter) } : Array.Empty<string>(),
         .. _world.GetApeHomeVillage(critter.Id) is { } village
             ? new[]
             {
@@ -1639,7 +1650,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         CritterSpecies.MegaToad => "broad prey; adjacent worms/cannibalism; fights sea scorpions and squid",
         CritterSpecies.Therapsid => "prefers wetland forage; fish as fallback",
         CritterSpecies.Monkey => "swamp and jungle foliage only",
-        CritterSpecies.Ape => "prey except plankton, worms, and its civilization; plus wetland foliage",
+        CritterSpecies.Ape or CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack => "prey except plankton, worms, and its civilization; plus wetland foliage",
         CritterSpecies.ApeSailor => "sea life except plankton and worms",
         CritterSpecies.ApeWarrior => "predators that hunt apes",
         CritterSpecies.ApeScholar => "village food stores",
@@ -1668,7 +1679,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         }
         if (critter.CanReproduce)
         {
-            return critter.Species is CritterSpecies.Ape or CritterSpecies.ApeSailor or
+            return critter.Species is CritterSpecies.Ape or CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack or CritterSpecies.ApeSailor or
                 CritterSpecies.ApeWarrior or CritterSpecies.ApeScholar or CritterSpecies.ApeChieftain
                 ? "Returning to found or reproduce at a village"
                 : "Seeking reproductive space";
@@ -1691,7 +1702,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 CritterSpecies.MegaToad => "Ambushing aquatic prey",
                 CritterSpecies.Therapsid => "Hunting or foraging in lush wetlands",
                 CritterSpecies.Monkey => "Seeking wetland foliage or fleeing predators",
-                CritterSpecies.Ape => "Hunting below 10 village food, wetland foraging, or returning",
+                CritterSpecies.Ape or CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack => "Hunting below 10 village food, wetland foraging, or returning",
                 CritterSpecies.ApeSailor => "Hunting at sea or returning food to harbor",
                 CritterSpecies.ApeWarrior => "Hunting predators of apes",
                 CritterSpecies.ApeChieftain => "Hunting predators of apes",
@@ -1722,7 +1733,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             CritterSpecies.MegaToad => "Patrolling the water's edge",
             CritterSpecies.Therapsid => "Patrolling terrestrial hunting grounds",
             CritterSpecies.Monkey => "Foraging while watching for predators",
-            CritterSpecies.Ape => "Hunting below 10 village food or wetland foraging",
+            CritterSpecies.Ape or CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack => "Hunting below 10 village food or wetland foraging",
             CritterSpecies.ApeSailor => "Patrolling village waters",
             CritterSpecies.ApeWarrior => "Defending its village from predators",
             CritterSpecies.ApeChieftain => "Leading the defense of its village",
@@ -2449,7 +2460,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         CritterSpecies.MegaToad => new Color(90, 155, 65),
         CritterSpecies.Therapsid => new Color(214, 242, 162),
         CritterSpecies.Monkey => new Color(190, 135, 85),
-        CritterSpecies.Ape => new Color(125, 95, 70),
+        CritterSpecies.Ape or CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack => new Color(125, 95, 70),
         CritterSpecies.ApeSailor => new Color(75, 115, 155),
         CritterSpecies.ApeWarrior => new Color(155, 65, 55),
         CritterSpecies.ApeScholar => new Color(150, 85, 185),

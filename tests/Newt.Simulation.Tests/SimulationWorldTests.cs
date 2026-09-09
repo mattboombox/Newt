@@ -1169,6 +1169,8 @@ public sealed class SimulationWorldTests
             CritterSpecies.MegaToad,
             CritterSpecies.Therapsid,
             CritterSpecies.Ape,
+            CritterSpecies.ApeFarmer,
+            CritterSpecies.ApeLumberjack,
             CritterSpecies.ApeSailor,
             CritterSpecies.Wolf,
             CritterSpecies.ToothedWhale,
@@ -2919,13 +2921,13 @@ public sealed class SimulationWorldTests
     }
 
     [Theory]
-    [InlineData(CritterSpecies.SeaScorpion)]
-    [InlineData(CritterSpecies.MegaToad)]
-    [InlineData(CritterSpecies.Wolf)]
-    [InlineData(CritterSpecies.Squid)]
-    public void HeavyPredatorsDealTwoCombatDamage(CritterSpecies species)
+    [InlineData(CritterSpecies.SeaScorpion, 2)]
+    [InlineData(CritterSpecies.MegaToad, 2)]
+    [InlineData(CritterSpecies.Wolf, 3)]
+    [InlineData(CritterSpecies.Squid, 2)]
+    public void HeavyPredatorsDealExpectedCombatDamage(CritterSpecies species, int damage)
     {
-        Assert.Equal(2, SimulationWorld.GetCombatDamage(species));
+        Assert.Equal(damage, SimulationWorld.GetCombatDamage(species));
     }
 
     [Fact]
@@ -3411,7 +3413,7 @@ public sealed class SimulationWorldTests
         Assert.Equal(1, world.GetCritterCount(predator));
         Assert.Equal(1, world.GetCritterCount(CritterSpecies.Therapsid));
         Assert.Equal(
-            8,
+            predator is CritterSpecies.Wolf ? 7 : 8,
             Enumerable.Range(0, world.CritterCount)
                 .Select(world.GetCritter)
                 .Sum(critter => critter.Energy));
@@ -3436,7 +3438,7 @@ public sealed class SimulationWorldTests
         Assert.Equal(1, world.GetCritterCount(CritterSpecies.MegaToad));
         Assert.Equal(1, world.GetCritterCount(CritterSpecies.Wolf));
         Assert.Equal(
-            8,
+            7,
             Enumerable.Range(0, world.CritterCount)
                 .Select(world.GetCritter)
                 .Sum(critter => critter.Energy));

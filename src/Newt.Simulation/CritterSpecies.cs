@@ -30,4 +30,6 @@ public enum CritterSpecies : byte
     UndeadApe,
     ApeChieftain,
     ApeScholar,
+    ApeFarmer,
+    ApeLumberjack,
 }

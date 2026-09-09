@@ -261,7 +261,7 @@ public sealed class MegaSpiderTests
         Assert.Equal(1, world.GetCritterCount(CritterSpecies.MegaSpider));
         Assert.Equal(1, world.GetCritterCount(CritterSpecies.Wolf));
         Assert.Equal(
-            8,
+            7,
             Enumerable.Range(0, world.CritterCount)
                 .Select(world.GetCritter)
                 .Sum(critter => critter.Energy));
