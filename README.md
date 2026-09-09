@@ -1,8 +1,7 @@
 # Newt
 
-Newt is being rebuilt as a deterministic ecosystem simulation in C# with
-MonoGame. The previous Pygame prototype remains in `Newt/` as a behavioral and
-asset reference while the replacement is developed under `src/`.
+Newt is a deterministic ecosystem simulation in C# with
+MonoGame.
 
 Newt's north star is an autonomous living terrarium: species evolve and establish
 themselves, civilizations rise and fall, and player control remains an optional
