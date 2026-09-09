@@ -1088,9 +1088,8 @@ public sealed class ApeTests
     }
 
     [Theory]
-    [InlineData(SurfaceWaterKind.River, ApeStructureKind.NavalDistrict)]
     [InlineData(SurfaceWaterKind.FreshwaterLake, ApeStructureKind.Aquaculture)]
-    public void FiveResidentsUseRiverForHarborAndLakeForAquaculture(
+    public void FiveResidentsUseLakeForAquaculture(
         SurfaceWaterKind water,
         ApeStructureKind expectedStructure)
     {
@@ -1132,7 +1131,7 @@ public sealed class ApeTests
     [Theory]
     [InlineData(SurfaceWaterKind.River)]
     [InlineData(SurfaceWaterKind.FreshwaterLake)]
-    public void VillageBuildsAndRecruitsFromFreshwaterHarborWithOnlyDiagonalLandAccess(SurfaceWaterKind water)
+    public void VillageDoesNotBuildHarborOnFreshwater(SurfaceWaterKind water)
     {
         var world = CreateFedApeWorld(hasGrassland: true);
         NaturalEvents.SetEnabled(world, false);
@@ -1151,21 +1150,16 @@ public sealed class ApeTests
         }
         AddAssignedResidents(world, village, 4);
 
-        for (var tick = 0; tick < 45 * SimulationWorld.TicksPerSecond &&
-            world.GetApeVillageSailorCount(village) == 0; tick++)
+        for (var tick = 0; tick < 45 * SimulationWorld.TicksPerSecond; tick++)
         {
             world.AdvanceOneTick();
         }
 
-        Assert.Equal(ApeStructureKind.NavalDistrict, world.GetApeStructure(harbor));
-        Assert.True(world.IsApeStructureOperational(harbor));
-        Assert.Equal(village, world.GetApeStructureVillage(harbor));
-        Assert.Equal(1, world.GetApeVillageSailorCount(village));
-        Assert.True(world.TryGetCritterAt(harbor, out var sailor));
-        Assert.Equal(CritterSpecies.ApeSailor, sailor.Species);
+        Assert.Null(world.GetApeStructure(harbor));
+        Assert.Equal(0, world.GetApeVillageSailorCount(village));
 
         world.RevalidateApeStructures();
-        Assert.Equal(ApeStructureKind.NavalDistrict, world.GetApeStructure(harbor));
+        Assert.Null(world.GetApeStructure(harbor));
     }
 
     [Theory]
@@ -2522,7 +2516,7 @@ public sealed class ApeTests
     }
 
     [Fact]
-    public void LibraryRequiresThreeHundredResidentsAndRecruitsTwoScholars()
+    public void LibraryRequiresTwoHundredResidentsAndRecruitsTwoScholars()
     {
         var world = CreateFedApeWorld(hasGrassland: true, width: 45, height: 25);
         NaturalEvents.SetEnabled(world, false);

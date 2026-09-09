@@ -256,7 +256,7 @@ public static class WorldGenerator
             for (var x = 0; x < world.Width; x++)
             {
                 var position = new GridPosition(x, y);
-                if (Hydrology.IsSnowmeltSource(world, position))
+                if (IsNaturalSpringCandidate(world, position))
                 {
                     candidates.Add(position);
                 }
@@ -277,6 +277,12 @@ public static class WorldGenerator
                 continue;
             }
 
+            if (world.GetTerrain(candidate) is not (Terrain.Hills or Terrain.Mountain))
+            {
+                // Islands can be completely flat. Match the River tool by
+                // creating a small source hill before starting the river.
+                world.SetTerrain(candidate, Terrain.Hills);
+            }
             if (Hydrology.StartSnowmeltSpring(world, candidate).Termination is SpringTermination.Flowing)
             {
                 selected.Add(candidate);
@@ -289,7 +295,13 @@ public static class WorldGenerator
     }
 
     internal static int GetNaturalSpringTargetCount(int width, int height) =>
-        2 * Math.Clamp(width * height / 2_500 + 1, 3, 12);
+        4 * Math.Clamp(width * height / 2_500 + 1, 3, 12);
+
+    private static bool IsNaturalSpringCandidate(SimulationWorld world, GridPosition position) =>
+        world.GetTerrain(position) is not
+            (Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows or Terrain.RingWorldWall) &&
+        world.GetSurfaceWater(position) is SurfaceWaterKind.None &&
+        world.GetSurfaceCover(position) is not SurfaceCover.Lava;
 
     private static int WrappedDistanceSquared(
         SimulationWorld world,

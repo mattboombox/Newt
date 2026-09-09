@@ -105,7 +105,7 @@ public sealed class WorldGeneratorTests
             Assert.Equal(preset.Height, world.Height);
             if (preset != WorldPreset.Earth)
             {
-                Assert.InRange(world.ActiveSpringCount, 1, 24);
+                Assert.InRange(world.ActiveSpringCount, 1, 48);
             }
         }
     }
@@ -347,11 +347,11 @@ public sealed class WorldGeneratorTests
     }
 
     [Theory]
-    [InlineData(80, 48, 6)]
-    [InlineData(160, 96, 14)]
-    [InlineData(320, 192, 24)]
-    [InlineData(640, 311, 24)]
-    [InlineData(1280, 642, 24)]
+    [InlineData(80, 48, 12)]
+    [InlineData(160, 96, 28)]
+    [InlineData(320, 192, 48)]
+    [InlineData(640, 311, 48)]
+    [InlineData(1280, 642, 48)]
     public void NaturalRiverTargetsAreDoubledForEveryMapSize(
         int width,
         int height,

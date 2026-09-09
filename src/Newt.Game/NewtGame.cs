@@ -42,7 +42,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             WorldTool.Monkey, WorldTool.Ape, WorldTool.Deer, WorldTool.Elk,
             WorldTool.Gazelle, WorldTool.Wolf, WorldTool.Crab, WorldTool.ToothedWhale,
             WorldTool.BaleenWhale];
-    private static readonly WorldTool[] BuildingToolOrder = [WorldTool.WolfDen, WorldTool.Teleporter];
+    private static readonly WorldTool[] BuildingToolOrder =
+        [WorldTool.WolfDen, WorldTool.Teleporter, WorldTool.ApeVillage, WorldTool.BarbarianApeVillage];
     private static readonly WorldTool[] OtherToolOrder =
         [WorldTool.JumpStart, WorldTool.Population, WorldTool.Inspect, WorldTool.Controls];
     private static readonly string[] ControlLines =
@@ -88,6 +89,12 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private Texture2D? _apeColonistFlashSprite;
     private Texture2D? _apeColonistSailorSprite;
     private Texture2D? _apeColonistSailorFlashSprite;
+    private Texture2D? _apeBarbarianSprite;
+    private Texture2D? _apeBarbarianFlashSprite;
+    private Texture2D? _apeBarbarianChiefSprite;
+    private Texture2D? _apeBarbarianChiefFlashSprite;
+    private Texture2D? _apePirateSprite;
+    private Texture2D? _apePirateFlashSprite;
     private TimeSpan _accumulator;
     private KeyboardState _previousKeyboard;
     private MouseState _previousMouse;
@@ -359,6 +366,21 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             _apeColonistSailorSprite = sprite;
             _apeColonistSailorFlashSprite = flashSprite;
         }
+        if (TryLoadCritterSprite("ape-barbarian.png", out sprite, out flashSprite))
+        {
+            _apeBarbarianSprite = sprite;
+            _apeBarbarianFlashSprite = flashSprite;
+        }
+        if (TryLoadCritterSprite("ape-barbarian-chieftain.png", out sprite, out flashSprite))
+        {
+            _apeBarbarianChiefSprite = sprite;
+            _apeBarbarianChiefFlashSprite = flashSprite;
+        }
+        if (TryLoadCritterSprite("ape-pirate.png", out sprite, out flashSprite))
+        {
+            _apePirateSprite = sprite;
+            _apePirateFlashSprite = flashSprite;
+        }
     }
 
     private bool TryLoadCritterSprite(
@@ -479,6 +501,21 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             flashSprite = colonistInWater
                 ? _apeColonistSailorFlashSprite
                 : _apeColonistFlashSprite;
+        }
+        else if (_world.IsBarbarianApe(critter.Id) &&
+            (critter.Species switch
+            {
+                CritterSpecies.ApeChieftain => _apeBarbarianChiefSprite,
+                CritterSpecies.ApeSailor => _apePirateSprite,
+                _ => _apeBarbarianSprite,
+            }) is not null)
+        {
+            (sprite, flashSprite) = critter.Species switch
+            {
+                CritterSpecies.ApeChieftain => (_apeBarbarianChiefSprite, _apeBarbarianChiefFlashSprite),
+                CritterSpecies.ApeSailor => (_apePirateSprite, _apePirateFlashSprite),
+                _ => (_apeBarbarianSprite, _apeBarbarianFlashSprite),
+            };
         }
         else
         {
@@ -812,6 +849,12 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 NaturalEvents.SetEnabled(_world, false);
                 break;
             case WorldTool.River when primaryActivated:
+                var riverSourceTerrain = _world.GetTerrain(position.Value);
+                if (riverSourceTerrain is not (Terrain.Mountain or Terrain.Hills or
+                    Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows or Terrain.RingWorldWall))
+                {
+                    _world.SetTerrain(position.Value, Terrain.Hills);
+                }
                 Hydrology.StartSnowmeltSpring(_world, position.Value, SpringOrigin.Player);
                 break;
             case WorldTool.River:
@@ -855,6 +898,12 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 break;
             case WorldTool.Colonist when primaryActivated:
                 _world.TrySendApeColonist(position.Value);
+                break;
+            case WorldTool.ApeVillage when primaryActivated:
+                _world.TrySpawnTestApeVillage(position.Value);
+                break;
+            case WorldTool.BarbarianApeVillage when primaryActivated:
+                _world.TrySpawnBarbarianApeVillage(position.Value);
                 break;
             case WorldTool.Inspect when primaryActivated:
                 if (_world.TryGetCritterAt(position.Value, out var inspected))
@@ -1463,15 +1512,18 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             var villageId = _world.GetApeVillageId(position);
             if (apeStructure is ApeStructureKind.Village)
             {
+                var isBarbarian = _world.IsBarbarianVillage(position);
                 return [
                     "BUILDING",
-                    villageId.HasValue ? $"Ape Village #{villageId.Value}" : "Ape Village",
+                    villageId.HasValue
+                        ? $"{(isBarbarian ? "Barbarian Camp" : "Ape Village")} #{villageId.Value}"
+                        : isBarbarian ? "Barbarian Camp" : "Ape Village",
                     $"Residents {_world.GetApeVillageResidentCount(position)} / {_world.GetApeVillagePopulationCapacity(position)}",
                     $"Civilians {_world.GetApeVillageCivilianCount(position)}   Sailors {_world.GetApeVillageSailorCount(position)}",
                     $"Chieftains {_world.GetApeVillageChieftainCount(position)}   Warriors {_world.GetApeVillageWarriorCount(position)}",
                     $"Food {_world.GetApeVillageFood(position)} / {_world.GetApeVillageFoodCapacity(position)}",
                     $"Wood {_world.GetApeVillageWood(position)} / {_world.GetApeVillageWoodCapacity(position)}",
-                    "Behavior Settlement",
+                    isBarbarian ? "Behavior Raiding camp" : "Behavior Settlement",
                 ];
             }
 
@@ -1541,10 +1593,24 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 : Array.Empty<string>(),
         .. critter.Species is CritterSpecies.Ape or CritterSpecies.ApeSailor or CritterSpecies.ApeWarrior or CritterSpecies.ApeScholar or CritterSpecies.ApeChieftain or CritterSpecies.UndeadApe
             ? new[] { GetPlagueDescription(critter) } : Array.Empty<string>(),
+        .. _world.GetApeHomeVillage(critter.Id) is { } village
+            ? new[]
+            {
+                _world.IsBarbarianVillage(village)
+                    ? $"Village Barbarian Camp #{_world.GetApeVillageId(village)}"
+                    : $"Village Ape Village #{_world.GetApeVillageId(village)}",
+            }
+            : Array.Empty<string>(),
     ];
 
-    private static string GetCritterDisplayName(CritterSnapshot critter) =>
-        critter.IsColonist ? "Colonist Ape" : GetCritterDisplayName(critter.Species);
+    private string GetCritterDisplayName(CritterSnapshot critter) =>
+        critter.IsColonist ? "Colonist Ape" :
+        _world.IsBarbarianApe(critter.Id) ? critter.Species switch
+        {
+            CritterSpecies.ApeSailor => "Barbarian Pirate",
+            CritterSpecies.ApeChieftain => "Barbarian Chieftain",
+            _ => "Barbarian Warrior",
+        } : GetCritterDisplayName(critter.Species);
 
     private static string GetPlagueDescription(CritterSnapshot critter) =>
         critter.Species is CritterSpecies.UndeadApe ? "Undead: contagious, cannot reproduce" :
@@ -2037,8 +2103,15 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         switch (structure)
         {
             case ApeStructureKind.Village:
-                _spriteBatch.Draw(_pixel, new Rectangle(x, y + size / 3, size, Math.Max(1, size * 2 / 3)), new Color(181, 139, 88));
-                _spriteBatch.Draw(_pixel, new Rectangle(x + size / 4, y, Math.Max(1, size / 2), Math.Max(1, size / 2)), new Color(112, 69, 45));
+                var barbarianCamp = _world.IsBarbarianVillage(position);
+                _spriteBatch.Draw(
+                    _pixel,
+                    new Rectangle(x, y + size / 3, size, Math.Max(1, size * 2 / 3)),
+                    barbarianCamp ? new Color(174, 102, 78) : new Color(181, 139, 88));
+                _spriteBatch.Draw(
+                    _pixel,
+                    new Rectangle(x + size / 4, y, Math.Max(1, size / 2), Math.Max(1, size / 2)),
+                    barbarianCamp ? new Color(132, 58, 48) : new Color(112, 69, 45));
                 break;
             case ApeStructureKind.Farm:
                 var aridFarm = _world.GetBiome(position) is Biome.Arid;
@@ -2339,7 +2412,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         Biome.Forest => new Color(42, 112, 62),
         Biome.Swamp => new Color(35, 91, 67),
         Biome.Desert => new Color(205, 172, 94),
-        Biome.Arid => new Color(168, 145, 74),
+        Biome.Arid => new Color(164, 153, 76),
         Biome.Jungle => new Color(25, 105, 53),
         _ => new Color(110, 110, 100),
     };
@@ -2463,6 +2536,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         WorldTool.Lava => "L add; R clear",
         WorldTool.JumpStart => "L seed plankton",
         WorldTool.Colonist => "L village: auto; tile: target",
+        WorldTool.ApeVillage => "L place village with 2 apes",
+        WorldTool.BarbarianApeVillage => "L place barbarian village with 2 apes",
         WorldTool.Population => _populationWindowOpen
             ? "Open; R close"
             : "L open counts",
@@ -2477,6 +2552,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
 
     private static string GetToolName(WorldTool tool) => tool switch
     {
+        WorldTool.ApeVillage => "Ape Village",
+        WorldTool.BarbarianApeVillage => "Barbarian Ape Village",
         WorldTool.JumpStart => "Jump Start",
         WorldTool.ZombiePlague => "Zombie Plague",
         _ => tool.ToString(),
@@ -2549,6 +2626,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         Lava,
         JumpStart,
         Colonist,
+        ApeVillage,
+        BarbarianApeVillage,
         Population,
         Controls,
         Inspect,

@@ -20,6 +20,7 @@ public sealed partial class SimulationWorld
     internal const int ToothedWhalePerceptionRadius = 7;
     private const int ApePerceptionRadius = 6;
     internal const int ApeDefenderPerceptionRadius = ApeVillageClaimRadius;
+    private const int ApeChieftainDefenderPerceptionRadius = ApePerceptionRadius;
     internal const int CrabFeedingPerceptionRadius = 5;
     private const int ApeVillageSearchRadius = 28;
     private const int ApeVillageClaimRadius = 28;
@@ -41,6 +42,9 @@ public sealed partial class SimulationWorld
     private const int ApeFoodDistrictPopulationThreshold = 5;
     private const int ApeVillageBaseFoodCapacity = 5;
     private const int ApeFoodDistrictStorageCapacity = 10;
+    private const int BarbarianVillageFoodCapacity = 100;
+    // A large chance is appropriate because ape settlements are uncommon.
+    private const int NaturalBarbarianVillageChancePercent = 50;
     internal const int ApeVillageHuntingFoodThreshold = 10;
     private const int ApeInitialWood = 20;
     private const int ApeMaximumWood = 30;
@@ -150,6 +154,9 @@ public sealed partial class SimulationWorld
     private readonly Dictionary<int, int> _apeVillageGrowthFeedTargets = [];
     private readonly Dictionary<int, int> _apeVillageWood = [];
     private readonly Dictionary<int, int> _apeVillageIds = [];
+    // Barbarian camps reuse the Village structure and placement rules, but not
+    // the ordinary village lifecycle.
+    private readonly HashSet<int> _barbarianVillageTiles = [];
     private readonly Dictionary<int, int> _apeCarriedFood = [];
     private readonly Dictionary<int, (int BestDistance, long LastProgressTick)>
         _apeFoodReturnProgress = [];
@@ -407,6 +414,18 @@ public sealed partial class SimulationWorld
 
     public int GetApeVillageWood(GridPosition position) =>
         _apeVillageWood.TryGetValue(GetIndex(position), out var wood) ? wood : 0;
+
+    public bool IsBarbarianVillage(GridPosition position) =>
+        _barbarianVillageTiles.Contains(GetIndex(position));
+
+    public bool IsBarbarianApe(CritterId critterId) =>
+        _critterIndicesById.TryGetValue(critterId.Value, out var critterIndex) &&
+        IsBarbarianApe(critterIndex);
+
+    public GridPosition? GetApeHomeVillage(CritterId critterId) =>
+        _apeVillageHomes.TryGetValue(critterId.Value, out var villageTile)
+            ? GetPosition(villageTile)
+            : null;
 
     public int GetApeVillageWoodCapacity(GridPosition position) =>
         _apeStructures.TryGetValue(GetIndex(position), out var structure) &&
@@ -986,6 +1005,7 @@ public sealed partial class SimulationWorld
         _apeVillageWood.Remove(tileIndex);
         _apeVillageTechnologies.Remove(tileIndex);
         _apeVillageIds.Remove(tileIndex);
+        _barbarianVillageTiles.Remove(tileIndex);
         _loneApeSailorSinceTicks.Remove(tileIndex);
 
         foreach (var auxiliaryTile in _apeAuxiliaryVillages
@@ -1359,7 +1379,7 @@ public sealed partial class SimulationWorld
                 CritterSpecies.ApeChieftain =>
                     TryMoveHunter(
                         index,
-                        ApeDefenderPerceptionRadius,
+                        ApeChieftainDefenderPerceptionRadius,
                         reservedPrey,
                         huntWhenFull: true),
                 CritterSpecies.UndeadApe => TryMoveHunter(index, ApePerceptionRadius, reservedPrey),
@@ -1709,6 +1729,7 @@ public sealed partial class SimulationWorld
         _apeVillageIds[villageTile] = _nextApeVillageId++;
         _apeVillageHomes[apeId] = villageTile;
         _apeVillageTargets.Remove(apeId);
+        TryFoundBarbarianCamp(villageTile);
         _energy[apeIndex] -= nutrition.ReproductionCost;
         return false;
     }
@@ -2004,32 +2025,12 @@ public sealed partial class SimulationWorld
 
     private bool IsApeHarborTile(int tileIndex)
     {
-        if (_terrain[tileIndex] is Terrain.Beach)
+        if (_terrain[tileIndex] is Terrain.Ocean or Terrain.DeepOcean)
         {
             return true;
         }
-        if (_surfaceWater[tileIndex] is not
-            (SurfaceWaterKind.River or SurfaceWaterKind.FreshwaterLake))
-        {
-            return false;
-        }
-
-        var position = GetPosition(tileIndex);
-        foreach (var direction in MovementDirections)
-        {
-            var y = position.Y + direction.Y;
-            if (y < 0 || y >= Height)
-            {
-                continue;
-            }
-            var neighborTile = GetIndex(new GridPosition(Mod(position.X + direction.X, Width), y));
-            if (_surfaceWater[neighborTile] is SurfaceWaterKind.None &&
-                CanLiveOn(CritterSpecies.Ape, neighborTile))
-            {
-                return true;
-            }
-        }
-        return false;
+        // Beach represents an ocean shore. Rivers and freshwater never qualify.
+        return _terrain[tileIndex] is Terrain.Beach;
     }
 
     private bool IsApeFoodDistrictActive(int tileIndex, ApeStructureKind kind) =>
@@ -2081,8 +2082,10 @@ public sealed partial class SimulationWorld
             structure is ApeStructureKind.ResidentialDistrict);
 
     private int GetApeVillageFoodCapacityByTile(int villageTile) =>
-        ApeVillageBaseFoodCapacity +
-        ApeFoodDistrictStorageCapacity * GetApeFoodDistrictCount(villageTile);
+        _barbarianVillageTiles.Contains(villageTile)
+            ? BarbarianVillageFoodCapacity
+            : ApeVillageBaseFoodCapacity +
+                ApeFoodDistrictStorageCapacity * GetApeFoodDistrictCount(villageTile);
 
     private int GetApeVillageWoodCapacityByTile(int villageTile) =>
         ApeMaximumWood + ApeLumberCampWoodCapacity *
@@ -2130,6 +2133,21 @@ public sealed partial class SimulationWorld
             .Select(pair => pair.Key)
             .ToArray())
         {
+            if (_barbarianVillageTiles.Contains(villageTile))
+            {
+                if (GetApeVillageResidentCountByTile(villageTile) == 0)
+                {
+                    RemoveAbandonedApeVillage(villageTile);
+                }
+                else
+                {
+                    // Camps use the ordinary one-chief rule, but none of the
+                    // civilian infrastructure or recruitment progression.
+                    TryRecruitApeChieftain(villageTile);
+                    TryRecruitBarbarianPirate(villageTile);
+                }
+                continue;
+            }
             var population = GetApeVillageResidentCountByTile(villageTile);
             if (population == 0)
             {
@@ -2292,6 +2310,128 @@ public sealed partial class SimulationWorld
             food,
             allowInsufficientFood: true,
             requestedTargetVillageTile: clickedTile);
+    }
+
+    /// <summary>Seeds a normal two-ape village for manual testing.</summary>
+    public bool TrySpawnTestApeVillage(GridPosition position)
+        => TrySpawnApeVillage(position, isBarbarian: false);
+
+    /// <summary>Seeds a barbarian two-ape village for manual testing.</summary>
+    public bool TrySpawnBarbarianApeVillage(GridPosition position)
+        => TrySpawnApeVillage(position, isBarbarian: true);
+
+    private bool TrySpawnApeVillage(GridPosition position, bool isBarbarian)
+    {
+        var villageTile = GetIndex(position);
+        if ((isBarbarian && _terrain[villageTile] is Terrain.Shallows) ||
+            !TryGetApeVillageAuxiliarySite(-1, villageTile, out _, out _))
+        {
+            return false;
+        }
+
+        var residents = new[] { CritterSpecies.Ape, CritterSpecies.Ape };
+        var spawnTiles = FindApeVillageSpawnTiles(villageTile, residents.Length);
+        if (spawnTiles is null)
+        {
+            return false;
+        }
+
+        SetApeStructure(villageTile, ApeStructureKind.Village);
+        _apeVillageFood[villageTile] = 0;
+        _apeVillageWood[villageTile] = ApeInitialWood;
+        _apeVillageIds[villageTile] = _nextApeVillageId++;
+        if (isBarbarian)
+        {
+            _barbarianVillageTiles.Add(villageTile);
+        }
+
+        for (var index = 0; index < residents.Length; index++)
+        {
+            var residentId = AddCritter(residents[index], GetPosition(spawnTiles[index]));
+            _apeVillageHomes[residentId.Value] = villageTile;
+        }
+        return true;
+    }
+
+    private bool TryFoundBarbarianCamp(int villageTile)
+    {
+        if (_terrain[villageTile] is Terrain.Shallows || !ShouldFoundBarbarianCamp(villageTile))
+        {
+            return false;
+        }
+
+        _barbarianVillageTiles.Add(villageTile);
+        return true;
+    }
+
+    private bool ShouldFoundBarbarianCamp(int villageTile) =>
+        (Seed ^ ((ulong)(uint)villageTile * 2_654_435_761UL)) % 100 <
+        NaturalBarbarianVillageChancePercent;
+
+    private void TryRecruitBarbarianPirate(int villageTile)
+    {
+        if (!IsBarbarianCampCoastal(villageTile) || _apeVillageHomes.Any(pair =>
+            pair.Value == villageTile && _critterIndicesById.TryGetValue(pair.Key, out var residentIndex) &&
+            _species[residentIndex] is CritterSpecies.ApeSailor))
+        {
+            return;
+        }
+
+        var recruitId = _apeVillageHomes
+            .Where(pair => pair.Value == villageTile &&
+                _critterIndicesById.TryGetValue(pair.Key, out var residentIndex) &&
+                _species[residentIndex] is CritterSpecies.Ape)
+            .Select(pair => pair.Key)
+            .OrderBy(id => id)
+            .FirstOrDefault();
+        if (recruitId != 0)
+        {
+            ChangeCritterSpecies(
+                _critterIndicesById[recruitId],
+                CritterSpecies.ApeSailor,
+                preserveEnergy: true,
+                preserveApeVillage: true);
+        }
+    }
+
+    private bool IsBarbarianCampCoastal(int villageTile)
+    {
+        if (_terrain[villageTile] is Terrain.Beach)
+        {
+            return true;
+        }
+        var village = GetPosition(villageTile);
+        return MovementDirections.Any(direction =>
+        {
+            var y = village.Y + direction.Y;
+            return y >= 0 && y < Height &&
+                _terrain[GetIndex(new GridPosition(Mod(village.X + direction.X, Width), y))] is Terrain.Shallows;
+        });
+    }
+
+    private int[]? FindApeVillageSpawnTiles(int villageTile, int requiredCount)
+    {
+        var tiles = new List<int>(requiredCount) { villageTile };
+        var village = GetPosition(villageTile);
+        foreach (var direction in MovementDirections)
+        {
+            if (tiles.Count == requiredCount)
+            {
+                break;
+            }
+            var candidate = new GridPosition(Mod(village.X + direction.X, Width), village.Y + direction.Y);
+            if (candidate.Y < 0 || candidate.Y >= Height)
+            {
+                continue;
+            }
+            var candidateTile = GetIndex(candidate);
+            if (_occupants[candidateTile] < 0 && !_apeStructures.ContainsKey(candidateTile) &&
+                CanLiveOn(CritterSpecies.Ape, candidateTile))
+            {
+                tiles.Add(candidateTile);
+            }
+        }
+        return tiles.Count == requiredCount ? [.. tiles] : null;
     }
 
     private int FindNearestApeVillage(int targetTile)
@@ -3544,6 +3684,7 @@ public sealed partial class SimulationWorld
     {
         var predatorSpecies = _species[critterIndex];
         if (predatorSpecies is (CritterSpecies.ApeWarrior or CritterSpecies.ApeChieftain) &&
+            !IsBarbarianApe(critterIndex) &&
             TryPrioritizeApeReproduction(critterIndex, reservedPrey))
         {
             return null;
@@ -3994,6 +4135,7 @@ public sealed partial class SimulationWorld
             var apeNutrition = CritterNutritions.Get(CritterSpecies.Ape);
             _energy[apeIndex] = apeNutrition.InitialEnergy;
             _nextMetabolismTicks[apeIndex] = Tick + apeNutrition.MetabolismIntervalTicks;
+            TryFoundBarbarianCamp(targetVillageTile);
             SpawnApeColonistFoundingCompanion(apeIndex, targetVillageTile);
             return true;
         }
@@ -5002,6 +5144,7 @@ public sealed partial class SimulationWorld
             return;
         }
         if (_species[predatorIndex] is CritterSpecies.MegaSpider &&
+            !CanFightInCombat(_species[preyIndex], _species[predatorIndex]) &&
             TryStoreCaughtPrey(predatorIndex, preyIndex))
         {
             return;
@@ -5032,6 +5175,11 @@ public sealed partial class SimulationWorld
 
         var predatorSpecies = _species[predatorIndex];
         var preySpecies = _species[preyIndex];
+        if (CanFightInCombat(preySpecies, predatorSpecies))
+        {
+            CommitMutualPredatorCombat(predatorPosition, preyPosition);
+            return;
+        }
         if (predatorSpecies != preySpecies &&
             CanEat(predatorSpecies, preySpecies) &&
             (CanEat(preySpecies, predatorSpecies) ||
@@ -5064,7 +5212,7 @@ public sealed partial class SimulationWorld
         {
             _energy[attackerIndex] = Math.Max(
                 0,
-                _energy[attackerIndex] - GetCombatDamage(defenderSpecies));
+                _energy[attackerIndex] - GetCombatDamage(defenderIndex));
             _damageFlashUntilTicks[attackerIndex] = Tick + CombatDamageFlashTicks;
             if (_energy[attackerIndex] == 0)
             {
@@ -5080,7 +5228,7 @@ public sealed partial class SimulationWorld
 
         _energy[defenderIndex] = Math.Max(
             0,
-            _energy[defenderIndex] - GetCombatDamage(attackerSpecies));
+            _energy[defenderIndex] - GetCombatDamage(attackerIndex));
         _damageFlashUntilTicks[defenderIndex] = Tick + CombatDamageFlashTicks;
         if (_energy[defenderIndex] == 0)
         {
@@ -5135,7 +5283,12 @@ public sealed partial class SimulationWorld
         var personalFood = foodEnergy;
         var settlementFood = 0;
         var apeId = _critterIds[predatorIndex].Value;
-        if (predatorSpecies is CritterSpecies.Ape or CritterSpecies.ApeSailor &&
+        if (IsBarbarianApe(predatorIndex))
+        {
+            personalFood = Math.Min(foodEnergy, Math.Max(0, nutrition.MaximumEnergy - _energy[predatorIndex]));
+            settlementFood = foodEnergy - personalFood;
+        }
+        else if (predatorSpecies is CritterSpecies.Ape or CritterSpecies.ApeSailor &&
             _apeVillageHomes.ContainsKey(apeId))
         {
             var personalReserve = predatorSpecies is CritterSpecies.ApeSailor
@@ -5151,8 +5304,16 @@ public sealed partial class SimulationWorld
             _energy[predatorIndex] + personalFood);
         if (settlementFood > 0)
         {
-            _apeCarriedFood.TryGetValue(apeId, out var carriedFood);
-            _apeCarriedFood[apeId] = carriedFood + settlementFood;
+            if (IsBarbarianApe(predatorIndex) &&
+                _apeVillageHomes.TryGetValue(apeId, out var barbarianVillageTile))
+            {
+                AddApeVillageFood(barbarianVillageTile, settlementFood);
+            }
+            else
+            {
+                _apeCarriedFood.TryGetValue(apeId, out var carriedFood);
+                _apeCarriedFood[apeId] = carriedFood + settlementFood;
+            }
         }
     }
 
@@ -5204,6 +5365,18 @@ public sealed partial class SimulationWorld
 
     private bool CanEatInCurrentContext(int predatorIndex, int preyIndex)
     {
+        if (IsBarbarianApe(predatorIndex))
+        {
+            return !_apeVillageHomes.TryGetValue(_critterIds[preyIndex].Value, out var preyVillage) ||
+                !_apeVillageHomes.TryGetValue(_critterIds[predatorIndex].Value, out var predatorVillage) ||
+                preyVillage != predatorVillage;
+        }
+        if (AreRivalApeFactions(predatorIndex, preyIndex))
+        {
+            // Barbarian camps raid; ordinary ape villages only retaliate once
+            // an encounter has already begun.
+            return IsBarbarianApe(predatorIndex);
+        }
         if (_species[predatorIndex] is CritterSpecies.MegaSpider &&
             _species[preyIndex] is CritterSpecies.MegaSpider)
         {
@@ -5224,6 +5397,14 @@ public sealed partial class SimulationWorld
         return !_apeVillageFood.TryGetValue(villageTile, out var villageFood) || villageFood == 0;
     }
 
+    private bool IsBarbarianApe(int critterIndex) =>
+        _apeVillageHomes.TryGetValue(_critterIds[critterIndex].Value, out var villageTile) &&
+        _barbarianVillageTiles.Contains(villageTile);
+
+    private bool AreRivalApeFactions(int firstIndex, int secondIndex) =>
+        IsLivingApe(_species[firstIndex]) && IsLivingApe(_species[secondIndex]) &&
+        IsBarbarianApe(firstIndex) != IsBarbarianApe(secondIndex);
+
     private static bool IsCrabFeederPredator(CritterSpecies species) => species is
         CritterSpecies.Jellyfish or CritterSpecies.SeaScorpion or
         CritterSpecies.Nautilus or CritterSpecies.Squid or CritterSpecies.MegaToad or CritterSpecies.MegaSpider or
@@ -5241,6 +5422,10 @@ public sealed partial class SimulationWorld
             _ => false,
         };
 
+    private static bool CanFightInCombat(CritterSpecies defender, CritterSpecies attacker) =>
+        attacker is not CritterSpecies.UndeadApe &&
+        (IsLivingApe(defender) || CanFightBackAgainst(defender, attacker));
+
     internal static int GetCombatDamage(CritterSpecies species) =>
         species switch
         {
@@ -5250,6 +5435,10 @@ public sealed partial class SimulationWorld
             CritterSpecies.ApeSailor => 2,
             _ => IsHeavyCombatPredator(species) ? 2 : 1,
         };
+
+    private int GetCombatDamage(int critterIndex) =>
+        IsBarbarianApe(critterIndex) ? GetCombatDamage(CritterSpecies.ApeWarrior) :
+        GetCombatDamage(_species[critterIndex]);
 
     internal static bool IsPredator(CritterSpecies species) => species is
         CritterSpecies.ToothedWhale or CritterSpecies.SeaScorpion or CritterSpecies.MegaToad or
