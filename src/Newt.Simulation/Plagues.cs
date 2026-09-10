@@ -22,7 +22,8 @@ public sealed partial class SimulationWorld
             return false;
         }
         var index = _occupants[GetIndex(position)];
-        if (index < 0 || !IsLivingApe(_species[index]) || _critterIds[index].Value % 5 == 0)
+        if (index < 0 || !IsLivingApe(_species[index]) ||
+            _species[index] is CritterSpecies.ApeSailor || _critterIds[index].Value % 5 == 0)
         {
             return false;
         }
@@ -102,6 +103,7 @@ public sealed partial class SimulationWorld
         {
             if (home == villageTile && id % 5 != 0 &&
                 _critterIndicesById.TryGetValue(id, out var index) && IsLivingApe(_species[index]) &&
+                _species[index] is not CritterSpecies.ApeSailor &&
                 NextInt(++candidates) == 0)
             {
                 selected = index;

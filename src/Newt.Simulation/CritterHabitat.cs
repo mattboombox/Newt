@@ -25,7 +25,7 @@ public static class CritterHabitats
         CritterSpecies.Newt or CritterSpecies.MegaToad or CritterSpecies.MegaSpider or CritterSpecies.Therapsid or
             CritterSpecies.Monkey or CritterSpecies.Ape or CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack or CritterSpecies.ApeWarrior or CritterSpecies.ApeScholar or CritterSpecies.ApeChieftain or CritterSpecies.UndeadApe or CritterSpecies.Deer or CritterSpecies.Elk or
             CritterSpecies.Gazelle or
-            CritterSpecies.Wolf or CritterSpecies.Crab =>
+            CritterSpecies.Wolf or CritterSpecies.Dog or CritterSpecies.Crab =>
             CritterHabitat.LandDweller,
         _ => throw new ArgumentOutOfRangeException(nameof(species)),
     };

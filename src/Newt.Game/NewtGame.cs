@@ -129,6 +129,9 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private readonly Dictionary<CritterSpecies, List<int>> _populationHistory =
         Enum.GetValues<CritterSpecies>().ToDictionary(species => species, _ => new List<int>());
     private readonly List<int> _sickApeHistory = [];
+    private readonly List<int> _barbarianHistory = [];
+    private readonly List<int> _pirateHistory = [];
+    private readonly List<int> _barbarianChiefHistory = [];
     private long _nextPopulationSampleTick;
 
     public NewtGame()
@@ -179,6 +182,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         LoadCritterSprite(CritterSpecies.ApeScholar, "ape-scholar.png");
         LoadCritterSprite(CritterSpecies.ApeFarmer, "ape-farmer.png");
         LoadCritterSprite(CritterSpecies.ApeLumberjack, "ape-lumberjack.png");
+        LoadCritterSprite(CritterSpecies.Dog, "dog.png");
         LoadCritterSprite(CritterSpecies.ApeChieftain, "ape-chieftain.png");
         LoadCritterSprite(CritterSpecies.UndeadApe, "undead-ape.png");
         LoadApeVariantSprites();
@@ -1118,12 +1122,22 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             return;
         }
 
+        var barbarians = _world.GetBarbarianPopulationBySpecies();
+        var pirates = barbarians[(int)CritterSpecies.ApeSailor];
+        var chiefs = barbarians[(int)CritterSpecies.ApeChieftain];
+        var warriors = barbarians.Sum() - pirates - chiefs;
         var populations = Enum.GetValues<CritterSpecies>()
             .Select(species => (Name: GetCritterDisplayName(species),
-                Count: _world.GetCritterCount(species), Color: GetCritterColor(species),
+                Count: _world.GetCritterCount(species) - barbarians[(int)species], Color: GetCritterColor(species),
                 History: _populationHistory[species]))
             .Where(entry => entry.Count > 0)
             .ToList();
+        if (warriors > 0)
+            populations.Add(("Ape Barbarian", warriors, new Color(190, 95, 60), _barbarianHistory));
+        if (pirates > 0)
+            populations.Add(("Barbarian Pirate", pirates, new Color(185, 125, 65), _pirateHistory));
+        if (chiefs > 0)
+            populations.Add(("Barbarian Chieftain", chiefs, new Color(210, 75, 55), _barbarianChiefHistory));
         if (_world.SickApeCount > 0)
         {
             populations.Add(("Sick Apes", _world.SickApeCount,
@@ -1256,10 +1270,16 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
 
     private void RecordPopulationSample()
     {
+        var barbarians = _world.GetBarbarianPopulationBySpecies();
         foreach (var species in Enum.GetValues<CritterSpecies>())
         {
-            AppendPopulationSample(_populationHistory[species], _world.GetCritterCount(species));
+            AppendPopulationSample(_populationHistory[species], _world.GetCritterCount(species) - barbarians[(int)species]);
         }
+        var pirates = barbarians[(int)CritterSpecies.ApeSailor];
+        var chiefs = barbarians[(int)CritterSpecies.ApeChieftain];
+        AppendPopulationSample(_barbarianHistory, barbarians.Sum() - pirates - chiefs);
+        AppendPopulationSample(_pirateHistory, pirates);
+        AppendPopulationSample(_barbarianChiefHistory, chiefs);
         AppendPopulationSample(_sickApeHistory, _world.SickApeCount);
         _nextPopulationSampleTick = _world.Tick + PopulationSampleIntervalTicks;
     }
@@ -1344,6 +1364,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         CritterSpecies.ApeScholar => "Ape Scholar",
         CritterSpecies.ApeFarmer => "Ape Farmer",
         CritterSpecies.ApeLumberjack => "Ape Lumberjack",
+        CritterSpecies.Dog => "Dog",
         CritterSpecies.ApeChieftain => "Ape Chieftain",
         CritterSpecies.UndeadApe => "Undead Ape",
         CritterSpecies.ToothedWhale => "Toothed Whale",
@@ -1535,6 +1556,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                             $"Chieftains {_world.GetApeVillageChieftainCount(position)}   Warriors {_world.GetApeVillageWarriorCount(position)}",
                         },
                     $"Food {_world.GetApeVillageFood(position)} / {_world.GetApeVillageFoodCapacity(position)}",
+                    $"Dogs {_world.GetApeVillageDogCount(position)} / {_world.GetApeVillageResidentCount(position) / 10}",
                     .. isBarbarian ? Array.Empty<string>()
                         : new[] { $"Wood {_world.GetApeVillageWood(position)} / {_world.GetApeVillageWoodCapacity(position)}" },
                     isBarbarian ? "Behavior Raiding camp" : "Behavior Settlement",
@@ -1618,6 +1640,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         critter.IsColonist ? "Colonist Ape" :
         _world.IsBarbarianApe(critter.Id) ? critter.Species switch
         {
+            CritterSpecies.Dog => "Barbarian Dog",
             CritterSpecies.ApeSailor => "Barbarian Pirate",
             CritterSpecies.ApeChieftain => "Barbarian Chieftain",
             _ => "Barbarian Warrior",
@@ -1650,11 +1673,11 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         CritterSpecies.MegaToad => "broad prey; adjacent worms/cannibalism; fights sea scorpions and squid",
         CritterSpecies.Therapsid => "prefers wetland forage; fish as fallback",
         CritterSpecies.Monkey => "swamp and jungle foliage only",
-        CritterSpecies.Ape or CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack => "prey except plankton, worms, and its civilization; plus wetland foliage",
-        CritterSpecies.ApeSailor => "sea life except plankton and worms",
-        CritterSpecies.ApeWarrior => "predators that hunt apes",
+        CritterSpecies.Ape or CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack => "prey except plankton, worms, whales, and its civilization; plus wetland foliage",
+        CritterSpecies.ApeSailor => "sea life except plankton, worms, and whales",
+        CritterSpecies.ApeWarrior or CritterSpecies.Dog => "predators that hunt apes, except whales",
         CritterSpecies.ApeScholar => "village food stores",
-        CritterSpecies.ApeChieftain => "predators that hunt apes",
+        CritterSpecies.ApeChieftain => "predators that hunt apes, except whales",
         CritterSpecies.Deer => "grassland and forest foliage",
         CritterSpecies.Elk => "grassland, tundra, and taiga foliage",
         CritterSpecies.Gazelle => "arid, forest, and grassland foliage",
@@ -1786,6 +1809,9 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             history.Clear();
         }
         _sickApeHistory.Clear();
+        _barbarianHistory.Clear();
+        _pirateHistory.Clear();
+        _barbarianChiefHistory.Clear();
         RecordPopulationSample();
     }
 
@@ -2469,7 +2495,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         CritterSpecies.Deer => new Color(181, 133, 82),
         CritterSpecies.Elk => new Color(112, 78, 48),
         CritterSpecies.Gazelle => new Color(220, 175, 95),
-        CritterSpecies.Wolf => new Color(125, 130, 135),
+        CritterSpecies.Wolf or CritterSpecies.Dog => new Color(125, 130, 135),
         CritterSpecies.Crab => new Color(255, 80, 80),
         CritterSpecies.ToothedWhale => new Color(58, 92, 120),
         CritterSpecies.BaleenWhale => new Color(105, 135, 155),

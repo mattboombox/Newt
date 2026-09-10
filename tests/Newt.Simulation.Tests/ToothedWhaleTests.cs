@@ -88,6 +88,7 @@ public sealed class ToothedWhaleTests
             CritterSpecies.Therapsid,
             CritterSpecies.Ape,
             CritterSpecies.ApeWarrior,
+            CritterSpecies.Dog,
             CritterSpecies.ApeChieftain,
             CritterSpecies.ApeScholar,
             CritterSpecies.ApeFarmer,

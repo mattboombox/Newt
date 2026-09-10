@@ -5,6 +5,78 @@ namespace Newt.Simulation.Tests;
 public sealed class ApeTests
 {
     [Theory]
+    [InlineData(9, 0)]
+    [InlineData(10, 1)]
+    [InlineData(20, 2)]
+    public void DogsJoinKillersVillageWithoutUsingHousingAndRespectPopulationLimit(int population, int expectedDogs)
+    {
+        var (world, village) = CreateVillageForPlague(population);
+        var killer = Enumerable.Range(0, world.CritterCount).First(index =>
+            world.GetCritter(index).Species is CritterSpecies.Ape &&
+            world.GetApeHomeVillage(world.GetCritter(index).Id) == village);
+        var housing = world.GetApeVillagePopulationCapacity(village);
+        for (var roll = 0; roll < 5000; roll++)
+            world.TryRecruitDogFromWolfKill(killer);
+        Assert.Equal(expectedDogs, world.GetApeVillageDogCount(village));
+        Assert.Equal(population, world.GetApeVillageResidentCount(village));
+        Assert.Equal(housing, world.GetApeVillagePopulationCapacity(village));
+        foreach (var dog in Enumerable.Range(0, world.CritterCount).Select(world.GetCritter)
+            .Where(critter => critter.Species is CritterSpecies.Dog))
+            Assert.Equal(village, world.GetApeHomeVillage(dog.Id));
+    }
+
+    [Fact]
+    public void DogsHaveWolfStatsAndWarriorHuntingRelationships()
+    {
+        Assert.Equal(CritterNutritions.Get(CritterSpecies.Wolf), CritterNutritions.Get(CritterSpecies.Dog));
+        Assert.Equal(SimulationWorld.GetCombatDamage(CritterSpecies.Wolf), SimulationWorld.GetCombatDamage(CritterSpecies.Dog));
+        Assert.Equal(SimulationWorld.GetMovementIntervalTicks(CritterSpecies.Wolf), SimulationWorld.GetMovementIntervalTicks(CritterSpecies.Dog));
+        Assert.True(SimulationWorld.CanSpeciesReproduce(CritterSpecies.Dog));
+        Assert.Equal(CritterSpecies.Dog, new SimulationWorld(1, 1, Terrain.Plains).ChooseOffspringSpecies(CritterSpecies.Dog));
+        foreach (var species in Enum.GetValues<CritterSpecies>())
+        {
+            Assert.Equal(SimulationWorld.CanEat(CritterSpecies.ApeWarrior, species), SimulationWorld.CanEat(CritterSpecies.Dog, species));
+            Assert.Equal(SimulationWorld.CanEat(species, CritterSpecies.ApeWarrior), SimulationWorld.CanEat(species, CritterSpecies.Dog));
+        }
+    }
+
+    [Fact]
+    public void DamagedApeCannotForageUntilCombatFeedingCooldownExpires()
+    {
+        var world = new SimulationWorld(4, 1, Terrain.Plains, seed: 1);
+        world.SeasonsEnabled = false;
+        NaturalEvents.SetEnabled(world, false);
+        var apeId = world.AddCritter(CritterSpecies.Ape, new GridPosition(0, 0));
+        world.AddCritter(CritterSpecies.Wolf, new GridPosition(1, 0));
+        var startingEnergy = world.GetCritter(0).Energy;
+        CritterSnapshot wounded = default;
+        for (var tick = 0; tick < 10 * SimulationWorld.TicksPerSecond; tick++)
+        {
+            world.AdvanceOneTick();
+            Assert.True(world.TryGetCritter(apeId, out wounded));
+            if (wounded.Energy < startingEnergy)
+                break;
+        }
+        Assert.True(wounded.Energy < startingEnergy);
+        foreach (var critter in Enumerable.Range(0, world.CritterCount).Select(world.GetCritter).ToArray())
+            if (critter.Id != apeId)
+                world.RemoveCritterAt(critter.Position);
+        foreach (var position in AllPositions(world))
+            world.SetBiome(position, Biome.Swamp);
+        var woundedEnergy = wounded.Energy;
+        for (var tick = 1; tick < SimulationWorld.ApeCombatFeedingCooldownTicks; tick++)
+        {
+            world.AdvanceOneTick();
+            Assert.True(world.TryGetCritter(apeId, out var waiting));
+            Assert.True(waiting.Energy <= woundedEnergy);
+        }
+        for (var tick = 0; tick <= SimulationWorld.GetMovementIntervalTicks(CritterSpecies.Ape); tick++)
+            world.AdvanceOneTick();
+        Assert.True(world.TryGetCritter(apeId, out var recovered));
+        Assert.True(recovered.Energy > woundedEnergy);
+    }
+
+    [Theory]
     [InlineData(CritterSpecies.Ape)]
     [InlineData(CritterSpecies.ApeSailor)]
     [InlineData(CritterSpecies.ApeWarrior)]
@@ -83,7 +155,7 @@ public sealed class ApeTests
     }
 
     [Fact]
-    public void SickApeCountIncludesBothStrainsAndSailorsButNotHealthyImmuneOrUndeadApes()
+    public void SickApeCountIncludesBothStrainsAndFarmersButNotHealthyImmuneOrUndeadApes()
     {
         var world = CreatePlagueWorld(5, 1, Terrain.Ice);
         var ape = new GridPosition(0, 0);
@@ -91,7 +163,7 @@ public sealed class ApeTests
         var healthy = new GridPosition(2, 0);
         var immune = new GridPosition(4, 0);
         world.AddCritter(CritterSpecies.Ape, ape);
-        world.AddCritter(CritterSpecies.ApeSailor, sailor);
+        world.AddCritter(CritterSpecies.ApeFarmer, sailor);
         world.AddCritter(CritterSpecies.Ape, healthy);
         world.AddCritter(CritterSpecies.UndeadApe, new GridPosition(3, 0));
         world.AddCritter(CritterSpecies.Ape, immune);
@@ -147,8 +219,8 @@ public sealed class ApeTests
     [Theory]
     [InlineData(PlagueKind.Plague, CritterSpecies.Ape)]
     [InlineData(PlagueKind.Zombie, CritterSpecies.Ape)]
-    [InlineData(PlagueKind.Plague, CritterSpecies.ApeSailor)]
-    [InlineData(PlagueKind.Zombie, CritterSpecies.ApeSailor)]
+    [InlineData(PlagueKind.Plague, CritterSpecies.ApeFarmer)]
+    [InlineData(PlagueKind.Zombie, CritterSpecies.ApeFarmer)]
     public void PlagueDrainsGraduallyAndOnlyZombieVictimsRise(PlagueKind kind, CritterSpecies species)
     {
         var world = CreatePlagueWorld(1, 1, Terrain.Ice);
@@ -223,7 +295,7 @@ public sealed class ApeTests
     {
         foreach (var species in Enum.GetValues<CritterSpecies>())
         {
-            Assert.Equal(species is CritterSpecies.Ape or CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack or CritterSpecies.ApeSailor or CritterSpecies.ApeWarrior or CritterSpecies.ApeScholar or CritterSpecies.ApeChieftain,
+            Assert.Equal(species is CritterSpecies.Dog or CritterSpecies.Ape or CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack or CritterSpecies.ApeSailor or CritterSpecies.ApeWarrior or CritterSpecies.ApeScholar or CritterSpecies.ApeChieftain,
                 SimulationWorld.CanEat(CritterSpecies.UndeadApe, species));
         }
         var world = CreatePlagueWorld(2, 1, Terrain.Ice);
@@ -254,16 +326,14 @@ public sealed class ApeTests
     }
 
     [Fact]
-    public void UndeadInfectAndReanimateSailorsKilledBeforePlagueDrainsTheirEnergy()
+    public void UndeadCannotReanimateSailorsTheyKill()
     {
         var world = CreatePlagueWorld(2, 1, Terrain.Ice);
         world.AddCritter(CritterSpecies.UndeadApe, new GridPosition(0, 0));
         var sailorId = world.AddCritter(CritterSpecies.ApeSailor, new GridPosition(1, 0));
         AdvancePlagueTicks(world, 3 * SimulationWorld.TicksPerSecond);
-        Assert.True(world.TryGetCritter(sailorId, out var risen));
-        Assert.Equal(CritterSpecies.UndeadApe, risen.Species);
-        Assert.Equal(2, world.GetCritterCount(CritterSpecies.UndeadApe));
-        Assert.NotEqual(world.GetCritter(0).Position, world.GetCritter(1).Position);
+        Assert.False(world.TryGetCritter(sailorId, out _));
+        Assert.Equal(1, world.GetCritterCount(CritterSpecies.UndeadApe));
     }
 
     [Fact]
@@ -478,7 +548,7 @@ public sealed class ApeTests
         foreach (var species in Enum.GetValues<CritterSpecies>())
         {
             var isApePrey = species is not
-                (CritterSpecies.Plankton or CritterSpecies.Worm or
+                (CritterSpecies.Dog or CritterSpecies.Plankton or CritterSpecies.Worm or CritterSpecies.ToothedWhale or CritterSpecies.BaleenWhale or
                     CritterSpecies.Ape or CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack or CritterSpecies.ApeSailor or CritterSpecies.ApeWarrior or CritterSpecies.ApeScholar or CritterSpecies.ApeChieftain);
             Assert.Equal(
                 isApePrey,
@@ -1486,7 +1556,6 @@ public sealed class ApeTests
             CritterSpecies.MegaSpider,
             CritterSpecies.MegaToad,
             CritterSpecies.Wolf,
-            CritterSpecies.ToothedWhale,
             CritterSpecies.UndeadApe,
         };
         Assert.Equal(
@@ -1619,7 +1688,7 @@ public sealed class ApeTests
     [Theory]
     [InlineData(PlagueKind.Plague)]
     [InlineData(PlagueKind.Zombie)]
-    public void AssignedSailorHasDoubleEnergyCapButVillageFoodDoesNotPreventPlagueDeath(PlagueKind kind)
+    public void AssignedSailorHasDoubleEnergyCapAndResistsBothPlagues(PlagueKind kind)
     {
         var world = CreateFedApeWorld(hasGrassland: true);
         AdvanceUntilVillage(world);
@@ -1663,25 +1732,11 @@ public sealed class ApeTests
         AdvancePlagueTicks(world, SimulationWorld.PlagueDrainIntervalTicks);
         Assert.True(world.TryGetCritter(sailor.Id, out var healthy));
         Assert.Equal(sailor.Energy, healthy.Energy);
-        Assert.True(world.TryInfectApeAt(healthy.Position, kind));
-
-        for (var tick = 0; tick < sailor.Energy * SimulationWorld.PlagueDrainIntervalTicks; tick++)
-        {
-            // Even unlimited village supplies must not replace plague losses.
-            world.StoreApeVillageFood(village, world.GetApeVillageFoodCapacity(village));
-            world.AdvanceOneTick();
-            if (!world.TryGetCritter(sailor.Id, out var current))
-            {
-                Assert.Equal(PlagueKind.Plague, kind);
-                return;
-            }
-            if (current.Species is CritterSpecies.UndeadApe)
-            {
-                Assert.Equal(PlagueKind.Zombie, kind);
-                return;
-            }
-        }
-        Assert.Fail("Village supplies prevented the infected sailor from dying.");
+        Assert.False(world.TryInfectApeAt(healthy.Position, kind));
+        Assert.True(healthy.IsPlagueImmune);
+        AdvancePlagueTicks(world, SimulationWorld.PlagueDrainIntervalTicks);
+        Assert.True(world.TryGetCritter(sailor.Id, out var immune));
+        Assert.Equal(PlagueKind.None, immune.Plague);
     }
 
     [Fact]
@@ -1778,14 +1833,14 @@ public sealed class ApeTests
             var isSeaPrey = species is CritterSpecies.Jellyfish or CritterSpecies.Trilobite or
                 CritterSpecies.SeaScorpion or CritterSpecies.Nautilus or
                 CritterSpecies.Fish or CritterSpecies.Crab or CritterSpecies.Squid or
-                CritterSpecies.SquidEgg or CritterSpecies.BaleenWhale;
+                CritterSpecies.SquidEgg;
             Assert.Equal(isSeaPrey, SimulationWorld.CanEat(CritterSpecies.ApeSailor, species));
         }
         Assert.False(SimulationWorld.CanEat(CritterSpecies.ApeSailor, CritterSpecies.Plankton));
     }
 
     [Fact]
-    public void SailorsHuntBaleenWhalesThatCanDefendThemselves()
+    public void SailorsLeaveBaleenWhalesAlone()
     {
         Assert.True(SimulationWorld.CanFightBackAgainst(
             CritterSpecies.BaleenWhale, CritterSpecies.ApeSailor));
@@ -1793,8 +1848,6 @@ public sealed class ApeTests
         Assert.False(SimulationWorld.CanEat(CritterSpecies.ApeSailor, CritterSpecies.ToothedWhale));
         Assert.Equal(1, SimulationWorld.GetCombatDamage(CritterSpecies.BaleenWhale));
         Assert.Equal(3, SimulationWorld.GetCombatDamage(CritterSpecies.ToothedWhale));
-        var sawWhaleDefend = false;
-        var sawSailorHit = false;
         for (ulong seed = 1; seed <= 20; seed++)
         {
             var world = new SimulationWorld(1, 2, Terrain.Ocean, seed);
@@ -1804,22 +1857,16 @@ public sealed class ApeTests
             var whaleId = world.AddCritter(CritterSpecies.BaleenWhale, new GridPosition(0, 1));
             var sailorEnergy = world.GetCritter(0).Energy;
             var whaleEnergy = world.GetCritter(1).Energy;
-            Assert.Equal(new GridPosition(0, 1),
-                world.FindHunterPrey(0, CritterSpecies.ApeSailor, 6, null));
+            Assert.Null(world.FindHunterPrey(0, CritterSpecies.ApeSailor, 6, null));
 
             for (var tick = 0; tick < SimulationWorld.GetMovementIntervalTicks(CritterSpecies.ApeSailor); tick++)
                 world.AdvanceOneTick();
 
             Assert.True(world.TryGetCritter(sailorId, out var sailor));
             Assert.True(world.TryGetCritter(whaleId, out var whale));
-            Assert.True(
-                sailor.Energy == sailorEnergy - 1 && whale.Energy == whaleEnergy ||
-                sailor.Energy == sailorEnergy && whale.Energy == whaleEnergy - 2);
-            sawWhaleDefend |= sailor.Energy == sailorEnergy - 1;
-            sawSailorHit |= whale.Energy == whaleEnergy - 2;
+            Assert.Equal(sailorEnergy, sailor.Energy);
+            Assert.Equal(whaleEnergy, whale.Energy);
         }
-        Assert.True(sawWhaleDefend);
-        Assert.True(sawSailorHit);
     }
 
     [Fact]

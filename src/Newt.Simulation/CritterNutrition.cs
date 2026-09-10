@@ -283,7 +283,7 @@ public static class CritterNutritions
         CritterSpecies.Deer => Deer,
         CritterSpecies.Elk => Elk,
         CritterSpecies.Gazelle => Deer,
-        CritterSpecies.Wolf => Wolf,
+        CritterSpecies.Wolf or CritterSpecies.Dog => Wolf,
         CritterSpecies.ToothedWhale => ToothedWhale,
         CritterSpecies.BaleenWhale => ToothedWhale,
         _ => throw new ArgumentOutOfRangeException(nameof(species)),
