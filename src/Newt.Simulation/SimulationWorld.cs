@@ -36,6 +36,7 @@ public sealed partial class SimulationWorld
     internal const int LoneApeSailorColonistDelayTicks = 60 * TicksPerSecond;
     internal const int ApeReproductionStallTicks = 30 * TicksPerSecond;
     private const int ApeVillageBasePopulationCapacity = 5;
+    private const int BarbarianVillagePopulationCapacity = 10;
     private const int ApeResidentialPopulationCapacity = 5;
     internal const int ApeResidentialUnderuseTicks = 2 * 60 * TicksPerSecond;
     internal const long ApeRuinDecayTicks = 2L * SeasonSystem.TicksPerYear;
@@ -428,8 +429,7 @@ public sealed partial class SimulationWorld
     {
         var counts = new int[_speciesCounts.Length];
         foreach (var (id, village) in _apeVillageHomes)
-            if (_barbarianVillageTiles.Contains(village) && _critterIndicesById.TryGetValue(id, out var index) &&
-                _species[index] is not CritterSpecies.Dog)
+            if (_barbarianVillageTiles.Contains(village) && _critterIndicesById.TryGetValue(id, out var index))
                 counts[(int)_species[index]]++;
         return counts;
     }
@@ -1828,15 +1828,14 @@ public sealed partial class SimulationWorld
             return;
         }
 
-        var nutrition = CritterNutritions.Get(CritterSpecies.Ape);
         bool IsEligible(int id) =>
             _critterIndicesById.TryGetValue(id, out var index) &&
             !IsApeFeedingBlocked(index) &&
-            _species[index] is (CritterSpecies.Ape or CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack) &&
+            _species[index] is (CritterSpecies.Ape or CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack or CritterSpecies.Dog) &&
             _apeVillageHomes.TryGetValue(id, out var home) && home == villageTile &&
             !_apeSettlerTargets.ContainsKey(id) &&
             !_plagues.ContainsKey(id) &&
-            _energy[index] < nutrition.ReproductionThreshold;
+            _energy[index] < CritterNutritions.Get(_species[index]).ReproductionThreshold;
 
         if (_apeVillageGrowthFeedTargets.TryGetValue(villageTile, out var target) &&
             !IsEligible(target))
@@ -1862,8 +1861,10 @@ public sealed partial class SimulationWorld
         }
 
         _apeVillageFood[villageTile] = food - 1;
-        _energy[_critterIndicesById[target]]++;
-        if (_energy[_critterIndicesById[target]] >= nutrition.ReproductionThreshold)
+        var targetIndex = _critterIndicesById[target];
+        var nutrition = CritterNutritions.Get(_species[targetIndex]);
+        _energy[targetIndex] = Math.Min(nutrition.MaximumEnergy, _energy[targetIndex] + 1);
+        if (_energy[targetIndex] >= nutrition.ReproductionThreshold)
         {
             _apeVillageGrowthFeedTargets.Remove(villageTile);
         }
@@ -2119,11 +2120,13 @@ public sealed partial class SimulationWorld
             _critterIndicesById.TryGetValue(pair.Key, out var index) && _species[index] is not CritterSpecies.Dog);
 
     private int GetApeVillagePopulationCapacityByTile(int villageTile) =>
-        ApeVillageBasePopulationCapacity +
-        ApeResidentialPopulationCapacity * _apeAuxiliaryVillages.Count(pair =>
-            pair.Value == villageTile &&
-            _apeStructures.TryGetValue(pair.Key, out var structure) &&
-            structure is ApeStructureKind.ResidentialDistrict);
+        _barbarianVillageTiles.Contains(villageTile)
+            ? BarbarianVillagePopulationCapacity
+            : ApeVillageBasePopulationCapacity +
+                ApeResidentialPopulationCapacity * _apeAuxiliaryVillages.Count(pair =>
+                    pair.Value == villageTile &&
+                    _apeStructures.TryGetValue(pair.Key, out var structure) &&
+                    structure is ApeStructureKind.ResidentialDistrict);
 
     private int GetApeVillageFoodCapacityByTile(int villageTile) =>
         _barbarianVillageTiles.Contains(villageTile)
@@ -2225,6 +2228,16 @@ public sealed partial class SimulationWorld
                 {
                     TryPurchaseApeStructure(villageTile, ApeStructureKind.NavalDistrict);
                 }
+            }
+
+            // Once a village has expanded its housing, empty stores are a signal
+            // to add another food district before investing in more infrastructure.
+            _apeVillageFood.TryGetValue(villageTile, out var villageFood);
+            if (population >= 2 && villageFood == 0 &&
+                GetApeFoodDistrictCount(villageTile) <=
+                GetApeStructureCount(villageTile, ApeStructureKind.ResidentialDistrict))
+            {
+                TryBuildApeFoodDistrict(villageTile);
             }
 
             if (population >= ApeFoodDistrictPopulationThreshold &&
@@ -2373,8 +2386,22 @@ public sealed partial class SimulationWorld
             return false;
         }
 
-        var residents = new[] { CritterSpecies.Ape, CritterSpecies.Ape };
-        var spawnTiles = FindApeVillageSpawnTiles(villageTile, residents.Length);
+        var residents = isBarbarian
+            ? IsBarbarianCampCoastal(villageTile)
+                ? new[]
+                {
+                    CritterSpecies.ApeChieftain,
+                    CritterSpecies.ApeWarrior, CritterSpecies.ApeWarrior, CritterSpecies.ApeWarrior, CritterSpecies.ApeWarrior,
+                    CritterSpecies.ApeSailor, CritterSpecies.ApeSailor, CritterSpecies.ApeSailor, CritterSpecies.ApeSailor, CritterSpecies.ApeSailor,
+                }
+                : new[]
+                {
+                    CritterSpecies.ApeChieftain,
+                    CritterSpecies.ApeWarrior, CritterSpecies.ApeWarrior, CritterSpecies.ApeWarrior, CritterSpecies.ApeWarrior,
+                    CritterSpecies.ApeWarrior, CritterSpecies.ApeWarrior, CritterSpecies.ApeWarrior, CritterSpecies.ApeWarrior, CritterSpecies.ApeWarrior,
+                }
+            : new[] { CritterSpecies.Ape, CritterSpecies.Ape };
+        var spawnTiles = FindApeVillageSpawnTiles(villageTile, residents);
         if (spawnTiles is null)
         {
             return false;
@@ -2455,29 +2482,24 @@ public sealed partial class SimulationWorld
         });
     }
 
-    private int[]? FindApeVillageSpawnTiles(int villageTile, int requiredCount)
+    private int[]? FindApeVillageSpawnTiles(int villageTile, IReadOnlyList<CritterSpecies> residents)
     {
-        var tiles = new List<int>(requiredCount) { villageTile };
         var village = GetPosition(villageTile);
-        foreach (var direction in MovementDirections)
+        var candidates = Enumerable.Range(0, Width * Height)
+            .Where(tile => WrappedManhattanDistance(village, GetPosition(tile)) <= 3)
+            .OrderBy(tile => WrappedManhattanDistance(village, GetPosition(tile)))
+            .ToArray();
+        var tiles = new List<int>(residents.Count);
+        foreach (var species in residents)
         {
-            if (tiles.Count == requiredCount)
-            {
-                break;
-            }
-            var candidate = new GridPosition(Mod(village.X + direction.X, Width), village.Y + direction.Y);
-            if (candidate.Y < 0 || candidate.Y >= Height)
-            {
-                continue;
-            }
-            var candidateTile = GetIndex(candidate);
-            if (_occupants[candidateTile] < 0 && !_apeStructures.ContainsKey(candidateTile) &&
-                CanLiveOn(CritterSpecies.Ape, candidateTile))
-            {
-                tiles.Add(candidateTile);
-            }
+            var availableTiles = candidates.Where(tile => !tiles.Contains(tile) &&
+                _occupants[tile] < 0 && !_apeStructures.ContainsKey(tile) && CanLiveOn(species, tile));
+            var spawn = availableTiles.FirstOrDefault();
+            if (!availableTiles.Any())
+                return null;
+            tiles.Add(spawn);
         }
-        return tiles.Count == requiredCount ? [.. tiles] : null;
+        return [.. tiles];
     }
 
     private int FindNearestApeVillage(int targetTile)
@@ -5539,11 +5561,11 @@ public sealed partial class SimulationWorld
     internal static int GetCombatDamage(CritterSpecies species) =>
         species switch
         {
-            CritterSpecies.ApeChieftain => 4,
+            CritterSpecies.ApeChieftain => 5,
             CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack => 2,
             CritterSpecies.ToothedWhale or CritterSpecies.Wolf or CritterSpecies.Dog => 3,
-            CritterSpecies.ApeWarrior => 3,
-            CritterSpecies.ApeSailor => 2,
+            CritterSpecies.ApeWarrior => 4,
+            CritterSpecies.ApeSailor => 3,
             _ => IsHeavyCombatPredator(species) ? 2 : 1,
         };
 

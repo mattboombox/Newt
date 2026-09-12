@@ -25,6 +25,7 @@ Place transparent PNG critter sprites in this folder. The game currently recogni
 - `sea-scorpion.png`
 - `sick-ape.png`
 - `squid.png`
+- `squid_egg.png`
 - `therapsid.png`
 - `toothed-whale.png`
 - `trilobite.png`

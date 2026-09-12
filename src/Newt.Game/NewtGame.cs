@@ -171,6 +171,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         LoadCritterSprite(CritterSpecies.MegaSpider, "mega-spider.png");
         LoadCritterSprite(CritterSpecies.Nautilus, "nautilus.png");
         LoadCritterSprite(CritterSpecies.Squid, "squid.png");
+        LoadCritterSprite(CritterSpecies.SquidEgg, "squid_egg.png");
         LoadCritterSprite(CritterSpecies.Fish, "fish.png");
         LoadCritterSprite(CritterSpecies.Newt, "newt.png");
         LoadCritterSprite(CritterSpecies.MegaToad, "mega-toad.png");

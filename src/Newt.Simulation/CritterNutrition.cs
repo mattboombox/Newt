@@ -205,7 +205,7 @@ public static class CritterNutritions
         BodySize: CritterBodySize.Large,
         FeedingStrategy: CritterFeedingStrategy.Hunter,
         InitialEnergy: 6,
-        MaximumEnergy: 14,
+        MaximumEnergy: 12,
         HungryThreshold: 5,
         MetabolismIntervalTicks: 70 * SimulationWorld.TicksPerSecond,
         MetabolismCost: 1,

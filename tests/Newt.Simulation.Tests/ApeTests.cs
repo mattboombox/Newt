@@ -5,8 +5,8 @@ namespace Newt.Simulation.Tests;
 public sealed class ApeTests
 {
     [Theory]
-    [InlineData(9, 0)]
-    [InlineData(10, 1)]
+    [InlineData(9, 2)]
+    [InlineData(10, 2)]
     [InlineData(20, 2)]
     public void DogsJoinKillersVillageWithoutUsingHousingAndRespectPopulationLimit(int population, int expectedDogs)
     {
@@ -23,6 +23,87 @@ public sealed class ApeTests
         foreach (var dog in Enumerable.Range(0, world.CritterCount).Select(world.GetCritter)
             .Where(critter => critter.Species is CritterSpecies.Dog))
             Assert.Equal(village, world.GetApeHomeVillage(dog.Id));
+    }
+
+    [Fact]
+    public void BarbarianCampsCanRecruitDogs()
+    {
+        var world = new SimulationWorld(20, 20, Terrain.Plains, seed: 1);
+        world.SeasonsEnabled = false;
+        NaturalEvents.SetEnabled(world, false);
+        foreach (var position in AllPositions(world))
+            world.SetBiome(position, Biome.Grassland);
+        var camp = new GridPosition(10, 10);
+        Assert.True(world.TrySpawnBarbarianApeVillage(camp));
+        var killer = Enumerable.Range(0, world.CritterCount).First(index =>
+            world.GetApeHomeVillage(world.GetCritter(index).Id) == camp);
+
+        for (var roll = 0; roll < 5000; roll++)
+            world.TryRecruitDogFromWolfKill(killer);
+
+        var dogs = Enumerable.Range(0, world.CritterCount).Select(world.GetCritter)
+            .Where(critter => critter.Species is CritterSpecies.Dog)
+            .ToArray();
+        Assert.Equal(5, dogs.Length);
+        var dog = dogs[0];
+        Assert.Equal(camp, world.GetApeHomeVillage(dog.Id));
+        Assert.True(world.IsBarbarianApe(dog.Id));
+        Assert.Equal(5, world.GetBarbarianPopulationBySpecies()[(int)CritterSpecies.Dog]);
+    }
+
+    [Fact]
+    public void InlandBarbarianCampsStartWithOneChieftainAndNineWarriors()
+    {
+        var world = new SimulationWorld(20, 20, Terrain.Plains, seed: 1);
+        foreach (var position in AllPositions(world))
+            world.SetBiome(position, Biome.Grassland);
+        var camp = new GridPosition(10, 10);
+
+        Assert.True(world.TrySpawnBarbarianApeVillage(camp));
+
+        var population = world.GetBarbarianPopulationBySpecies();
+        Assert.Equal(10, world.GetApeVillagePopulationCapacity(camp));
+        Assert.Equal(1, population[(int)CritterSpecies.ApeChieftain]);
+        Assert.Equal(9, population[(int)CritterSpecies.ApeWarrior]);
+        Assert.Equal(0, population[(int)CritterSpecies.ApeSailor]);
+    }
+
+    [Fact]
+    public void CoastalBarbarianCampsStartWithOneChieftainFourWarriorsAndFivePirates()
+    {
+        var world = new SimulationWorld(20, 20, Terrain.Beach, seed: 1);
+        foreach (var position in AllPositions(world))
+            world.SetBiome(position, Biome.Grassland);
+        var camp = new GridPosition(10, 10);
+
+        Assert.True(world.TrySpawnBarbarianApeVillage(camp));
+
+        var population = world.GetBarbarianPopulationBySpecies();
+        Assert.Equal(1, population[(int)CritterSpecies.ApeChieftain]);
+        Assert.Equal(4, population[(int)CritterSpecies.ApeWarrior]);
+        Assert.Equal(5, population[(int)CritterSpecies.ApeSailor]);
+    }
+
+    [Fact]
+    public void VillageStoresFeedDogsToTheirReproductionThreshold()
+    {
+        var (world, village) = CreateVillageForPlague(10);
+        var killer = Enumerable.Range(0, world.CritterCount).First(index =>
+            world.GetApeHomeVillage(world.GetCritter(index).Id) == village);
+        for (var roll = 0; roll < 5000; roll++)
+            world.TryRecruitDogFromWolfKill(killer);
+        var dog = Enumerable.Range(0, world.CritterCount).Select(world.GetCritter)
+            .First(critter => critter.Species is CritterSpecies.Dog);
+        var villageTile = village.Y * world.Width + village.X;
+
+        for (var meal = 0; meal < 100; meal++)
+        {
+            world.StoreApeVillageFood(village, world.GetApeVillageFoodCapacity(village));
+            world.FeedApeFromVillageSurplus(villageTile);
+        }
+
+        Assert.True(world.TryGetCritter(dog.Id, out var fedDog));
+        Assert.Equal(CritterNutritions.Get(CritterSpecies.Dog).ReproductionThreshold, fedDog.Energy);
     }
 
     [Fact]
@@ -96,14 +177,19 @@ public sealed class ApeTests
             var camp = new GridPosition(5, 5);
             var other = new GridPosition(45, 5);
             Assert.True(world.TrySpawnBarbarianApeVillage(camp));
-            var target = new GridPosition(5, 4);
+            if (affiliation == "own")
+                Assert.True(world.RemoveCritterAt(world.GetCritter(world.CritterCount - 1).Position));
+            var target = new GridPosition(5, 0);
             if (species is CritterSpecies.ApeSailor)
                 world.SetTerrain(target, Terrain.Shallows);
             var id = world.AddCritter(species, target);
             if (affiliation == "normal")
                 Assert.True(world.TrySpawnTestApeVillage(other));
             if (affiliation == "barbarian")
+            {
                 Assert.True(world.TrySpawnBarbarianApeVillage(other));
+                Assert.True(world.RemoveCritterAt(world.GetCritter(world.CritterCount - 1).Position));
+            }
             if (affiliation != "unassigned")
                 Assert.True(world.TryAssignApeToVillage(id, affiliation == "own" ? camp : other));
             Assert.Equal(affiliation == "own" ? (GridPosition?)null : target,
@@ -319,7 +405,7 @@ public sealed class ApeTests
             Assert.False(undead.CanReproduce);
             Assert.Equal(1, world.CritterCount);
         }
-        Assert.Equal(14, world.GetCritter(0).Energy);
+        Assert.Equal(12, world.GetCritter(0).Energy);
         AdvancePlagueTicks(world, 30 * SimulationWorld.TicksPerSecond);
         Assert.Equal(1, world.CritterCount);
         Assert.Equal(0, world.ApeVillageCount);
@@ -712,6 +798,28 @@ public sealed class ApeTests
     }
 
     [Fact]
+    public void EmptyStoresPrioritizeAnotherFarmAfterVillageHousingExpands()
+    {
+        var world = CreateFedApeWorld(hasGrassland: true);
+        NaturalEvents.SetEnabled(world, false);
+        AdvanceUntilVillage(world);
+        var village = FindStructure(world, ApeStructureKind.Village);
+        RemoveAllExcept(world, CritterSpecies.Ape);
+        AddAssignedResidents(world, village, 1);
+        world.AdvanceOneTick();
+        Assert.Equal(1, CountStructures(world, ApeStructureKind.Farm));
+
+        world.StoreApeVillageFood(village, 5);
+        var villageTile = village.Y * world.Width + village.X;
+        Assert.True(world.TryPurchaseApeStructure(villageTile, ApeStructureKind.ResidentialDistrict));
+        Assert.Equal(0, world.GetApeVillageFood(village));
+
+        world.AdvanceOneTick();
+
+        Assert.Equal(2, CountStructures(world, ApeStructureKind.Farm));
+    }
+
+    [Fact]
     public void SurplusFeedingKeepsOneRecipientAndStopsAtReproductionEnergy()
     {
         var world = CreateFedApeWorld(hasGrassland: true);
@@ -1007,7 +1115,7 @@ public sealed class ApeTests
         }
         Assert.Equal(1, world.GetApeVillageResidentCount(village));
 
-        for (var tick = 0; tick < 6 * 60 * SimulationWorld.TicksPerSecond; tick++)
+        for (var tick = 0; tick < 12 * 60 * SimulationWorld.TicksPerSecond; tick++)
         {
             world.AdvanceOneTick();
         }
@@ -1548,7 +1656,7 @@ public sealed class ApeTests
     }
 
     [Fact]
-    public void ApeWarriorsHuntApePredatorsAndDealThreeDamage()
+    public void ApeWarriorsHuntApePredatorsAndDealFourDamage()
     {
         var expectedPrey = new HashSet<CritterSpecies>
         {
@@ -1563,7 +1671,7 @@ public sealed class ApeTests
             Enum.GetValues<CritterSpecies>()
                 .Where(species => SimulationWorld.CanEat(CritterSpecies.ApeWarrior, species))
                 .ToHashSet());
-        Assert.Equal(3, SimulationWorld.GetCombatDamage(CritterSpecies.ApeWarrior));
+        Assert.Equal(4, SimulationWorld.GetCombatDamage(CritterSpecies.ApeWarrior));
         Assert.True(SimulationWorld.CanSpeciesReproduce(CritterSpecies.ApeWarrior));
     }
 
@@ -1619,7 +1727,7 @@ public sealed class ApeTests
     }
 
     [Fact]
-    public void ApeChieftainBehavesLikeWarriorButDealsFourDamage()
+    public void ApeChieftainBehavesLikeWarriorButDealsFiveDamage()
     {
         Assert.Equal(
             Enum.GetValues<CritterSpecies>()
@@ -1628,7 +1736,7 @@ public sealed class ApeTests
             Enum.GetValues<CritterSpecies>()
                 .Where(species => SimulationWorld.CanEat(CritterSpecies.ApeChieftain, species))
                 .ToHashSet());
-        Assert.Equal(4, SimulationWorld.GetCombatDamage(CritterSpecies.ApeChieftain));
+        Assert.Equal(5, SimulationWorld.GetCombatDamage(CritterSpecies.ApeChieftain));
         Assert.True(SimulationWorld.CanSpeciesReproduce(CritterSpecies.ApeChieftain));
         Assert.Equal(
             SimulationWorld.GetMovementIntervalTicks(CritterSpecies.ApeWarrior),
@@ -1720,7 +1828,7 @@ public sealed class ApeTests
         var sailor = Enumerable.Range(0, world.CritterCount)
             .Select(world.GetCritter)
             .Single(critter => critter.Species is CritterSpecies.ApeSailor);
-        Assert.Equal(28, sailor.MaximumEnergy);
+        Assert.Equal(24, sailor.MaximumEnergy);
         Assert.True(sailor.Energy <= CritterNutritions.Get(CritterSpecies.Ape).MaximumEnergy);
         Assert.Equal(
             sailor.Energy >= CritterNutritions.Get(CritterSpecies.ApeSailor).ReproductionThreshold,
@@ -1820,8 +1928,8 @@ public sealed class ApeTests
 
         Assert.True(housingFull, "A ready sailor continued hunting despite spare housing.");
         Assert.True(world.TryGetCritter(sailorId, out var sailor));
-        Assert.Equal(28, sailor.Energy);
-        Assert.Equal(2, world.GetApeCarriedFood(sailorId));
+        Assert.Equal(24, sailor.Energy);
+        Assert.Equal(6, world.GetApeCarriedFood(sailorId));
         Assert.True(sailor.CanReproduce);
     }
 
