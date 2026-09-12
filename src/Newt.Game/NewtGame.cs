@@ -1612,8 +1612,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         following ? "CRITTER (FOLLOWING)" : "CRITTER",
         $"{GetCritterDisplayName(critter)} #{critter.Id.Value}   {critter.Position}",
         critter.MaximumEnergy > 0
-            ? $"Energy {critter.Energy} / {critter.MaximumEnergy}"
-            : "Energy None",
+            ? $"Energy {critter.Energy} / {critter.MaximumEnergy}   Damage {_world.GetCritterCombatDamage(critter.Id)}"
+            : $"Energy None   Damage {_world.GetCritterCombatDamage(critter.Id)}",
         $"Hungry {(critter.IsHungry ? "yes" : "no")}   Reproduce {(critter.CanReproduce ? "ready" : "no")}",
         $"Habitat {CritterHabitats.GetHabitat(critter.Species)}",
         $"Diet {GetCritterDiet(critter.Species)}",

@@ -438,6 +438,12 @@ public sealed partial class SimulationWorld
         _critterIndicesById.TryGetValue(critterId.Value, out var critterIndex) &&
         IsBarbarianApe(critterIndex);
 
+    public int GetCritterCombatDamage(CritterId critterId) =>
+        _critterIndicesById.TryGetValue(critterId.Value, out var critterIndex) &&
+        CanCritterFight(_species[critterIndex])
+            ? GetCombatDamage(critterIndex)
+            : 0;
+
     public GridPosition? GetApeHomeVillage(CritterId critterId) =>
         _apeVillageHomes.TryGetValue(critterId.Value, out var villageTile)
             ? GetPosition(villageTile)
@@ -5572,6 +5578,9 @@ public sealed partial class SimulationWorld
     private int GetCombatDamage(int critterIndex) =>
         IsBarbarianApe(critterIndex) ? GetCombatDamage(CritterSpecies.ApeWarrior) :
         GetCombatDamage(_species[critterIndex]);
+
+    private static bool CanCritterFight(CritterSpecies species) =>
+        IsPredator(species) || species is CritterSpecies.BaleenWhale or CritterSpecies.Therapsid;
 
     internal static bool IsPredator(CritterSpecies species) => species is
         CritterSpecies.Dog or
