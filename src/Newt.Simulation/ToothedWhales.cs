@@ -23,7 +23,7 @@ public sealed partial class SimulationWorld
             CanLiveOn(CritterSpecies.ToothedWhale, GetIndex(_positions[preyIndex])) &&
             WrappedManhattanDistance(_positions[whaleIndex], _positions[preyIndex]) <= ToothedWhaleTrackingRadius &&
             IsPreyPursuitAllowedAtDistance(CritterSpecies.ToothedWhale, _species[preyIndex],
-                WrappedManhattanDistance(_positions[whaleIndex], _positions[preyIndex])))
+                GetPreyPursuitDistance(whaleIndex, preyIndex)))
         {
             // Another hunter reserving this prey for one tick must not erase the whale's memory.
             return reservedPrey?.Contains(_positions[preyIndex]) is true ? null : _positions[preyIndex];

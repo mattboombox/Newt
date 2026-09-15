@@ -27,6 +27,22 @@ dotnet run --project src/Newt.Game/Newt.Game.csproj
 
 Press Escape to exit.
 
+## Publishing for Windows
+
+```powershell
+dotnet publish src/Newt.Game/Newt.Game.csproj -c Release -r win-x64 --self-contained false -o dist/Newt
+```
+
+The application is published as `Newt.exe`; distribute the whole output folder.
+This build requires the .NET 10 runtime. Use a fresh output folder when replacing
+older releases so the former `Newt.Game.exe` does not remain alongside it.
+
+The executable icon is generated from `Content/Sprites/Critters/newt.png`, the
+same sprite used for the game window. After changing that sprite, run
+`./tools/Update-AppIcon.ps1` in PowerShell on Windows before publishing. The icon
+contains seven sizes with nearest-neighbor sampling and transparency masks to
+keep the pixel art crisp at small sizes.
+
 The current prototype supports deterministic generated worlds, camera movement,
 zoom, and tile inspection. See [world generation](docs/world-generation.md) for
 controls and algorithm notes. Live elevation editing and animated freshwater are

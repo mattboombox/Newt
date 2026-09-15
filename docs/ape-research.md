@@ -15,10 +15,9 @@ prerequisites are met. No scholars means no research. Discoveries belong to the
 village and survive losing its library; colonists carry a copy of their origin's
 knowledge when dispatched and give it to their new village.
 
-The initial independent technologies are:
+Sailing is innate: all Apes can build harbors, recruit sailors, and send colonists
+through ocean and freshwater tiles. The independent research technology is:
 
-- **Sailing:** permits harbors, sailor recruitment, and colonist travel through
-  ocean and freshwater tiles.
 - **Aquaculture:** permits aquaculture food districts.
 
 Definitions live in `ApeTechnology.cs` as a flat list with prerequisite lists.

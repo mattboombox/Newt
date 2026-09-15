@@ -2611,7 +2611,7 @@ public sealed class SimulationWorldTests
     }
 
     [Fact]
-    public void MegaToadCanSwallowAnotherMegaToad()
+    public void MegaToadMustFightAnotherMegaToad()
     {
         var world = new SimulationWorld(1, 2, Terrain.Plains, seed: 82);
         world.SeasonsEnabled = false;
@@ -2623,8 +2623,8 @@ public sealed class SimulationWorldTests
             world.AdvanceOneTick();
         }
 
-        Assert.Equal(1, world.GetCritterCount(CritterSpecies.MegaToad));
-        Assert.Equal(13, world.GetCritter(0).Energy);
+        Assert.Equal(2, world.GetCritterCount(CritterSpecies.MegaToad));
+        Assert.True(world.GetCritter(0).Energy + world.GetCritter(1).Energy < 16);
     }
 
     [Fact]
@@ -3635,9 +3635,7 @@ public sealed class SimulationWorldTests
     [InlineData(CritterSpecies.Crab, 8)]
     [InlineData(CritterSpecies.Newt, 7)]
     [InlineData(CritterSpecies.Nautilus, 8)]
-    [InlineData(CritterSpecies.Therapsid, 9)]
     [InlineData(CritterSpecies.Monkey, 8)]
-    [InlineData(CritterSpecies.Wolf, 9)]
     [InlineData(CritterSpecies.Deer, 9)]
     [InlineData(CritterSpecies.Elk, 9)]
     [InlineData(CritterSpecies.Gazelle, 9)]

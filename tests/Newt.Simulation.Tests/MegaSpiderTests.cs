@@ -72,7 +72,7 @@ public sealed class MegaSpiderTests
         var firstWeb = FindWebs(world).Single();
         Assert.True(world.RemoveMegaSpiderWebAt(firstWeb));
 
-        AddPreyNearSpider(world, 1);
+        AddPreyNearSpider(world, 3);
         AdvanceUntil(world, () => world.MegaSpiderWebCount == 1);
 
         Assert.Equal(1, world.GetCritterCount(CritterSpecies.MegaSpider));
@@ -286,10 +286,8 @@ public sealed class MegaSpiderTests
         world.SeasonsEnabled = false;
         world.AdjustEvolutionChance(-CritterEvolution.MaximumChanceSteps);
         world.AddCritter(CritterSpecies.MegaSpider, new GridPosition(0, 0));
-        // Stranded filter feeders cannot flee on land and provide enough food
-        // without involving the predator-versus-predator combat rule.
-        Assert.True(world.TrySpawnCritter(CritterSpecies.BaleenWhale, new GridPosition(1, 0)));
-        Assert.True(world.TrySpawnCritter(CritterSpecies.BaleenWhale, new GridPosition(2, 0)));
+        // Feed noncombat prey directly so this fixture tests web reproduction.
+        AddPreyNearSpider(world, 3);
         return world;
     }
 
@@ -303,7 +301,9 @@ public sealed class MegaSpiderTests
             var position = new GridPosition((spider.Position.X + offset) % world.Width, spider.Position.Y);
             if (!world.IsOccupied(position))
             {
-                Assert.True(world.TrySpawnCritter(CritterSpecies.BaleenWhale, position));
+                Assert.True(world.TrySpawnCritter(CritterSpecies.Elk, position));
+                world.CommitEncounter(spider.Position, position);
+                spider = world.GetCritter(0);
                 count--;
             }
         }

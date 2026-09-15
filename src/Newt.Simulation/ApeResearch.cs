@@ -42,7 +42,6 @@ public sealed partial class SimulationWorld
 
     private bool IsApeBuildingTechnologyUnlocked(int villageTile, ApeStructureKind kind) => kind switch
     {
-        ApeStructureKind.NavalDistrict => HasApeTechnology(villageTile, ApeTechnology.Sailing),
         ApeStructureKind.Aquaculture => HasApeTechnology(villageTile, ApeTechnology.Aquaculture),
         _ => true,
     };

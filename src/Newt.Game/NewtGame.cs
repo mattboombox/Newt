@@ -544,7 +544,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                     MapOffsetY + screenY * TileSize,
                     TileSize,
                     TileSize),
-                Color.White);
+                critter.IsDamageFlashing ? GetDamageFlashColor(critter) : Color.White);
             return;
         }
 
@@ -1136,7 +1136,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         if (warriors > 0)
             populations.Add(("Ape Barbarian", warriors, new Color(190, 95, 60), _barbarianHistory));
         if (pirates > 0)
-            populations.Add(("Barbarian Pirate", pirates, new Color(185, 125, 65), _pirateHistory));
+            populations.Add(("Ape Pirate", pirates, new Color(185, 125, 65), _pirateHistory));
         if (chiefs > 0)
             populations.Add(("Barbarian Chieftain", chiefs, new Color(210, 75, 55), _barbarianChiefHistory));
         if (_world.SickApeCount > 0)
@@ -1573,7 +1573,17 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                     .. GetApeStructureProductionLines(position, apeStructure),
                     _world.IsApeStructureOperational(position)
                         ? "Behavior Village district"
-                        : "Behavior Inactive (out of season)",
+                        : !_world.IsApeStructureStaffed(position)
+                            ? apeStructure switch
+                            {
+                                ApeStructureKind.LumberCamp => "Behavior Inactive (no lumberjack)",
+                                ApeStructureKind.Library => "Behavior Inactive (no scholars)",
+                                ApeStructureKind.Farm or ApeStructureKind.RicePaddy or
+                                    ApeStructureKind.Orchard or ApeStructureKind.Aquaculture =>
+                                    "Behavior Inactive (no farmer)",
+                                _ => "Behavior Inactive",
+                            }
+                            : "Behavior Inactive (out of season)",
                 ]
                 : ["BUILDING", GetApeStructureDisplayName(apeStructure)];
         }
@@ -1607,6 +1617,17 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             : [$"Production inactive ({production} when active)"];
     }
 
+    private string GetCritterReproductionStatus(CritterSnapshot critter)
+    {
+        if (!critter.CanReproduce)
+            return "no";
+        if (critter.Species is not CritterSpecies.Dog &&
+            _world.GetApeHomeVillage(critter.Id) is { } village &&
+            _world.GetApeVillageResidentCount(village) >= _world.GetApeVillagePopulationCapacity(village))
+            return "blocked (housing full)";
+        return "ready";
+    }
+
     private string[] GetCritterInspectionLines(CritterSnapshot critter, bool following) =>
     [
         following ? "CRITTER (FOLLOWING)" : "CRITTER",
@@ -1614,7 +1635,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         critter.MaximumEnergy > 0
             ? $"Energy {critter.Energy} / {critter.MaximumEnergy}   Damage {_world.GetCritterCombatDamage(critter.Id)}"
             : $"Energy None   Damage {_world.GetCritterCombatDamage(critter.Id)}",
-        $"Hungry {(critter.IsHungry ? "yes" : "no")}   Reproduce {(critter.CanReproduce ? "ready" : "no")}",
+        $"Hungry {(critter.IsHungry ? "yes" : "no")}   Reproduce {GetCritterReproductionStatus(critter)}",
         $"Habitat {CritterHabitats.GetHabitat(critter.Species)}",
         $"Diet {GetCritterDiet(critter.Species)}",
         .. _world.IsCritterCaughtInMegaSpiderWeb(critter.Id)
@@ -1642,7 +1663,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         _world.IsBarbarianApe(critter.Id) ? critter.Species switch
         {
             CritterSpecies.Dog => "Barbarian Dog",
-            CritterSpecies.ApeSailor => "Barbarian Pirate",
+            CritterSpecies.ApeSailor => "Ape Pirate",
             CritterSpecies.ApeChieftain => "Barbarian Chieftain",
             _ => "Barbarian Warrior",
         } : GetCritterDisplayName(critter.Species);
@@ -2460,8 +2481,15 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         Math.Clamp((int)MathF.Round(color.G * brightness), 0, 255),
         Math.Clamp((int)MathF.Round(color.B * brightness), 0, 255));
 
+    private static Color GetDamageFlashColor(CritterSnapshot critter) =>
+        critter.Species is CritterSpecies.Ape or CritterSpecies.ApeFarmer or
+            CritterSpecies.ApeLumberjack or CritterSpecies.ApeSailor &&
+        critter.Plague is PlagueKind.Plague or PlagueKind.Zombie
+            ? Color.LightGreen
+            : Color.Red;
+
     private static Color GetCritterColor(CritterSnapshot critter) =>
-        critter.IsDamageFlashing ? Color.White :
+        critter.IsDamageFlashing ? GetDamageFlashColor(critter) :
         critter.Species is CritterSpecies.UndeadApe ? GetCritterColor(critter.Species) :
         critter.Plague switch
         {

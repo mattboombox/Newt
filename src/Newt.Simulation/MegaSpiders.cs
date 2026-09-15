@@ -27,7 +27,7 @@ public sealed partial class SimulationWorld
                 if (prey >= 0 && _species[prey] is not CritterSpecies.MegaSpider &&
                     CanPursuePrey(spiderIndex, prey) &&
                     IsPreyPursuitAllowedAtDistance(CritterSpecies.MegaSpider, _species[prey],
-                        WrappedManhattanDistance(current, position)) &&
+                        GetPreyPursuitDistance(spiderIndex, prey)) &&
                     (CanLiveOn(CritterSpecies.MegaSpider, tile) ||
                         CanStrikeAdjacentFeederCrab(spiderIndex, prey)))
                     return false;
