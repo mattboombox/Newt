@@ -72,6 +72,7 @@ public sealed partial class SimulationWorld
 
     private void MergeApeVillageInto(int source, int destination)
     {
+        RemoveRoadsForVillage(source);
         var food = _apeVillageFood.GetValueOrDefault(source) + _apeVillageFood.GetValueOrDefault(destination);
         var wood = _apeVillageWood.GetValueOrDefault(source) + _apeVillageWood.GetValueOrDefault(destination);
         if (_apeVillageTechnologies.Remove(source, out var technologies))

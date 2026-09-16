@@ -1029,11 +1029,12 @@ public sealed partial class SimulationWorld
         }
 
         _apeVillageFood.Remove(tileIndex);
+        RemoveRoadsForVillage(tileIndex);
         _apeVillageGrowthFeedTargets.Remove(tileIndex);
         _apeVillageWood.Remove(tileIndex);
         _apeVillageTechnologies.Remove(tileIndex);
         _apeVillageIds.Remove(tileIndex);
-        _barbarianVillageTiles.Remove(tileIndex);
+        var wasBarbarianCamp = _barbarianVillageTiles.Remove(tileIndex);
         _loneApeSailorSinceTicks.Remove(tileIndex);
 
         foreach (var auxiliaryTile in _apeAuxiliaryVillages
@@ -1055,6 +1056,11 @@ public sealed partial class SimulationWorld
             .Select(pair => pair.Key)
             .ToArray())
         {
+            if (wasBarbarianCamp && _critterIndicesById.TryGetValue(id, out var residentIndex) &&
+                IsLivingApe(_species[residentIndex]))
+            {
+                ChangeCritterSpecies(residentIndex, CritterSpecies.Ape, preserveEnergy: true);
+            }
             _apeVillageHomes.Remove(id);
             _apeCarriedFood.Remove(id);
             _apeFoodReturnProgress.Remove(id);
@@ -1201,7 +1207,12 @@ public sealed partial class SimulationWorld
             return false;
         }
 
+        var dogVillage = species is CritterSpecies.Dog ? FindNearestApeVillage(tileIndex) : -1;
+        if (species is CritterSpecies.Dog && dogVillage < 0)
+            species = CritterSpecies.Wolf;
         AddCritterUnchecked(species, position, tileIndex);
+        if (dogVillage >= 0)
+            _apeVillageHomes[_critterIds[_occupants[tileIndex]].Value] = dogVillage;
         return true;
     }
 
@@ -1295,7 +1306,9 @@ public sealed partial class SimulationWorld
             Tick < _damageFlashUntilTicks[index],
             GetPlague(index),
             isColonist,
-            colonistDestination);
+            colonistDestination,
+            IsVeteranWarrior(index),
+            _warriorCombatKills.GetValueOrDefault(_critterIds[index].Value));
     }
 
     public bool TryGetCritter(CritterId id, out CritterSnapshot critter)
@@ -1384,6 +1397,8 @@ public sealed partial class SimulationWorld
                 (isStranded ? StrandedMovementIntervalMultiplier : 1);
             var prey = isStranded
                 ? TryMoveStranded(index)
+                : _species[index] is CritterSpecies.Dog
+                    ? TryMoveDog(index, reservedPrey)
                 : IsBarbarianApe(index)
                     ? TryMoveHunter(index, ApePerceptionRadius, reservedPrey, huntWhenFull: true)
                 : _species[index] switch
@@ -1448,6 +1463,7 @@ public sealed partial class SimulationWorld
 
         if (predations is null)
         {
+            ValidateVillageRoads();
             return;
         }
 
@@ -1455,6 +1471,7 @@ public sealed partial class SimulationWorld
         {
             CommitEncounter(predation.Predator, predation.Prey);
         }
+        ValidateVillageRoads();
     }
 
     private void AdvanceCritterLifecycles()
@@ -2747,6 +2764,12 @@ public sealed partial class SimulationWorld
             return false;
         }
 
+        BuildApeStructureAt(villageTile, constructionTile, kind);
+        return true;
+    }
+
+    private void BuildApeStructureAt(int villageTile, int constructionTile, ApeStructureKind kind)
+    {
         SetApeStructure(constructionTile, kind);
         _apeAuxiliaryVillages[constructionTile] = villageTile;
         if (IsApeFoodDistrict(kind))
@@ -2769,7 +2792,6 @@ public sealed partial class SimulationWorld
             _apeStructureNextActionTicks[constructionTile] =
                 Tick + ApeWarriorRecruitmentIntervalTicks;
         }
-        return true;
     }
 
     private int FindApeConstructionSite(int villageTile, ApeStructureKind kind)
@@ -3422,6 +3444,8 @@ public sealed partial class SimulationWorld
         }
         _species[critterIndex] = targetSpecies;
         var critterId = _critterIds[critterIndex].Value;
+        if (targetSpecies is not CritterSpecies.ApeWarrior)
+            _warriorCombatKills.Remove(critterId);
         _toothedWhaleHunts.Remove(critterId);
         if (!IsLivingApe(targetSpecies) || targetSpecies is CritterSpecies.ApeSailor)
         {
@@ -3796,6 +3820,11 @@ public sealed partial class SimulationWorld
         GridPosition? preferredTarget = null)
     {
         var predatorSpecies = _species[critterIndex];
+        if (TryFollowVillageChieftain(critterIndex, reservedPrey, out var escortPrey))
+            return escortPrey;
+        if (predatorSpecies is CritterSpecies.ApeChieftain && !IsBarbarianApe(critterIndex) &&
+            TryHandleApeSettlementReturn(critterIndex, reservedPrey, out var returnMovement))
+            return returnMovement;
         var defendingAgainstBarbarian = false;
         if (predatorSpecies is CritterSpecies.ApeWarrior && !IsBarbarianApe(critterIndex))
         {
@@ -3813,6 +3842,16 @@ public sealed partial class SimulationWorld
             !defendingAgainstBarbarian && TryPrioritizeApeReproduction(critterIndex, reservedPrey))
         {
             return null;
+        }
+        if (IsBarbarianApe(critterIndex) && IsLivingApe(predatorSpecies))
+        {
+            if (TryFeedApeFoliage(critterIndex) ||
+                (_energy[critterIndex] < CritterNutritions.Get(predatorSpecies).MaximumEnergy &&
+                    TryMoveToAdjacentApeFoliage(critterIndex)))
+            {
+                _preyTargets[critterIndex] = -1;
+                return null;
+            }
         }
         if (IsBarbarianApe(critterIndex) && !ShouldApeHunt(critterIndex))
         {
@@ -4276,14 +4315,20 @@ public sealed partial class SimulationWorld
             _apeVillageFood[targetVillageTile] = 0;
             _apeVillageWood[targetVillageTile] = ApeInitialWood;
             _apeVillageIds[targetVillageTile] = _nextApeVillageId++;
-            InheritApeColonistTechnologies(apeId, targetVillageTile);
             _apeVillageHomes[apeId] = targetVillageTile;
             _apeSettlerTargets.Remove(apeId);
             _apeSettlerPaths.Remove(apeId);
             var apeNutrition = CritterNutritions.Get(CritterSpecies.Ape);
             _energy[apeIndex] = apeNutrition.InitialEnergy;
             _nextMetabolismTicks[apeIndex] = Tick + apeNutrition.MetabolismIntervalTicks;
-            TryFoundBarbarianCamp(targetVillageTile);
+            if (TryFoundBarbarianCamp(targetVillageTile))
+            {
+                _apeColonistTechnologies.Remove(apeId);
+            }
+            else
+            {
+                InheritApeColonistTechnologies(apeId, targetVillageTile);
+            }
             SpawnApeColonistFoundingCompanion(apeIndex, targetVillageTile);
             return true;
         }
@@ -4574,7 +4619,7 @@ public sealed partial class SimulationWorld
     {
         if (IsApeFeedingBlocked(critterIndex))
             return false;
-        var nutrition = CritterNutritions.Get(CritterSpecies.Ape);
+        var nutrition = CritterNutritions.Get(_species[critterIndex]);
         var tileIndex = GetIndex(_positions[critterIndex]);
         if (_energy[critterIndex] >= nutrition.MaximumEnergy ||
             !IsApeFoliageTile(tileIndex) ||
@@ -5443,6 +5488,7 @@ public sealed partial class SimulationWorld
                 {
                     return;
                 }
+                RecordWarriorCombatKill(defenderIndex);
                 RemoveCritterAt(attackerPosition);
                 FeedPredatorAt(defenderPosition, attackerSpecies);
             }
@@ -5456,11 +5502,11 @@ public sealed partial class SimulationWorld
         BlockApeFeedingAfterDamage(defenderIndex);
         if (_energy[defenderIndex] == 0)
         {
-            CommitPredation(attackerPosition, defenderPosition);
+            CommitPredation(attackerPosition, defenderPosition, combatKill: true);
         }
     }
 
-    private void CommitPredation(GridPosition predatorPosition, GridPosition preyPosition)
+    private void CommitPredation(GridPosition predatorPosition, GridPosition preyPosition, bool combatKill = false)
     {
         var predatorIndex = _occupants[GetIndex(predatorPosition)];
         var preyIndex = _occupants[GetIndex(preyPosition)];
@@ -5483,6 +5529,8 @@ public sealed partial class SimulationWorld
             _preyTargets[predatorIndex] = -1;
             return;
         }
+        if (combatKill)
+            RecordWarriorCombatKill(predatorIndex);
         RemoveCritterAt(preyPosition);
         // Removing the prey may compact the predator to another array index,
         // so resolve it again through its still-occupied source tile.
@@ -5523,7 +5571,7 @@ public sealed partial class SimulationWorld
             personalFood = Math.Min(foodEnergy, Math.Max(0, nutrition.MaximumEnergy - _energy[predatorIndex]));
             settlementFood = foodEnergy - personalFood;
         }
-        else if (predatorSpecies is CritterSpecies.Ape or CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack or CritterSpecies.ApeSailor &&
+        else if (predatorSpecies is CritterSpecies.Ape or CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack or CritterSpecies.ApeSailor or CritterSpecies.ApeChieftain &&
             _apeVillageHomes.ContainsKey(apeId))
         {
             var personalReserve = predatorSpecies is CritterSpecies.ApeSailor
@@ -5589,7 +5637,7 @@ public sealed partial class SimulationWorld
                 CritterSpecies.SeaScorpion or CritterSpecies.Nautilus or CritterSpecies.Fish or
                 CritterSpecies.Crab or CritterSpecies.Squid or CritterSpecies.SquidEgg,
         CritterSpecies.ApeWarrior => IsApePredator(prey),
-        CritterSpecies.ApeChieftain => IsApePredator(prey),
+        CritterSpecies.ApeChieftain => CanEatSpecies(CritterSpecies.Ape, prey),
         CritterSpecies.Wolf =>
             prey is not (CritterSpecies.Wolf or CritterSpecies.MegaToad) &&
             IsLargeLandPredatorPrey(prey),
@@ -5627,6 +5675,8 @@ public sealed partial class SimulationWorld
         }
         if (CanEat(_species[predatorIndex], _species[preyIndex]))
         {
+            if (_species[predatorIndex] is CritterSpecies.ApeChieftain && !IsApePredator(_species[preyIndex]))
+                return ShouldApeHunt(predatorIndex);
             return true;
         }
 
@@ -5652,7 +5702,7 @@ public sealed partial class SimulationWorld
         CritterSpecies.Jellyfish or CritterSpecies.SeaScorpion or
         CritterSpecies.Nautilus or CritterSpecies.Squid or CritterSpecies.MegaToad or CritterSpecies.MegaSpider or
         CritterSpecies.Therapsid or CritterSpecies.Ape or CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack or CritterSpecies.ApeSailor or
-        CritterSpecies.Wolf or CritterSpecies.ToothedWhale;
+        CritterSpecies.ApeChieftain or CritterSpecies.Wolf or CritterSpecies.ToothedWhale;
 
     internal static bool CanFightBackAgainst(CritterSpecies defender, CritterSpecies attacker) =>
         defender switch
@@ -5669,6 +5719,8 @@ public sealed partial class SimulationWorld
         species switch
         {
             CritterSpecies.ApeChieftain => 5,
+            CritterSpecies.MegaToad => 3,
+            CritterSpecies.MegaSpider => 2,
             CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack => 2,
             CritterSpecies.ToothedWhale or CritterSpecies.Wolf or CritterSpecies.Dog => 3,
             CritterSpecies.ApeWarrior => 4,
@@ -5677,8 +5729,8 @@ public sealed partial class SimulationWorld
         };
 
     private int GetCombatDamage(int critterIndex) =>
-        IsBarbarianApe(critterIndex) ? GetCombatDamage(CritterSpecies.ApeWarrior) :
-        GetCombatDamage(_species[critterIndex]);
+        (IsBarbarianApe(critterIndex) ? GetCombatDamage(CritterSpecies.ApeWarrior) :
+            GetCombatDamage(_species[critterIndex])) + (IsVeteranWarrior(critterIndex) ? 1 : 0);
 
     private static bool CanCritterFight(CritterSpecies species) =>
         IsLivingApe(species) || IsPredator(species) || species is CritterSpecies.BaleenWhale;
@@ -6762,6 +6814,7 @@ public sealed partial class SimulationWorld
         var tileIndex = GetIndex(_positions[critterIndex]);
         var lastIndex = _count - 1;
         var removedId = _critterIds[critterIndex];
+        _warriorCombatKills.Remove(removedId.Value);
         _toothedWhaleHunts.Remove(removedId.Value);
         var removedSpecies = _species[critterIndex];
         _critterIndicesById.Remove(removedId.Value);

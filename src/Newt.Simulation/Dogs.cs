@@ -33,6 +33,8 @@ public sealed partial class SimulationWorld
 
     public int GetApeVillageDogCount(GridPosition village) => GetVillageDogCount(GetIndex(village));
 
+    public int GetApeVillageDogCapacity(GridPosition village) => GetVillageDogLimit(GetIndex(village));
+
     private int GetVillageDogCount(int village) => _apeVillageHomes.Count(pair =>
         pair.Value == village && _critterIndicesById.TryGetValue(pair.Key, out var index) &&
         _species[index] is CritterSpecies.Dog);

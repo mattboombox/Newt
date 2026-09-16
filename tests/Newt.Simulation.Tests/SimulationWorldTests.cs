@@ -1172,6 +1172,7 @@ public sealed class SimulationWorldTests
             CritterSpecies.ApeFarmer,
             CritterSpecies.ApeLumberjack,
             CritterSpecies.ApeSailor,
+            CritterSpecies.ApeChieftain,
             CritterSpecies.Wolf,
             CritterSpecies.ToothedWhale,
         };
@@ -2393,7 +2394,7 @@ public sealed class SimulationWorldTests
 
         Assert.Equal(2, world.CritterCount);
         Assert.Equal(
-            7,
+            6,
             Enumerable.Range(0, world.CritterCount)
                 .Select(world.GetCritter)
                 .Sum(critter => critter.Energy));
@@ -2621,6 +2622,8 @@ public sealed class SimulationWorldTests
         for (var tick = 0; tick < 6 * SimulationWorld.TicksPerSecond; tick++)
         {
             world.AdvanceOneTick();
+            if (world.GetCritter(0).Energy + world.GetCritter(1).Energy < 16)
+                break;
         }
 
         Assert.Equal(2, world.GetCritterCount(CritterSpecies.MegaToad));
@@ -2922,7 +2925,7 @@ public sealed class SimulationWorldTests
 
     [Theory]
     [InlineData(CritterSpecies.SeaScorpion, 2)]
-    [InlineData(CritterSpecies.MegaToad, 2)]
+    [InlineData(CritterSpecies.MegaToad, 3)]
     [InlineData(CritterSpecies.Wolf, 3)]
     [InlineData(CritterSpecies.Squid, 2)]
     public void HeavyPredatorsDealExpectedCombatDamage(CritterSpecies species, int damage)
@@ -2931,9 +2934,9 @@ public sealed class SimulationWorldTests
     }
 
     [Fact]
-    public void MegaSpiderDealsOneCombatDamage()
+    public void MegaSpiderDealsTwoCombatDamage()
     {
-        Assert.Equal(1, SimulationWorld.GetCombatDamage(CritterSpecies.MegaSpider));
+        Assert.Equal(2, SimulationWorld.GetCombatDamage(CritterSpecies.MegaSpider));
     }
 
     [Fact]
@@ -3413,7 +3416,7 @@ public sealed class SimulationWorldTests
         Assert.Equal(1, world.GetCritterCount(predator));
         Assert.Equal(1, world.GetCritterCount(CritterSpecies.Therapsid));
         Assert.Equal(
-            predator is CritterSpecies.Wolf ? 7 : 8,
+            predator is CritterSpecies.Wolf or CritterSpecies.MegaToad ? 7 : 8,
             Enumerable.Range(0, world.CritterCount)
                 .Select(world.GetCritter)
                 .Sum(critter => critter.Energy));

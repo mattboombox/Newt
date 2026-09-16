@@ -40,10 +40,12 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             WorldTool.SeaScorpion, WorldTool.Nautilus, WorldTool.Squid, WorldTool.SquidEgg,
             WorldTool.Fish, WorldTool.Newt, WorldTool.MegaToad, WorldTool.MegaSpider, WorldTool.Therapsid,
             WorldTool.Monkey, WorldTool.Ape, WorldTool.Deer, WorldTool.Elk,
-            WorldTool.Gazelle, WorldTool.Wolf, WorldTool.Crab, WorldTool.ToothedWhale,
+            WorldTool.Gazelle, WorldTool.Wolf, WorldTool.Dog, WorldTool.Crab, WorldTool.ToothedWhale,
             WorldTool.BaleenWhale];
     private static readonly WorldTool[] BuildingToolOrder =
-        [WorldTool.WolfDen, WorldTool.Teleporter, WorldTool.ApeVillage, WorldTool.BarbarianApeVillage];
+        [WorldTool.WolfDen, WorldTool.Teleporter, WorldTool.ApeVillage, WorldTool.BarbarianApeVillage,
+            WorldTool.Farm, WorldTool.LumberCamp, WorldTool.Harbor, WorldTool.ResidentialDistrict,
+            WorldTool.MilitaryDistrict, WorldTool.Library, WorldTool.Road];
     private static readonly WorldTool[] OtherToolOrder =
         [WorldTool.JumpStart, WorldTool.Population, WorldTool.Inspect, WorldTool.Controls];
     private static readonly string[] ControlLines =
@@ -95,6 +97,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private Texture2D? _apeBarbarianChiefFlashSprite;
     private Texture2D? _apePirateSprite;
     private Texture2D? _apePirateFlashSprite;
+    private Texture2D? _apeWarriorVeteranSprite;
+    private Texture2D? _apeWarriorVeteranFlashSprite;
     private TimeSpan _accumulator;
     private KeyboardState _previousKeyboard;
     private MouseState _previousMouse;
@@ -302,6 +306,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 {
                     DrawSurfaceWater(screenX, screenY, position, water);
                 }
+                DrawVillageRoad(screenX, screenY, position);
                 DrawApeStructure(screenX, screenY, position);
                 DrawWolfDen(screenX, screenY, position);
                 DrawMegaSpiderWeb(screenX, screenY, position);
@@ -358,6 +363,11 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
 
     private void LoadApeVariantSprites()
     {
+        if (TryLoadCritterSprite("ape-warrior-veteran.png", out var veteran, out var veteranFlash))
+        {
+            _apeWarriorVeteranSprite = veteran;
+            _apeWarriorVeteranFlashSprite = veteranFlash;
+        }
         if (TryLoadCritterSprite("sick-ape.png", out var sprite, out var flashSprite))
         {
             _sickApeSprite = sprite;
@@ -508,6 +518,11 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             flashSprite = colonistInWater
                 ? _apeColonistSailorFlashSprite
                 : _apeColonistFlashSprite;
+        }
+        else if (critter.IsVeteranWarrior && _apeWarriorVeteranSprite is not null)
+        {
+            sprite = _apeWarriorVeteranSprite;
+            flashSprite = _apeWarriorVeteranFlashSprite;
         }
         else if (_world.IsBarbarianApe(critter.Id) &&
             (critter.Species switch
@@ -874,7 +889,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 WorldTool.MegaSpider or
                 WorldTool.Therapsid or WorldTool.Monkey or WorldTool.Deer or
                 WorldTool.Ape or WorldTool.Elk or WorldTool.Gazelle or
-                WorldTool.Wolf or WorldTool.Crab or WorldTool.ToothedWhale or WorldTool.BaleenWhale
+                WorldTool.Wolf or WorldTool.Dog or WorldTool.Crab or WorldTool.ToothedWhale or WorldTool.BaleenWhale
                 when primaryActivated:
                 var species = GetCritterSpecies(CurrentTool);
                 _world.TrySpawnCritter(species, position.Value);
@@ -912,6 +927,22 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             case WorldTool.BarbarianApeVillage when primaryActivated:
                 _world.TrySpawnBarbarianApeVillage(position.Value);
                 break;
+            case WorldTool.Farm or WorldTool.LumberCamp or WorldTool.Harbor or
+                WorldTool.ResidentialDistrict or WorldTool.MilitaryDistrict or WorldTool.Library
+                when primaryActivated:
+                _world.TryPlaceApeBuilding(position.Value, CurrentTool switch
+                {
+                    WorldTool.Farm => ApeStructureKind.Farm,
+                    WorldTool.LumberCamp => ApeStructureKind.LumberCamp,
+                    WorldTool.Harbor => ApeStructureKind.NavalDistrict,
+                    WorldTool.ResidentialDistrict => ApeStructureKind.ResidentialDistrict,
+                    WorldTool.MilitaryDistrict => ApeStructureKind.MilitaryDistrict,
+                    _ => ApeStructureKind.Library,
+                });
+                break;
+            case WorldTool.Road when primaryActivated:
+                _world.TryPlaceVillageRoad(position.Value);
+                break;
             case WorldTool.Inspect when primaryActivated:
                 if (_world.TryGetCritterAt(position.Value, out var inspected))
                 {
@@ -919,6 +950,9 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 }
                 break;
             case WorldTool.Inspect:
+                break;
+            case WorldTool.Road:
+                _world.RemoveVillageRoadAt(position.Value);
                 break;
         }
     }
@@ -948,6 +982,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         WorldTool.Elk => CritterSpecies.Elk,
         WorldTool.Gazelle => CritterSpecies.Gazelle,
         WorldTool.Wolf => CritterSpecies.Wolf,
+        WorldTool.Dog => CritterSpecies.Dog,
         WorldTool.Crab => CritterSpecies.Crab,
         WorldTool.ToothedWhale => CritterSpecies.ToothedWhale,
         WorldTool.BaleenWhale => CritterSpecies.BaleenWhale,
@@ -1556,8 +1591,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                             $"Civilians {_world.GetApeVillageCivilianCount(position)}   Sailors {_world.GetApeVillageSailorCount(position)}",
                             $"Chieftains {_world.GetApeVillageChieftainCount(position)}   Warriors {_world.GetApeVillageWarriorCount(position)}",
                         },
-                    $"Food {_world.GetApeVillageFood(position)} / {_world.GetApeVillageFoodCapacity(position)}",
-                    $"Dogs {_world.GetApeVillageDogCount(position)} / {_world.GetApeVillageResidentCount(position) / 10}",
+                    $"Food {_world.GetApeVillageFood(position)}/{_world.GetApeVillageFoodCapacity(position)} {_world.GetApeVillageFarmCount(position)} farms, {_world.GetApeVillageFoodPerMinute(position):0.#} food/min",
+                    $"Dogs {_world.GetApeVillageDogCount(position)} / {_world.GetApeVillageDogCapacity(position)}",
                     .. isBarbarian ? Array.Empty<string>()
                         : new[] { $"Wood {_world.GetApeVillageWood(position)} / {_world.GetApeVillageWoodCapacity(position)}" },
                     isBarbarian ? "Behavior Raiding camp" : "Behavior Settlement",
@@ -1699,7 +1734,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         CritterSpecies.ApeSailor => "sea life except plankton, worms, and whales",
         CritterSpecies.ApeWarrior or CritterSpecies.Dog => "predators that hunt apes, except whales",
         CritterSpecies.ApeScholar => "village food stores",
-        CritterSpecies.ApeChieftain => "predators that hunt apes, except whales",
+        CritterSpecies.ApeChieftain => "ape prey when village food is low; predators of apes",
         CritterSpecies.Deer => "grassland and forest foliage",
         CritterSpecies.Elk => "grassland, tundra, and taiga foliage",
         CritterSpecies.Gazelle => "arid, forest, and grassland foliage",
@@ -1750,7 +1785,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 CritterSpecies.Ape or CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack => "Hunting below 10 village food, wetland foraging, or returning",
                 CritterSpecies.ApeSailor => "Hunting at sea or returning food to harbor",
                 CritterSpecies.ApeWarrior => "Hunting predators of apes",
-                CritterSpecies.ApeChieftain => "Hunting predators of apes",
+                CritterSpecies.ApeChieftain => "Defending, hunting for village food, or returning food",
                 CritterSpecies.Deer => "Grazing or fleeing predators",
                 CritterSpecies.Elk => "Grazing or fleeing predators",
                 CritterSpecies.Gazelle => "Grazing or fleeing predators",
@@ -2005,6 +2040,22 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     {
         var difference = Mod(worldX - _cameraX, _world.Width);
         return difference;
+    }
+
+    private void DrawVillageRoad(int screenX, int screenY, GridPosition position)
+    {
+        var connections = _world.GetRoadConnections(position);
+        if (_spriteBatch is null || _pixel is null || connections is RiverConnection.None)
+            return;
+        var color = _world.GetSurfaceWater(position) is SurfaceWaterKind.River
+            ? new Color(145, 145, 145) : new Color(139, 94, 50);
+        var originX = MapOffsetX + screenX * TileSize;
+        var originY = MapOffsetY + screenY * TileSize;
+        var centerX = originX + TileSize / 2;
+        var centerY = originY + TileSize / 2;
+        var width = Math.Max(1, TileSize / 3);
+        _spriteBatch.Draw(_pixel, new Rectangle(centerX - width / 2, centerY - width / 2, width, width), color);
+        DrawRiverConnections(connections, originX, originY, centerX, centerY, width, color);
     }
 
     private void DrawSurfaceWater(
@@ -2593,6 +2644,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         WorldTool.Elk => "L spawn: grass / tundra / taiga",
         WorldTool.Gazelle => "L spawn: grass / arid",
         WorldTool.Wolf => "L spawn: land",
+        WorldTool.Dog => "L spawn: joins nearest village; otherwise wolf",
         WorldTool.Crab => "L spawn: coast / land",
         WorldTool.ToothedWhale => "L spawn: ocean",
         WorldTool.BaleenWhale => "L spawn: ocean",
@@ -2603,6 +2655,10 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         WorldTool.JumpStart => "L seed plankton",
         WorldTool.Colonist => "L village: auto; tile: target",
         WorldTool.ApeVillage => "L place village with 2 apes",
+        WorldTool.Road => "L village: road (50+ residents each); R remove",
+        WorldTool.Farm => "L place biome farm beside village buildings",
+        WorldTool.LumberCamp or WorldTool.Harbor or WorldTool.ResidentialDistrict or
+            WorldTool.MilitaryDistrict or WorldTool.Library => "L place beside village buildings",
         WorldTool.BarbarianApeVillage => "L place barbarian village with 2 apes",
         WorldTool.Population => _populationWindowOpen
             ? "Open; R close"
@@ -2619,6 +2675,9 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private static string GetToolName(WorldTool tool) => tool switch
     {
         WorldTool.ApeVillage => "Ape Village",
+        WorldTool.LumberCamp => "Lumber Camp",
+        WorldTool.ResidentialDistrict => "Residential District",
+        WorldTool.MilitaryDistrict => "Military District",
         WorldTool.BarbarianApeVillage => "Barbarian Ape Village",
         WorldTool.JumpStart => "Jump Start",
         WorldTool.ZombiePlague => "Zombie Plague",
@@ -2683,6 +2742,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         Elk,
         Gazelle,
         Wolf,
+        Dog,
         Crab,
         ToothedWhale,
         BaleenWhale,
@@ -2694,6 +2754,13 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         Colonist,
         ApeVillage,
         BarbarianApeVillage,
+        Farm,
+        LumberCamp,
+        Harbor,
+        ResidentialDistrict,
+        MilitaryDistrict,
+        Library,
+        Road,
         Population,
         Controls,
         Inspect,
