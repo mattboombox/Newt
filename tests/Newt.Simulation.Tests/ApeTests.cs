@@ -75,6 +75,7 @@ public sealed class ApeTests
         foreach (var position in AllPositions(world))
             world.SetBiome(position, Biome.Grassland);
         var camp = new GridPosition(10, 10);
+        world.SetTerrain(new GridPosition(10, 11), Terrain.Shallows);
 
         Assert.True(world.TrySpawnBarbarianApeVillage(camp));
 
@@ -94,6 +95,9 @@ public sealed class ApeTests
             world.TryRecruitDogFromWolfKill(killer);
         var dog = Enumerable.Range(0, world.CritterCount).Select(world.GetCritter)
             .First(critter => critter.Species is CritterSpecies.Dog);
+        foreach (var other in Enumerable.Range(0, world.CritterCount).Select(world.GetCritter)
+            .Where(critter => critter.Species is CritterSpecies.Dog && critter.Id != dog.Id).ToArray())
+            world.RemoveCritterAt(other.Position);
         var villageTile = village.Y * world.Width + village.X;
 
         for (var meal = 0; meal < 100; meal++)
@@ -104,6 +108,105 @@ public sealed class ApeTests
 
         Assert.True(world.TryGetCritter(dog.Id, out var fedDog));
         Assert.Equal(CritterNutritions.Get(CritterSpecies.Dog).ReproductionThreshold, fedDog.Energy);
+    }
+
+    [Fact]
+    public void OldestTwoDogsAvoidCombatAndReplacementTakesOverAfterDeath()
+    {
+        var (world, village) = CreateVillageForPlague(30);
+        var killer = Enumerable.Range(0, world.CritterCount).First(index =>
+            world.GetApeHomeVillage(world.GetCritter(index).Id) == village);
+        for (var roll = 0; roll < 5000; roll++)
+            world.TryRecruitDogFromWolfKill(killer);
+        var dogs = Enumerable.Range(0, world.CritterCount).Select(world.GetCritter)
+            .Where(critter => critter.Species is CritterSpecies.Dog).OrderBy(dog => dog.Id.Value).ToArray();
+        Assert.Equal(3, dogs.Length);
+        var wolfPosition = AllPositions(world).First(position => !world.TryGetCritterAt(position, out _));
+        var wolf = world.AddCritter(CritterSpecies.Wolf, wolfPosition);
+        foreach (var dog in dogs.Take(2))
+            for (var attempt = 0; attempt < 20; attempt++)
+                world.CommitEncounter(dog.Position, wolfPosition);
+        Assert.True(world.TryGetCritter(wolf, out var untouched));
+        Assert.Equal(CritterNutritions.Get(CritterSpecies.Wolf).InitialEnergy, untouched.Energy);
+        Assert.All(dogs.Take(2), dog => Assert.Equal(dog.Energy, CritterAt(world, dog.Position).Energy));
+
+        // The third dog still engages in normal combat.
+        world.CommitEncounter(dogs[2].Position, wolfPosition);
+        Assert.True(CritterAt(world, dogs[2].Position).Energy < dogs[2].Energy ||
+            CritterAt(world, wolfPosition).Energy < untouched.Energy);
+
+        world.RemoveCritterAt(dogs[0].Position);
+        var beforeDog = CritterAt(world, dogs[2].Position).Energy;
+        var beforeWolf = CritterAt(world, wolfPosition).Energy;
+        for (var attempt = 0; attempt < 20; attempt++)
+            world.CommitEncounter(dogs[2].Position, wolfPosition);
+        Assert.Equal(beforeDog, CritterAt(world, dogs[2].Position).Energy);
+        Assert.Equal(beforeWolf, CritterAt(world, wolfPosition).Energy);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void DogsReceiveGrowthMealsWhenApeGrowthIsBlocked(bool fullHousing)
+    {
+        var (world, village) = CreateVillageForPlague(fullHousing ? 10 : 201);
+        if (fullHousing)
+            AddAssignedResidents(world, village, world.GetApeVillagePopulationCapacity(village) -
+                world.GetApeVillageResidentCount(village));
+        var killer = Enumerable.Range(0, world.CritterCount).First(index =>
+            world.GetApeHomeVillage(world.GetCritter(index).Id) == village);
+        for (var roll = 0; roll < 5000 && world.GetApeVillageDogCount(village) == 0; roll++)
+            world.TryRecruitDogFromWolfKill(killer);
+        var dog = Enumerable.Range(0, world.CritterCount).Select(world.GetCritter)
+            .Single(critter => critter.Species is CritterSpecies.Dog);
+        var initialFood = world.GetApeVillageFoodCapacity(village);
+        world.StoreApeVillageFood(village, initialFood);
+        var meals = CritterNutritions.Get(CritterSpecies.Dog).ReproductionThreshold - dog.Energy;
+        for (var meal = 0; meal < meals; meal++)
+        {
+            world.StoreApeVillageFood(village, initialFood);
+            world.FeedApeFromVillageSurplus(village.Y * world.Width + village.X);
+        }
+        Assert.Equal(CritterNutritions.Get(CritterSpecies.Dog).ReproductionThreshold,
+            CritterAt(world, dog.Position).Energy);
+    }
+
+    [Fact]
+    public void ReservedDogFleesWolfAndWandersWithoutAttacking()
+    {
+        var (world, village) = CreateVillageForPlague(10);
+        var killer = Enumerable.Range(0, world.CritterCount).First(index =>
+            world.GetApeHomeVillage(world.GetCritter(index).Id) == village);
+        for (var roll = 0; roll < 5000 && world.GetApeVillageDogCount(village) == 0; roll++)
+            world.TryRecruitDogFromWolfKill(killer);
+        var dog = Enumerable.Range(0, world.CritterCount).Select(world.GetCritter)
+            .Single(critter => critter.Species is CritterSpecies.Dog);
+        foreach (var critter in Enumerable.Range(0, world.CritterCount).Select(world.GetCritter)
+            .Where(critter => critter.Id != dog.Id).ToArray())
+            world.RemoveCritterAt(critter.Position);
+        int Distance(GridPosition a, GridPosition b) =>
+            Math.Min(Math.Abs(a.X - b.X), world.Width - Math.Abs(a.X - b.X)) + Math.Abs(a.Y - b.Y);
+        var wolfPosition = AllPositions(world).First(position => Distance(position, dog.Position) == 1 &&
+            world.GetTerrain(position) == Terrain.Plains);
+        var wolf = world.AddCritter(CritterSpecies.Wolf, wolfPosition);
+        var dogIndex = Enumerable.Range(0, world.CritterCount).Single(index => world.GetCritter(index).Id == dog.Id);
+        Assert.Null(world.TryMoveDog(dogIndex));
+        Assert.True(world.TryGetCritter(dog.Id, out var escaped));
+        Assert.True(Distance(escaped.Position, wolfPosition) > 1);
+        Assert.Equal(dog.Energy, escaped.Energy);
+        Assert.True(world.TryGetCritter(wolf, out var untouched));
+        Assert.Equal(CritterNutritions.Get(CritterSpecies.Wolf).InitialEnergy, untouched.Energy);
+        world.RemoveCritterAt(wolfPosition);
+        dogIndex = Enumerable.Range(0, world.CritterCount).Single(index => world.GetCritter(index).Id == dog.Id);
+        var visited = new HashSet<GridPosition>();
+        for (var step = 0; step < 100; step++)
+        {
+            Assert.Null(world.TryMoveDog(dogIndex));
+            visited.Add(world.GetCritter(dogIndex).Position);
+        }
+        Assert.True(visited.Count > 5);
+        Assert.Contains(visited, position => Distance(position, village) > 1);
+        Assert.Equal(village, world.GetApeHomeVillage(dog.Id));
     }
 
     [Fact]
@@ -760,10 +863,10 @@ public sealed class ApeTests
     }
 
     [Fact]
-    public void FirstReproductionFoundsVillageBesideBeachWithoutHarbor()
+    public void FirstReproductionFoundsVillageBesideShallowsWithoutHarbor()
     {
         var world = CreateFedApeWorld(hasGrassland: false);
-        world.SetTerrain(new GridPosition(0, 1), Terrain.Beach);
+        world.SetTerrain(new GridPosition(0, 1), Terrain.Shallows);
 
         AdvanceUntilVillage(world);
 
@@ -771,7 +874,7 @@ public sealed class ApeTests
         Assert.Equal(0, CountStructures(world, ApeStructureKind.Farm));
         var village = FindStructure(world, ApeStructureKind.Village);
         Assert.Contains(GetSurroundingNeighbors(world, village),
-            position => world.GetTerrain(position) is Terrain.Beach);
+            position => world.GetTerrain(position) is Terrain.Shallows);
         Assert.Equal(0, CountStructures(world, ApeStructureKind.NavalDistrict));
         Assert.Equal(1, world.GetCritterCount(CritterSpecies.Ape));
     }
@@ -959,6 +1062,7 @@ public sealed class ApeTests
     [InlineData(Biome.Grassland, ApeStructureKind.Farm)]
     [InlineData(Biome.Arid, ApeStructureKind.Farm)]
     [InlineData(Biome.Swamp, ApeStructureKind.RicePaddy)]
+    [InlineData(Biome.Jungle, ApeStructureKind.RicePaddy)]
     [InlineData(Biome.Forest, ApeStructureKind.Orchard)]
     public void FiveResidentsCannotBuildFoodDistrictOnBiomeClassifiedBeaches(
         Biome biome,
@@ -990,6 +1094,7 @@ public sealed class ApeTests
 
     [Theory]
     [InlineData(Biome.Swamp, ApeStructureKind.RicePaddy, 14)]
+    [InlineData(Biome.Jungle, ApeStructureKind.RicePaddy, 14)]
     [InlineData(Biome.Forest, ApeStructureKind.Orchard, 14)]
     [InlineData(Biome.Arid, ApeStructureKind.Farm, 28)]
     public void FiveResidentsBuildBiomeFoodDistrictAtItsProductionRate(
@@ -997,7 +1102,9 @@ public sealed class ApeTests
         ApeStructureKind expectedStructure,
         int productionSeconds)
     {
-        var world = CreateFedApeWorld(hasGrassland: false);
+        var world = CreateFedApeWorld(hasGrassland: biome is Biome.Jungle);
+        if (biome is Biome.Jungle)
+            AdvanceUntilVillage(world); // Use an ordinary settlement before changing its biome.
         for (var y = 0; y < world.Height; y++)
         {
             for (var x = 0; x < world.Width; x++)
@@ -1353,9 +1460,9 @@ public sealed class ApeTests
     public void FiveCoastalResidentsBuildHarborThatRecruitsSailor()
     {
         var world = CreateFedApeWorld(hasGrassland: false);
-        world.SetTerrain(new GridPosition(0, 1), Terrain.Beach);
+        world.SetTerrain(new GridPosition(0, 1), Terrain.Shallows);
         AdvanceUntilVillage(world);
-        ResearchCoastalTechnologies(world);
+        // Leave the single shallows tile available for the harbor, rather than aquaculture.
         var village = FindStructure(world, ApeStructureKind.Village);
         AddAssignedResidents(world, village, 4);
 
@@ -1370,6 +1477,34 @@ public sealed class ApeTests
         Assert.Equal(1, CountStructures(world, ApeStructureKind.NavalDistrict));
         Assert.Equal(1, world.GetCritterCount(CritterSpecies.ApeSailor));
         Assert.Equal(5, world.GetApeVillageResidentCount(village));
+    }
+
+    [Theory]
+    [InlineData(Terrain.Shallows, SurfaceWaterKind.None, true)]
+    [InlineData(Terrain.Ocean, SurfaceWaterKind.None, false)]
+    [InlineData(Terrain.DeepOcean, SurfaceWaterKind.None, false)]
+    [InlineData(Terrain.Beach, SurfaceWaterKind.None, false)]
+    [InlineData(Terrain.Plains, SurfaceWaterKind.None, false)]
+    [InlineData(Terrain.Shallows, SurfaceWaterKind.River, false)]
+    [InlineData(Terrain.Shallows, SurfaceWaterKind.FreshwaterLake, false)]
+    public void HarborsRequireSaltwaterShallows(Terrain terrain, SurfaceWaterKind water, bool allowed)
+    {
+        var world = CreateFedApeWorld(hasGrassland: true);
+        AdvanceUntilVillage(world);
+        var village = FindStructure(world, ApeStructureKind.Village);
+        var site = GetCardinalNeighbors(world, village)
+            .First(position => !world.IsOccupied(position) && world.GetApeStructure(position) is null);
+        world.SetTerrain(site, terrain);
+        world.SetSurfaceWater(site, water);
+        Assert.Equal(allowed, world.TryBuildApeStructure(village.Y * world.Width + village.X,
+            ApeStructureKind.NavalDistrict));
+        Assert.Equal(allowed ? ApeStructureKind.NavalDistrict : (ApeStructureKind?)null,
+            world.GetApeStructure(site));
+        if (allowed)
+        {
+            world.SetTerrain(site, Terrain.Ocean);
+            Assert.Null(world.GetApeStructure(site));
+        }
     }
 
     [Theory]
@@ -1512,9 +1647,9 @@ public sealed class ApeTests
     {
         var world = CreateFedApeWorld(hasGrassland: false);
         var harborTile = new GridPosition(0, 1);
-        world.SetTerrain(harborTile, Terrain.Beach);
+        world.SetTerrain(harborTile, Terrain.Shallows);
         AdvanceUntilVillage(world);
-        ResearchCoastalTechnologies(world);
+        // Leave the single shallows tile available for the harbor, rather than aquaculture.
         var village = FindStructure(world, ApeStructureKind.Village);
         AddAssignedResidents(world, village, 4);
         world.AdvanceOneTick();
@@ -1523,7 +1658,7 @@ public sealed class ApeTests
         world.SetClimateTerrain(harbor, Terrain.Plains);
 
         Assert.Equal(ApeStructureKind.NavalDistrict, world.GetApeStructure(harbor));
-        world.SetClimateTerrain(harbor, Terrain.Beach);
+        world.SetClimateTerrain(harbor, Terrain.Shallows);
         world.RevalidateApeStructures();
         Assert.Equal(ApeStructureKind.NavalDistrict, world.GetApeStructure(harbor));
     }
@@ -1532,9 +1667,9 @@ public sealed class ApeTests
     public void FiveResidentVillageKeepsFourCiviliansAfterHarborRecruitment()
     {
         var world = CreateFedApeWorld(hasGrassland: false);
-        world.SetTerrain(new GridPosition(0, 1), Terrain.Beach);
+        world.SetTerrain(new GridPosition(0, 1), Terrain.Shallows);
         AdvanceUntilVillage(world);
-        ResearchCoastalTechnologies(world);
+        // Leave the single shallows tile available for the harbor, rather than aquaculture.
         var village = FindStructure(world, ApeStructureKind.Village);
         AddAssignedResidents(world, village, 4);
 
@@ -1811,7 +1946,7 @@ public sealed class ApeTests
             .Distinct()
             .First(position => world.GetApeStructure(position) is null &&
                 !world.IsOccupied(position));
-        world.SetTerrain(beach, Terrain.Beach);
+        world.SetTerrain(beach, Terrain.Shallows);
         world.StoreApeVillageFood(village, 8);
 
         for (var tick = 0;
@@ -1846,7 +1981,7 @@ public sealed class ApeTests
     }
 
     [Fact]
-    public void InlandVillageAddsOnlyOneHarborAfterItsDistrictsReachBeach()
+    public void InlandVillageAddsOnlyOneHarborAfterItsDistrictsReachShallows()
     {
         var world = CreateFedApeWorld(hasGrassland: true);
         AdvanceUntilVillage(world);
@@ -1869,7 +2004,7 @@ public sealed class ApeTests
         Assert.Equal(2, reachableTiles.Length);
         foreach (var beach in reachableTiles)
         {
-            world.SetTerrain(beach, Terrain.Beach);
+            world.SetTerrain(beach, Terrain.Shallows);
         }
 
         for (var tick = 0; tick < 60 * SimulationWorld.TicksPerSecond; tick++)
@@ -2325,43 +2460,29 @@ public sealed class ApeTests
     }
 
     [Fact]
-    public void SailorSeeksOceanThroughRiverWithoutPreyToLureItThenHunts()
+    public void SailorHuntsNearbyFreshwaterPreyInsteadOfSeekingOcean()
     {
-        var world = new SimulationWorld(11, 6, Terrain.Mountain, seed: 5203);
+        var world = new SimulationWorld(9, 1, Terrain.Mountain, seed: 5203);
         world.SeasonsEnabled = false;
         NaturalEvents.SetEnabled(world, false);
-        var start = new GridPosition(1, 1);
-        world.SetSurfaceWater(start, SurfaceWaterKind.FreshwaterLake);
-        foreach (var river in new[] { new GridPosition(2, 2), new GridPosition(3, 3), new GridPosition(4, 3) })
-        {
-            world.SetSurfaceWater(river, SurfaceWaterKind.River);
-        }
-        var ocean = new GridPosition(5, 3);
-        world.SetTerrain(ocean, Terrain.Ocean);
+        world.SetTerrain(new GridPosition(0, 0), Terrain.Ocean);
+        for (var x = 1; x <= 4; x++)
+            world.SetSurfaceWater(new GridPosition(x, 0), SurfaceWaterKind.River);
+        var start = new GridPosition(3, 0);
+        var preyPosition = new GridPosition(4, 0);
+        world.SetSurfaceWater(preyPosition, SurfaceWaterKind.FreshwaterLake);
         var sailor = world.AddCritter(CritterSpecies.ApeSailor, start);
-        var reachedOcean = false;
-        for (var tick = 0; tick < 20 * SimulationWorld.TicksPerSecond; tick++)
+        var prey = world.AddCritter(CritterSpecies.Fish, preyPosition);
+        for (var tick = 0; tick < 5 * SimulationWorld.TicksPerSecond; tick++)
         {
             world.AdvanceOneTick();
             Assert.True(world.TryGetCritter(sailor, out var moving));
-            if (moving.Position == ocean)
-            {
-                reachedOcean = true;
+            if (moving.Position != start)
                 break;
-            }
         }
-        Assert.True(reachedOcean);
-        var feedingTile = new GridPosition(6, 3);
-        world.SetTerrain(feedingTile, Terrain.Ocean);
-        var fish = world.AddCritter(CritterSpecies.Fish, feedingTile);
-        for (var tick = 0; tick < 10 * SimulationWorld.TicksPerSecond &&
-            world.TryGetCritter(fish, out _); tick++)
-        {
-            world.AdvanceOneTick();
-        }
-        Assert.False(world.TryGetCritter(fish, out _));
-        Assert.True(world.TryGetCritter(sailor, out var fed));
-        Assert.True(fed.Energy > 6);
+        Assert.False(world.TryGetCritter(prey, out _));
+        Assert.True(world.TryGetCritter(sailor, out var hunter));
+        Assert.Equal(preyPosition, hunter.Position);
     }
 
     [Fact]
@@ -2438,9 +2559,9 @@ public sealed class ApeTests
     public void SailorReturnsSeafoodToConnectedHarbor()
     {
         var world = CreateFedApeWorld(hasGrassland: false);
-        world.SetTerrain(new GridPosition(0, 1), Terrain.Beach);
+        world.SetTerrain(new GridPosition(0, 1), Terrain.Shallows);
         AdvanceUntilVillage(world);
-        ResearchCoastalTechnologies(world);
+        // Leave the single shallows tile available for the harbor, rather than aquaculture.
         var village = FindStructure(world, ApeStructureKind.Village);
         AddAssignedResidents(world, village, 4);
         for (var tick = 0;
@@ -2544,7 +2665,10 @@ public sealed class ApeTests
         var destinationAuxiliary = new GridPosition(
             (destination.X + 1) % world.Width,
             destination.Y);
-        foreach (var position in new[] { destination, destinationAuxiliary })
+        // Leave several land sites available if a wandering blocker occupies the first
+        // choice. Shallows remain traversable, but are no longer fallback village sites.
+        foreach (var position in AllPositions(world).Where(position =>
+            WrappedDistance(world, position, destination) <= 2))
         {
             world.SetTerrain(position, Terrain.Plains);
             world.SetSurfaceCover(position, SurfaceCover.None, 0);
@@ -2838,7 +2962,7 @@ public sealed class ApeTests
         var tile = village.Y * world.Width + village.X;
         var site = GetCardinalNeighbors(world, village)
             .First(position => !world.IsOccupied(position) && world.GetApeStructure(position) is null);
-        world.SetTerrain(site, building is ApeStructureKind.NavalDistrict ? Terrain.Beach : Terrain.Shallows);
+        world.SetTerrain(site, Terrain.Shallows);
         Assert.False(world.TryBuildApeStructure(tile, building));
         Assert.Empty(world.GetApeVillageTechnologies(village));
         Assert.True(world.TryResearchApeTechnology(tile, technology));

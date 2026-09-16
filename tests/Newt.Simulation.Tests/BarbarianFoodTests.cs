@@ -17,6 +17,7 @@ public sealed class BarbarianFoodTests
         for (var x = 0; x < world.Width; x++)
             world.SetBiome(new GridPosition(x, y), Biome.Grassland);
         var camp = new GridPosition(10, 10);
+        world.SetTerrain(new GridPosition(10, 11), Terrain.Shallows);
         Assert.True(world.TrySpawnBarbarianApeVillage(camp));
         while (world.CritterCount > 0)
             world.RemoveCritterAt(world.GetCritter(0).Position);

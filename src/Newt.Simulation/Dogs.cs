@@ -4,6 +4,33 @@ public sealed partial class SimulationWorld
 {
     private const int DogRecruitmentChancePercent = 25;
 
+    private bool IsReservedVillageDog(int index)
+    {
+        if (_species[index] is not CritterSpecies.Dog ||
+            !_apeVillageHomes.TryGetValue(_critterIds[index].Value, out var village))
+            return false;
+
+        // Stable IDs preserve age order even when removal compacts the critter arrays.
+        var olderDogs = 0;
+        foreach (var pair in _apeVillageHomes)
+            if (pair.Value == village && pair.Key < _critterIds[index].Value &&
+                _critterIndicesById.TryGetValue(pair.Key, out var other) &&
+                _species[other] is CritterSpecies.Dog && ++olderDogs >= 2)
+                return false;
+        return true;
+    }
+
+    internal GridPosition? TryMoveDog(int index, IReadOnlySet<GridPosition>? reservedPrey = null)
+    {
+        if (!IsReservedVillageDog(index))
+            return TryMoveHunter(index, ApeDefenderPerceptionRadius, reservedPrey, huntWhenFull: true);
+
+        _preyTargets[index] = -1;
+        if (TryFleePredators(index, LandPreyFleeRadius))
+            return null;
+        return TryMove(index, reservedPrey, allowPredation: false);
+    }
+
     public int GetApeVillageDogCount(GridPosition village) => GetVillageDogCount(GetIndex(village));
 
     private int GetVillageDogCount(int village) => _apeVillageHomes.Count(pair =>

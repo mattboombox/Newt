@@ -392,12 +392,13 @@ the civilization's active marine hunters. Their eight-direction movement follows
 diagonal Rivers into Freshwater Lakes, including freshwater corridors through
 Mountains and across horizontal map wrap.
 
-Villages begin with capacity for five residents. At five residents they build a
-Grassland or Arid Farm, Swamp Rice Paddy, Forest Orchard, or Shallows or Freshwater Lake
+Village centers cannot be founded in Shallows, including by colonists and manual spawning;
+Apes may still travel through Shallows. Villages begin with capacity for five residents.
+At five residents they build a Grassland or Arid Farm, Swamp or Jungle Rice Paddy,
+Forest Orchard, or Shallows or Freshwater Lake
 Aquaculture when possible, otherwise a Harbor
-on a Beach, River, or Freshwater Lake tile. Harbor sites may connect diagonally to
-the village or its districts, and freshwater Harbors accept dry land in any of
-the eight neighboring tiles. Other districts retain cardinal construction links.
+on a saltwater Shallows tile. Harbor sites may connect diagonally to
+the village or its districts. Other districts retain cardinal construction links.
 Grassland Farms, Rice Paddies, and Orchards add one stored food every fourteen seconds;
 Arid Farms operate at half that rate, producing every twenty-eight seconds. Aquaculture
 is slightly less productive than an Arid Farm even in ideal conditions: it produces every
@@ -461,7 +462,7 @@ The Colonist tool in Events manually sends one from a clicked Village, charging 
 hundred food and reducing a poorer village's food to zero. Clicking a valid non-Village
 tile instead dispatches from the nearest Village to found at that exact destination.
 Inspection shows the destination X and Y coordinates while the Ape remains a colonist.
-Climate coastline rebuilding validates Harbors only after Beach classification finishes,
+Climate coastline rebuilding validates Harbors only after coastline classification finishes,
 so the temporary landform stage cannot demolish them.
 
 Harbors recruit ordinary residents into Ape Sailors at thirty-second intervals without
@@ -490,16 +491,34 @@ hunt Sea Scorpions, Mega Spiders, Mega Toads, Wolves, Toothed Whales, and Undead
 deal three energy damage on each successful combat roll. If either plague infects a Warrior,
 it immediately becomes a regular sick Ape while retaining its village membership.
 
+Ordinary Ape Warriors proactively attack barbarian Apes within their existing perception
+radius. Eligible barbarians take priority over wildlife, with the nearest barbarian chosen
+first, and this defense takes priority over returning home to reproduce. Other peaceful
+Ape roles retain their existing targeting behavior.
+
 Village, Farm, Harbor, Military District, Residential
 District, and Ruin tiles are simulation-owned structures exposed to rendering and inspection;
 destructive terrain and surface-cover changes remove invalid structures.
 An eligible village that originally founded beside a food
 biome may add a Harbor later once its connected district network reaches an open
-Beach or land-adjacent freshwater tile and the settlement has at least five residents.
+saltwater Shallows tile and the settlement has at least five residents. Harbors can only
+occupy Shallows without River or Freshwater Lake water; Beach, Ocean, and Deep Ocean are
+invalid. Terrain revalidation also removes Harbors whose tiles no longer qualify.
 When a village loses its final living resident, the Village and every connected district
 become unowned ruins. Ruins are non-operational and add no population or storage capacity.
 Any Ape settlement may build directly over an unoccupied ruin when the tile otherwise suits
 the new structure. Ruins that remain undisturbed decay away after two simulated years.
+
+Ordinary Ape villages automatically merge when any of their buildings touch, including
+diagonals and horizontal world wrapping. Barbarian camps and ruins do not participate.
+The oldest village identity survives; residents, Dogs, districts, and researched technologies
+transfer to it. Food and wood combine up to the resulting storage capacities. Extra village
+centers and Libraries become Residential Districts (or ruins if housing cannot occupy the
+tile), extra Chieftains become Warriors, and Scholars above the two-per-village limit become
+ordinary Apes. Return routes and growth timers are reset to use the merged settlement.
+`ApeVillageMergingEnabled` defaults to true; disable this temporary consolidation rule when
+diplomacy and war are introduced. Adjacency is checked around village updates only after
+structure changes, and chains of touching villages merge in one pass.
 
 Deer, Elk, and Gazelles use the same reproduction placement rule as other
 ordinary species; only the chosen offspring tile must be open and habitable.
