@@ -4,6 +4,23 @@ public sealed partial class SimulationWorld
 {
     internal const int ChieftainEscortSize = 4;
     private const int ChieftainEscortDistance = 2;
+    private readonly Dictionary<int, (int Target, long Until)> _chieftainAttackTargets = [];
+
+    private void RememberChieftainTarget(int chief, int target)
+    {
+        if (_species[chief] is CritterSpecies.ApeChieftain)
+            _chieftainAttackTargets[_critterIds[chief].Value] =
+                (_critterIds[target].Value, Tick + 2 * GetMovementIntervalTicks(CritterSpecies.ApeChieftain));
+    }
+
+    private bool IsChieftainEscortTarget(int index, int target) =>
+        _species[index] is (CritterSpecies.ApeWarrior or CritterSpecies.Dog) &&
+        _apeVillageHomes.TryGetValue(_critterIds[index].Value, out var village) &&
+        TryGetVillageChieftain(village, out var chief) &&
+        _chieftainAttackTargets.TryGetValue(_critterIds[chief].Value, out var attack) &&
+        Tick < attack.Until && attack.Target == _critterIds[target].Value &&
+        GetChieftainEscort(GetPosition(village)).Contains(_critterIds[index]) &&
+        CanEatInCurrentContext(chief, target);
 
     internal CritterId[] GetChieftainEscort(GridPosition village)
     {
@@ -21,16 +38,8 @@ public sealed partial class SimulationWorld
             else if (_species[index] is CritterSpecies.Dog && !IsReservedVillageDog(index))
                 dogs.Enqueue(pair.Key);
         }
-        // Alternate roles so available dogs can join an established warrior escort.
-        var escort = new List<CritterId>(ChieftainEscortSize);
-        while (escort.Count < ChieftainEscortSize && (warriors.Count > 0 || dogs.Count > 0))
-        {
-            if (warriors.TryDequeue(out var warrior))
-                escort.Add(new CritterId(warrior));
-            if (escort.Count < ChieftainEscortSize && dogs.TryDequeue(out var dog))
-                escort.Add(new CritterId(dog));
-        }
-        return escort.ToArray();
+        return warriors.Take(ChieftainEscortSize).Concat(dogs.Take(2))
+            .Select(id => new CritterId(id)).ToArray();
     }
 
     private bool TryGetVillageChieftain(int village, out int chiefIndex)
@@ -59,6 +68,22 @@ public sealed partial class SimulationWorld
             return false;
 
         _preyTargets[index] = -1;
+        if (_chieftainAttackTargets.TryGetValue(_critterIds[chief].Value, out var attack) &&
+            Tick < attack.Until && _critterIndicesById.TryGetValue(attack.Target, out var target) &&
+            CanPursuePrey(index, target))
+        {
+            var position = _positions[target];
+            _preyTargets[index] = GetIndex(position);
+            if (MovementDirections.Any(direction => new GridPosition(
+                Mod(_positions[index].X + direction.X, Width), _positions[index].Y + direction.Y) == position))
+            {
+                if (reservedPrey?.Contains(position) is not true)
+                    prey = position;
+            }
+            else
+                TryMoveTowardApeStructure(index, GetIndex(position), reservedPrey);
+            return true;
+        }
         // Fight adjacent enemies, but do not abandon the chief to chase distant prey.
         prey = FindHunterPrey(index, _species[index], 1, reservedPrey);
         if (prey is not null)

@@ -280,6 +280,7 @@ public static class CritterNutritions
         CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack => Ape,
         CritterSpecies.ApeScholar => Ape with { ReproductionThreshold = 0, ReproductionCost = 0 },
         CritterSpecies.UndeadApe => Ape with { ReproductionThreshold = 0, ReproductionCost = 0 },
+        CritterSpecies.Vampire => Ape,
         CritterSpecies.Deer => Deer,
         CritterSpecies.Elk => Elk,
         CritterSpecies.Gazelle => Deer,

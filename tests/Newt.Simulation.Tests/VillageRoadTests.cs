@@ -43,6 +43,34 @@ public sealed class VillageRoadTests
             .Select(tile => new GridPosition(tile % world.Width, tile / world.Width));
 
     [Fact]
+    public void RoadsFormAutomaticallyAtFiftyResidents()
+    {
+        var world = CreateWorld();
+        Assert.Equal(0, world.VillageRoadCount);
+        world.AdvanceOneTick();
+        Assert.Equal(1, world.VillageRoadCount);
+        world.AdvanceOneTick();
+        Assert.Equal(1, world.VillageRoadCount);
+    }
+
+    [Fact]
+    public void ForcedRoadCanFollowDiagonalTiles()
+    {
+        var world = new SimulationWorld(40, 30, Terrain.Plains, seed: 17);
+        foreach (var position in Positions(world))
+            world.SetBiome(position, Biome.Grassland);
+        var first = new GridPosition(10, 10);
+        var second = new GridPosition(20, 20);
+        Assert.True(world.TrySpawnTestApeVillage(first));
+        Assert.True(world.TrySpawnTestApeVillage(second));
+        Assert.True(world.TryPlaceVillageRoad(first));
+        Assert.Equal(RiverConnection.SouthEast, world.GetRoadConnections(first));
+        Assert.Equal(RiverConnection.NorthWest, world.GetRoadConnections(second));
+        Assert.Equal(RiverConnection.NorthWest | RiverConnection.SouthEast,
+            world.GetRoadConnections(new(15, 15)));
+    }
+
+    [Fact]
     public void DistrictClickConnectsCentersAndRoadCanBeRemoved()
     {
         var world = CreateWorld();
@@ -66,8 +94,9 @@ public sealed class VillageRoadTests
     public void BothVillagesNeedFiftyResidents(int first, int second)
     {
         var world = CreateWorld(first, second);
-        Assert.False(world.TryPlaceVillageRoad(First));
+        Assert.False(world.TryPlaceVillageRoad(First, force: false));
         Assert.Equal(0, world.VillageRoadCount);
+        Assert.True(world.TryPlaceVillageRoad(First));
     }
 
     [Fact]
@@ -127,17 +156,17 @@ public sealed class VillageRoadTests
     }
 
     [Fact]
-    public void FloodingRoadRemovesItOnNextTick()
+    public void FloodingRoadDoesNotRemoveIt()
     {
         var world = CreateWorld();
         Assert.True(world.TryPlaceVillageRoad(First));
         world.SetSurfaceWater(new GridPosition(20, 10), SurfaceWaterKind.FreshwaterLake);
         world.AdvanceOneTick();
-        Assert.Equal(0, world.VillageRoadCount);
+        Assert.Equal(1, world.VillageRoadCount);
     }
 
     [Fact]
-    public void PopulationLossRemovesRoadOnNextTick()
+    public void PopulationLossPreservesRoad()
     {
         var world = CreateWorld();
         Assert.True(world.TryPlaceVillageRoad(First));
@@ -145,7 +174,7 @@ public sealed class VillageRoadTests
             .First(critter => world.GetApeHomeVillage(critter.Id) == First);
         world.RemoveCritterAt(resident.Position);
         world.AdvanceOneTick();
-        Assert.Equal(0, world.VillageRoadCount);
+        Assert.Equal(1, world.VillageRoadCount);
     }
 
     [Fact]

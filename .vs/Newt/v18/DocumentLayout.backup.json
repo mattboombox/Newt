@@ -82,8 +82,12 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 0,
+          "SelectedChildIndex": 1,
           "Children": [
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{1c4feeaa-4718-4aa9-859d-94ce25d182ba}"
+            },
             {
               "$type": "Document",
               "DocumentIndex": 0,
@@ -92,7 +96,7 @@
               "RelativeDocumentMoniker": "tests\\Newt.Simulation.Tests\\ApeTests.cs",
               "ToolTip": "C:\\Users\\1Matt\\Desktop\\Newt\\tests\\Newt.Simulation.Tests\\ApeTests.cs",
               "RelativeToolTip": "tests\\Newt.Simulation.Tests\\ApeTests.cs",
-              "ViewState": "AgIAAKALAAAAAAAAAAAAwMELAAAyAAAAAAAAAA==",
+              "ViewState": "AgIAAGMLAAAAAAAAAAAqwMELAAAyAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2026-09-08T05:09:41Z",
               "EditorCaption": ""

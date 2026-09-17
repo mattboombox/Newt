@@ -4,6 +4,37 @@ namespace Newt.Simulation.Tests;
 
 public sealed class ChieftainEscortTests
 {
+    [Theory]
+    [InlineData(CritterSpecies.ApeWarrior)]
+    [InlineData(CritterSpecies.Dog)]
+    public void ChiefCanShoveEscortMembers(CritterSpecies member)
+    {
+        Assert.True(SimulationWorld.CanDisplace(CritterSpecies.ApeChieftain, member));
+        Assert.False(SimulationWorld.CanDisplace(member, CritterSpecies.ApeChieftain));
+    }
+
+    [Fact]
+    public void EscortAttacksChiefsTargetEvenOutsideOrdinaryWarriorDiet()
+    {
+        var (world, chief) = CreateWorld(false);
+        var escort = world.GetChieftainEscort(Village)[0];
+        Assert.True(world.TryGetCritter(escort, out var warrior));
+        var targetPosition = new GridPosition(warrior.Position.X, warrior.Position.Y - 1);
+        var target = world.AddCritter(CritterSpecies.Therapsid, targetPosition);
+        Assert.False(SimulationWorld.CanEat(CritterSpecies.ApeWarrior, CritterSpecies.Therapsid));
+        var chiefIndex = Enumerable.Range(0, world.CritterCount).Single(i => world.GetCritter(i).Id == chief);
+        var targetIndex = Enumerable.Range(0, world.CritterCount).Single(i => world.GetCritter(i).Id == target);
+        typeof(SimulationWorld).GetMethod("RememberChieftainTarget",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
+            .Invoke(world, [chiefIndex, targetIndex]);
+        var index = Enumerable.Range(0, world.CritterCount).Single(i => world.GetCritter(i).Id == escort);
+        Assert.True(world.TryFollowVillageChieftain(index, null, out var prey));
+        Assert.Equal(targetPosition, prey);
+        world.CommitEncounter(warrior.Position, targetPosition);
+        Assert.True(world.TryGetCritter(escort, out var afterWarrior));
+        Assert.True(world.TryGetCritter(target, out var afterTarget));
+        Assert.True(afterWarrior.Energy < warrior.Energy || afterTarget.Energy < 5);
+    }
     private static readonly GridPosition Village = new(10, 10);
 
     private static (SimulationWorld World, CritterId Chief) CreateWorld(bool barbarian)
@@ -34,13 +65,13 @@ public sealed class ChieftainEscortTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void SquadHasFourMembersAndExcludesReservedDogs(bool barbarian)
+    public void SquadHasFourWarriorsPlusTwoUnreservedDogs(bool barbarian)
     {
         var (world, chief) = CreateWorld(barbarian);
         var squad = world.GetChieftainEscort(Village);
-        Assert.Equal(4, squad.Length);
+        Assert.Equal(6, squad.Length);
         var members = squad.Select(id => { Assert.True(world.TryGetCritter(id, out var critter)); return critter; }).ToArray();
-        Assert.Equal(2, members.Count(critter => critter.Species is CritterSpecies.ApeWarrior));
+        Assert.Equal(4, members.Count(critter => critter.Species is CritterSpecies.ApeWarrior));
         Assert.Equal(2, members.Count(critter => critter.Species is CritterSpecies.Dog));
         var dogs = Enumerable.Range(0, world.CritterCount).Select(world.GetCritter)
             .Where(critter => critter.Species is CritterSpecies.Dog).OrderBy(critter => critter.Id.Value).ToArray();
@@ -48,7 +79,7 @@ public sealed class ChieftainEscortTests
         Assert.DoesNotContain(dogs[1].Id, squad);
         Assert.True(world.TryGetCritter(squad[0], out var removed));
         world.RemoveCritterAt(removed.Position);
-        Assert.Equal(4, world.GetChieftainEscort(Village).Length);
+        Assert.Equal(6, world.GetChieftainEscort(Village).Length);
         Assert.DoesNotContain(removed.Id, world.GetChieftainEscort(Village));
         Assert.True(world.TryGetCritter(chief, out var leader));
         world.RemoveCritterAt(leader.Position);

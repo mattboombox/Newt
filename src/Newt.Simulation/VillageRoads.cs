@@ -11,7 +11,18 @@ public sealed partial class SimulationWorld
 
     private bool IsRoadVillage(int tile) =>
         _apeStructures.TryGetValue(tile, out var kind) && kind is ApeStructureKind.Village &&
-        !_barbarianVillageTiles.Contains(tile) && GetApeVillageResidentCountByTile(tile) >= 50;
+        !_barbarianVillageTiles.Contains(tile);
+
+    private readonly Dictionary<int, int> _roadPopulationChecks = [];
+
+    private void CheckVillageRoadPopulation(int village, int population)
+    {
+        var milestone = population / 50;
+        if (milestone <= _roadPopulationChecks.GetValueOrDefault(village))
+            return;
+        _roadPopulationChecks[village] = milestone;
+        TryPlaceVillageRoad(GetPosition(village), force: false);
+    }
 
     private bool IsRoadTerrain(int tile) =>
         _terrain[tile] is not (Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows or
@@ -19,14 +30,16 @@ public sealed partial class SimulationWorld
         _surfaceWater[tile] is not SurfaceWaterKind.FreshwaterLake &&
         _surfaceCovers[tile] is SurfaceCover.None;
 
-    public bool TryPlaceVillageRoad(GridPosition position)
+    public bool TryPlaceVillageRoad(GridPosition position, bool force = true)
     {
         if (!Contains(position) || GetApeStructureVillage(position) is not { } village)
             return false;
         var start = GetIndex(village);
-        if (!IsRoadVillage(start))
+        if (!IsRoadVillage(start) || (!force && GetApeVillageResidentCountByTile(start) < 50))
             return false;
-        var end = _apeStructures.Keys.Where(tile => tile != start && IsRoadVillage(tile))
+        var end = _apeStructures.Keys.Where(tile => tile != start && IsRoadVillage(tile) &&
+                (force || GetApeVillageResidentCountByTile(tile) >= 50) &&
+                !_villageRoads.ContainsKey(start < tile ? (start, tile) : (tile, start)))
             .OrderBy(tile => WrappedManhattanDistance(village, GetPosition(tile)))
             .ThenBy(tile => tile).FirstOrDefault(-1);
         if (end < 0 || !IsRoadTerrain(start) || !IsRoadTerrain(end))
@@ -41,7 +54,8 @@ public sealed partial class SimulationWorld
         while (pending.TryDequeue(out var current) && !previous.ContainsKey(end))
         {
             var origin = GetPosition(current);
-            foreach (var direction in CardinalDirections)
+            foreach (var direction in MovementDirections.OrderBy(direction =>
+                WrappedManhattanDistance(new GridPosition(Mod(origin.X + direction.X, Width), origin.Y + direction.Y), GetPosition(end))))
             {
                 var next = new GridPosition(Mod(origin.X + direction.X, Width), origin.Y + direction.Y);
                 if (!Contains(next))
@@ -77,12 +91,14 @@ public sealed partial class SimulationWorld
             pair.Value.Contains(tile));
     }
 
-    private void RemoveRoadsForVillage(int village) =>
+    private void RemoveRoadsForVillage(int village)
+    {
+        _roadPopulationChecks.Remove(village);
         RemoveVillageRoadsWhere(pair => pair.Key.First == village || pair.Key.Second == village);
+    }
 
     private void ValidateVillageRoads() => RemoveVillageRoadsWhere(pair =>
-        !IsRoadVillage(pair.Key.First) || !IsRoadVillage(pair.Key.Second) ||
-        pair.Value.Any(tile => !IsRoadTerrain(tile)));
+        !IsRoadVillage(pair.Key.First) || !IsRoadVillage(pair.Key.Second));
 
     private bool RemoveVillageRoadsWhere(Func<KeyValuePair<(int First, int Second), int[]>, bool> predicate)
     {
@@ -103,15 +119,23 @@ public sealed partial class SimulationWorld
         {
             var first = GetPosition(path[index - 1]);
             var second = GetPosition(path[index]);
-            var direction = second.Y < first.Y ? RiverConnection.North :
-                second.Y > first.Y ? RiverConnection.South :
-                second.X == Mod(first.X + 1, Width) ? RiverConnection.East : RiverConnection.West;
+            var east = second.X != first.X && second.X == Mod(first.X + 1, Width);
+            var west = second.X != first.X && !east;
+            var direction = second.Y < first.Y
+                ? east ? RiverConnection.NorthEast : west ? RiverConnection.NorthWest : RiverConnection.North
+                : second.Y > first.Y
+                    ? east ? RiverConnection.SouthEast : west ? RiverConnection.SouthWest : RiverConnection.South
+                    : east ? RiverConnection.East : RiverConnection.West;
             var opposite = direction switch
             {
                 RiverConnection.North => RiverConnection.South,
                 RiverConnection.South => RiverConnection.North,
                 RiverConnection.East => RiverConnection.West,
-                _ => RiverConnection.East,
+                RiverConnection.West => RiverConnection.East,
+                RiverConnection.NorthEast => RiverConnection.SouthWest,
+                RiverConnection.NorthWest => RiverConnection.SouthEast,
+                RiverConnection.SouthEast => RiverConnection.NorthWest,
+                _ => RiverConnection.NorthEast,
             };
             _roadConnections[path[index - 1]] = _roadConnections.GetValueOrDefault(path[index - 1]) | direction;
             _roadConnections[path[index]] = _roadConnections.GetValueOrDefault(path[index]) | opposite;

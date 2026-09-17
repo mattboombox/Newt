@@ -34,7 +34,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private static readonly WorldTool[] EventToolOrder =
         [WorldTool.Meteor, WorldTool.Tsunami, WorldTool.WatershedShift,
             WorldTool.Evolve, WorldTool.NaturalEvents, WorldTool.Colonist,
-            WorldTool.Plague, WorldTool.ZombiePlague];
+            WorldTool.Plague, WorldTool.ZombiePlague, WorldTool.VampirePlague, WorldTool.Feast];
     private static readonly WorldTool[] CritterToolOrder =
         [WorldTool.Plankton, WorldTool.Jellyfish, WorldTool.Worm, WorldTool.Trilobite,
             WorldTool.SeaScorpion, WorldTool.Nautilus, WorldTool.Squid, WorldTool.SquidEgg,
@@ -190,6 +190,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         LoadCritterSprite(CritterSpecies.Dog, "dog.png");
         LoadCritterSprite(CritterSpecies.ApeChieftain, "ape-chieftain.png");
         LoadCritterSprite(CritterSpecies.UndeadApe, "undead-ape.png");
+        LoadCritterSprite(CritterSpecies.Vampire, "vampire.png");
         LoadApeVariantSprites();
         LoadCritterSprite(CritterSpecies.Deer, "deer.png");
         LoadCritterSprite(CritterSpecies.Elk, "elk.png");
@@ -505,7 +506,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         Texture2D? flashSprite;
         var colonistInWater = critter.IsColonist && IsWaterTile(critter.Position);
         if (critter.Species is CritterSpecies.Ape or CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack or CritterSpecies.ApeSailor &&
-            critter.Plague is PlagueKind.Plague or PlagueKind.Zombie &&
+            critter.Plague is PlagueKind.Plague or PlagueKind.Zombie or PlagueKind.Vampire &&
             _sickApeSprite is not null)
         {
             sprite = _sickApeSprite;
@@ -781,8 +782,14 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             case WorldTool.Plague when primaryActivated:
                 _world.TryInfectApeAt(position.Value, PlagueKind.Plague);
                 break;
+            case WorldTool.Feast when primaryActivated:
+                _world.TryStartVillageFeast(position.Value);
+                break;
             case WorldTool.ZombiePlague when primaryActivated:
                 _world.TryInfectApeAt(position.Value, PlagueKind.Zombie);
+                break;
+            case WorldTool.VampirePlague when primaryActivated:
+                _world.TryInfectApeAt(position.Value, PlagueKind.Vampire);
                 break;
             case WorldTool.Elevation when primaryActivated:
                 Geology.ApplyRadialUplift(_world, position.Value, TerrainBrushRadius, ElevationBrushStrength);
@@ -1541,6 +1548,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
 
     private string[] GetBuildingInspectionLines(GridPosition position)
     {
+        if (_world.HasVampireLair(position))
+            return ["BUILDING", "Vampire Lair", $"Residents {_world.GetVampireLairPopulation(position)}/2", "Behavior Vampire nursery"];
         if (_world.GetVolcanoState(position) is { } volcanoState)
         {
             return ["BUILDING", "Volcano", $"Behavior {volcanoState}", "Energy None"];
@@ -1591,11 +1600,14 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                             $"Civilians {_world.GetApeVillageCivilianCount(position)}   Sailors {_world.GetApeVillageSailorCount(position)}",
                             $"Chieftains {_world.GetApeVillageChieftainCount(position)}   Warriors {_world.GetApeVillageWarriorCount(position)}",
                         },
-                    $"Food {_world.GetApeVillageFood(position)}/{_world.GetApeVillageFoodCapacity(position)} {_world.GetApeVillageFarmCount(position)} farms, {_world.GetApeVillageFoodPerMinute(position):0.#} food/min",
+                    isBarbarian
+                        ? $"Food {_world.GetApeVillageFood(position)}/{_world.GetApeVillageFoodCapacity(position)}"
+                        : $"Food {_world.GetApeVillageFood(position)}/{_world.GetApeVillageFoodCapacity(position)} {_world.GetApeVillageFarmCount(position)} farms, {_world.GetApeVillageFoodPerMinute(position):0.#} food/min",
                     $"Dogs {_world.GetApeVillageDogCount(position)} / {_world.GetApeVillageDogCapacity(position)}",
                     .. isBarbarian ? Array.Empty<string>()
                         : new[] { $"Wood {_world.GetApeVillageWood(position)} / {_world.GetApeVillageWoodCapacity(position)}" },
-                    isBarbarian ? "Behavior Raiding camp" : "Behavior Settlement",
+                    isBarbarian ? "Behavior Raiding camp" :
+                        _world.IsVillageFeasting(position) ? "Behavior Feasting" : "Behavior Settlement",
                 ];
             }
 
@@ -1704,17 +1716,20 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         } : GetCritterDisplayName(critter.Species);
 
     private static string GetPlagueDescription(CritterSnapshot critter) =>
+        critter.Species is CritterSpecies.Vampire ? "Vampire: disease immune, feeds through damage" :
         critter.Species is CritterSpecies.UndeadApe ? "Undead: contagious, cannot reproduce" :
         critter.IsPlagueImmune ? "Plague immune: ID divisible by 5" :
         critter.Plague switch
         {
             PlagueKind.Plague => "Plague: -1 energy / 10 seconds",
             PlagueKind.Zombie => "Zombie plague: -1 energy / 10s, rises on death",
+            PlagueKind.Vampire => "Vampire plague: non-contagious, rises on death",
             _ => "Plague: susceptible",
         };
 
     private static string GetCritterDiet(CritterSpecies species) => species switch
     {
+        CritterSpecies.Vampire => "living ape damage (1 energy per damage)",
         CritterSpecies.UndeadApe => "living apes and ape sailors",
         CritterSpecies.Plankton => "ambient nutrients",
         CritterSpecies.Worm => "deep-ocean, shallow, and beach detritus",
@@ -1747,6 +1762,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
 
     private static string GetCritterBehavior(CritterSnapshot critter)
     {
+        if (critter.Species is CritterSpecies.Vampire)
+            return critter.CanReproduce ? "Seeking space for a two-vampire lair" : "Hunting living apes for energy";
         if (critter.IsColonist)
         {
             return critter.ColonistDestination is { } destination
@@ -2048,7 +2065,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         if (_spriteBatch is null || _pixel is null || connections is RiverConnection.None)
             return;
         var color = _world.GetSurfaceWater(position) is SurfaceWaterKind.River
-            ? new Color(145, 145, 145) : new Color(139, 94, 50);
+            ? new Color(145, 145, 145) : new Color(170, 125, 78);
         var originX = MapOffsetX + screenX * TileSize;
         var originY = MapOffsetY + screenY * TileSize;
         var centerX = originX + TileSize / 2;
@@ -2200,6 +2217,17 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
 
     private void DrawApeStructure(int screenX, int screenY, GridPosition position)
     {
+        if (_spriteBatch is not null && _pixel is not null && _world.HasVampireLair(position))
+        {
+            var lairSize = Math.Max(2, TileSize * 3 / 4);
+            var lairInset = (TileSize - lairSize) / 2;
+            var lairX = MapOffsetX + screenX * TileSize + lairInset;
+            var lairY = MapOffsetY + screenY * TileSize + lairInset;
+            _spriteBatch.Draw(_pixel, new Rectangle(lairX, lairY + lairSize / 3,
+                lairSize, Math.Max(1, lairSize * 2 / 3)), new Color(150, 150, 150));
+            _spriteBatch.Draw(_pixel, new Rectangle(lairX + lairSize / 4, lairY,
+                Math.Max(1, lairSize / 2), Math.Max(1, lairSize / 2)), new Color(85, 85, 85));
+        }
         if (_spriteBatch is null || _pixel is null ||
             _world.GetApeStructure(position) is not { } structure)
         {
@@ -2535,7 +2563,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private static Color GetDamageFlashColor(CritterSnapshot critter) =>
         critter.Species is CritterSpecies.Ape or CritterSpecies.ApeFarmer or
             CritterSpecies.ApeLumberjack or CritterSpecies.ApeSailor &&
-        critter.Plague is PlagueKind.Plague or PlagueKind.Zombie
+        critter.Plague is PlagueKind.Plague or PlagueKind.Zombie or PlagueKind.Vampire
             ? Color.LightGreen
             : Color.Red;
 
@@ -2546,6 +2574,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         {
             PlagueKind.Plague => new Color(205, 195, 55),
             PlagueKind.Zombie => new Color(170, 85, 190),
+            PlagueKind.Vampire => new Color(160, 75, 85),
             _ when critter.IsColonist => new Color(215, 180, 65),
             _ => GetCritterColor(critter.Species),
         };
@@ -2572,6 +2601,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         CritterSpecies.ApeScholar => new Color(150, 85, 185),
         CritterSpecies.ApeChieftain => new Color(195, 105, 45),
         CritterSpecies.UndeadApe => new Color(95, 190, 100),
+        CritterSpecies.Vampire => new Color(170, 90, 105),
         CritterSpecies.Deer => new Color(181, 133, 82),
         CritterSpecies.Elk => new Color(112, 78, 48),
         CritterSpecies.Gazelle => new Color(220, 175, 95),
@@ -2623,6 +2653,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         WorldTool.Evolve => "L evolve; R devolve",
         WorldTool.Plague => "L infect ape",
         WorldTool.ZombiePlague => "L infect ape",
+        WorldTool.VampirePlague => "L infect ape (non-contagious; vampire on death)",
+        WorldTool.Feast => "L village: feast until food stores are empty",
         WorldTool.NaturalEvents => "L on; R off",
         WorldTool.River => "L add; R remove",
         WorldTool.Plankton => "L spawn: deep ocean",
@@ -2655,7 +2687,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         WorldTool.JumpStart => "L seed plankton",
         WorldTool.Colonist => "L village: auto; tile: target",
         WorldTool.ApeVillage => "L place village with 2 apes",
-        WorldTool.Road => "L village: road (50+ residents each); R remove",
+        WorldTool.Road => "L village: force road; R remove",
         WorldTool.Farm => "L place biome farm beside village buildings",
         WorldTool.LumberCamp or WorldTool.Harbor or WorldTool.ResidentialDistrict or
             WorldTool.MilitaryDistrict or WorldTool.Library => "L place beside village buildings",
@@ -2681,6 +2713,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         WorldTool.BarbarianApeVillage => "Barbarian Ape Village",
         WorldTool.JumpStart => "Jump Start",
         WorldTool.ZombiePlague => "Zombie Plague",
+        WorldTool.VampirePlague => "Vampire Plague",
         _ => tool.ToString(),
     };
 
@@ -2766,5 +2799,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         Inspect,
         Plague,
         ZombiePlague,
+        VampirePlague,
+        Feast,
     }
 }

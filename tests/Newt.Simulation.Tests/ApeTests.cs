@@ -954,7 +954,7 @@ public sealed class ApeTests
     }
 
     [Fact]
-    public void EmptyStoresPrioritizeAnotherFarmAfterVillageHousingExpands()
+    public void EmptyStoresWaitForFarmStaffingBeforeBuildingAnotherFarm()
     {
         var world = CreateFedApeWorld(hasGrassland: true);
         NaturalEvents.SetEnabled(world, false);
@@ -972,7 +972,7 @@ public sealed class ApeTests
 
         world.AdvanceOneTick();
 
-        Assert.Equal(2, CountStructures(world, ApeStructureKind.Farm));
+        Assert.Equal(1, CountStructures(world, ApeStructureKind.Farm));
     }
 
     [Fact]
@@ -1915,11 +1915,11 @@ public sealed class ApeTests
     }
 
     [Fact]
-    public void ApeChieftainBehavesLikeWarriorButDealsFiveDamage()
+    public void ApeChieftainCanHuntOrdinaryApePreyExceptVampiresAndDealsFiveDamage()
     {
         Assert.Equal(
             Enum.GetValues<CritterSpecies>()
-                .Where(species => SimulationWorld.CanEat(CritterSpecies.ApeWarrior, species))
+                .Where(species => species is not CritterSpecies.Vampire && SimulationWorld.CanEat(CritterSpecies.Ape, species))
                 .ToHashSet(),
             Enum.GetValues<CritterSpecies>()
                 .Where(species => SimulationWorld.CanEat(CritterSpecies.ApeChieftain, species))

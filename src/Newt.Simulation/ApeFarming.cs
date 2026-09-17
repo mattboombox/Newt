@@ -4,6 +4,24 @@ public sealed partial class SimulationWorld
 {
     private readonly Dictionary<int, int> _apeFarmers = [];
     private readonly Dictionary<int, long> _apeFarmerRecruitmentTicks = [];
+    private readonly Dictionary<int, long> _apeFoodExpansionTicks = [];
+
+    private void TryBuildEmergencyApeFarm(int village)
+    {
+        if (_apeVillageFood.GetValueOrDefault(village) >= 10 ||
+            GetApeVillageResidentCountByTile(village) < 2 ||
+            Tick < _apeFoodExpansionTicks.GetValueOrDefault(village))
+            return;
+        var available = _apeVillageHomes.Count(pair => pair.Value == village &&
+            _critterIndicesById.TryGetValue(pair.Key, out var index) &&
+            _species[index] is CritterSpecies.Ape && !_plagues.ContainsKey(pair.Key) &&
+            !_apeSettlerTargets.ContainsKey(pair.Key) && !_apeCarriedFood.ContainsKey(pair.Key));
+        var unstaffed = _apeAuxiliaryVillages.Count(pair => pair.Value == village &&
+            _apeStructures.TryGetValue(pair.Key, out var kind) && IsApeFoodDistrict(kind) &&
+            IsApeFoodDistrictActive(pair.Key, kind) && !HasApeFarmer(pair.Key));
+        if (available > 0 && unstaffed == 0)
+            TryBuildApeFoodDistrict(village);
+    }
 
     private bool HasApeFarmer(int farmTile) =>
         _apeFarmers.TryGetValue(farmTile, out var id) &&

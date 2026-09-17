@@ -11,13 +11,13 @@ public sealed partial class SimulationWorld
     // Stable IDs keep sparse infections valid when the critter arrays compact.
     private readonly Dictionary<int, (PlagueKind Kind, long InfectedTick, long DrainTick)> _plagues = [];
 
-    /// <summary>Living apes and specialists infected by either strain; excludes undead.</summary>
+    /// <summary>Infected living apes and specialists; excludes undead and vampires.</summary>
     public int SickApeCount => _plagues.Count;
 
-    /// <summary>Infects a living ape on the selected tile; IDs divisible by five resist both strains.</summary>
+    /// <summary>Infects a living ape on the selected tile; IDs divisible by five resist infection.</summary>
     public bool TryInfectApeAt(GridPosition position, PlagueKind kind)
     {
-        if (kind is not (PlagueKind.Plague or PlagueKind.Zombie) || !Contains(position))
+        if (kind is not (PlagueKind.Plague or PlagueKind.Zombie or PlagueKind.Vampire) || !Contains(position))
         {
             return false;
         }
@@ -38,8 +38,8 @@ public sealed partial class SimulationWorld
         }
         if (_plagues.TryGetValue(id, out var infection))
         {
-            // Zombie plague can supersede ordinary plague without resetting its damage clock.
-            if (kind is not PlagueKind.Zombie || infection.Kind is PlagueKind.Zombie)
+            // Stronger strains supersede ordinary plague without resetting its damage clock.
+            if (infection.Kind is PlagueKind.Vampire || kind == infection.Kind || kind is PlagueKind.Plague)
             {
                 return false;
             }
@@ -126,7 +126,7 @@ public sealed partial class SimulationWorld
         for (var index = 0; index < _count; index++)
         {
             var kind = GetPlague(index);
-            if (kind is PlagueKind.None ||
+            if (kind is PlagueKind.None or PlagueKind.Vampire ||
                 (_plagues.TryGetValue(_critterIds[index].Value, out var infection) &&
                     infection.InfectedTick >= Tick))
             {
@@ -160,11 +160,12 @@ public sealed partial class SimulationWorld
 
     private bool TryReanimateApe(int index)
     {
-        if (!IsLivingApe(_species[index]) || GetPlague(index) is not PlagueKind.Zombie)
+        if (!IsLivingApe(_species[index]) || GetPlague(index) is not (PlagueKind.Zombie or PlagueKind.Vampire))
         {
             return false;
         }
-        ChangeCritterSpecies(index, CritterSpecies.UndeadApe, preserveEnergy: false);
+        var risen = GetPlague(index) is PlagueKind.Vampire ? CritterSpecies.Vampire : CritterSpecies.UndeadApe;
+        ChangeCritterSpecies(index, risen, preserveEnergy: false);
         _reproductionTruces.Remove(_critterIds[index].Value);
         return true;
     }

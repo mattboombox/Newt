@@ -33,4 +33,5 @@ public enum CritterSpecies : byte
     ApeFarmer,
     ApeLumberjack,
     Dog,
+    Vampire,
 }

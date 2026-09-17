@@ -31,6 +31,12 @@ public sealed class CombatProtectionTests
 
             Assert.True(world.TryGetCritter(attackId, out var survivingAttacker), $"{attacker} vs {defender}");
             Assert.True(world.TryGetCritter(defenseId, out var survivingDefender), $"{attacker} vs {defender}");
+            if ((attacker is CritterSpecies.Vampire && survivingAttacker.Energy > CritterNutritions.Get(attacker).InitialEnergy) ||
+                (defender is CritterSpecies.Vampire && survivingDefender.Energy > CritterNutritions.Get(defender).InitialEnergy))
+            {
+                Assert.Equal(initial, survivingAttacker.Energy + survivingDefender.Energy);
+                continue;
+            }
             Assert.Contains(initial - survivingAttacker.Energy - survivingDefender.Energy,
                 new[] { attackDamage, defenseDamage });
         }
@@ -60,7 +66,7 @@ public sealed class CombatProtectionTests
 
             Assert.True(world.TryGetCritter(warrior, out var survivingWarrior));
             Assert.True(world.TryGetCritter(therapsid, out var survivingTherapsid));
-            Assert.Contains(initial - survivingWarrior.Energy - survivingTherapsid.Energy, new[] { 1, 4 });
+            Assert.Contains(initial - survivingWarrior.Energy - survivingTherapsid.Energy, new[] { 1, 3 });
         }
     }
 }

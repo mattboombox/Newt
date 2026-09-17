@@ -10,6 +10,9 @@ public sealed class WarriorVeteranTests
     public void FiveCombatKillsPromoteWarriorWithoutChangingSpecies(bool defending)
     {
         var world = new SimulationWorld(20, 20, Terrain.Plains, seed: 17);
+        // Use an immune warrior so zombie infection does not demote the combatant.
+        for (var x = 0; x < 4; x++)
+            world.AddCritter(CritterSpecies.Ape, new GridPosition(x, 0));
         var warrior = world.AddCritter(CritterSpecies.ApeWarrior, new GridPosition(10, 10));
         for (var kill = 1; kill <= 6; kill++)
         {
@@ -60,6 +63,6 @@ public sealed class WarriorVeteranTests
         Assert.True(world.TryGetCritter(warrior, out var regular));
         Assert.False(regular.IsVeteranWarrior);
         Assert.Equal(0, regular.CombatKills);
-        Assert.Equal(4, world.GetCritterCombatDamage(warrior));
+        Assert.Equal(3, world.GetCritterCombatDamage(warrior));
     }
 }
