@@ -156,13 +156,14 @@ public sealed class VillageRoadTests
     }
 
     [Fact]
-    public void FloodingRoadDoesNotRemoveIt()
+    public void FloodingRoadReroutesItOnNextTick()
     {
         var world = CreateWorld();
         Assert.True(world.TryPlaceVillageRoad(First));
         world.SetSurfaceWater(new GridPosition(20, 10), SurfaceWaterKind.FreshwaterLake);
         world.AdvanceOneTick();
         Assert.Equal(1, world.VillageRoadCount);
+        Assert.Equal(RiverConnection.None, world.GetRoadConnections(new GridPosition(20, 10)));
     }
 
     [Fact]

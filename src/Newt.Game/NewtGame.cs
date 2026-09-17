@@ -2687,7 +2687,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         WorldTool.JumpStart => "L seed plankton",
         WorldTool.Colonist => "L village: auto; tile: target",
         WorldTool.ApeVillage => "L place village with 2 apes",
-        WorldTool.Road => "L village: force road; R remove",
+        WorldTool.Road => "L village: join road network (any population); R remove",
         WorldTool.Farm => "L place biome farm beside village buildings",
         WorldTool.LumberCamp or WorldTool.Harbor or WorldTool.ResidentialDistrict or
             WorldTool.MilitaryDistrict or WorldTool.Library => "L place beside village buildings",
