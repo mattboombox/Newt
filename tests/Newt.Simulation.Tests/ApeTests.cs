@@ -747,7 +747,7 @@ public sealed class ApeTests
         {
             var isApePrey = species is not
                 (CritterSpecies.Dog or CritterSpecies.Plankton or CritterSpecies.Worm or CritterSpecies.ToothedWhale or CritterSpecies.BaleenWhale or
-                    CritterSpecies.Ape or CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack or CritterSpecies.ApeSailor or CritterSpecies.ApeWarrior or CritterSpecies.ApeScholar or CritterSpecies.ApeChieftain);
+                    CritterSpecies.ApeTrader or CritterSpecies.ApeTraderSailor or CritterSpecies.Ape or CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack or CritterSpecies.ApeSailor or CritterSpecies.ApeWarrior or CritterSpecies.ApeScholar or CritterSpecies.ApeChieftain);
             Assert.Equal(
                 isApePrey,
                 SimulationWorld.CanEat(CritterSpecies.Ape, species));

@@ -14,4 +14,5 @@ public enum ApeStructureKind : byte
     Aquaculture,
     Ruin,
     Library,
+    Market,
 }

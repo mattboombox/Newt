@@ -1108,7 +1108,7 @@ public sealed partial class SimulationWorld
                 IsApeFoodDistrictStructurallyValid(tileIndex, structure),
             ApeStructureKind.LumberCamp => IsValidApeAuxiliaryTile(tileIndex, structure),
             ApeStructureKind.NavalDistrict => IsValidApeAuxiliaryTile(tileIndex, structure),
-            ApeStructureKind.Library or ApeStructureKind.MilitaryDistrict => IsValidApeAuxiliaryTile(tileIndex, structure),
+            ApeStructureKind.Market or ApeStructureKind.Library or ApeStructureKind.MilitaryDistrict => IsValidApeAuxiliaryTile(tileIndex, structure),
             ApeStructureKind.ResidentialDistrict =>
                 IsValidApeAuxiliaryTile(tileIndex, structure),
             ApeStructureKind.Ruin => true,
@@ -1357,6 +1357,8 @@ public sealed partial class SimulationWorld
         SpreadPlagues();
         AdvanceCritterLifecycles();
         AdvanceApeVillages();
+        if (Tick % TicksPerSecond == 1)
+            AdvanceApeTraders();
         AdvanceApeRuins();
         AdvanceVillagePlagueOutbreaks();
         AdvanceVillageFeasts();
@@ -1419,6 +1421,7 @@ public sealed partial class SimulationWorld
                 CritterSpecies.Therapsid => TryMoveTherapsid(index, reservedPrey),
                 CritterSpecies.Monkey => TryMoveMonkey(index, reservedPrey),
                 CritterSpecies.Ape or CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack => TryMoveApe(index, reservedPrey),
+                CritterSpecies.ApeTrader or CritterSpecies.ApeTraderSailor => TryMoveApeTrader(index, reservedPrey),
                 CritterSpecies.ApeSailor => TryMoveApeSailor(index, reservedPrey),
                 CritterSpecies.ApeScholar => TryMoveApeScholar(index, reservedPrey),
                 CritterSpecies.Dog => TryMoveDog(index, reservedPrey),
@@ -1522,6 +1525,9 @@ public sealed partial class SimulationWorld
             {
                 TryFeedApeFromVillage(index, nutrition);
             }
+
+            if (!isStranded && species is (CritterSpecies.ApeTrader or CritterSpecies.ApeTraderSailor))
+                RefillApeTraderProvisions(index);
 
             DrainPlagueEnergy(index);
             if (_energy[index] == 0)
@@ -2090,7 +2096,7 @@ public sealed partial class SimulationWorld
                     Biome.Forest or Biome.Jungle or Biome.Taiga or Biome.Swamp or Biome.Grassland or Biome.Arid &&
                 CanLiveOn(CritterSpecies.Ape, tileIndex),
             ApeStructureKind.NavalDistrict => IsApeHarborTile(tileIndex),
-            ApeStructureKind.Library or ApeStructureKind.MilitaryDistrict =>
+            ApeStructureKind.Market or ApeStructureKind.Library or ApeStructureKind.MilitaryDistrict =>
                 CanLiveOn(CritterSpecies.Ape, tileIndex) &&
                 _terrain[tileIndex] is not Terrain.Shallows,
             ApeStructureKind.ResidentialDistrict =>
@@ -2696,7 +2702,7 @@ public sealed partial class SimulationWorld
     internal static int GetApeStructureFoodCost(ApeStructureKind kind) => kind switch
     {
         ApeStructureKind.LumberCamp => ApeLumberCampFoodCost,
-        ApeStructureKind.Library => 5,
+        ApeStructureKind.Market or ApeStructureKind.Library => 5,
         ApeStructureKind.ResidentialDistrict => ApeResidentialFoodCost,
         _ => 0,
     };
@@ -2707,7 +2713,7 @@ public sealed partial class SimulationWorld
             ApeStructureKind.Aquaculture =>
             ApeFoodDistrictWoodCost,
         ApeStructureKind.ResidentialDistrict => ApeResidentialWoodCost,
-        ApeStructureKind.NavalDistrict => ApeHarborWoodCost,
+        ApeStructureKind.Market or ApeStructureKind.NavalDistrict => ApeHarborWoodCost,
         ApeStructureKind.Library or ApeStructureKind.MilitaryDistrict => ApeMilitaryDistrictWoodCost,
         _ => 0,
     };
@@ -2767,7 +2773,8 @@ public sealed partial class SimulationWorld
 
     internal bool TryBuildApeStructure(int villageTile, ApeStructureKind kind)
     {
-        if (!IsApeBuildingTechnologyUnlocked(villageTile, kind) ||
+        if ((kind is ApeStructureKind.Market && !CanBuildApeMarket(GetPosition(villageTile))) ||
+            !IsApeBuildingTechnologyUnlocked(villageTile, kind) ||
             (kind is ApeStructureKind.Library &&
                 (GetApeVillageResidentCountByTile(villageTile) < ApeLibraryPopulationThreshold ||
                     HasApeStructure(villageTile, kind))))
@@ -2803,6 +2810,10 @@ public sealed partial class SimulationWorld
         {
             _apeStructureNextActionTicks[constructionTile] =
                 Tick + GetApeLumberProductionIntervalTicks(_biomes[constructionTile]);
+        }
+        else if (kind is ApeStructureKind.Market)
+        {
+            _apeStructureNextActionTicks[constructionTile] = Tick + ApeMarketRecruitmentIntervalTicks;
         }
         else if (kind is ApeStructureKind.NavalDistrict)
         {
@@ -5656,7 +5667,7 @@ public sealed partial class SimulationWorld
         CritterSpecies.Vampire => IsLivingApe(prey),
         CritterSpecies.Ape or CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack => prey is not
             (CritterSpecies.Plankton or CritterSpecies.Worm or CritterSpecies.ToothedWhale or CritterSpecies.BaleenWhale or
-                CritterSpecies.Ape or CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack or CritterSpecies.ApeSailor or CritterSpecies.ApeWarrior or CritterSpecies.ApeScholar or CritterSpecies.ApeChieftain),
+                CritterSpecies.ApeTrader or CritterSpecies.ApeTraderSailor or CritterSpecies.Ape or CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack or CritterSpecies.ApeSailor or CritterSpecies.ApeWarrior or CritterSpecies.ApeScholar or CritterSpecies.ApeChieftain),
         CritterSpecies.ApeSailor =>
             prey is CritterSpecies.Jellyfish or CritterSpecies.Trilobite or
                 CritterSpecies.SeaScorpion or CritterSpecies.Nautilus or CritterSpecies.Fish or
@@ -5748,6 +5759,7 @@ public sealed partial class SimulationWorld
     internal static int GetCombatDamage(CritterSpecies species) =>
         species switch
         {
+            CritterSpecies.ApeTrader or CritterSpecies.ApeTraderSailor => 1,
             CritterSpecies.ApeChieftain => 5,
             CritterSpecies.MegaToad => 3,
             CritterSpecies.Vampire => 3,
@@ -5764,7 +5776,7 @@ public sealed partial class SimulationWorld
             GetCombatDamage(_species[critterIndex])) + (IsVeteranWarrior(critterIndex) ? 1 : 0);
 
     private static bool CanCritterFight(CritterSpecies species) =>
-        IsLivingApe(species) || IsPredator(species) || species is CritterSpecies.BaleenWhale;
+        IsLivingApe(species) || IsPredator(species) || species is CritterSpecies.BaleenWhale or CritterSpecies.ApeTrader or CritterSpecies.ApeTraderSailor;
 
     internal static bool IsPredator(CritterSpecies species) => species is
         CritterSpecies.Dog or
@@ -5818,6 +5830,7 @@ public sealed partial class SimulationWorld
                     prey is CritterSpecies.Trilobite or CritterSpecies.Nautilus));
 
     internal static bool CanDisplace(CritterSpecies mover, CritterSpecies blocker) =>
+        mover is CritterSpecies.ApeTrader or CritterSpecies.ApeTraderSailor ||
         (mover is CritterSpecies.ApeChieftain && blocker is (CritterSpecies.ApeWarrior or CritterSpecies.Dog)) ||
         CritterNutritions.Get(mover).BodySize > CritterNutritions.Get(blocker).BodySize;
 
@@ -6846,6 +6859,7 @@ public sealed partial class SimulationWorld
         var tileIndex = GetIndex(_positions[critterIndex]);
         var lastIndex = _count - 1;
         var removedId = _critterIds[critterIndex];
+        _traderJourneys.Remove(removedId.Value);
         DetachVampireFromLair(removedId.Value);
         _chieftainAttackTargets.Remove(removedId.Value);
         _warriorCombatKills.Remove(removedId.Value);
@@ -6943,6 +6957,8 @@ public sealed partial class SimulationWorld
             ? IsFishTile(tileIndex)
             : species is CritterSpecies.Trilobite
                 ? IsTrilobiteTile(tileIndex)
+            : species is CritterSpecies.ApeTraderSailor
+                ? IsTraderWater(tileIndex)
             : species is CritterSpecies.ApeSailor
                 ? IsApeSailorTile(tileIndex)
             : species is CritterSpecies.Worm
@@ -7071,6 +7087,8 @@ public sealed partial class SimulationWorld
         CritterSpecies.Therapsid => 6 * TicksPerSecond,
         CritterSpecies.Monkey => 5 * TicksPerSecond,
         CritterSpecies.Ape or CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack => 3 * TicksPerSecond,
+        CritterSpecies.ApeTrader => 3 * TicksPerSecond,
+        CritterSpecies.ApeTraderSailor => 2 * TicksPerSecond,
         CritterSpecies.ApeSailor => 2 * TicksPerSecond,
         CritterSpecies.ApeWarrior => 3 * TicksPerSecond,
         CritterSpecies.ApeChieftain => 3 * TicksPerSecond,

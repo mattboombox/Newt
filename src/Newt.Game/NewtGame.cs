@@ -45,7 +45,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private static readonly WorldTool[] BuildingToolOrder =
         [WorldTool.WolfDen, WorldTool.Teleporter, WorldTool.ApeVillage, WorldTool.BarbarianApeVillage,
             WorldTool.Farm, WorldTool.LumberCamp, WorldTool.Harbor, WorldTool.ResidentialDistrict,
-            WorldTool.MilitaryDistrict, WorldTool.Library, WorldTool.Road];
+            WorldTool.MilitaryDistrict, WorldTool.Library, WorldTool.Market, WorldTool.Road];
     private static readonly WorldTool[] OtherToolOrder =
         [WorldTool.JumpStart, WorldTool.Population, WorldTool.Inspect, WorldTool.Controls];
     private static readonly string[] ControlLines =
@@ -183,6 +183,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         LoadCritterSprite(CritterSpecies.Monkey, "monkey.png");
         LoadCritterSprite(CritterSpecies.Ape, "ape.png");
         LoadCritterSprite(CritterSpecies.ApeSailor, "ape-sailor.png");
+        LoadCritterSprite(CritterSpecies.ApeTrader, "ape-trader.png");
+        LoadCritterSprite(CritterSpecies.ApeTraderSailor, "ape-trader-sailor.png");
         LoadCritterSprite(CritterSpecies.ApeWarrior, "ape-warrior.png");
         LoadCritterSprite(CritterSpecies.ApeScholar, "ape-scholar.png");
         LoadCritterSprite(CritterSpecies.ApeFarmer, "ape-farmer.png");
@@ -935,13 +937,14 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 _world.TrySpawnBarbarianApeVillage(position.Value);
                 break;
             case WorldTool.Farm or WorldTool.LumberCamp or WorldTool.Harbor or
-                WorldTool.ResidentialDistrict or WorldTool.MilitaryDistrict or WorldTool.Library
+                WorldTool.ResidentialDistrict or WorldTool.MilitaryDistrict or WorldTool.Library or WorldTool.Market
                 when primaryActivated:
                 _world.TryPlaceApeBuilding(position.Value, CurrentTool switch
                 {
                     WorldTool.Farm => ApeStructureKind.Farm,
                     WorldTool.LumberCamp => ApeStructureKind.LumberCamp,
                     WorldTool.Harbor => ApeStructureKind.NavalDistrict,
+                    WorldTool.Market => ApeStructureKind.Market,
                     WorldTool.ResidentialDistrict => ApeStructureKind.ResidentialDistrict,
                     WorldTool.MilitaryDistrict => ApeStructureKind.MilitaryDistrict,
                     _ => ApeStructureKind.Library,
@@ -1402,6 +1405,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         CritterSpecies.MegaSpider => "Mega Spider",
         CritterSpecies.SquidEgg => "Squid Egg",
         CritterSpecies.MegaToad => "Mega Toad",
+        CritterSpecies.ApeTrader => "Ape Trader",
+        CritterSpecies.ApeTraderSailor => "Ape Trader Sailor",
         CritterSpecies.ApeSailor => "Ape Sailor",
         CritterSpecies.ApeWarrior => "Ape Warrior",
         CritterSpecies.ApeScholar => "Ape Scholar",
@@ -1642,6 +1647,10 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         GridPosition position,
         ApeStructureKind structure)
     {
+        if (structure is ApeStructureKind.Market)
+            return [$"Traders {_world.GetApeMarketTraderCount(position)} / 1",
+                "Recruitment: 3 food; checked every 30 seconds",
+                "Routes: roads and harbor crossings"];
         if (structure is ApeStructureKind.Library && _world.GetApeStructureVillage(position) is { } village)
         {
             var technologies = _world.GetApeVillageTechnologies(village);
@@ -1695,7 +1704,12 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                     $"Web X {web.X}, Y {web.Y}   Stored food {_world.GetMegaSpiderWebFood(web)}",
                 }
                 : Array.Empty<string>(),
-        .. _world.GetApeHomeVillage(critter.Id) is { } village
+        .. _world.GetApeTraderMarket(critter.Id) is { } market
+            ? new[] { $"Market X {market.X}, Y {market.Y}" }
+            : Array.Empty<string>(),
+        .. _world.GetApeTraderDestination(critter.Id) is { } destination
+            ? new[] { $"Destination Village #{_world.GetApeVillageId(destination)}   {destination}" }
+            : Array.Empty<string>(),        .. _world.GetApeHomeVillage(critter.Id) is { } village
             ? new[]
             {
                 _world.IsBarbarianVillage(village)
@@ -1746,6 +1760,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         CritterSpecies.Therapsid => "prefers wetland forage; fish as fallback",
         CritterSpecies.Monkey => "swamp and jungle foliage only",
         CritterSpecies.Ape or CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack => "prey except plankton, worms, whales, and its civilization; plus wetland foliage",
+        CritterSpecies.ApeTrader or CritterSpecies.ApeTraderSailor => "stocks up on food at each village visited",
         CritterSpecies.ApeSailor => "sea life except plankton, worms, and whales",
         CritterSpecies.ApeWarrior or CritterSpecies.Dog => "predators that hunt apes, except whales",
         CritterSpecies.ApeScholar => "village food stores",
@@ -1831,6 +1846,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             CritterSpecies.Therapsid => "Patrolling terrestrial hunting grounds",
             CritterSpecies.Monkey => "Foraging while watching for predators",
             CritterSpecies.Ape or CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack => "Hunting below 10 village food or wetland foraging",
+            CritterSpecies.ApeTrader => "Traveling between villages on roads (no trading yet)",
+            CritterSpecies.ApeTraderSailor => "Traveling between village harbors (no trading yet)",
             CritterSpecies.ApeSailor => "Patrolling village waters",
             CritterSpecies.ApeWarrior => "Defending its village from predators",
             CritterSpecies.ApeChieftain => "Leading the defense of its village",
@@ -2304,6 +2321,11 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 _spriteBatch.Draw(_pixel, new Rectangle(x, y + size / 4, size, Math.Max(1, size / 5)), new Color(177, 126, 70));
                 _spriteBatch.Draw(_pixel, new Rectangle(x + size / 5, y, Math.Max(1, size / 6), size), new Color(78, 53, 35));
                 break;
+            case ApeStructureKind.Market:
+                _spriteBatch.Draw(_pixel, new Rectangle(x, y + size / 2, size, Math.Max(1, size / 2)), new Color(139, 91, 46));
+                _spriteBatch.Draw(_pixel, new Rectangle(x, y + size / 5, size, Math.Max(1, size / 3)), new Color(216, 170, 65));
+                _spriteBatch.Draw(_pixel, new Rectangle(x + size / 3, y + size / 5, Math.Max(1, size / 3), Math.Max(1, size / 3)), new Color(179, 65, 52));
+                break;
             case ApeStructureKind.NavalDistrict:
                 _spriteBatch.Draw(_pixel, new Rectangle(x, y + size / 3, size, Math.Max(1, size / 3)), new Color(117, 77, 46));
                 _spriteBatch.Draw(_pixel, new Rectangle(x + size / 4, y, Math.Max(1, size / 5), size), new Color(190, 155, 98));
@@ -2344,6 +2366,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         ApeStructureKind.Aquaculture => "Aquaculture",
         ApeStructureKind.LumberCamp => "Lumber Camp",
         ApeStructureKind.NavalDistrict => "Harbor",
+        ApeStructureKind.Market => "Market",
         ApeStructureKind.MilitaryDistrict => "Military District",
         ApeStructureKind.Library => "Library",
         ApeStructureKind.ResidentialDistrict => "Residential District",
@@ -2596,6 +2619,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         CritterSpecies.Therapsid => new Color(214, 242, 162),
         CritterSpecies.Monkey => new Color(190, 135, 85),
         CritterSpecies.Ape or CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack => new Color(125, 95, 70),
+        CritterSpecies.ApeTrader => new Color(180, 140, 75),
+        CritterSpecies.ApeTraderSailor => new Color(75, 155, 180),
         CritterSpecies.ApeSailor => new Color(75, 115, 155),
         CritterSpecies.ApeWarrior => new Color(155, 65, 55),
         CritterSpecies.ApeScholar => new Color(150, 85, 185),
@@ -2689,6 +2714,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         WorldTool.ApeVillage => "L place village with 2 apes",
         WorldTool.Road => "L village: join road network (any population); R remove",
         WorldTool.Farm => "L place biome farm beside village buildings",
+        WorldTool.Market => "L place: one per village; needs road or harbor route",
         WorldTool.LumberCamp or WorldTool.Harbor or WorldTool.ResidentialDistrict or
             WorldTool.MilitaryDistrict or WorldTool.Library => "L place beside village buildings",
         WorldTool.BarbarianApeVillage => "L place barbarian village with 2 apes",
@@ -2789,6 +2815,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         BarbarianApeVillage,
         Farm,
         LumberCamp,
+        Market,
         Harbor,
         ResidentialDistrict,
         MilitaryDistrict,

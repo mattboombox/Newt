@@ -21,9 +21,9 @@ public static class CritterHabitats
             CritterSpecies.SquidEgg or CritterSpecies.ToothedWhale or CritterSpecies.BaleenWhale =>
             CritterHabitat.OceanDweller,
         CritterSpecies.SeaScorpion => CritterHabitat.ShorelineHunter,
-        CritterSpecies.ApeSailor => CritterHabitat.ShorelineHunter,
+        CritterSpecies.ApeSailor or CritterSpecies.ApeTraderSailor => CritterHabitat.ShorelineHunter,
         CritterSpecies.Newt or CritterSpecies.MegaToad or CritterSpecies.MegaSpider or CritterSpecies.Therapsid or
-            CritterSpecies.Monkey or CritterSpecies.Ape or CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack or CritterSpecies.ApeWarrior or CritterSpecies.ApeScholar or CritterSpecies.ApeChieftain or CritterSpecies.UndeadApe or CritterSpecies.Deer or CritterSpecies.Elk or
+            CritterSpecies.ApeTrader or CritterSpecies.Monkey or CritterSpecies.Ape or CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack or CritterSpecies.ApeWarrior or CritterSpecies.ApeScholar or CritterSpecies.ApeChieftain or CritterSpecies.UndeadApe or CritterSpecies.Deer or CritterSpecies.Elk or
             CritterSpecies.Gazelle or
             CritterSpecies.Wolf or CritterSpecies.Dog or CritterSpecies.Crab or CritterSpecies.Vampire =>
             CritterHabitat.LandDweller,

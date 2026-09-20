@@ -38,6 +38,8 @@ public sealed partial class SimulationWorld
             if (!GetPlayerConnectedVillageTiles(village).Any(connected =>
                 ArePlayerBuildingsAdjacent(connected, tile, kind)))
                 continue;
+            if (kind is ApeStructureKind.Market && !CanBuildApeMarket(GetPosition(village)))
+                continue;
             BuildApeStructureAt(village, tile, kind);
             _apeVillageFood[village] = Math.Max(0,
                 _apeVillageFood.GetValueOrDefault(village) - GetApeStructureFoodCost(kind));

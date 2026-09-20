@@ -4,6 +4,43 @@ namespace Newt.Simulation.Tests;
 
 public sealed class CombatProtectionTests
 {
+    [Theory]
+    [InlineData(CritterSpecies.ApeTrader)]
+    [InlineData(CritterSpecies.ApeTraderSailor)]
+    public void TradersDealOneDamageAndMustBeDefeatedInCombat(CritterSpecies species)
+    {
+        var sawRetaliation = false;
+        var sawPredatorHit = false;
+        for (ulong seed = 1; seed <= 30; seed++)
+        {
+            var world = new SimulationWorld(2, 1, Terrain.Shallows, seed);
+            var attackerPosition = new GridPosition(0, 0);
+            var traderPosition = new GridPosition(1, 0);
+            var attacker = world.AddCritter(CritterSpecies.MegaSpider, attackerPosition);
+            var trader = world.AddCritter(species, traderPosition);
+            Assert.True(world.TryGetCritter(attacker, out var beforeAttacker));
+            Assert.True(world.TryGetCritter(trader, out var beforeTrader));
+            Assert.Equal(1, world.GetCritterCombatDamage(trader));
+
+            world.CommitEncounter(attackerPosition, traderPosition);
+
+            Assert.True(world.TryGetCritter(attacker, out var afterAttacker));
+            Assert.True(world.TryGetCritter(trader, out var afterTrader));
+            if (afterAttacker.Energy < beforeAttacker.Energy)
+            {
+                sawRetaliation = true;
+                Assert.Equal(beforeAttacker.Energy - 1, afterAttacker.Energy);
+                Assert.Equal(beforeTrader.Energy, afterTrader.Energy);
+            }
+            else
+            {
+                sawPredatorHit = true;
+                Assert.Equal(beforeTrader.Energy - 2, afterTrader.Energy);
+            }
+        }
+        Assert.True(sawRetaliation);
+        Assert.True(sawPredatorHit);
+    }
     [Fact]
     public void CombatCapablePreyTakesCombatDamageFromEveryEligibleSpecies()
     {

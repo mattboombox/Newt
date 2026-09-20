@@ -323,3 +323,32 @@ Finally, spawn the feature in the game and inspect its energy, ownership, target
 and production. A successful build does not prove the new behavior is reachable.
 Existing release ZIPs are snapshots; rebuild the Windows package separately when
 you want friends to receive the new feature.
+
+## Markets and route traders
+
+Villages can build one Market once another village is reachable by roads or by
+harbor crossings. Construction costs 5 food and 6 wood. Autonomous villages
+consider a market every 30 simulated seconds; player placement follows the usual
+building tool affordability bypass, but still requires a route and respects the
+one-market limit. Markets remain standing if their routes disappear.
+
+Each market supports one active trader across both land and sailing forms. It
+checks recruitment every 30 simulated seconds, spending 3 village food to create
+a trader with 3 starting provisions. It recruits only when a destination is
+reachable and the market tile is free. Destinations do not need a market.
+
+Traders choose randomly among reachable villages, avoiding the village they just
+left when another destination exists. They use roads between settlements and
+connected building tiles inside settlements. The same critter boards and
+changes to the trader-sailor sprite at a harbor, then changes back on land;
+identity, market ownership, provisions and metabolism timing are preserved.
+Open sea and lakes are navigable; road river crossings remain on foot. At least
+two distinct harbor villages are required for sailing.
+
+Traders can shove every species when there is space to move the blocker. They
+carry no trade goods and do not reproduce. Their food capacity is 48 energy;
+they consume one every 70 simulated seconds and refill from the village whose
+center, harbor or market they visit, limited by its stored food. Route validity
+is checked once per simulated second. Removed markets or invalid routes retire
+the affected traders; eligible markets can recruit replacements on their next
+recruitment check. Inspection shows market ownership and destination.

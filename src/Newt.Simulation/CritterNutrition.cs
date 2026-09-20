@@ -273,6 +273,7 @@ public static class CritterNutritions
         CritterSpecies.SquidEgg => SquidEgg,
         CritterSpecies.Therapsid => Therapsid,
         CritterSpecies.Monkey => Monkey,
+        CritterSpecies.ApeTrader or CritterSpecies.ApeTraderSailor => Ape with { MaximumEnergy = 4 * Ape.MaximumEnergy, ReproductionThreshold = 0, ReproductionCost = 0 },
         CritterSpecies.Ape => Ape,
         CritterSpecies.ApeSailor => Ape with { MaximumEnergy = 2 * Ape.MaximumEnergy },
         CritterSpecies.ApeWarrior => Ape,
