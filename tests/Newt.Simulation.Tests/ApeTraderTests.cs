@@ -78,6 +78,102 @@ public sealed class ApeTraderTests
         Assert.Equal(0, world.GetApeVillageWood(First));
         Assert.Equal(0, world.GetApeMarketTraderCount(market));
     }
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void TradersSurviveShovingEachOtherAndResumeTheirJourneys(bool sea)
+    {
+        var world = CreateWorld(sea);
+        if (!sea)
+            Assert.True(world.TryPlaceVillageRoad(First));
+        var firstMarket = AddMarket(world, First);
+        var secondMarket = AddMarket(world, Second);
+        var first = Recruit(world, firstMarket);
+        world.StoreApeVillageFood(Second, 3);
+        Assert.True(world.TryRecruitApeMarketTrader(secondMarket.Y * world.Width + secondMarket.X));
+        var second = Enumerable.Range(0, world.CritterCount).Select(world.GetCritter)
+            .Single(critter => critter.Id != first.Id);
+        var y = sea ? 8 : 10;
+        first = Arrive(world, first, new(19, y));
+        second = Arrive(world, second, new(20, y));
+        var firstEnergy = first.Energy;
+        var secondEnergy = second.Energy;
+        first = Move(world, first);
+        Assert.Equal(new GridPosition(20, y), first.Position);
+        Assert.True(world.TryGetCritter(second.Id, out second));
+        Assert.NotEqual(new GridPosition(20, y), second.Position);
+        world.AdvanceApeTraders();
+        Assert.True(world.TryGetCritter(first.Id, out first));
+        Assert.True(world.TryGetCritter(second.Id, out second));
+        Assert.Equal(firstEnergy, first.Energy);
+        Assert.Equal(secondEnergy, second.Energy);
+        var firstArrived = false;
+        var secondArrived = false;
+        for (var i = 0; i < 100; i++)
+        {
+            first = Move(world, first);
+            second = Move(world, second);
+            world.AdvanceApeTraders();
+            Assert.True(world.TryGetCritter(first.Id, out first));
+            Assert.True(world.TryGetCritter(second.Id, out second));
+            firstArrived |= first.Position == Second;
+            secondArrived |= second.Position == First;
+            Assert.Equal(firstMarket, world.GetApeTraderMarket(first.Id));
+            Assert.Equal(secondMarket, world.GetApeTraderMarket(second.Id));
+            foreach (var critter in new[] { first, second })
+            {
+                Assert.True(world.TryGetCritterAt(critter.Position, out var occupant));
+                Assert.Equal(critter.Id, occupant.Id);
+            }
+        }
+        Assert.True(firstArrived);
+        Assert.True(secondArrived);
+        Assert.Equal(1, world.GetApeMarketTraderCount(firstMarket));
+        Assert.Equal(1, world.GetApeMarketTraderCount(secondMarket));
+    }
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ShovedTraderRejoinsRouteWithoutBeingDeleted(bool sea)
+    {
+        var world = CreateWorld(sea);
+        if (!sea)
+            Assert.True(world.TryPlaceVillageRoad(First));
+        var firstMarket = AddMarket(world, First);
+        var secondMarket = AddMarket(world, Second);
+        var first = Recruit(world, firstMarket);
+        world.StoreApeVillageFood(Second, 3);
+        Assert.True(world.TryRecruitApeMarketTrader(secondMarket.Y * world.Width + secondMarket.X));
+        var second = Enumerable.Range(0, world.CritterCount).Select(world.GetCritter)
+            .Single(critter => critter.Id != first.Id);
+        second = Arrive(world, second, First);
+        var y = sea ? 8 : 10;
+        second = Arrive(world, second, new(20, y));
+        first = Arrive(world, first, new(19, y));
+        var energy = second.Energy;
+        first = Move(world, first);
+        Assert.Equal(new GridPosition(20, y), first.Position);
+        Assert.True(world.TryGetCritter(second.Id, out second));
+        Assert.NotEqual(new GridPosition(20, y), second.Position);
+        Assert.NotEqual(new GridPosition(19, y), second.Position); // Shove, not an exchange.
+        world.AdvanceApeTraders();
+        Assert.True(world.TryGetCritter(second.Id, out second));
+        Assert.Equal(energy, second.Energy);
+        var arrived = false;
+        for (var i = 0; i < 100 && !arrived; i++)
+        {
+            first = Move(world, first);
+            Assert.True(world.TryGetCritter(second.Id, out second));
+            arrived |= second.Position == Second;
+            second = Move(world, second);
+            arrived |= second.Position == Second;
+            world.AdvanceApeTraders();
+            Assert.True(world.TryGetCritter(first.Id, out first));
+            Assert.True(world.TryGetCritter(second.Id, out second));
+        }
+        Assert.True(arrived);
+        Assert.Equal(secondMarket, world.GetApeTraderMarket(second.Id));
+    }
     private static CritterSnapshot Move(SimulationWorld world, CritterSnapshot trader)
     {
         world.MoveApeTrader(trader.Id);
@@ -225,6 +321,7 @@ public sealed class ApeTraderTests
             forms.Add(trader.Species);
             Assert.Equal(initialEnergy, trader.Energy);
             Assert.Equal(market, world.GetApeTraderMarket(trader.Id));
+            Assert.Equal(First, world.GetApeHomeVillage(trader.Id));
             Assert.Equal(1, world.GetCritterCount(CritterSpecies.ApeTrader) + world.GetCritterCount(CritterSpecies.ApeTraderSailor));
         }
         Assert.Equal(Second, trader.Position);

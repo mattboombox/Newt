@@ -131,7 +131,7 @@ The game starts in Critter Tools with Plankton selected.
   Swamp 5, Forest 4, Grassland/Taiga 3, Bog/Arid 2, Tundra 1, and
   Desert/Arctic 0. Ice Sheets over Deep Ocean hold 1, while shallower Ice Sheets
   hold 0. Beaches are 0 freezing and 1 otherwise; Shallows are
-  2 freezing, 3 cold, and 4 temperate/hot; Ocean is 0; Deep Ocean is 2 cold and
+  4 freezing, 3 cold, 2 temperate, and 1 hot; Ocean is 0; Deep Ocean is 2 cold and
   1 otherwise. Rivers and Lakes both replace the underlying tile with a flat
   capacity of 2, independent of biome and temperature. Only Worms, Fish,
   and Newts consume this freshwater nutrition; Crabs and terrestrial foliage feeders may

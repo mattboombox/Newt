@@ -451,7 +451,9 @@ public sealed partial class SimulationWorld
     public GridPosition? GetApeHomeVillage(CritterId critterId) =>
         _apeVillageHomes.TryGetValue(critterId.Value, out var villageTile)
             ? GetPosition(villageTile)
-            : null;
+            : GetApeTraderMarket(critterId) is { } market
+                ? GetApeStructureVillage(market)
+                : null;
 
     public int GetApeVillageWoodCapacity(GridPosition position) =>
         _apeStructures.TryGetValue(GetIndex(position), out var structure) &&
@@ -6092,9 +6094,10 @@ public sealed partial class SimulationWorld
             Terrain.Beach => temperatureBand is TemperatureBand.Freezing ? 0 : 1,
             Terrain.Shallows => temperatureBand switch
             {
-                TemperatureBand.Freezing => 2,
+                TemperatureBand.Freezing => 4,
                 TemperatureBand.Cold => 3,
-                _ => 4,
+                TemperatureBand.Temperate => 2,
+                _ => 1,
             },
             Terrain.Ocean => 0,
             Terrain.DeepOcean => temperatureBand switch

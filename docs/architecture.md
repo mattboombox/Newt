@@ -99,7 +99,7 @@ Ambient food is finite per tile. Terrestrial capacity is Jungle 6, Swamp 5,
 Forest 4, Grassland and Taiga 3, Bog and Arid 2, Tundra 1, and Desert and Arctic
 0. Ice Sheets over Deep Ocean hold 1; shallower Ice Sheets hold 0. Beaches hold
 0 when freezing and 1 otherwise. Shallows hold
-2 freezing, 3 cold, and 4 temperate or hot. Ordinary Ocean is always 0. Deep
+4 freezing, 3 cold, 2 temperate, and 1 hot. Ordinary Ocean is always 0. Deep
 Ocean holds 2 when cold and 1 otherwise.
 
 Rivers and Freshwater Lakes both replace underlying tile nutrition with a flat

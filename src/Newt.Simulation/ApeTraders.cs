@@ -142,7 +142,6 @@ public sealed partial class SimulationWorld
             }
             if (_apeStructures.GetValueOrDefault(journey.Market) is not ApeStructureKind.Market ||
                 !IsRoadVillage(journey.Destination) ||
-                GetIndex(_positions[index]) != journey.Tiles[journey.Step] ||
                 journey.Tiles.Skip(journey.Step).Zip(journey.Tiles.Skip(journey.Step + 1))
                     .Any(edge => !CanTraverseTraderEdge(edge.First, edge.Second)))
                 RemoveCritterAtIndex(index);
@@ -208,11 +207,85 @@ public sealed partial class SimulationWorld
             TryMoveApeTrader(index, null);
     }
 
+    private void TryRejoinTraderRoute(int index, TraderJourney journey, IReadOnlySet<GridPosition>? reservedPrey)
+    {
+        var current = GetIndex(_positions[index]);
+        // A shove is a sidestep, not a lost route. Prefer the next route tile so
+        // opposing traders can pass, then fall back to the tile we were pushed from.
+        for (var step = Math.Min(journey.Step + 1, journey.Tiles.Count - 1); step >= journey.Step; step--)
+        {
+            var tile = journey.Tiles[step];
+            var position = GetPosition(tile);
+            if (!RoadNeighbors(current).Contains(tile) ||
+                !CanLiveOn(_species[index], tile) ||
+                IsTraderWater(tile) != (_species[index] is CritterSpecies.ApeTraderSailor) ||
+                reservedPrey?.Contains(position) is true)
+                continue;
+            var blocker = _occupants[tile];
+            // Wait for another trader to pass rather than shoving it back and forth.
+            if (blocker >= 0 && _species[blocker] is (CritterSpecies.ApeTrader or CritterSpecies.ApeTraderSailor))
+                continue;
+            if (!CanEnterOrShoveMovementBlocker(index, tile, reservedPrey))
+                continue;
+            MoveCritter(index, tile, position, activateTeleporter: false);
+            journey.Step = step;
+            RefillApeTraderProvisions(index);
+            return;
+        }
+    }
+    private bool TryPassTrader(int index, TraderJourney journey, int next, IReadOnlySet<GridPosition>? reservedPrey)
+    {
+        var other = _occupants[next];
+        var current = GetIndex(_positions[index]);
+        if (other < 0 || _species[other] is not (CritterSpecies.ApeTrader or CritterSpecies.ApeTraderSailor) ||
+            !_traderJourneys.TryGetValue(_critterIds[other].Value, out var otherJourney) ||
+            IsCaughtInMegaSpiderWeb(other) || reservedPrey?.Contains(_positions[index]) is true ||
+            !CanTraverseTraderEdge(next, current))
+            return false;
+        var otherStep = otherJourney.Step;
+        if (otherStep + 1 < otherJourney.Tiles.Count && otherJourney.Tiles[otherStep + 1] == current)
+            otherStep++;
+        else if (otherJourney.Tiles[otherStep] != current)
+            return false;
+
+        // Exchange occupied tiles atomically. This also lets a previously shoved
+        // trader reclaim its route without trapping both traders in a narrow channel.
+        var origin = _positions[index];
+        var destination = _positions[other];
+        _positions[index] = destination;
+        _positions[other] = origin;
+        _occupants[next] = index;
+        _occupants[current] = other;
+        journey.Step++;
+        otherJourney.Step = otherStep;
+        SetTraderTravelForm(index, next);
+        SetTraderTravelForm(other, current);
+        _nextMovementTicks[other] = Math.Max(_nextMovementTicks[other], Tick + GetMovementIntervalTicks(_species[other]));
+        RefillApeTraderProvisions(index);
+        RefillApeTraderProvisions(other);
+        TriggerWolfDenNear(origin, destination, _species[index]);
+        TriggerWolfDenNear(destination, origin, _species[other]);
+        return true;
+    }
+
+    private void SetTraderTravelForm(int index, int tile)
+    {
+        var form = IsTraderWater(tile) ? CritterSpecies.ApeTraderSailor : CritterSpecies.ApeTrader;
+        if (_species[index] == form)
+            return;
+        _speciesCounts[(int)_species[index]]--;
+        _species[index] = form;
+        _speciesCounts[(int)form]++;
+    }
     private GridPosition? TryMoveApeTrader(int index, IReadOnlySet<GridPosition>? reservedPrey)
     {
-        if (!_traderJourneys.TryGetValue(_critterIds[index].Value, out var journey) ||
-            GetIndex(_positions[index]) != journey.Tiles[journey.Step])
+        if (!_traderJourneys.TryGetValue(_critterIds[index].Value, out var journey))
             return null;
+        if (GetIndex(_positions[index]) != journey.Tiles[journey.Step])
+        {
+            TryRejoinTraderRoute(index, journey, reservedPrey);
+            return null;
+        }
         RefillApeTraderProvisions(index);
         if (journey.Step == journey.Tiles.Count - 1)
         {
@@ -228,6 +301,8 @@ public sealed partial class SimulationWorld
         var next = journey.Tiles[journey.Step + 1];
         if (reservedPrey?.Contains(GetPosition(next)) is true ||
             !CanTraverseTraderEdge(journey.Tiles[journey.Step], next))
+            return null;
+        if (TryPassTrader(index, journey, next, reservedPrey))
             return null;
         // Change only the form and species count: identity, provisions and metabolism
         // schedule survive boarding. General evolution resets too much state here.
@@ -246,6 +321,7 @@ public sealed partial class SimulationWorld
         }
         MoveCritter(index, next, GetPosition(next), activateTeleporter: false);
         journey.Step++;
+
         RefillApeTraderProvisions(index);
         return null;
     }

@@ -646,7 +646,7 @@ public sealed class SimulationWorldTests
 
         Assert.Equal(3, deepOcean.GetCritter(0).Energy);
         Assert.Equal(2, ocean.GetCritter(0).Energy);
-        Assert.Equal(4, shallows.GetCritter(0).Energy);
+        Assert.Equal(5, shallows.GetCritter(0).Energy);
     }
 
     [Theory]
@@ -886,7 +886,7 @@ public sealed class SimulationWorldTests
     [Theory]
     [InlineData(Terrain.DeepOcean, 3)]
     [InlineData(Terrain.Ocean, 2)]
-    [InlineData(Terrain.Shallows, 4)]
+    [InlineData(Terrain.Shallows, 5)]
     public void TrilobiteFeedsInDeepOceanAndShallows(Terrain terrain, int expectedEnergy)
     {
         var world = new SimulationWorld(1, 1, terrain, seed: 40);
@@ -953,7 +953,7 @@ public sealed class SimulationWorldTests
         }
 
         Assert.Equal(3, beach.GetCritter(0).Energy);
-        Assert.Equal(5, shallows.GetCritter(0).Energy);
+        Assert.Equal(6, shallows.GetCritter(0).Energy);
         Assert.Equal(3, plains.GetCritter(0).Energy);
         Assert.True(new SimulationWorld(1, 1, Terrain.Ocean)
             .TryAddCritter(CritterSpecies.Crab, new GridPosition(0, 0)));
@@ -1071,7 +1071,7 @@ public sealed class SimulationWorldTests
 
     [Theory]
     [InlineData(Terrain.Beach, 1, 3)]
-    [InlineData(Terrain.Shallows, 2, 2)]
+    [InlineData(Terrain.Shallows, 2, 4)]
     public void CoastalFeedingReflectsTerrainProductivityWithinSixteenSeconds(
         Terrain terrain,
         int expectedCount,
@@ -1129,9 +1129,9 @@ public sealed class SimulationWorldTests
         world.SeasonsEnabled = false;
         var beach = new GridPosition(0, 0);
         var nursery = new GridPosition(1, 0);
-        // Cold saltwater shallows supply the two meals needed to breed.
+        // Temperate saltwater shallows supply the two meals needed to breed.
         world.SetTerrain(beach, Terrain.Shallows);
-        world.SetTemperature(beach, 0.1f);
+        world.SetTemperature(beach, 0.5f);
         var parentId = world.AddCritter(CritterSpecies.Crab, beach);
         world.AddCritter(CritterSpecies.Crab, nursery);
 
@@ -1279,7 +1279,7 @@ public sealed class SimulationWorldTests
     [Theory]
     [InlineData(Terrain.DeepOcean, 4)]
     [InlineData(Terrain.Ocean, 3)]
-    [InlineData(Terrain.Shallows, 5)]
+    [InlineData(Terrain.Shallows, 7)]
     public void NautilusFeedsInDeepOceanAndShallows(
         Terrain terrain,
         int expectedEnergy)
@@ -1711,8 +1711,8 @@ public sealed class SimulationWorldTests
     }
 
     [Theory]
-    [InlineData(Terrain.Shallows, 0.8f, 6)]
-    [InlineData(Terrain.Shallows, 0.5f, 6)]
+    [InlineData(Terrain.Shallows, 0.8f, 3)]
+    [InlineData(Terrain.Shallows, 0.5f, 4)]
     [InlineData(Terrain.Ocean, 0.8f, 2)]
     public void FishForageInShallowsAtAnyTemperature(
         Terrain terrain,
@@ -1780,8 +1780,8 @@ public sealed class SimulationWorldTests
         var world = new SimulationWorld(2, 1, Terrain.Shallows, seed: 55);
         world.SeasonsEnabled = false;
         world.AdjustEvolutionChance(-CritterEvolution.MaximumChanceSteps);
-        world.SetTemperature(new GridPosition(0, 0), 0.8f);
-        world.SetTemperature(new GridPosition(1, 0), 0.8f);
+        world.SetTemperature(new GridPosition(0, 0), 0.1f);
+        world.SetTemperature(new GridPosition(1, 0), 0.1f);
         world.AddCritter(CritterSpecies.Fish, new GridPosition(0, 0));
 
         for (var tick = 0;
@@ -1828,7 +1828,7 @@ public sealed class SimulationWorldTests
         var parent = new GridPosition(1, 1);
         var diagonalRiver = new GridPosition(2, 2);
         world.SetTerrain(parent, Terrain.Shallows);
-        world.SetTemperature(parent, 0.8f);
+        world.SetTemperature(parent, 0.1f);
         world.SetSurfaceWater(diagonalRiver, SurfaceWaterKind.River);
         world.AddCritter(CritterSpecies.Fish, parent);
 
@@ -1916,7 +1916,7 @@ public sealed class SimulationWorldTests
         var world = new SimulationWorld(4, 1, Terrain.Mountain, seed: 58);
         world.SeasonsEnabled = false;
         world.SetTerrain(new GridPosition(0, 0), Terrain.Shallows);
-        world.SetTemperature(new GridPosition(0, 0), 1f);
+        world.SetTemperature(new GridPosition(0, 0), 0.1f);
         world.AddCritter(CritterSpecies.Fish, new GridPosition(0, 0));
         for (var tick = 0; tick < 8 * SimulationWorld.TicksPerSecond; tick++)
         {

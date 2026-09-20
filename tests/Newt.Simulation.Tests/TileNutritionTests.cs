@@ -6,7 +6,7 @@ public sealed class TileNutritionTests
 {
     [Theory]
     [InlineData(Terrain.DeepOcean, Biome.None, SurfaceWaterKind.None, 1)]
-    [InlineData(Terrain.Shallows, Biome.None, SurfaceWaterKind.None, 4)]
+    [InlineData(Terrain.Shallows, Biome.None, SurfaceWaterKind.None, 2)]
     [InlineData(Terrain.Beach, Biome.None, SurfaceWaterKind.None, 1)]
     [InlineData(Terrain.Plains, Biome.Tundra, SurfaceWaterKind.None, 1)]
     [InlineData(Terrain.Plains, Biome.Grassland, SurfaceWaterKind.None, 3)]
@@ -60,10 +60,10 @@ public sealed class TileNutritionTests
     [InlineData(Terrain.Beach, 0.25f, 1)]
     [InlineData(Terrain.Beach, 0.50f, 1)]
     [InlineData(Terrain.Beach, 0.80f, 1)]
-    [InlineData(Terrain.Shallows, 0.10f, 2)]
+    [InlineData(Terrain.Shallows, 0.10f, 4)]
     [InlineData(Terrain.Shallows, 0.25f, 3)]
-    [InlineData(Terrain.Shallows, 0.50f, 4)]
-    [InlineData(Terrain.Shallows, 0.80f, 4)]
+    [InlineData(Terrain.Shallows, 0.50f, 2)]
+    [InlineData(Terrain.Shallows, 0.80f, 1)]
     public void CoastalNutritionFollowsTemperatureBand(
         Terrain terrain,
         float temperature,
@@ -167,6 +167,7 @@ public sealed class TileNutritionTests
         var world = new SimulationWorld(1, 1, Terrain.Shallows, seed: 2001);
         world.SeasonsEnabled = false;
         var position = new GridPosition(0, 0);
+        world.SetTemperature(position, 0.5f); // Two food units for two feeding actions.
         world.AddCritter(CritterSpecies.Worm, position);
 
         for (var tick = 0; tick < 2 * SimulationWorld.GetMovementIntervalTicks(CritterSpecies.Worm); tick++)

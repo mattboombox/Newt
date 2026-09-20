@@ -1709,7 +1709,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             : Array.Empty<string>(),
         .. _world.GetApeTraderDestination(critter.Id) is { } destination
             ? new[] { $"Destination Village #{_world.GetApeVillageId(destination)}   {destination}" }
-            : Array.Empty<string>(),        .. _world.GetApeHomeVillage(critter.Id) is { } village
+            : Array.Empty<string>(),
+        .. _world.GetApeHomeVillage(critter.Id) is { } village
             ? new[]
             {
                 _world.IsBarbarianVillage(village)
