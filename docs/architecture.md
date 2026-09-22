@@ -294,7 +294,7 @@ spawned from a den remains associated with it; once a den has zero charges and i
 last associated or inbound Wolf is gone, the empty den is removed automatically.
 The Other category includes a global Jump Start action that enables life and fills
 every empty Deep Ocean tile with one Plankton without replacing existing critters.
-Its Population tool opens a live overlay built from the world's per-species counters.
+The `[` key toggles a live population overlay built from the world's per-species counters.
 Only nonzero species populations are rendered, with a responsive multi-column layout for
 short windows. Each row includes a colored five-second-sample sparkline retaining
 roughly seven and a half minutes of history; the simulation continues updating beneath it.
@@ -346,8 +346,8 @@ Large land animals are eligible only while standing in Shallows; the whale will 
 pursue them on land or in deeper water. Toothed Whales ignore Jellyfish, Plankton,
 Worms, Squid Eggs, and smaller land animals.
 Baleen Whales evolve from Toothed Whales and reuse their saltwater habitat, huge
-body size, energy economy, four-second movement interval, and seven-tile perception
-radius. Their diet contains only Plankton.
+body size, energy economy, and four-second movement interval. Their perception
+radius is fourteen tiles, twice that of Toothed Whales. Their diet contains only Plankton.
 The critter that loses any mutual-predator combat roll exposes a deterministic
 half-second damage-flash state. The presentation renders that critter white for
 the duration without changing combat timing or movement.
@@ -371,6 +371,13 @@ Swamp, Jungle, or Forest foliage to keep feeding, while a hungry Monkey adjacent
 one of those biomes moves toward it. Wolves and Mega Toads may eat Monkeys only
 when adjacent, including diagonal neighbors and neighbors across the horizontal
 map seam. Monkeys receive no special target priority and are not pursued at range.
+
+Barbarian apes combine land and sailor habitats, allowing them to enter saltwater,
+rivers, and lakes while retaining their species, energy, and village membership.
+In water they use the pirate sprite, or pirate-chieftain sprite for chiefs; on
+land and beaches they use their barbarian sprites. All barbarian ape roles use
+the same broad hunting diet, including marine prey, while still avoiding whales
+and their own village members.
 
 Apes extend the Monkey branch and use the land habitat while hunting every species
 except Plankton and Worms outside their own civilization that enters shared terrain. As an emergency

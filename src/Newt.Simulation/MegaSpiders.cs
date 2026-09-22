@@ -237,6 +237,9 @@ public sealed partial class SimulationWorld
 
     private bool TryStoreCaughtPrey(int spiderIndex, int preyIndex)
     {
+        if (CanCritterFight(_species[preyIndex]) && _energy[preyIndex] > 0)
+            return false;
+
         var spiderId = _critterIds[spiderIndex].Value;
         var webTile = GetIndex(_positions[preyIndex]);
         if (!_megaSpiderWebHomes.TryGetValue(spiderId, out var homeTile) ||

@@ -55,7 +55,7 @@ Press `M` to open the new-world menu. World size and map shape are selected
 independently. The current shapes are Continents, Pangaea, Archipelago, Water World,
 Ring World, and Earth. Earth supports every regular size by resampling the embedded
 1280 × 642 NOAA relief grid; Standard (320 × 192) is the default while
-Huge retains the full source detail. Ring World keeps its fixed 1280 × 40
+Huge retains the full source detail. Ring World keeps its fixed 1280 × 44
 engineered dimensions. Each game launch chooses a fresh initial seed. Select the
 Seed row and type digits to replace it, or use Backspace and the left/right arrows
 to edit it. Reusing the displayed seed keeps world generation deterministic.
@@ -72,7 +72,7 @@ keeps every tile submerged while retaining varied bathymetry and polar sea ice.
 | 3 | Standard (default) | 320 × 192 |
 | 4 | Large | 640 × 311 |
 | 5 | Huge (stress test) | 1280 × 642 |
-| 6 | Ring World | 1280 × 40 |
+| 6 | Ring World | 1280 × 44 |
 | 7 | Earth | 1280 × 642 |
 
 Ring World is an artificial megastructure conservatory rather than a planet.
@@ -103,8 +103,8 @@ The game starts in Critter Tools with Plankton selected.
 - `R`: cycle tool categories.
 - Events / Colonist: click a Village to choose a valid destination automatically,
   or click a valid distant tile to send a colonist there from the nearest Village.
-- Other / Population: left click opens a live population window and right click
-  closes it. The window lists only species whose current count is above zero.
+- Press `[` to toggle the live population chart. The window lists only species
+  whose current count is above zero.
 - Other / Inspect: left click a critter to show its full entity details and keep
   the camera centered on it. Right click stops following. Inspection also clears
   automatically if the followed critter dies.
@@ -303,13 +303,13 @@ The game starts in Critter Tools with Plankton selected.
   in Shallows; whales ignore them on land or in deeper water. They do not eat
   Jellyfish, Plankton, Worms, Squid Eggs, or smaller land animals.
   Baleen Whales evolve from Toothed Whales with the same body size, energy,
-  metabolism, reproduction, movement timing, perception range, and saltwater
-  habitat. They eat only Plankton.
+  metabolism, reproduction, movement timing, and saltwater habitat. They eat only
+  Plankton and search fourteen tiles away, twice the Toothed Whale's search radius.
   Building Tools can be cycled like Critter Tools; the Wolf Den entry places a
   den with one charge on left click and removes one with right click.
   Other / Jump Start enables life and fills every unoccupied Deep Ocean tile with
   one Plankton, preserving any critters already occupying those tiles.
-  Other / Population opens a live, non-pausing window of extant species counts;
+  The `[` key toggles a live, non-pausing window of extant species counts;
   each count has a colored population-history sparkline, and species disappear
   from the list when their population reaches zero.
   Monkeys, Deer, Elk, and Gazelles flee any

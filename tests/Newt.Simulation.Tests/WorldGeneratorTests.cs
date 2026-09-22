@@ -229,7 +229,7 @@ public sealed class WorldGeneratorTests
     public void RingWorldIsLongWithoutScalingItsLocalFeaturesByFullWidth()
     {
         Assert.Equal(1280, WorldPreset.Ring.Width);
-        Assert.Equal(40, WorldPreset.Ring.Height);
+        Assert.Equal(44, WorldPreset.Ring.Height);
         Assert.Equal(WorldPreset.Ring.Width, WorldPreset.Huge.Width);
 
         var world = WorldGenerator.Generate(new WorldGenerationOptions(WorldPreset.Ring, Seed: 9));

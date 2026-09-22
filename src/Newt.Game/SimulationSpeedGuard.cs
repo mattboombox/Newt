@@ -4,7 +4,7 @@ namespace Newt.Game;
 internal sealed class SimulationSpeedGuard
 {
     internal const double FallbackRate = 8;
-    internal const int MinimumCritterCount = 5_000;
+    internal const int MinimumCritterCount = 4_000;
     private bool _enabled = true;
     private double _slowSeconds;
 

@@ -27,6 +27,7 @@ Place transparent PNG critter sprites in this folder. The game currently recogni
 - `squid.png`
 - `squid_egg.png`
 - `therapsid.png`
+- `ape-pirate-chieftain.png` (barbarian chieftains in water)
 - `toothed-whale.png`
 - `trilobite.png`
 - `undead-ape.png`

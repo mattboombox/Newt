@@ -12,7 +12,7 @@ public readonly record struct WorldPreset(string Name, int Width, int Height)
     // Fits a 2560x1440 display above the HUD at the 4px zoom level with margin.
     public static WorldPreset Large => new("Large", 640, 311);
 
-    public static WorldPreset Ring => new("Ring World", 1280, 40);
+    public static WorldPreset Ring => new("Ring World", 1280, 44);
 
     public static WorldPreset Earth => new("Earth", 1280, 642);
 

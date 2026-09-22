@@ -356,4 +356,46 @@ public sealed class RoadNetworkTests
         Assert.True(world.TryPlaceVillageRoad(First));
         Assert.All(Roads(world).Keys, tile => Assert.NotEqual(Terrain.Ice, world.GetTerrain(tile)));
     }
+
+    [Theory]
+    [InlineData(Biome.Swamp)]
+    [InlineData(Biome.Bog)]
+    [InlineData(Biome.Jungle)]
+    public void NewRoadPrefersDetourAroundDifficultBiome(Biome biome)
+    {
+        var world = CreateWorld();
+        Assert.True(world.TrySpawnTestApeVillage(First));
+        Assert.True(world.TrySpawnTestApeVillage(Second));
+        for (var x = 20; x <= 30; x++)
+        for (var y = 9; y <= 11; y++)
+            world.SetBiome(new(x, y), biome);
+
+        Assert.True(world.TryPlaceVillageRoad(First));
+        Assert.Contains(Second, Reachable(world, First));
+        Assert.All(Roads(world).Keys, tile => Assert.NotEqual(biome, world.GetBiome(tile)));
+        Assert.Contains(Roads(world).Keys, tile => tile.Y < 9 || tile.Y > 11);
+    }
+
+    [Theory]
+    [InlineData(Biome.Swamp)]
+    [InlineData(Biome.Bog)]
+    [InlineData(Biome.Jungle)]
+    public void DifficultBiomeRemainsUsableWhenItIsTheOnlyCrossing(Biome biome)
+    {
+        var world = CreateWorld();
+        Assert.True(world.TrySpawnTestApeVillage(First));
+        Assert.True(world.TrySpawnTestApeVillage(Second));
+        for (var y = 0; y < world.Height; y++)
+        {
+            world.SetTerrain(new(25, y), Terrain.Mountain);
+            world.SetTerrain(new(75, y), Terrain.Ocean);
+        }
+        var crossing = new GridPosition(25, 10);
+        world.SetTerrain(crossing, Terrain.Plains);
+        world.SetBiome(crossing, biome);
+
+        Assert.True(world.TryPlaceVillageRoad(First));
+        Assert.Contains(Second, Reachable(world, First));
+        Assert.NotEqual(RiverConnection.None, world.GetRoadConnections(crossing));
+    }
 }

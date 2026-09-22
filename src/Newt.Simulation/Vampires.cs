@@ -39,6 +39,10 @@ public sealed partial class SimulationWorld
     private void ApplyCombatDamage(int attacker, int victim)
     {
         var damage = Math.Min(_energy[victim], GetCombatDamage(attacker));
+        // A fresh fighter must survive a hit, even against a stronger opponent.
+        // Use starting energy rather than current energy so wounded fighters can die.
+        if (CanCritterFight(_species[victim]))
+            damage = Math.Min(damage, Math.Max(1, CritterNutritions.Get(_species[victim]).InitialEnergy - 1));
         _energy[victim] -= damage;
         if (_species[attacker] is CritterSpecies.Vampire && IsLivingApe(_species[victim]))
             _energy[attacker] = Math.Min(CritterNutritions.Get(CritterSpecies.Vampire).MaximumEnergy,

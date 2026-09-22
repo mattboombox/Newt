@@ -4,6 +4,43 @@ namespace Newt.Simulation.Tests;
 
 public sealed class CombatProtectionTests
 {
+    [Fact]
+    public void ChieftainsMustExchangeCombatHitsWithTherapsids()
+    {
+        var sawRetaliation = false;
+        var sawChiefHit = false;
+        for (ulong seed = 1; seed <= 30; seed++)
+        {
+            var world = new SimulationWorld(2, 1, Terrain.Plains, seed);
+            var attackerPosition = new GridPosition(0, 0);
+            var defenderPosition = new GridPosition(1, 0);
+            var chief = world.AddCritter(CritterSpecies.ApeChieftain, attackerPosition);
+            var therapsid = world.AddCritter(CritterSpecies.Therapsid, defenderPosition);
+            var chiefEnergy = world.GetCritter(0).Energy;
+            var therapsidEnergy = world.GetCritter(1).Energy;
+
+            world.CommitEncounter(attackerPosition, defenderPosition);
+
+            Assert.True(world.TryGetCritter(chief, out var afterChief));
+            Assert.True(world.TryGetCritter(therapsid, out var afterTherapsid));
+            Assert.Equal(attackerPosition, afterChief.Position);
+            Assert.Equal(defenderPosition, afterTherapsid.Position);
+            if (afterChief.Energy < chiefEnergy)
+            {
+                sawRetaliation = true;
+                Assert.Equal(chiefEnergy - world.GetCritterCombatDamage(therapsid), afterChief.Energy);
+                Assert.Equal(therapsidEnergy, afterTherapsid.Energy);
+            }
+            else
+            {
+                sawChiefHit = true;
+                Assert.Equal(1, afterTherapsid.Energy);
+            }
+        }
+        Assert.True(sawRetaliation);
+        Assert.True(sawChiefHit);
+    }
+
     [Theory]
     [InlineData(CritterSpecies.ApeTrader)]
     [InlineData(CritterSpecies.ApeTraderSailor)]
@@ -142,6 +179,10 @@ public sealed class CombatProtectionTests
             var defenseId = world.AddCritter(defender, defensePosition);
             var attackDamage = world.GetCritterCombatDamage(attackId);
             var defenseDamage = world.GetCritterCombatDamage(defenseId);
+            if (defenseDamage > 0)
+                attackDamage = Math.Min(attackDamage, Math.Max(1, CritterNutritions.Get(defender).InitialEnergy - 1));
+            if (world.GetCritterCombatDamage(attackId) > 0)
+                defenseDamage = Math.Min(defenseDamage, Math.Max(1, CritterNutritions.Get(attacker).InitialEnergy - 1));
             var initial = world.GetCritter(0).Energy + world.GetCritter(1).Energy;
             if (defenseDamage == 0 || world.GetCritter(0).Energy <= defenseDamage ||
                 world.GetCritter(1).Energy <= attackDamage)
@@ -162,8 +203,10 @@ public sealed class CombatProtectionTests
         }
     }
 
-    [Fact]
-    public void BarbarianWarriorsMustFightTherapsids()
+    [Theory]
+    [InlineData(CritterSpecies.ApeWarrior)]
+    [InlineData(CritterSpecies.ApeChieftain)]
+    public void BarbarianFightersMustFightTherapsids(CritterSpecies species)
     {
         for (ulong seed = 1; seed <= 20; seed++)
         {
@@ -177,7 +220,7 @@ public sealed class CombatProtectionTests
                 world.RemoveCritterAt(world.GetCritter(0).Position);
             var attacker = new GridPosition(5, 4);
             var defender = new GridPosition(6, 4);
-            var warrior = world.AddCritter(CritterSpecies.ApeWarrior, attacker);
+            var warrior = world.AddCritter(species, attacker);
             Assert.True(world.TryAssignApeToVillage(warrior, camp));
             var therapsid = world.AddCritter(CritterSpecies.Therapsid, defender);
             var initial = world.GetCritter(0).Energy + world.GetCritter(1).Energy;

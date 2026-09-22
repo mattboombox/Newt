@@ -18,6 +18,7 @@ public sealed partial class SimulationWorld
     private const int MegaToadPerceptionRadius = 3;
     private const int TherapsidPerceptionRadius = 4;
     internal const int ToothedWhalePerceptionRadius = 7;
+    internal const int BaleenWhalePerceptionRadius = 14;
     private const int ApePerceptionRadius = 6;
     internal const int ApeDefenderPerceptionRadius = ApeVillageClaimRadius;
     private const int ApeChieftainDefenderPerceptionRadius = ApePerceptionRadius;
@@ -1444,7 +1445,7 @@ public sealed partial class SimulationWorld
                 CritterSpecies.ToothedWhale =>
                     TryMoveToothedWhale(index, reservedPrey),
                 CritterSpecies.BaleenWhale =>
-                    TryMoveHunter(index, ToothedWhalePerceptionRadius, reservedPrey),
+                    TryMoveHunter(index, BaleenWhalePerceptionRadius, reservedPrey),
                 CritterSpecies.Deer or CritterSpecies.Elk or CritterSpecies.Gazelle =>
                     TryMoveGrazer(index),
                 CritterSpecies.Newt => TryMoveNewt(index),
@@ -2522,7 +2523,8 @@ public sealed partial class SimulationWorld
         var recruitId = _apeVillageHomes
             .Where(pair => pair.Value == villageTile &&
                 _critterIndicesById.TryGetValue(pair.Key, out var residentIndex) &&
-                _species[residentIndex] is CritterSpecies.Ape)
+                _species[residentIndex] is CritterSpecies.Ape &&
+                CanLiveOn(CritterSpecies.ApeSailor, GetIndex(_positions[residentIndex])))
             .Select(pair => pair.Key)
             .OrderBy(id => id)
             .FirstOrDefault();
@@ -3621,7 +3623,7 @@ public sealed partial class SimulationWorld
                         continue;
                     }
                 }
-                if (CanLiveOn(_species[critterIndex], destinationIndex) &&
+                if (CanCritterLiveOn(critterIndex, destinationIndex) &&
                     TryShoveMovementBlocker(critterIndex, destinationIndex, reservedPrey))
                 {
                     MoveCritter(critterIndex, destinationIndex, candidate);
@@ -3630,7 +3632,7 @@ public sealed partial class SimulationWorld
                 continue;
             }
 
-            if (!CanLiveOn(_species[critterIndex], destinationIndex))
+            if (!CanCritterLiveOn(critterIndex, destinationIndex))
             {
                 continue;
             }
@@ -3936,14 +3938,14 @@ public sealed partial class SimulationWorld
             {
                 var preyIndex = _occupants[destinationIndex];
                 if (candidate == target &&
-                    (CanLiveOn(predatorSpecies, destinationIndex) ||
+                    (CanCritterLiveOn(critterIndex, destinationIndex) ||
                         CanTherapsidStrikeAdjacentLakePrey(critterIndex, preyIndex) ||
                         CanStrikeAdjacentFeederCrab(critterIndex, preyIndex)) &&
                     reservedPrey?.Contains(candidate) is not true)
                 {
                     return candidate;
                 }
-                if (CanLiveOn(predatorSpecies, destinationIndex) &&
+                if (CanCritterLiveOn(critterIndex, destinationIndex) &&
                     TryShoveMovementBlocker(critterIndex, destinationIndex, reservedPrey))
                 {
                     MoveCritter(critterIndex, destinationIndex, candidate);
@@ -3951,7 +3953,7 @@ public sealed partial class SimulationWorld
                 }
                 continue;
             }
-            if (!CanLiveOn(predatorSpecies, destinationIndex))
+            if (!CanCritterLiveOn(critterIndex, destinationIndex))
             {
                 continue;
             }
@@ -4685,7 +4687,8 @@ public sealed partial class SimulationWorld
             }
 
             var tileIndex = y * Width + Mod(current.X + direction.X, Width);
-            if (IsApeFoliageTile(tileIndex) && HasNaturalTileNutrition(tileIndex))
+            if (CanCritterLiveOn(critterIndex, tileIndex) &&
+                IsApeFoliageTile(tileIndex) && HasNaturalTileNutrition(tileIndex))
             {
                 hasAdjacentFoliage = true;
                 break;
@@ -4709,7 +4712,8 @@ public sealed partial class SimulationWorld
             }
 
             var destinationIndex = GetIndex(candidate);
-            if (IsApeFoliageTile(destinationIndex) &&
+            if (CanCritterLiveOn(critterIndex, destinationIndex) &&
+                IsApeFoliageTile(destinationIndex) &&
                 HasNaturalTileNutrition(destinationIndex) &&
                 CanEnterOrShoveMovementBlocker(critterIndex, destinationIndex))
             {
@@ -4939,7 +4943,7 @@ public sealed partial class SimulationWorld
                 continue;
             }
             var candidateIndex = GetIndex(candidate);
-            if (!CanLiveOn(_species[critterIndex], candidateIndex) ||
+            if (!CanCritterLiveOn(critterIndex, candidateIndex) ||
                 (_occupants[candidateIndex] >= 0 &&
                     !CanShoveMovementBlocker(critterIndex, candidateIndex, reservedPrey)))
             {
@@ -5099,7 +5103,7 @@ public sealed partial class SimulationWorld
             }
 
             var candidateIndex = GetIndex(candidate);
-            if (!CanLiveOn(_species[critterIndex], candidateIndex) ||
+            if (!CanCritterLiveOn(critterIndex, candidateIndex) ||
                 (_occupants[candidateIndex] >= 0 &&
                     !CanShoveMovementBlocker(critterIndex, candidateIndex)))
             {
@@ -5407,7 +5411,7 @@ public sealed partial class SimulationWorld
                         predatorSpecies,
                         _species[occupant],
                         GetPreyPursuitDistance(critterIndex, occupant)) ||
-                    (!CanLiveOn(predatorSpecies, candidateIndex) &&
+                    (!CanCritterLiveOn(critterIndex, candidateIndex) &&
                         !CanTherapsidStrikeAdjacentLakePrey(critterIndex, occupant) &&
                         !CanStrikeAdjacentFeederCrab(critterIndex, occupant)))
                 {
@@ -5463,6 +5467,12 @@ public sealed partial class SimulationWorld
         {
             TryInfectApeAt(predatorPosition, PlagueKind.Zombie);
         }
+        // Combat-capable prey must be defeated before any special feeding path runs.
+        if (CanCritterFight(_species[preyIndex]))
+        {
+            CommitMutualPredatorCombat(predatorPosition, preyPosition);
+            return;
+        }
         if (CanTherapsidStrikeAdjacentLakePrey(predatorIndex, preyIndex))
         {
             var shorelinePreySpecies = _species[preyIndex];
@@ -5472,7 +5482,7 @@ public sealed partial class SimulationWorld
         }
 
         if (CanStrikeAdjacentFeederCrab(predatorIndex, preyIndex) &&
-            !CanLiveOn(_species[predatorIndex], GetIndex(preyPosition)))
+            !CanCritterLiveOn(predatorIndex, GetIndex(preyPosition)))
         {
             RemoveCritterAt(preyPosition);
             FeedPredatorAt(predatorPosition, CritterSpecies.Crab);
@@ -5481,11 +5491,6 @@ public sealed partial class SimulationWorld
 
         var predatorSpecies = _species[predatorIndex];
         var preySpecies = _species[preyIndex];
-        if (CanCritterFight(preySpecies))
-        {
-            CommitMutualPredatorCombat(predatorPosition, preyPosition);
-            return;
-        }
         if (predatorSpecies != preySpecies &&
             CanEat(predatorSpecies, preySpecies) &&
             (CanEat(preySpecies, predatorSpecies) ||
@@ -5553,6 +5558,11 @@ public sealed partial class SimulationWorld
 
         var predatorSpecies = _species[predatorIndex];
         var preySpecies = _species[preyIndex];
+        if (CanCritterFight(preySpecies) && _energy[preyIndex] > 0)
+        {
+            CommitMutualPredatorCombat(predatorPosition, preyPosition);
+            return;
+        }
         if (predatorSpecies is CritterSpecies.MegaSpider &&
             TryStoreCaughtPrey(predatorIndex, preyIndex))
         {
@@ -6265,7 +6275,7 @@ public sealed partial class SimulationWorld
         return blockerIndex >= 0 &&
             _species[blockerIndex] is not CritterSpecies.Plankton &&
             CanDisplace(_species[moverIndex], _species[blockerIndex]) &&
-            CanLiveOn(_species[moverIndex], destinationIndex) &&
+            CanCritterLiveOn(moverIndex, destinationIndex) &&
             reservedPrey?.Contains(_positions[blockerIndex]) is not true &&
             FindCritterShoveDestination(moverIndex, blockerIndex, reservedPrey) is not null;
     }
@@ -6310,7 +6320,7 @@ public sealed partial class SimulationWorld
             }
 
             var candidateIndex = GetIndex(candidate);
-            if (_occupants[candidateIndex] < 0 && CanLiveOn(blockerSpecies, candidateIndex))
+            if (_occupants[candidateIndex] < 0 && CanCritterLiveOn(blockerIndex, candidateIndex))
             {
                 return candidate;
             }
@@ -6672,7 +6682,7 @@ public sealed partial class SimulationWorld
         for (var tileIndex = 0; tileIndex < _terrain.Length; tileIndex++)
         {
             if (_occupants[tileIndex] < 0 && !_teleporters.Contains(tileIndex) &&
-                CanLiveOn(_species[critterIndex], tileIndex))
+                CanCritterLiveOn(critterIndex, tileIndex))
             {
                 candidates.Add(tileIndex);
             }
@@ -6706,7 +6716,7 @@ public sealed partial class SimulationWorld
                 var candidate = new GridPosition(Mod(portal.X + direction.X, Width), y);
                 var candidateTile = GetIndex(candidate);
                 if (_occupants[candidateTile] < 0 && !_teleporters.Contains(candidateTile) &&
-                    CanLiveOn(_species[critterIndex], candidateTile) &&
+                    CanCritterLiveOn(critterIndex, candidateTile) &&
                     !arrivals.Contains(candidateTile))
                 {
                     arrivals.Add(candidateTile);
@@ -6979,11 +6989,22 @@ public sealed partial class SimulationWorld
                     _biomes[tileIndex],
                     _surfaceCovers[tileIndex]));
 
+    private bool CanCritterLiveOn(int critterIndex, int tileIndex) =>
+        IsLivingApe(_species[critterIndex]) && IsBarbarianApe(critterIndex)
+            ? CanLiveOn(CritterSpecies.Ape, tileIndex) || CanLiveOn(CritterSpecies.ApeSailor, tileIndex)
+            : CanLiveOn(_species[critterIndex], tileIndex);
+
+    public bool IsApePirate(CritterId id) =>
+        _critterIndicesById.TryGetValue(id.Value, out var index) &&
+        IsLivingApe(_species[index]) && IsBarbarianApe(index) &&
+        (_terrain[GetIndex(_positions[index])] is Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows or Terrain.Ice ||
+            _surfaceWater[GetIndex(_positions[index])] is SurfaceWaterKind.River or SurfaceWaterKind.FreshwaterLake);
+
     private bool CanCritterRemainOnTile(int critterIndex, int tileIndex) =>
         _species[critterIndex] is (CritterSpecies.Ape or CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack) &&
             _apeSettlerTargets.ContainsKey(_critterIds[critterIndex].Value)
                 ? IsApeSettlerTransitTile(critterIndex, tileIndex)
-                : CanLiveOn(_species[critterIndex], tileIndex);
+                : CanCritterLiveOn(critterIndex, tileIndex);
 
     private bool IsApeSettlerTransitTile(int critterIndex, int tileIndex) =>
         _terrain[tileIndex] is not (Terrain.Mountain or Terrain.RingWorldWall) &&

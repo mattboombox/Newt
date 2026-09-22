@@ -47,10 +47,11 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             WorldTool.Farm, WorldTool.LumberCamp, WorldTool.Harbor, WorldTool.ResidentialDistrict,
             WorldTool.MilitaryDistrict, WorldTool.Library, WorldTool.Market, WorldTool.Road];
     private static readonly WorldTool[] OtherToolOrder =
-        [WorldTool.JumpStart, WorldTool.Population, WorldTool.Inspect, WorldTool.Controls];
+        [WorldTool.JumpStart, WorldTool.Inspect];
     private static readonly string[] ControlLines =
     [
         "?  open or close controls",
+        "[  toggle population chart",
         "Esc  quit",
         "H  hide or show HUD",
         "M  open world menu",
@@ -77,7 +78,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private readonly GraphicsDeviceManager _graphics;
     private SimulationWorld _world = null!;
     private WorldPreset _preset = WorldPreset.Standard;
-    private WorldMapType _mapType = WorldMapType.Continents;
+    private WorldMapType _mapType = MenuMapTypes[Random.Shared.Next(MenuMapTypes.Length)];
     private ulong _seed = CreateRandomSeed();
     private string _seedText;
     private SpriteBatch? _spriteBatch;
@@ -97,6 +98,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private Texture2D? _apeBarbarianChiefFlashSprite;
     private Texture2D? _apePirateSprite;
     private Texture2D? _apePirateFlashSprite;
+    private Texture2D? _apePirateChiefSprite;
+    private Texture2D? _apePirateChiefFlashSprite;
     private Texture2D? _apeWarriorVeteranSprite;
     private Texture2D? _apeWarriorVeteranFlashSprite;
     private TimeSpan _accumulator;
@@ -140,6 +143,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
 
     public NewtGame()
     {
+        if (_mapType is WorldMapType.RingWorld)
+            _preset = WorldPreset.Ring;
         _seedText = _seed.ToString(CultureInfo.InvariantCulture);
         _graphics = new GraphicsDeviceManager(this)
         {
@@ -401,6 +406,11 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             _apePirateSprite = sprite;
             _apePirateFlashSprite = flashSprite;
         }
+        if (TryLoadCritterSprite("ape-pirate-chieftain.png", out sprite, out flashSprite))
+        {
+            _apePirateChiefSprite = sprite;
+            _apePirateChiefFlashSprite = flashSprite;
+        }
     }
 
     private bool TryLoadCritterSprite(
@@ -522,7 +532,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 ? _apeColonistSailorFlashSprite
                 : _apeColonistFlashSprite;
         }
-        else if (critter.IsVeteranWarrior && _apeWarriorVeteranSprite is not null)
+        else if (critter.IsVeteranWarrior && !_world.IsBarbarianApe(critter.Id) && _apeWarriorVeteranSprite is not null)
         {
             sprite = _apeWarriorVeteranSprite;
             flashSprite = _apeWarriorVeteranFlashSprite;
@@ -530,15 +540,17 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         else if (_world.IsBarbarianApe(critter.Id) &&
             (critter.Species switch
             {
+                CritterSpecies.ApeChieftain when _world.IsApePirate(critter.Id) => _apePirateChiefSprite,
+                _ when _world.IsApePirate(critter.Id) => _apePirateSprite,
                 CritterSpecies.ApeChieftain => _apeBarbarianChiefSprite,
-                CritterSpecies.ApeSailor => _apePirateSprite,
                 _ => _apeBarbarianSprite,
             }) is not null)
         {
             (sprite, flashSprite) = critter.Species switch
             {
+                CritterSpecies.ApeChieftain when _world.IsApePirate(critter.Id) => (_apePirateChiefSprite, _apePirateChiefFlashSprite),
+                _ when _world.IsApePirate(critter.Id) => (_apePirateSprite, _apePirateFlashSprite),
                 CritterSpecies.ApeChieftain => (_apeBarbarianChiefSprite, _apeBarbarianChiefFlashSprite),
-                CritterSpecies.ApeSailor => (_apePirateSprite, _apePirateFlashSprite),
                 _ => (_apeBarbarianSprite, _apeBarbarianFlashSprite),
             };
         }
@@ -591,6 +603,10 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         if (WasPressed(keyboard, Keys.OemQuestion))
         {
             _controlsWindowOpen = !_controlsWindowOpen;
+        }
+        else if (WasPressed(keyboard, Keys.OemOpenBrackets))
+        {
+            _populationWindowOpen = !_populationWindowOpen;
         }
         else if (WasPressed(keyboard, Keys.OemMinus))
         {
@@ -738,32 +754,6 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         {
             _lifeEnabled = true;
             _world.JumpStartPlankton();
-            return;
-        }
-
-        if (CurrentTool is WorldTool.Population)
-        {
-            if (primaryActivated)
-            {
-                _populationWindowOpen = true;
-            }
-            else if (secondaryActivated)
-            {
-                _populationWindowOpen = false;
-            }
-            return;
-        }
-
-        if (CurrentTool is WorldTool.Controls)
-        {
-            if (primaryActivated)
-            {
-                _controlsWindowOpen = true;
-            }
-            else if (secondaryActivated)
-            {
-                _controlsWindowOpen = false;
-            }
             return;
         }
 
@@ -1169,7 +1159,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         }
 
         var barbarians = _world.GetBarbarianPopulationBySpecies();
-        var pirates = barbarians[(int)CritterSpecies.ApeSailor];
+        var pirates = Enumerable.Range(0, _world.CritterCount).Select(_world.GetCritter)
+            .Count(critter => critter.Species is not CritterSpecies.ApeChieftain && _world.IsApePirate(critter.Id));
         var chiefs = barbarians[(int)CritterSpecies.ApeChieftain];
         var warriors = barbarians.Sum() - pirates - chiefs;
         var populations = Enum.GetValues<CritterSpecies>()
@@ -1297,7 +1288,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             new Color(126, 190, 213));
         _spriteBatch.DrawString(
             _hudFont,
-            "Press ? or right-click the Controls tool to close",
+            "Press ? to close",
             new Vector2(bounds.X + padding, bounds.Y + 29),
             new Color(175, 184, 190));
 
@@ -1321,7 +1312,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         {
             AppendPopulationSample(_populationHistory[species], _world.GetCritterCount(species) - barbarians[(int)species]);
         }
-        var pirates = barbarians[(int)CritterSpecies.ApeSailor];
+        var pirates = Enumerable.Range(0, _world.CritterCount).Select(_world.GetCritter)
+            .Count(critter => critter.Species is not CritterSpecies.ApeChieftain && _world.IsApePirate(critter.Id));
         var chiefs = barbarians[(int)CritterSpecies.ApeChieftain];
         AppendPopulationSample(_barbarianHistory, barbarians.Sum() - pirates - chiefs);
         AppendPopulationSample(_pirateHistory, pirates);
@@ -1725,7 +1717,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         _world.IsBarbarianApe(critter.Id) ? critter.Species switch
         {
             CritterSpecies.Dog => "Barbarian Dog",
-            CritterSpecies.ApeSailor => "Ape Pirate",
+            CritterSpecies.ApeChieftain when _world.IsApePirate(critter.Id) => "Pirate Chieftain",
+            _ when _world.IsApePirate(critter.Id) => "Ape Pirate",
             CritterSpecies.ApeChieftain => "Barbarian Chieftain",
             _ => "Barbarian Warrior",
         } : GetCritterDisplayName(critter.Species);
@@ -2719,12 +2712,6 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         WorldTool.LumberCamp or WorldTool.Harbor or WorldTool.ResidentialDistrict or
             WorldTool.MilitaryDistrict or WorldTool.Library => "L place beside village buildings",
         WorldTool.BarbarianApeVillage => "L place barbarian village with 2 apes",
-        WorldTool.Population => _populationWindowOpen
-            ? "Open; R close"
-            : "L open counts",
-        WorldTool.Controls => _controlsWindowOpen
-            ? "Open; R close or ?"
-            : "L open or ?",
         WorldTool.Inspect => _inspectedCritterId.IsValid
             ? "Following; R clear"
             : "L follow; R clear",
@@ -2822,8 +2809,6 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         MilitaryDistrict,
         Library,
         Road,
-        Population,
-        Controls,
         Inspect,
         Plague,
         ZombiePlague,

@@ -34,7 +34,8 @@ public sealed partial class SimulationWorld
         _surfaceCovers[tile] is SurfaceCover.None;
 
     private int RoadTerrainCostMultiplier(int tile) =>
-        _terrain[tile] is Terrain.Hills or Terrain.Canyon or Terrain.Beach or Terrain.Trench ? 3 : 1;
+        _terrain[tile] is Terrain.Hills or Terrain.Canyon or Terrain.Beach or Terrain.Trench ||
+        _biomes[tile] is Biome.Swamp or Biome.Bog or Biome.Jungle ? 3 : 1;
 
     private IEnumerable<int> RoadNeighbors(int tile)
     {
