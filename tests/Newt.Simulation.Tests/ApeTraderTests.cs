@@ -116,8 +116,8 @@ public sealed class ApeTraderTests
             world.AdvanceApeTraders();
             Assert.True(world.TryGetCritter(first.Id, out first));
             Assert.True(world.TryGetCritter(second.Id, out second));
-            firstArrived |= first.Position == Second;
-            secondArrived |= second.Position == First;
+            firstArrived |= first.Position == secondMarket;
+            secondArrived |= second.Position == firstMarket;
             Assert.Equal(firstMarket, world.GetApeTraderMarket(first.Id));
             Assert.Equal(secondMarket, world.GetApeTraderMarket(second.Id));
             foreach (var critter in new[] { first, second })
@@ -146,7 +146,7 @@ public sealed class ApeTraderTests
         Assert.True(world.TryRecruitApeMarketTrader(secondMarket.Y * world.Width + secondMarket.X));
         var second = Enumerable.Range(0, world.CritterCount).Select(world.GetCritter)
             .Single(critter => critter.Id != first.Id);
-        second = Arrive(world, second, First);
+        second = Arrive(world, second, firstMarket);
         var y = sea ? 8 : 10;
         second = Arrive(world, second, new(20, y));
         first = Arrive(world, first, new(19, y));
@@ -164,9 +164,9 @@ public sealed class ApeTraderTests
         {
             first = Move(world, first);
             Assert.True(world.TryGetCritter(second.Id, out second));
-            arrived |= second.Position == Second;
+            arrived |= second.Position == secondMarket;
             second = Move(world, second);
-            arrived |= second.Position == Second;
+            arrived |= second.Position == secondMarket;
             world.AdvanceApeTraders();
             Assert.True(world.TryGetCritter(first.Id, out first));
             Assert.True(world.TryGetCritter(second.Id, out second));
@@ -179,6 +179,36 @@ public sealed class ApeTraderTests
         world.MoveApeTrader(trader.Id);
         Assert.True(world.TryGetCritter(trader.Id, out trader));
         return trader;
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void TraderDisplacedSeveralTilesRecoversAndKeepsTrading(bool sea)
+    {
+        var world = CreateWorld(sea);
+        if (!sea)
+            Assert.True(world.TryPlaceVillageRoad(First));
+        else
+            for (var y = 4; y <= 8; y++)
+                for (var x = 16; x <= 24; x++)
+                    world.SetTerrain(new(x, y), Terrain.Ocean);
+        var market = AddMarket(world, First);
+        var destinationMarket = AddMarket(world, Second);
+        var trader = Recruit(world, market);
+        trader = Arrive(world, trader, new(20, sea ? 8 : 10));
+        var displaced = new GridPosition(20, sea ? 4 : 14);
+        var indices = (Dictionary<int, int>)typeof(SimulationWorld)
+            .GetField("_critterIndicesById", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(world)!;
+        typeof(SimulationWorld).GetMethod("MoveCritter", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(world, [indices[trader.Id.Value], displaced.Y * world.Width + displaced.X, displaced, false]);
+        Assert.True(world.TryGetCritter(trader.Id, out trader));
+        for (var trip = 0; trip < 100; trip++)
+        {
+            trader = Arrive(world, trader, destinationMarket);
+            trader = Arrive(world, trader, market);
+        }
+        Assert.Equal(market, trader.Position);
     }
 
     private static CritterSnapshot Arrive(SimulationWorld world, CritterSnapshot trader, GridPosition target)
@@ -307,6 +337,67 @@ public sealed class ApeTraderTests
         Assert.Equal(1, world.GetApeMarketTraderCount(market));
     }
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void TradersVisitDestinationMarketAndReturnFromTheirActualStop(bool sea, bool destinationHasMarket)
+    {
+        var world = CreateWorld(sea);
+        if (!sea)
+            Assert.True(world.TryPlaceVillageRoad(First));
+        var homeMarket = AddMarket(world, First);
+        var stop = destinationHasMarket ? AddMarket(world, Second) : Second;
+        var trader = Recruit(world, homeMarket);
+        Assert.Equal(Second, world.GetApeTraderDestination(trader.Id));
+        trader = Arrive(world, trader, stop);
+        world.AdvanceApeTraders();
+        Assert.True(world.TryGetCritter(trader.Id, out trader));
+        trader = Move(world, trader);
+        Assert.Equal(First, world.GetApeTraderDestination(trader.Id));
+        trader = Arrive(world, trader, homeMarket);
+        Assert.Equal(homeMarket, trader.Position);
+    }
+
+    [Fact]
+    public void SeaTradersCrossOpenWaterDirectly()
+    {
+        var world = CreateWorld(sea: true);
+        for (var y = 2; y <= 8; y++)
+            for (var x = First.X; x <= Second.X; x++)
+                world.SetTerrain(new(x, y), Terrain.Ocean);
+        var trader = Recruit(world, AddMarket(world, First));
+        for (var i = 0; i < 50 && trader.Position != Second; i++)
+        {
+            trader = Move(world, trader);
+            Assert.True(trader.Position.Y >= 8, "Open-water crossing wandered away from the harbors.");
+        }
+        Assert.Equal(Second, trader.Position);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void SeaTradersAvoidDeepOceanWhenAShortDetourExists(bool detour)
+    {
+        var world = CreateWorld(sea: true);
+        for (var x = 17; x <= 23; x++)
+            world.SetTerrain(new(x, 8), Terrain.DeepOcean);
+        if (detour)
+            for (var x = First.X; x <= Second.X; x++)
+                world.SetTerrain(new(x, 7), Terrain.Ocean);
+        var trader = Recruit(world, AddMarket(world, First));
+        var crossedDeepOcean = false;
+        for (var i = 0; i < 50 && trader.Position != Second; i++)
+        {
+            trader = Move(world, trader);
+            crossedDeepOcean |= world.GetTerrain(trader.Position) is Terrain.DeepOcean;
+        }
+        Assert.Equal(Second, trader.Position);
+        Assert.Equal(!detour, crossedDeepOcean);
+    }
+
     [Fact]
     public void SameTraderBoardsAtHarborAndDisembarksWithoutLosingProvisionsOrOwnership()
     {
@@ -344,7 +435,7 @@ public sealed class ApeTraderTests
             trader = Move(world, trader);
             visited.Add(trader.Position);
         }
-        Assert.Contains(First, visited);
+        Assert.Contains(world.GetApeTraderMarket(trader.Id)!.Value, visited);
         Assert.Contains(Second, visited);
         Assert.Contains(third, visited);
     }
@@ -384,14 +475,14 @@ public sealed class ApeTraderTests
         Assert.Equal(initial + 5, trader.Energy);
         Assert.Equal(0, world.GetApeVillageFood(Second));
         Assert.Equal(5, world.GetApeVillageFood(First));
-        trader = Arrive(world, trader, First);
+        trader = Arrive(world, trader, world.GetApeTraderMarket(trader.Id)!.Value);
         Assert.Equal(initial + 10, trader.Energy);
         Assert.Equal(0, world.GetApeVillageFood(First));
         for (var i = 0; i < 12; i++)
         {
             world.StoreApeVillageFood(Second, 5);
             trader = Arrive(world, trader, Second);
-            trader = Arrive(world, trader, First);
+            trader = Arrive(world, trader, world.GetApeTraderMarket(trader.Id)!.Value);
         }
         Assert.Equal(48, trader.Energy);
         Assert.True(world.GetApeVillageFood(Second) > 0);

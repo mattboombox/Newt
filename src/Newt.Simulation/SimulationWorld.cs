@@ -6320,7 +6320,8 @@ public sealed partial class SimulationWorld
             }
 
             var candidateIndex = GetIndex(candidate);
-            if (_occupants[candidateIndex] < 0 && CanCritterLiveOn(blockerIndex, candidateIndex))
+            if (_occupants[candidateIndex] < 0 && CanCritterLiveOn(blockerIndex, candidateIndex) &&
+                CanTraderRecoverFromShove(blockerIndex, candidateIndex))
             {
                 return candidate;
             }

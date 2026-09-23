@@ -79,11 +79,14 @@ public sealed partial class SimulationWorld
     private List<int>? FindTraderPath(int start, int currentVillage, int previousVillage = -1, bool random = true)
     {
         var previous = new Dictionary<int, int> { [start] = -1 };
-        var pending = new Queue<int>();
+        var costs = new Dictionary<int, double> { [start] = 0 };
+        var pending = new PriorityQueue<int, (double Cost, int Tile)>();
         var destinations = new List<int>();
-        pending.Enqueue(start);
-        while (pending.TryDequeue(out var current))
+        pending.Enqueue(start, (0, start));
+        while (pending.TryDequeue(out var current, out var priority))
         {
+            if (priority.Cost > costs[current])
+                continue;
             if (current != currentVillage && IsRoadVillage(current))
             {
                 destinations.Add(current);
@@ -92,9 +95,12 @@ public sealed partial class SimulationWorld
             }
             foreach (var next in TraderNeighbors(current))
             {
-                if (!previous.TryAdd(next, current))
+                var cost = costs[current] + TraderEdgeCost(current, next);
+                if (costs.TryGetValue(next, out var best) && cost >= best)
                     continue;
-                pending.Enqueue(next);
+                costs[next] = cost;
+                previous[next] = current;
+                pending.Enqueue(next, (cost, next));
             }
         }
         if (destinations.Count == 0)
@@ -102,11 +108,34 @@ public sealed partial class SimulationWorld
         if (destinations.Count > 1)
             destinations.Remove(previousVillage);
         var end = destinations[random ? NextInt(destinations.Count) : 0];
+        // Keep village selection separate from the final stop. Settlement links
+        // connect markets to the same road/harbor network as their village center.
+        if (random)
+            end = _apeAuxiliaryVillages
+                .Where(pair => pair.Value == end &&
+                    _apeStructures.GetValueOrDefault(pair.Key) is ApeStructureKind.Market &&
+                    costs.ContainsKey(pair.Key))
+                .Select(pair => pair.Key).DefaultIfEmpty(end).Min();
         var path = new List<int>();
         for (var tile = end; tile >= 0; tile = previous[tile])
             path.Add(tile);
         path.Reverse();
         return path;
+    }
+
+    private int TraderDestinationVillage(List<int> path) =>
+        _apeAuxiliaryVillages.GetValueOrDefault(path[^1], path[^1]);
+
+    private double TraderEdgeCost(int from, int to)
+    {
+        if (!IsTraderWater(from) || !IsTraderWater(to))
+            return 1;
+        var origin = GetPosition(from);
+        var destination = GetPosition(to);
+        // Diagonals cover more distance, including across the world's horizontal seam.
+        // A finite depth penalty permits necessary crossings without huge coastal detours.
+        var distance = origin.X != destination.X && origin.Y != destination.Y ? Math.Sqrt(2) : 1;
+        return distance * (GetTerrain(destination) is Terrain.DeepOcean ? 2 : 1);
     }
 
     public bool CanBuildApeMarket(GridPosition village)
@@ -180,7 +209,7 @@ public sealed partial class SimulationWorld
         var index = _critterIndicesById[id.Value];
         _energy[index] = ApeTraderRecruitmentFoodCost;
         _apeVillageFood[village] -= ApeTraderRecruitmentFoodCost;
-        _traderJourneys[id.Value] = new(market, village, path[^1], path);
+        _traderJourneys[id.Value] = new(market, village, TraderDestinationVillage(path), path);
         RefillApeTraderProvisions(index);
         return true;
     }
@@ -232,6 +261,50 @@ public sealed partial class SimulationWorld
             RefillApeTraderProvisions(index);
             return;
         }
+
+        // Repeated shoves can leave a trader more than one tile from its route.
+        // Search a bounded local area for an empty recovery path, keeping the
+        // current travel form so recovery cannot board away from a harbor.
+        var parents = new Dictionary<int, int> { [current] = -1 };
+        var pending = new Queue<int>();
+        pending.Enqueue(current);
+        while (pending.TryDequeue(out var tile) && parents.Count <= 256)
+        {
+            foreach (var next in RoadNeighbors(tile))
+            {
+                if (parents.ContainsKey(next) || _occupants[next] >= 0 ||
+                    reservedPrey?.Contains(GetPosition(next)) is true ||
+                    !CanLiveOn(_species[index], next) ||
+                    IsTraderWater(next) != (_species[index] is CritterSpecies.ApeTraderSailor))
+                    continue;
+                parents[next] = tile;
+                var step = next == journey.Tiles[journey.Step] ? journey.Step :
+                    journey.Step + 1 < journey.Tiles.Count && next == journey.Tiles[journey.Step + 1]
+                        ? journey.Step + 1 : -1;
+                if (step >= 0)
+                {
+                    var move = next;
+                    while (parents[move] != current)
+                        move = parents[move];
+                    MoveCritter(index, move, GetPosition(move), activateTeleporter: false);
+                    if (move == next)
+                        journey.Step = step;
+                    RefillApeTraderProvisions(index);
+                    return;
+                }
+                pending.Enqueue(next);
+            }
+        }
+    }
+
+    private bool CanTraderRecoverFromShove(int index, int tile)
+    {
+        if (!_traderJourneys.TryGetValue(_critterIds[index].Value, out var journey))
+            return true;
+        return RoadNeighbors(tile).Any(next =>
+            (next == journey.Tiles[journey.Step] ||
+                journey.Step + 1 < journey.Tiles.Count && next == journey.Tiles[journey.Step + 1]) &&
+            CanLiveOn(_species[index], next) && IsTraderWater(next) == IsTraderWater(tile));
     }
     private bool TryPassTrader(int index, TraderJourney journey, int next, IReadOnlySet<GridPosition>? reservedPrey)
     {
@@ -290,11 +363,11 @@ public sealed partial class SimulationWorld
         if (journey.Step == journey.Tiles.Count - 1)
         {
             RebuildTraderSettlementLinks();
-            var path = FindTraderPath(journey.Destination, journey.Destination, journey.Origin);
+            var path = FindTraderPath(journey.Tiles[^1], journey.Destination, journey.Origin);
             if (path is null)
                 return null;
             journey.Origin = journey.Destination;
-            journey.Destination = path[^1];
+            journey.Destination = TraderDestinationVillage(path);
             journey.Tiles = path;
             journey.Step = 0;
         }
