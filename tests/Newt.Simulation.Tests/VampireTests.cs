@@ -26,7 +26,7 @@ public sealed class VampireTests
         var world = CreateWorld();
         var infected = world.AddCritter(CritterSpecies.Ape, new(10, 10));
         var neighbor = world.AddCritter(CritterSpecies.Ape, new(11, 10));
-        Assert.True(world.TryInfectApeAt(new(10, 10), PlagueKind.Vampire));
+        Assert.True(world.TryInfectApeAt(new(10, 10), PlagueKind.Vampire, 0));
         for (var tick = 0; tick < SimulationWorld.PlagueSpreadIntervalTicks; tick++)
             world.AdvanceOneTick();
         Assert.True(world.TryGetCritter(neighbor, out var healthy));
@@ -38,7 +38,7 @@ public sealed class VampireTests
         Assert.Equal(PlagueKind.None, vampire.Plague);
         Assert.True(vampire.IsPlagueImmune);
         foreach (var strain in new[] { PlagueKind.Plague, PlagueKind.Zombie, PlagueKind.Vampire })
-            Assert.False(world.TryInfectApeAt(vampire.Position, strain));
+            Assert.False(world.TryInfectApeAt(vampire.Position, strain, 0));
     }
 
     [Theory]

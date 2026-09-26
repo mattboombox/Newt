@@ -1362,8 +1362,10 @@ public sealed partial class SimulationWorld
         AdvanceApeVillages();
         if (Tick % TicksPerSecond == 1)
             AdvanceApeTraders();
+            AdvanceApeWars();
         AdvanceApeRuins();
         AdvanceVillagePlagueOutbreaks();
+        AdvanceVillageWarOutbreaks();
         AdvanceVillageFeasts();
         if (PlanktonRecoveryEnabled && Tick >= _nextPlanktonRecoveryTick)
         {
@@ -1406,6 +1408,10 @@ public sealed partial class SimulationWorld
                 (isStranded ? StrandedMovementIntervalMultiplier : 1);
             var prey = isStranded
                 ? TryMoveStranded(index)
+                : _returningWarSailors.ContainsKey(_critterIds[index].Value) && !TryGetApeWar(index, out _)
+                    ? TryReturnWarSailor(index, reservedPrey)
+                : _species[index] is (CritterSpecies.ApeWarrior or CritterSpecies.ApeChieftain) && TryGetApeWar(index, out _)
+                    ? TryMoveWarApe(index, reservedPrey)
                 : _species[index] is CritterSpecies.Dog
                     ? TryMoveDog(index, reservedPrey)
                 : IsBarbarianApe(index)
@@ -2193,6 +2199,11 @@ public sealed partial class SimulationWorld
         _apeVillageHomes.Count(pair => pair.Value == villageTile &&
             _critterIndicesById.TryGetValue(pair.Key, out var index) && _species[index] is not CritterSpecies.Dog);
 
+    private int GetApeVillageSustainingPopulation(int villageTile) =>
+        _apeVillageHomes.Count(pair => pair.Value == villageTile &&
+            _critterIndicesById.TryGetValue(pair.Key, out var index) &&
+            _species[index] is not (CritterSpecies.Dog or CritterSpecies.ApeTrader or CritterSpecies.ApeTraderSailor));
+
     private int GetApeVillagePopulationCapacityByTile(int villageTile) =>
         _barbarianVillageTiles.Contains(villageTile)
             ? BarbarianVillagePopulationCapacity
@@ -2257,7 +2268,7 @@ public sealed partial class SimulationWorld
         {
             if (_barbarianVillageTiles.Contains(villageTile))
             {
-                if (GetApeVillageResidentCountByTile(villageTile) == 0)
+                if (GetApeVillageSustainingPopulation(villageTile) == 0)
                 {
                     RemoveAbandonedApeVillage(villageTile);
                 }
@@ -2271,13 +2282,14 @@ public sealed partial class SimulationWorld
                 continue;
             }
             var population = GetApeVillageResidentCountByTile(villageTile);
-            if (population == 0)
+            var sustainingPopulation = GetApeVillageSustainingPopulation(villageTile);
+            if (sustainingPopulation == 0)
             {
                 RemoveAbandonedApeVillage(villageTile);
                 continue;
             }
 
-            if (TryLaunchLoneApeSailorColonist(villageTile, population))
+            if (TryLaunchLoneApeSailorColonist(villageTile, sustainingPopulation))
             {
                 RemoveAbandonedApeVillage(villageTile);
                 continue;
@@ -5461,11 +5473,11 @@ public sealed partial class SimulationWorld
         }
         if (_species[predatorIndex] is CritterSpecies.UndeadApe)
         {
-            TryInfectApeAt(preyPosition, PlagueKind.Zombie);
+            TryInfectApeAt(preyPosition, PlagueKind.Zombie, GetPlagueImmunityRemainder(predatorIndex));
         }
         if (_species[preyIndex] is CritterSpecies.UndeadApe)
         {
-            TryInfectApeAt(predatorPosition, PlagueKind.Zombie);
+            TryInfectApeAt(predatorPosition, PlagueKind.Zombie, GetPlagueImmunityRemainder(preyIndex));
         }
         // Combat-capable prey must be defeated before any special feeding path runs.
         if (CanCritterFight(_species[preyIndex]))
@@ -5699,6 +5711,9 @@ public sealed partial class SimulationWorld
 
     private bool CanEatInCurrentContext(int predatorIndex, int preyIndex)
     {
+        if (AreWarEnemies(predatorIndex, preyIndex))
+            return _species[predatorIndex] is (CritterSpecies.ApeWarrior or CritterSpecies.ApeChieftain) &&
+                CanTargetWarApe(predatorIndex, preyIndex);
         if (IsReservedVillageDog(predatorIndex))
             return false;
         if (_species[preyIndex] is CritterSpecies.Vampire &&
@@ -6876,11 +6891,13 @@ public sealed partial class SimulationWorld
         _traderJourneys.Remove(removedId.Value);
         DetachVampireFromLair(removedId.Value);
         _chieftainAttackTargets.Remove(removedId.Value);
+        _returningWarSailors.Remove(removedId.Value);
         _warriorCombatKills.Remove(removedId.Value);
         _toothedWhaleHunts.Remove(removedId.Value);
         var removedSpecies = _species[critterIndex];
         _critterIndicesById.Remove(removedId.Value);
         _plagues.Remove(removedId.Value);
+        _plagueImmunityRemainders.Remove(removedId.Value);
         _apeColonistTechnologies.Remove(removedId.Value);
         DetachWolfFromDens(removedId.Value);
         DetachMegaSpiderFromWeb(removedId.Value);
@@ -6991,7 +7008,7 @@ public sealed partial class SimulationWorld
                     _surfaceCovers[tileIndex]));
 
     private bool CanCritterLiveOn(int critterIndex, int tileIndex) =>
-        IsLivingApe(_species[critterIndex]) && IsBarbarianApe(critterIndex)
+        (IsLivingApe(_species[critterIndex]) && IsBarbarianApe(critterIndex)) || CanWarApeSail(critterIndex)
             ? CanLiveOn(CritterSpecies.Ape, tileIndex) || CanLiveOn(CritterSpecies.ApeSailor, tileIndex)
             : CanLiveOn(_species[critterIndex], tileIndex);
 
@@ -7167,3 +7184,4 @@ public sealed partial class SimulationWorld
         return result < 0 ? result + modulus : result;
     }
 }
+

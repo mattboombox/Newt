@@ -12,6 +12,8 @@ namespace Newt.Game;
 /// <summary>MonoGame host responsible only for input, timing, and presentation.</summary>
 public sealed class NewtGame : Microsoft.Xna.Framework.Game
 {
+    private GridPosition? _warAttacker;
+    private string _warToolStatus = "L select attacker / village at war: stop";
     private const int HudHeight = 156;
     private const int HudPadding = 12;
     private const double ToolRepeatDelaySeconds = 0.25;
@@ -34,7 +36,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private static readonly WorldTool[] EventToolOrder =
         [WorldTool.Meteor, WorldTool.Tsunami, WorldTool.WatershedShift,
             WorldTool.Evolve, WorldTool.NaturalEvents, WorldTool.Colonist,
-            WorldTool.Plague, WorldTool.ZombiePlague, WorldTool.VampirePlague, WorldTool.Feast];
+            WorldTool.Plague, WorldTool.ZombiePlague, WorldTool.VampirePlague, WorldTool.Feast, WorldTool.War, WorldTool.BloodWar, WorldTool.CivilWar];
     private static readonly WorldTool[] CritterToolOrder =
         [WorldTool.Plankton, WorldTool.Jellyfish, WorldTool.Worm, WorldTool.Trilobite,
             WorldTool.SeaScorpion, WorldTool.Nautilus, WorldTool.Squid, WorldTool.SquidEgg,
@@ -102,6 +104,9 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private Texture2D? _apePirateChiefFlashSprite;
     private Texture2D? _apeWarriorVeteranSprite;
     private Texture2D? _apeWarriorVeteranFlashSprite;
+    private Texture2D? _apeSailorWarriorSprite, _apeSailorWarriorFlashSprite;
+    private Texture2D? _apeSailorChiefSprite, _apeSailorChiefFlashSprite;
+    private readonly Dictionary<(bool Attacking, bool Sailing), (Texture2D Sprite, Texture2D Flash)> _apeWarTeamSprites = [];
     private TimeSpan _accumulator;
     private KeyboardState _previousKeyboard;
     private MouseState _previousMouse;
@@ -137,7 +142,6 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         Enum.GetValues<CritterSpecies>().ToDictionary(species => species, _ => new List<int>());
     private readonly List<int> _sickApeHistory = [];
     private readonly List<int> _barbarianHistory = [];
-    private readonly List<int> _pirateHistory = [];
     private readonly List<int> _barbarianChiefHistory = [];
     private long _nextPopulationSampleTick;
 
@@ -371,6 +375,24 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
 
     private void LoadApeVariantSprites()
     {
+        foreach (var attacking in new[] { true, false })
+            foreach (var sailing in new[] { false, true })
+            {
+                var color = attacking ? "red" : "blue";
+                var role = sailing ? "ape-sailor-warrior" : "ape-warrior";
+                if (TryLoadCritterSprite($"{role}-{color}.png", out var teamSprite, out var teamFlash))
+                    _apeWarTeamSprites[(attacking, sailing)] = (teamSprite, teamFlash);
+            }
+        if (TryLoadCritterSprite("ape-sailor-warrior.png", out var sailorWarrior, out var sailorWarriorFlash))
+        {
+            _apeSailorWarriorSprite = sailorWarrior;
+            _apeSailorWarriorFlashSprite = sailorWarriorFlash;
+        }
+        if (TryLoadCritterSprite("ape-sailor-chieftain.png", out var sailorChief, out var sailorChiefFlash))
+        {
+            _apeSailorChiefSprite = sailorChief;
+            _apeSailorChiefFlashSprite = sailorChiefFlash;
+        }
         if (TryLoadCritterSprite("ape-warrior-veteran.png", out var veteran, out var veteranFlash))
         {
             _apeWarriorVeteranSprite = veteran;
@@ -531,6 +553,19 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             flashSprite = colonistInWater
                 ? _apeColonistSailorFlashSprite
                 : _apeColonistFlashSprite;
+        }
+        else if (critter.Species is CritterSpecies.ApeWarrior &&
+            _world.TryGetApeWarSide(critter.Id, out var attacking) &&
+            _apeWarTeamSprites.TryGetValue((attacking, IsWaterTile(critter.Position)), out var teamSprites))
+        {
+            (sprite, flashSprite) = teamSprites;
+        }
+        else if (critter.Species is (CritterSpecies.ApeWarrior or CritterSpecies.ApeChieftain) &&
+            !_world.IsBarbarianApe(critter.Id) && IsWaterTile(critter.Position) &&
+            (critter.Species == CritterSpecies.ApeWarrior ? _apeSailorWarriorSprite : _apeSailorChiefSprite) is not null)
+        {
+            sprite = critter.Species == CritterSpecies.ApeWarrior ? _apeSailorWarriorSprite : _apeSailorChiefSprite;
+            flashSprite = critter.Species == CritterSpecies.ApeWarrior ? _apeSailorWarriorFlashSprite : _apeSailorChiefFlashSprite;
         }
         else if (critter.IsVeteranWarrior && !_world.IsBarbarianApe(critter.Id) && _apeWarriorVeteranSprite is not null)
         {
@@ -920,6 +955,43 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             case WorldTool.Colonist when primaryActivated:
                 _world.TrySendApeColonist(position.Value);
                 break;
+            case WorldTool.War when primaryActivated:
+            case WorldTool.BloodWar when primaryActivated:
+            case WorldTool.CivilWar when primaryActivated:
+                if (_world.GetApeStructureVillage(position.Value) is { } warVillage)
+                {
+                    if (_world.TryStopApeWar(warVillage))
+                    {
+                        _warAttacker = null;
+                        _warToolStatus = "War stopped! L select another attacker";
+                    }
+                    else if (CurrentTool == WorldTool.CivilWar)
+                    {
+                        _warAttacker = null;
+                        _warToolStatus = _world.TryStartApeCivilWar(warVillage)
+                            ? "Civil war started! L village at war: stop"
+                            : "Cannot start: need at least two village apes";
+                    }
+                    else if (_warAttacker is not { } attacker)
+                    {
+                        _warAttacker = warVillage;
+                        _warToolStatus = "L select defender / village at war: stop / R cancel";
+                    }
+                    else if (_world.TryStartApeWar(attacker, warVillage, CurrentTool == WorldTool.BloodWar))
+                    {
+                        _warAttacker = null;
+                        _warToolStatus = "War started! L select another attacker";
+                    }
+                    else
+                        _warToolStatus = "Cannot start: check armies, access or existing war";
+                }
+                break;
+            case WorldTool.War when secondaryActivated:
+            case WorldTool.BloodWar when secondaryActivated:
+            case WorldTool.CivilWar when secondaryActivated:
+                _warAttacker = null;
+                _warToolStatus = "L select attacker / village at war: stop";
+                break;
             case WorldTool.ApeVillage when primaryActivated:
                 _world.TrySpawnTestApeVillage(position.Value);
                 break;
@@ -1159,10 +1231,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         }
 
         var barbarians = _world.GetBarbarianPopulationBySpecies();
-        var pirates = Enumerable.Range(0, _world.CritterCount).Select(_world.GetCritter)
-            .Count(critter => critter.Species is not CritterSpecies.ApeChieftain && _world.IsApePirate(critter.Id));
         var chiefs = barbarians[(int)CritterSpecies.ApeChieftain];
-        var warriors = barbarians.Sum() - pirates - chiefs;
+        var warriors = barbarians.Sum() - chiefs;
         var populations = Enum.GetValues<CritterSpecies>()
             .Select(species => (Name: GetCritterDisplayName(species),
                 Count: _world.GetCritterCount(species) - barbarians[(int)species], Color: GetCritterColor(species),
@@ -1171,8 +1241,6 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             .ToList();
         if (warriors > 0)
             populations.Add(("Ape Barbarian", warriors, new Color(190, 95, 60), _barbarianHistory));
-        if (pirates > 0)
-            populations.Add(("Ape Pirate", pirates, new Color(185, 125, 65), _pirateHistory));
         if (chiefs > 0)
             populations.Add(("Barbarian Chieftain", chiefs, new Color(210, 75, 55), _barbarianChiefHistory));
         if (_world.SickApeCount > 0)
@@ -1312,11 +1380,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         {
             AppendPopulationSample(_populationHistory[species], _world.GetCritterCount(species) - barbarians[(int)species]);
         }
-        var pirates = Enumerable.Range(0, _world.CritterCount).Select(_world.GetCritter)
-            .Count(critter => critter.Species is not CritterSpecies.ApeChieftain && _world.IsApePirate(critter.Id));
         var chiefs = barbarians[(int)CritterSpecies.ApeChieftain];
-        AppendPopulationSample(_barbarianHistory, barbarians.Sum() - pirates - chiefs);
-        AppendPopulationSample(_pirateHistory, pirates);
+        AppendPopulationSample(_barbarianHistory, barbarians.Sum() - chiefs);
         AppendPopulationSample(_barbarianChiefHistory, chiefs);
         AppendPopulationSample(_sickApeHistory, _world.SickApeCount);
         _nextPopulationSampleTick = _world.Tick + PopulationSampleIntervalTicks;
@@ -1726,13 +1791,13 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private static string GetPlagueDescription(CritterSnapshot critter) =>
         critter.Species is CritterSpecies.Vampire ? "Vampire: disease immune, feeds through damage" :
         critter.Species is CritterSpecies.UndeadApe ? "Undead: contagious, cannot reproduce" :
-        critter.IsPlagueImmune ? "Plague immune: ID divisible by 5" :
+        critter.IsPlagueImmune ? "Plague immune" :
         critter.Plague switch
         {
             PlagueKind.Plague => "Plague: -1 energy / 10 seconds",
             PlagueKind.Zombie => "Zombie plague: -1 energy / 10s, rises on death",
             PlagueKind.Vampire => "Vampire plague: non-contagious, rises on death",
-            _ => "Plague: susceptible",
+            _ => "Plague: immunity varies by outbreak",
         };
 
     private static string GetCritterDiet(CritterSpecies species) => species switch
@@ -1883,6 +1948,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private void GenerateWorld()
     {
         ResetSpeedGuard();
+        _warAttacker = null;
+        _warToolStatus = "L select attacker / village at war: stop";
         _world = WorldGenerator.Generate(new WorldGenerationOptions(_preset, _seed, MapType: _mapType));
         _cameraX = 0;
         _cameraY = 0;
@@ -1895,7 +1962,6 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         }
         _sickApeHistory.Clear();
         _barbarianHistory.Clear();
-        _pirateHistory.Clear();
         _barbarianChiefHistory.Clear();
         RecordPopulationSample();
     }
@@ -2705,6 +2771,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         WorldTool.Lava => "L add; R clear",
         WorldTool.JumpStart => "L seed plankton",
         WorldTool.Colonist => "L village: auto; tile: target",
+        WorldTool.War or WorldTool.BloodWar => _warToolStatus,
+        WorldTool.CivilWar => "L village: start civil war / village at war: stop",
         WorldTool.ApeVillage => "L place village with 2 apes",
         WorldTool.Road => "L village: join road network (any population); R remove",
         WorldTool.Farm => "L place biome farm beside village buildings",
@@ -2720,6 +2788,9 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
 
     private static string GetToolName(WorldTool tool) => tool switch
     {
+        WorldTool.War => "War",
+        WorldTool.BloodWar => "Blood War",
+        WorldTool.CivilWar => "Civil War",
         WorldTool.ApeVillage => "Ape Village",
         WorldTool.LumberCamp => "Lumber Camp",
         WorldTool.ResidentialDistrict => "Residential District",
@@ -2814,5 +2885,10 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         ZombiePlague,
         VampirePlague,
         Feast,
+        War,
+        BloodWar,
+        CivilWar,
     }
 }
+
+

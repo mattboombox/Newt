@@ -369,14 +369,14 @@ public sealed class ApeTests
         world.AddCritter(CritterSpecies.Ape, immune);
         Assert.Equal(0, world.SickApeCount);
 
-        Assert.True(world.TryInfectApeAt(ape, PlagueKind.Plague));
-        Assert.True(world.TryInfectApeAt(sailor, PlagueKind.Zombie));
-        Assert.False(world.TryInfectApeAt(immune, PlagueKind.Plague));
+        Assert.True(world.TryInfectApeAt(ape, PlagueKind.Plague, 0));
+        Assert.True(world.TryInfectApeAt(sailor, PlagueKind.Zombie, 0));
+        Assert.False(world.TryInfectApeAt(immune, PlagueKind.Plague, 0));
         Assert.Equal(2, world.SickApeCount);
         Assert.Equal(5, world.CritterCount);
 
-        Assert.True(world.TryInfectApeAt(ape, PlagueKind.Zombie));
-        Assert.False(world.TryInfectApeAt(sailor, PlagueKind.Zombie));
+        Assert.True(world.TryInfectApeAt(ape, PlagueKind.Zombie, 0));
+        Assert.False(world.TryInfectApeAt(sailor, PlagueKind.Zombie, 0));
         Assert.Equal(2, world.SickApeCount);
         Assert.True(world.RemoveCritterAt(healthy));
         Assert.Equal(2, world.SickApeCount);
@@ -396,7 +396,7 @@ public sealed class ApeTests
         {
             world.AddCritter(CritterSpecies.Ape, position);
         }
-        Assert.True(world.TryInfectApeAt(new GridPosition(0, 0), kind));
+        Assert.True(world.TryInfectApeAt(new GridPosition(0, 0), kind, 0));
         AdvancePlagueTicks(world, SimulationWorld.PlagueSpreadIntervalTicks);
 
         Assert.Equal(kind, CritterAt(world, new GridPosition(1, 0)).Plague);
@@ -405,8 +405,8 @@ public sealed class ApeTests
         Assert.Equal(kind, CritterAt(world, new GridPosition(5, 1)).Plague);
         Assert.Equal(PlagueKind.None, CritterAt(world, new GridPosition(2, 0)).Plague);
         Assert.Equal(PlagueKind.None, CritterAt(world, new GridPosition(0, 2)).Plague);
-        Assert.True(CritterAt(world, new GridPosition(4, 0)).IsPlagueImmune);
-        Assert.False(world.TryInfectApeAt(new GridPosition(4, 0), kind));
+        Assert.False(CritterAt(world, new GridPosition(4, 0)).IsPlagueImmune);
+        Assert.False(world.TryInfectApeAt(new GridPosition(4, 0), kind, 0));
         Assert.Equal(PlagueKind.None, CritterAt(world, new GridPosition(4, 0)).Plague);
         Assert.Equal(PlagueKind.None, CritterAt(world, new GridPosition(4, 1)).Plague);
 
@@ -426,7 +426,7 @@ public sealed class ApeTests
         var world = CreatePlagueWorld(1, 1, Terrain.Ice);
         var position = new GridPosition(0, 0);
         var id = world.AddCritter(species, position);
-        Assert.True(world.TryInfectApeAt(position, kind));
+        Assert.True(world.TryInfectApeAt(position, kind, 0));
         Assert.Equal(1, world.SickApeCount);
         AdvancePlagueTicks(world, SimulationWorld.PlagueDrainIntervalTicks - 1);
         Assert.Equal(6, world.GetCritter(0).Energy);
@@ -460,11 +460,11 @@ public sealed class ApeTests
         var world = CreatePlagueWorld(3, 1);
         world.AddCritter(CritterSpecies.Monkey, new GridPosition(0, 0));
         world.AddCritter(CritterSpecies.UndeadApe, new GridPosition(1, 0));
-        Assert.False(world.TryInfectApeAt(new GridPosition(0, 0), PlagueKind.Plague));
-        Assert.False(world.TryInfectApeAt(new GridPosition(1, 0), PlagueKind.Zombie));
-        Assert.False(world.TryInfectApeAt(new GridPosition(2, 0), PlagueKind.Plague));
-        Assert.False(world.TryInfectApeAt(new GridPosition(-1, 0), PlagueKind.Plague));
-        Assert.False(world.TryInfectApeAt(new GridPosition(0, 0), PlagueKind.None));
+        Assert.False(world.TryInfectApeAt(new GridPosition(0, 0), PlagueKind.Plague, 0));
+        Assert.False(world.TryInfectApeAt(new GridPosition(1, 0), PlagueKind.Zombie, 0));
+        Assert.False(world.TryInfectApeAt(new GridPosition(2, 0), PlagueKind.Plague, 0));
+        Assert.False(world.TryInfectApeAt(new GridPosition(-1, 0), PlagueKind.Plague, 0));
+        Assert.False(world.TryInfectApeAt(new GridPosition(0, 0), PlagueKind.None, 0));
     }
 
     [Fact]
@@ -475,12 +475,12 @@ public sealed class ApeTests
         var second = new GridPosition(1, 0);
         world.AddCritter(CritterSpecies.Ape, first);
         var id = world.AddCritter(CritterSpecies.Ape, second);
-        Assert.True(world.TryInfectApeAt(second, PlagueKind.Plague));
+        Assert.True(world.TryInfectApeAt(second, PlagueKind.Plague, 0));
         AdvancePlagueTicks(world, SimulationWorld.PlagueDrainIntervalTicks - 1);
         Assert.True(world.RemoveCritterAt(first));
-        Assert.True(world.TryInfectApeAt(second, PlagueKind.Zombie));
-        Assert.False(world.TryInfectApeAt(second, PlagueKind.Plague));
-        Assert.False(world.TryInfectApeAt(second, PlagueKind.Zombie));
+        Assert.True(world.TryInfectApeAt(second, PlagueKind.Zombie, 0));
+        Assert.False(world.TryInfectApeAt(second, PlagueKind.Plague, 0));
+        Assert.False(world.TryInfectApeAt(second, PlagueKind.Zombie, 0));
         world.AdvanceOneTick();
         Assert.True(world.TryGetCritter(id, out var infected));
         Assert.Equal(PlagueKind.Zombie, infected.Plague);
@@ -542,7 +542,7 @@ public sealed class ApeTests
         RemoveAllExcept(world, CritterSpecies.Ape);
         var village = FindStructure(world, ApeStructureKind.Village);
         var ape = world.GetCritter(0);
-        Assert.True(world.TryInfectApeAt(ape.Position, PlagueKind.Zombie));
+        Assert.True(world.TryInfectApeAt(ape.Position, PlagueKind.Zombie, 0));
         foreach (var position in AllPositions(world))
         {
             world.SetBiome(position, Biome.Desert);
@@ -571,7 +571,7 @@ public sealed class ApeTests
             {
                 world.AddCritter(CritterSpecies.Ape, position);
             }
-            world.TryInfectApeAt(new GridPosition(0, 0), PlagueKind.Zombie);
+            world.TryInfectApeAt(new GridPosition(0, 0), PlagueKind.Zombie, 0);
         }
         for (var tick = 0; tick < 100 * SimulationWorld.TicksPerSecond; tick++)
         {
@@ -629,8 +629,8 @@ public sealed class ApeTests
     {
         var (world, village) = CreateVillageForPlague(201);
         var target = Enumerable.Range(0, world.CritterCount).Select(world.GetCritter)
-            .First(critter => !critter.IsPlagueImmune);
-        Assert.True(world.TryInfectApeAt(target.Position, kind));
+            .First(critter => !critter.IsPlagueImmune && critter.Id.Value % 5 != 0);
+        Assert.True(world.TryInfectApeAt(target.Position, kind, 0));
 
         for (var attempt = 0; attempt < 1000; attempt++)
         {
@@ -708,6 +708,20 @@ public sealed class ApeTests
         NaturalEvents.SetEnabled(world, true);
         return (world, village);
     }
+    [Theory]
+    [InlineData(PlagueKind.Plague)]
+    [InlineData(PlagueKind.Zombie)]
+    public void SpreadKeepsTheOutbreaksNonzeroImmuneRemainder(PlagueKind kind)
+    {
+        var world = CreatePlagueWorld(5, 1);
+        for (var x = 0; x < 5; x++) world.AddCritter(CritterSpecies.Ape, new(x, 0));
+        Assert.True(world.TryInfectApeAt(new(0, 0), kind, 2));
+        AdvancePlagueTicks(world, 2 * SimulationWorld.PlagueSpreadIntervalTicks);
+        Assert.Equal(PlagueKind.None, CritterAt(world, new(1, 0)).Plague);
+        Assert.Equal(kind, CritterAt(world, new(4, 0)).Plague);
+        Assert.Equal(kind, CritterAt(world, new(3, 0)).Plague);
+    }
+
     private static SimulationWorld CreatePlagueWorld(int width, int height, Terrain terrain = Terrain.Plains)
     {
         var world = new SimulationWorld(width, height, terrain, seed: 2101);
@@ -1961,7 +1975,7 @@ public sealed class ApeTests
         var position = new GridPosition(0, 0);
         var warriorId = world.AddCritter(CritterSpecies.ApeWarrior, position);
 
-        Assert.True(world.TryInfectApeAt(position, kind));
+        Assert.True(world.TryInfectApeAt(position, kind, 0));
         Assert.True(world.TryGetCritter(warriorId, out var infected));
         Assert.Equal(CritterSpecies.Ape, infected.Species);
         Assert.Equal(kind, infected.Plague);
@@ -2028,7 +2042,7 @@ public sealed class ApeTests
         AdvancePlagueTicks(world, SimulationWorld.PlagueDrainIntervalTicks);
         Assert.True(world.TryGetCritter(sailor.Id, out var healthy));
         Assert.Equal(sailor.Energy, healthy.Energy);
-        Assert.False(world.TryInfectApeAt(healthy.Position, kind));
+        Assert.False(world.TryInfectApeAt(healthy.Position, kind, 0));
         Assert.True(healthy.IsPlagueImmune);
         AdvancePlagueTicks(world, SimulationWorld.PlagueDrainIntervalTicks);
         Assert.True(world.TryGetCritter(sailor.Id, out var immune));

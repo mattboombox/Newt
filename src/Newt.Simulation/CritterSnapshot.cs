@@ -16,6 +16,5 @@ public readonly record struct CritterSnapshot(
     bool IsVeteranWarrior = false,
     int CombatKills = 0)
 {
-    public bool IsPlagueImmune => Species is CritterSpecies.ApeSailor or CritterSpecies.Vampire || Species is CritterSpecies.Ape or CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack or CritterSpecies.ApeWarrior or CritterSpecies.ApeScholar or CritterSpecies.ApeChieftain &&
-        Id.Value % 5 == 0;
+    public bool IsPlagueImmune => Species is CritterSpecies.ApeSailor or CritterSpecies.Vampire;
 }

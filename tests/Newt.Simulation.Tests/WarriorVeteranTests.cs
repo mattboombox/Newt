@@ -10,7 +10,7 @@ public sealed class WarriorVeteranTests
     public void FiveCombatKillsPromoteWarriorWithoutChangingSpecies(bool defending)
     {
         var world = new SimulationWorld(20, 20, Terrain.Plains, seed: 17);
-        // Use an immune warrior so zombie infection does not demote the combatant.
+        // Keep this combat test's zombie strain immune to the warrior's ID remainder.
         for (var x = 0; x < 4; x++)
             world.AddCritter(CritterSpecies.Ape, new GridPosition(x, 0));
         var warrior = world.AddCritter(CritterSpecies.ApeWarrior, new GridPosition(10, 10));
@@ -18,6 +18,10 @@ public sealed class WarriorVeteranTests
         {
             Assert.True(world.TryGetCritter(warrior, out var fighter));
             var enemy = world.AddCritter(CritterSpecies.UndeadApe, new GridPosition(fighter.Position.X + 1, fighter.Position.Y));
+            var immunity = (Dictionary<int, int>)typeof(SimulationWorld)
+                .GetField("_plagueImmunityRemainders", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                .GetValue(world)!;
+            immunity[enemy.Value] = warrior.Value % 5;
             for (var exchange = 0; exchange < 100 && world.TryGetCritter(enemy, out var opponent); exchange++)
             {
                 Assert.True(world.TryGetCritter(warrior, out fighter));

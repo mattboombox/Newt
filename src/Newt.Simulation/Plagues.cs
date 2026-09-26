@@ -10,12 +10,16 @@ public sealed partial class SimulationWorld
 
     // Stable IDs keep sparse infections valid when the critter arrays compact.
     private readonly Dictionary<int, (PlagueKind Kind, long InfectedTick, long DrainTick)> _plagues = [];
+    private readonly Dictionary<int, int> _plagueImmunityRemainders = [];
 
     /// <summary>Infected living apes and specialists; excludes undead and vampires.</summary>
     public int SickApeCount => _plagues.Count;
 
-    /// <summary>Infects a living ape on the selected tile; IDs divisible by five resist infection.</summary>
-    public bool TryInfectApeAt(GridPosition position, PlagueKind kind)
+    /// <summary>Seeds an outbreak with a random immune ID remainder, protecting about one ape in five.</summary>
+    public bool TryInfectApeAt(GridPosition position, PlagueKind kind) =>
+        TryInfectApeAt(position, kind, NextInt(5));
+
+    internal bool TryInfectApeAt(GridPosition position, PlagueKind kind, int immuneRemainder)
     {
         if (kind is not (PlagueKind.Plague or PlagueKind.Zombie or PlagueKind.Vampire) || !Contains(position))
         {
@@ -23,7 +27,7 @@ public sealed partial class SimulationWorld
         }
         var index = _occupants[GetIndex(position)];
         if (index < 0 || !IsLivingApe(_species[index]) ||
-            _species[index] is CritterSpecies.ApeSailor || _critterIds[index].Value % 5 == 0)
+            _species[index] is CritterSpecies.ApeSailor || _critterIds[index].Value % 5 == immuneRemainder)
         {
             return false;
         }
@@ -49,6 +53,7 @@ public sealed partial class SimulationWorld
         {
             _plagues[id] = (kind, Tick, Tick + PlagueDrainIntervalTicks);
         }
+        _plagueImmunityRemainders[id] = immuneRemainder;
         return true;
     }
 
@@ -99,9 +104,10 @@ public sealed partial class SimulationWorld
 
         var selected = -1;
         var candidates = 0;
+        var immuneRemainder = NextInt(5);
         foreach (var (id, home) in _apeVillageHomes)
         {
-            if (home == villageTile && id % 5 != 0 &&
+            if (home == villageTile && id % 5 != immuneRemainder &&
                 _critterIndicesById.TryGetValue(id, out var index) && IsLivingApe(_species[index]) &&
                 _species[index] is not CritterSpecies.ApeSailor &&
                 NextInt(++candidates) == 0)
@@ -109,7 +115,15 @@ public sealed partial class SimulationWorld
                 selected = index;
             }
         }
-        return selected >= 0 && TryInfectApeAt(_positions[selected], PlagueKind.Plague);
+        return selected >= 0 && TryInfectApeAt(_positions[selected], PlagueKind.Plague, immuneRemainder);
+    }
+
+    private int GetPlagueImmunityRemainder(int index)
+    {
+        var id = _critterIds[index].Value;
+        if (!_plagueImmunityRemainders.TryGetValue(id, out var remainder))
+            _plagueImmunityRemainders[id] = remainder = NextInt(5);
+        return remainder;
     }
 
     private PlagueKind GetPlague(int index) =>
@@ -133,11 +147,12 @@ public sealed partial class SimulationWorld
                 continue;
             }
             // Eight grid lookups per contagious ape, never a population search.
+            var immuneRemainder = GetPlagueImmunityRemainder(index);
             foreach (var direction in MovementDirections)
             {
                 var position = _positions[index];
                 TryInfectApeAt(new GridPosition(
-                    Mod(position.X + direction.X, Width), position.Y + direction.Y), kind);
+                    Mod(position.X + direction.X, Width), position.Y + direction.Y), kind, immuneRemainder);
             }
         }
     }

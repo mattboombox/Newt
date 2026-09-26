@@ -50,8 +50,12 @@ drifting into contradictory states. Reproduction spends only surplus energy;
 if no adjacent habitat is open, the parent retains that energy for a later tick.
 
 The Events category includes Colonist, Plague, and Zombie Plague tools. Left-click a living
-Ape or Ape Sailor to infect it; stable critter IDs divisible by five resist both
-strains. Every simulation second, infected apes expose their eight neighboring
+Ape to seed an outbreak. Each new outbreak of Plague, Zombie Plague, or Vampire
+Plague randomly chooses a remainder from zero through four; apes with matching
+`ID % 5` resist that outbreak (about 20%). Spread and reanimated zombies retain
+the originating outbreak's remainder, while later outbreaks can infect earlier
+survivors. Sailors and vampires retain unconditional immunity. Every simulation
+second, infected apes expose their eight neighboring
 tiles, including horizontal wrap. Newly infected apes cannot spread again in the
 same tick. Both strains drain one energy every ten simulation seconds, in addition
 to normal metabolism; feeding can prolong survival. Ordinary plague is yellow,
@@ -493,7 +497,7 @@ of each kind per 150 residents.
 Every complete group of 50 residents allows one Military District. Like a Harbor, it converts
 ordinary residents at thirty-second intervals without changing population or stable identity,
 and each district supports four Ape Warriors. The first Warrior supplied by each district is
-free; subsequent Warriors cost two wood. Warriors cannot reproduce, remain land dwellers,
+free; subsequent Warriors cost two wood. Warriors cannot reproduce, remain land dwellers in peacetime,
 hunt Sea Scorpions, Mega Spiders, Mega Toads, Wolves, Toothed Whales, and Undead Apes, and
 deal three energy damage on each successful combat roll. If either plague infects a Warrior,
 it immediately becomes a regular sick Ape while retaining its village membership.
@@ -557,3 +561,73 @@ reclassify from their current temperature and moisture over 18 to 45 seconds.
 
 The bootstrap currently commits movement directly. Intent generation and conflict
 resolution must replace direct mutation before interactions are introduced.
+
+Village wars are started with Events / War: click the attacking village or one
+of its buildings, then the defending village or one of its buildings. Right-click
+cancels selection. Both settlements levy 90% of ordinary unemployed Apes (rounded
+up), using the existing Warrior species. Workers retain their roles. Existing
+warriors and chiefs participate; the attacker marches and the defender intercepts
+near its settlement. War routes include land and sailor-accessible water and permit
+one war per village at a time. Warriors and chiefs may enter water during war,
+retaining their combat roles and using their sailor sprites while afloat (including
+veteran warriors). Ordinary sailors retain their peacetime sea hunting role.
+For temporary war visualization, attacking warriors use red sprites and defending
+warriors use blue sprites, with matching sailor variants on water. These override
+veteran artwork during war only; chiefs retain their existing distinct sprites.
+When war ends, military units at sea seek reachable land before losing water
+access; levies afloat defer demobilization until landing.
+
+Each side's initial warriors, including levies, form a fixed casualty baseline.
+At 90% losses, the war ends and all remaining stored food and wood transfer from
+the loser to the winner, without applying storage caps to the payout. Simultaneous
+defeat is a draw. Surviving levies become ordinary Apes again; standing warriors
+remain warriors. Movement uses a shared terrain-distance field, refreshed every
+30 simulation seconds, with local enemy searches rather than per-soldier global
+pathfinding.
+When allies block every forward step, war units search up to four steps for an
+open route that moves sideways before making forward progress. The search avoids
+occupied, combat-reserved, and impassable tiles, never retreats, and holds position
+when no short detour exists. Direct movement and adjacent combat retain priority.
+
+Events / Blood War uses the same attacker-then-defender selection. Attackers use
+normal mobilization, while defenders recruit ordinary apes, scholars, and sailors.
+Farmers and lumberjacks retain their jobs and keep producing food and wood; they
+remain attackable and fight back using their existing role damage. Chiefs retain their role and chief
+sprites; traders and sailor traders remain excluded from recruitment. Surviving
+defending recruits recover their prior roles when the conflict ends.
+With either war tool, clicking any village already at war (or one of its buildings)
+immediately stops that conflict for both sides, regardless of variant or pending
+attacker selection. Manual peace transfers no stores and uses normal demobilization,
+including allowing units at sea to land before returning levies to ordinary apes.
+Normal wars target opposing warriors and chiefs. Blood War attackers instead target
+every resident of the defending village, including employed workers and sailors;
+defenders still target the invading military. Losing the defending army does not
+end a Blood War: it ends when no defending residents remain or the attackers lose
+90% of their initial warriors (or their village is lost). A shared route field to
+surviving defending residents refreshes every simulation second so attackers seek
+out residents away from the village as well. Spoils and demobilization follow the
+normal war rules.
+
+Events / Civil War starts with one click on a village or its building. Its current
+living ape residents, excluding traders and sailor traders, are randomly split into
+fixed red and blue teams differing in size by at most one. Recruits become warriors;
+chiefs join a side while retaining their chief role and existing chief/sailor-chief
+sprites. Chiefs count toward their team's surviving force and remain combat targets.
+Both teams pursue the other, using the existing team and sailor sprites. It ends
+at 90% losses for either team's initial force or when stopped with any war tool.
+No stores transfer and surviving recruits recover their original roles; existing
+warriors remain warriors. A village cannot join another war during its civil war.
+
+With natural events enabled, villages check for random wars once per simulation
+minute after an initial five-minute grace period. Eligible villages have a 1%
+outbreak roll; each variant has an equal one-in-three selection chance before
+population and opponent eligibility checks. Normal
+wars require at least 50 living resident apes in each village. Blood wars require
+100 in each, and civil wars require 100 in the single village. Traders do not
+count toward these thresholds. Inter-village wars require a reachable opponent;
+diplomacy is ignored. Every war ending, including manual peace, grants both villages
+five simulation minutes of protection from natural wars. Manual tools remain
+available regardless of these natural-event thresholds and cooldowns.
+Traders and sailor traders are never recruited for Blood War and do not keep a
+defeated village or its Blood War alive. They also do not prevent the existing
+lone-sailor colonist departure and abandonment behavior.

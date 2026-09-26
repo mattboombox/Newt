@@ -83,7 +83,7 @@ public sealed class VillageFeastTests
         var world = CreateWorld();
         SetResidentEnergy(world, 11);
         var sick = world.GetCritter(0);
-        Assert.True(world.TryInfectApeAt(sick.Position, PlagueKind.Plague));
+        Assert.True(world.TryInfectApeAt(sick.Position, PlagueKind.Plague, 0));
         var outsider = world.AddCritter(CritterSpecies.Ape, new(30, 20));
         world.StoreApeVillageFood(Village, 1);
         Assert.True(world.TryStartVillageFeast(Village));
