@@ -33,6 +33,9 @@ public sealed class SimulationSpeedGuardTests
 
     [Theory]
     [InlineData(16)]
+    [InlineData(2)]
+    [InlineData(4)]
+    [InlineData(8)]
     [InlineData(32)]
     public void SustainedSlowUpdatesTriggerFallback(double rate)
     {
@@ -47,8 +50,6 @@ public sealed class SimulationSpeedGuardTests
     [Theory]
     [InlineData(0.25)]
     [InlineData(1)]
-    [InlineData(4)]
-    [InlineData(8)]
     public void LowerSpeedsAreNeverReduced(double rate)
     {
         var guard = new SimulationSpeedGuard();

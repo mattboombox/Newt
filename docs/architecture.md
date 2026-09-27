@@ -64,10 +64,10 @@ immunity. Reapplying a strain does not reset its damage timer; zombie plague can
 upgrade ordinary plague, but not the reverse.
 
 With natural events enabled, each village with at least 200 assigned residents
-(including sailors) has a 1% chance per simulation minute to seed ordinary plague
+(including sailors) has a 1% chance per simulation minute to seed a plague
 in one random non-immune resident. Villages with fewer than 200 residents are exempt;
 unassigned apes do not count. A village with any already infected resident skips
-the outbreak roll. These spontaneous outbreaks never create zombie plague.
+the outbreak roll. Outbreak strains are 80% ordinary plague, 10% zombie, and 10% vampire.
 
 Zombie-infected apes that die from energy loss or predation rise on their current
 tile with the same ID as Undead Apes. Reanimation detaches village membership and
@@ -88,7 +88,7 @@ the plankton cannot move, and the jellyfish consumes it before entering its tile
 This keeps predation deterministic while critters are stored in compact arrays.
 Plankton reproduction has a half-percent default chance to produce a jellyfish.
 With life enabled, complete Plankton extinction starts a 15,000-tick recovery timer
-that restores one Plankton on an available Deep Ocean tile.
+that restores one Plankton on an available Ocean tile.
 Body size has six ordered levels whose numeric values are also prey food energy:
 Tiny 1, Small 2, Medium 3, Big 4, Large 5, and Huge 8. A critter can normally shove
 only a smaller blocker into adjacent valid empty habitat. Plankton are the exception:
@@ -101,13 +101,13 @@ otherwise movement remains blocked. Deliberate hunting always consumes legal pre
 
 Ambient food is finite per tile. Terrestrial capacity is Jungle 6, Swamp 5,
 Forest 4, Grassland and Taiga 3, Bog and Arid 2, Tundra 1, and Desert and Arctic
-0. Ice Sheets over Deep Ocean hold 1; shallower Ice Sheets hold 0. Beaches hold
+0. Ice Sheets over shelf Ocean hold 1; deep-ocean Ice Sheets hold 0. Beaches hold
 0 when freezing and 1 otherwise. Shallows hold
-4 freezing, 3 cold, 2 temperate, and 1 hot. Ordinary Ocean is always 0. Deep
-Ocean holds 2 when cold and 1 otherwise.
+6 freezing, 5 cold, 4 temperate, and 3 hot. Deep Ocean is always 0. Ordinary
+Ocean holds 3 when cold and 2 otherwise.
 
 Rivers and Freshwater Lakes both replace underlying tile nutrition with a flat
-capacity of 2. Since freshwater determines the tile's ecological role, its value
+capacity of 3. Since freshwater determines the tile's ecological role, its value
 does not stack with the biome and does not vary with temperature. Only Worms,
 Fish, and Newts consume freshwater nutrition; Crabs, Therapsids, Apes, Monkeys, Deer, Elk,
 and Gazelles may cross supported freshwater habitat but do not graze it. This rule
@@ -167,8 +167,8 @@ seven-energy stomach and reproduction economy. They no longer use freshwater as
 habitat. Worms retain their own evolution branches and predator relationships.
 Both species can shove a chain of up to four Plankton through a dense bloom.
 Trilobites occupy this broad saltwater range and graze terrain nutrition in
-Deep Ocean, deep-ocean Ice Sheets, and Shallows. Ordinary Ocean remains transit-only because it has no
-terrain nutrition. Their simple eyes detect predators
+Ocean, Shallows, and Beaches. Deep Ocean remains transit-only because it has no
+terrain nutrition. Worms also graze shelf-ocean Ice Sheets. Their simple eyes detect predators
 within three Manhattan tiles, prompting the trilobite to take the open eight-way
 step that maximizes its distance from the nearest threat.
 Sea Scorpions are active aquatic hunters descended from Trilobites. Every four
@@ -208,10 +208,10 @@ open eight-way move that maximizes distance from the nearest threat. Detecting
 a predator suppresses hunting even when no escape tile is available.
 
 Nautiluses are slow shelled hunters evolved from Worms. Every six seconds they
-eat available terrain food in Deep Ocean, deep-ocean Ice Sheets, or Shallows before pursuing the nearest
+eat available terrain food in Ocean or Shallows before pursuing the nearest
 Plankton within a Manhattan radius of five. Like Trilobites, they roam Ocean and
-Deep Ocean, return from depleted Shallows toward adjacent deep-sea terrain, and flee
-visible predators within three tiles. Ordinary Ocean is transit and hunting habitat only.
+Deep Ocean, return from depleted Shallows toward adjacent shelf-ocean terrain, and flee
+visible predators within three tiles. Deep Ocean is transit and hunting habitat only.
 Jellyfish cannot eat Nautiluses. Sea Scorpions, Squid, and Toothed Whales can consume them only on
 adjacent encounters; Mega Toads can still attempt to swallow
 Nautiluses encountered in Shallows. Nautiluses evolve into Squid, which
@@ -297,7 +297,7 @@ rendering, inspection, triggering, and destruction rules as wolf-built dens. A W
 spawned from a den remains associated with it; once a den has zero charges and its
 last associated or inbound Wolf is gone, the empty den is removed automatically.
 The Other category includes a global Jump Start action that enables life and fills
-every empty Deep Ocean tile with one Plankton without replacing existing critters.
+every empty Ocean tile with one Plankton without replacing existing critters.
 The `[` key toggles a live population overlay built from the world's per-species counters.
 Only nonzero species populations are rendered, with a responsive multi-column layout for
 short windows. Each row includes a colored five-second-sample sparkline retaining
@@ -351,7 +351,7 @@ pursue them on land or in deeper water. Toothed Whales ignore Jellyfish, Plankto
 Worms, Squid Eggs, and smaller land animals.
 Baleen Whales evolve from Toothed Whales and reuse their saltwater habitat, huge
 body size, energy economy, and four-second movement interval. Their perception
-radius is fourteen tiles, twice that of Toothed Whales. Their diet contains only Plankton.
+radius is twenty-four tiles. Their diet contains only Plankton, which give them two energy each.
 The critter that loses any mutual-predator combat roll exposes a deterministic
 half-second damage-flash state. The presentation renders that critter white for
 the duration without changing combat timing or movement.
@@ -568,12 +568,12 @@ cancels selection. Both settlements levy 90% of ordinary unemployed Apes (rounde
 up), using the existing Warrior species. Workers retain their roles. Existing
 warriors and chiefs participate; the attacker marches and the defender intercepts
 near its settlement. War routes include land and sailor-accessible water and permit
-one war per village at a time. Warriors and chiefs may enter water during war,
+one war per village at a time. Warriors may sail in peacetime to pursue pirates and protect sailors; chiefs may enter water during war,
 retaining their combat roles and using their sailor sprites while afloat (including
 veteran warriors). Ordinary sailors retain their peacetime sea hunting role.
 For temporary war visualization, attacking warriors use red sprites and defending
-warriors use blue sprites, with matching sailor variants on water. These override
-veteran artwork during war only; chiefs retain their existing distinct sprites.
+warriors use blue sprites, with matching sailor and veteran variants on water.
+Chiefs retain their existing distinct sprites.
 When war ends, military units at sea seek reachable land before losing water
 access; levies afloat defer demobilization until landing.
 
@@ -614,7 +614,10 @@ fixed red and blue teams differing in size by at most one. Recruits become warri
 chiefs join a side while retaining their chief role and existing chief/sailor-chief
 sprites. Chiefs count toward their team's surviving force and remain combat targets.
 Both teams pursue the other, using the existing team and sailor sprites. It ends
-at 90% losses for either team's initial force or when stopped with any war tool.
+when either team has no fighters left or when stopped with any war tool.
+At 90% losses for either team's initial force, surviving previously employed
+recruits on both sides return to their jobs and leave combat (landing first if
+at sea). Recruited unemployed apes, existing warriors, and chiefs keep fighting.
 No stores transfer and surviving recruits recover their original roles; existing
 warriors remain warriors. A village cannot join another war during its civil war.
 
@@ -631,3 +634,11 @@ available regardless of these natural-event thresholds and cooldowns.
 Traders and sailor traders are never recruited for Blood War and do not keep a
 defeated village or its Blood War alive. They also do not prevent the existing
 lone-sailor colonist departure and abandonment behavior.
+
+Balance rules: Vampire lairs hold four vampires; vampires deal four damage per hit.
+Feasts spend at most 80% of the food present when started (rounded down), with a
+fixed budget that does not grow when new food arrives. All living ape roles,
+including traders and village-less apes, have a 25% dog recruitment chance after
+a wolf kill; village dog caps still apply to assigned apes. Roads first seek an
+entirely land route, then permit expensive straight bridges across one Shallows
+tile between land banks. Shallows bridges use the same gray color as river bridges.

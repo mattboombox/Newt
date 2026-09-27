@@ -18,7 +18,7 @@ public sealed partial class SimulationWorld
     private const int MegaToadPerceptionRadius = 3;
     private const int TherapsidPerceptionRadius = 4;
     internal const int ToothedWhalePerceptionRadius = 7;
-    internal const int BaleenWhalePerceptionRadius = 14;
+    internal const int BaleenWhalePerceptionRadius = 24;
     private const int ApePerceptionRadius = 6;
     internal const int ApeDefenderPerceptionRadius = ApeVillageClaimRadius;
     private const int ApeChieftainDefenderPerceptionRadius = ApePerceptionRadius;
@@ -1222,7 +1222,7 @@ public sealed partial class SimulationWorld
     }
 
     /// <summary>
-    /// Seeds every currently empty Deep Ocean tile with one Plankton.
+    /// Seeds every currently empty Ocean tile with one Plankton.
     /// Occupied tiles are preserved so jump-starting life never replaces an
     /// existing critter.
     /// </summary>
@@ -1240,7 +1240,7 @@ public sealed partial class SimulationWorld
             {
                 var position = new GridPosition(x, y);
                 var tileIndex = GetIndex(position);
-                if (_terrain[tileIndex] is Terrain.DeepOcean && _occupants[tileIndex] < 0)
+                if (_terrain[tileIndex] is Terrain.Ocean && _occupants[tileIndex] < 0)
                 {
                     TryAddCritter(CritterSpecies.Plankton, position);
                 }
@@ -5622,6 +5622,8 @@ public sealed partial class SimulationWorld
         if (preySpecies is CritterSpecies.Wolf)
             TryRecruitDogFromWolfKill(predatorIndex);
         var foodEnergy = CritterNutritions.Get(preySpecies).FoodEnergy;
+        if (predatorSpecies is CritterSpecies.BaleenWhale && preySpecies is CritterSpecies.Plankton)
+            foodEnergy = 2;
         var personalFood = foodEnergy;
         var settlementFood = 0;
         var apeId = _critterIds[predatorIndex].Value;
@@ -5789,7 +5791,7 @@ public sealed partial class SimulationWorld
             CritterSpecies.ApeTrader or CritterSpecies.ApeTraderSailor => 1,
             CritterSpecies.ApeChieftain => 5,
             CritterSpecies.MegaToad => 3,
-            CritterSpecies.Vampire => 3,
+            CritterSpecies.Vampire => 4,
             CritterSpecies.MegaSpider => 2,
             CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack => 2,
             CritterSpecies.ToothedWhale or CritterSpecies.Wolf or CritterSpecies.Dog => 3,
@@ -6008,7 +6010,7 @@ public sealed partial class SimulationWorld
     private int FindEnvironmentalFoodTile(CritterSpecies species, int tileIndex)
     {
         if (species is (CritterSpecies.Nautilus or CritterSpecies.Trilobite) &&
-            IsIceOverDeepOcean(tileIndex))
+            IsIceOverOcean(tileIndex))
         {
             return -1;
         }
@@ -6105,7 +6107,7 @@ public sealed partial class SimulationWorld
         if (_surfaceWater[tileIndex] is
             SurfaceWaterKind.River or SurfaceWaterKind.FreshwaterLake)
         {
-            return 2;
+            return 3;
         }
 
         return GetUnderlyingTileNutritionCapacity(tileIndex, temperatureBand);
@@ -6119,18 +6121,18 @@ public sealed partial class SimulationWorld
             Terrain.Beach => temperatureBand is TemperatureBand.Freezing ? 0 : 1,
             Terrain.Shallows => temperatureBand switch
             {
-                TemperatureBand.Freezing => 4,
-                TemperatureBand.Cold => 3,
-                TemperatureBand.Temperate => 2,
-                _ => 1,
+                TemperatureBand.Freezing => 6,
+                TemperatureBand.Cold => 5,
+                TemperatureBand.Temperate => 4,
+                _ => 3,
             },
-            Terrain.Ocean => 0,
-            Terrain.DeepOcean => temperatureBand switch
+            Terrain.DeepOcean => 0,
+            Terrain.Ocean => temperatureBand switch
             {
-                TemperatureBand.Cold => 2,
-                _ => 1,
+                TemperatureBand.Cold => 3,
+                _ => 2,
             },
-            Terrain.Ice => IsIceOverDeepOcean(tileIndex) ? 1 : 0,
+            Terrain.Ice => IsIceOverOcean(tileIndex) ? 1 : 0,
             Terrain.Mountain or Terrain.RingWorldWall => 0,
             _ => _biomes[tileIndex] switch
             {
@@ -6187,17 +6189,18 @@ public sealed partial class SimulationWorld
         IsTrilobiteFeedingTerrain(_terrain[tileIndex]);
 
     private bool IsWormFeedingTile(int tileIndex) =>
-        IsTrilobiteFeedingTile(tileIndex) || IsIceOverDeepOcean(tileIndex);
+        IsTrilobiteFeedingTile(tileIndex) || IsIceOverOcean(tileIndex);
 
     private static bool IsTrilobiteFeedingTerrain(Terrain terrain) =>
-        terrain is Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows or Terrain.Beach;
+        terrain is Terrain.Ocean or Terrain.Shallows or Terrain.Beach;
 
-    private bool IsIceOverDeepOcean(int tileIndex) =>
+    private bool IsIceOverOcean(int tileIndex) =>
         _terrain[tileIndex] is Terrain.Ice &&
-        SeaLevel - _elevation[tileIndex] > TerrainClassifier.DeepOceanDepthThreshold;
+        SeaLevel - _elevation[tileIndex] > 0 &&
+        SeaLevel - _elevation[tileIndex] <= TerrainClassifier.DeepOceanDepthThreshold;
 
     private static bool IsNautilusFeedingTerrain(Terrain terrain) =>
-        terrain is Terrain.DeepOcean or Terrain.Shallows;
+        terrain is Terrain.Ocean or Terrain.Shallows;
 
     private bool IsNautilusFeedingTile(int tileIndex) =>
         IsNautilusFeedingTerrain(_terrain[tileIndex]);
@@ -6951,7 +6954,7 @@ public sealed partial class SimulationWorld
             {
                 var position = new GridPosition(x, y);
                 var index = y * Width + x;
-                if (_terrain[index] is not Terrain.DeepOcean || _occupants[index] >= 0 ||
+                if (_terrain[index] is not Terrain.Ocean || _occupants[index] >= 0 ||
                     _surfaceCovers[index] is not SurfaceCover.None)
                 {
                     continue;
@@ -7008,7 +7011,8 @@ public sealed partial class SimulationWorld
                     _surfaceCovers[tileIndex]));
 
     private bool CanCritterLiveOn(int critterIndex, int tileIndex) =>
-        (IsLivingApe(_species[critterIndex]) && IsBarbarianApe(critterIndex)) || CanWarApeSail(critterIndex)
+        (IsLivingApe(_species[critterIndex]) && IsBarbarianApe(critterIndex)) ||
+        _species[critterIndex] is CritterSpecies.ApeWarrior || CanWarApeSail(critterIndex)
             ? CanLiveOn(CritterSpecies.Ape, tileIndex) || CanLiveOn(CritterSpecies.ApeSailor, tileIndex)
             : CanLiveOn(_species[critterIndex], tileIndex);
 

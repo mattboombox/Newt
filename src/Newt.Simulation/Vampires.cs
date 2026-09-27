@@ -2,7 +2,7 @@ namespace Newt.Simulation;
 
 public sealed partial class SimulationWorld
 {
-    public const int VampireLairCapacity = 2;
+    public const int VampireLairCapacity = 4;
     private readonly HashSet<int> _vampireLairs = [];
     private readonly Dictionary<int, int> _vampireHomes = [];
 

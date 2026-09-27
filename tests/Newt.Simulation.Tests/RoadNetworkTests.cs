@@ -218,7 +218,6 @@ public sealed class RoadNetworkTests
     [InlineData(Terrain.Plains, SurfaceWaterKind.FreshwaterLake)]
     [InlineData(Terrain.Ocean, SurfaceWaterKind.None)]
     [InlineData(Terrain.DeepOcean, SurfaceWaterKind.None)]
-    [InlineData(Terrain.Shallows, SurfaceWaterKind.None)]
     [InlineData(Terrain.Mountain, SurfaceWaterKind.None)]
     [InlineData(Terrain.Ice, SurfaceWaterKind.None)]
     public void ChangedTerrainReroutesExistingRoadEvenBelowPopulationThreshold(Terrain terrain, SurfaceWaterKind water)

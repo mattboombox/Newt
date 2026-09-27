@@ -4,6 +4,35 @@ namespace Newt.Simulation.Tests;
 
 public sealed class VillageRoadTests
 {
+    [Theory]
+    [InlineData(1, false, true)]
+    [InlineData(2, false, false)]
+    [InlineData(1, true, true)]
+    public void ShallowsBridgesSpanOneTileOnlyWhenNoLandRouteExists(int width, bool landRoute, bool connects)
+    {
+        var world = CreateWorld();
+        for (var y = 0; y < world.Height; y++)
+        {
+            for (var x = 20; x < 20 + width; x++) world.SetTerrain(new(x, y), Terrain.Shallows);
+            world.SetTerrain(new(60, y), Terrain.Ocean);
+        }
+        if (landRoute) world.SetTerrain(new(20, 0), Terrain.Plains);
+        Assert.Equal(connects, world.TryPlaceVillageRoad(First));
+        var bridges = Positions(world).Where(p => world.GetTerrain(p) == Terrain.Shallows &&
+            world.GetRoadConnections(p) != RiverConnection.None).ToArray();
+        if (connects && !landRoute)
+        {
+            var bridge = Assert.Single(bridges);
+            Assert.Equal(RiverConnection.East | RiverConnection.West, world.GetRoadConnections(bridge));
+            world.AdvanceOneTick();
+            Assert.NotEqual(RiverConnection.None, world.GetRoadConnections(bridge));
+            world.SetTerrain(bridge, Terrain.Ocean);
+            world.AdvanceOneTick();
+            Assert.Equal(RiverConnection.None, world.GetRoadConnections(bridge));
+        }
+        else Assert.Empty(bridges);
+    }
+
     private static readonly GridPosition First = new(10, 10);
     private static readonly GridPosition Second = new(30, 10);
 
@@ -105,7 +134,7 @@ public sealed class VillageRoadTests
         var world = CreateWorld();
         for (var y = 0; y < world.Height; y++)
         {
-            world.SetTerrain(new GridPosition(20, y), Terrain.Shallows);
+            world.SetTerrain(new GridPosition(20, y), Terrain.Ocean);
             world.SetTerrain(new GridPosition(60, y), Terrain.Ocean);
         }
         Assert.False(world.TryPlaceVillageRoad(First));

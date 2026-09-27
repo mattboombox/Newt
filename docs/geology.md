@@ -49,7 +49,7 @@ every 6 to 16 simulated minutes. Tsunamis only start when the randomly selected
 tile is ocean (including sea ice); land selections are skipped. The NaturalEvents
 tool enables them with left click and disables them with right click.
 
-NaturalEvents also enables random ordinary-plague outbreaks: each village with
+NaturalEvents also enables random plague outbreaks (80% ordinary, 10% zombie, 10% vampire): each village with
 at least 200 assigned residents (including sailors) has a 1% chance per simulated
 minute, provided none of its residents is already infected.
 
@@ -61,15 +61,15 @@ lowers the elevation of land reached by the wave.
 8x, 16x, and 32x. `P` pauses or resumes simulation time without disabling tools or
 camera controls. The current rate and pause state appear beside the world tick.
 
-Automatic slowdown is enabled by default and can be toggled with `G`. At 16x or
+Automatic slowdown is enabled by default and can be toggled with `G`. At 2x, 4x, 8x, 16x, or
 32x, worlds with at least 4,000 critters automatically reduce the rate
-directly to 8x after sustained slow updates. Smaller populations never trigger
+directly to 1x after sustained slow updates. Smaller populations never trigger
 the fallback. The guard waits for about one second of slow updates and ignores
-isolated stalls. The HUD marks the fallback as `8x (auto)`; changing speed
+isolated stalls. The HUD marks the fallback as `1x (auto)`; changing speed
 manually clears the marker and restarts the guard. Speed never increases
 automatically. Pausing,
 opening the setup menu, or generating a world resets the slowdown history.
-Rendering quality is unchanged, and no automatic reductions occur at 8x or below.
+Rendering quality is unchanged, and no automatic reductions occur at 1x or below.
 
 Temperature and Moisture are global climate tools. Left click adds 0.05 and right
 click subtracts 0.05 from the corresponding world-wide climate offset. Each

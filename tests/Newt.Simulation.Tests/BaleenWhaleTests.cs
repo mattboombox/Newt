@@ -5,9 +5,9 @@ namespace Newt.Simulation.Tests;
 public sealed class BaleenWhaleTests
 {
     [Theory]
-    [InlineData(14, true)]
-    [InlineData(15, false)]
-    [InlineData(50, true)] // Fourteen tiles across the horizontal world seam.
+    [InlineData(24, true)]
+    [InlineData(25, false)]
+    [InlineData(40, true)] // Twenty-four tiles across the horizontal world seam.
     public void BaleenWhaleFindsPlanktonWithinExtendedRange(int preyX, bool visible)
     {
         var world = new SimulationWorld(64, 1, Terrain.DeepOcean, seed: 5204);
@@ -15,7 +15,7 @@ public sealed class BaleenWhaleTests
         var prey = new GridPosition(preyX, 0);
         world.AddCritter(CritterSpecies.Plankton, prey);
 
-        Assert.Equal(14, SimulationWorld.BaleenWhalePerceptionRadius);
+        Assert.Equal(24, SimulationWorld.BaleenWhalePerceptionRadius);
         Assert.Equal(visible ? prey : (GridPosition?)null,
             world.FindHunterPrey(0, CritterSpecies.BaleenWhale,
                 SimulationWorld.BaleenWhalePerceptionRadius, null));
@@ -76,5 +76,7 @@ public sealed class BaleenWhaleTests
 
         Assert.Equal(1, world.GetCritterCount(CritterSpecies.BaleenWhale));
         Assert.Equal(0, world.GetCritterCount(CritterSpecies.Plankton));
+        Assert.Equal(CritterNutritions.Get(CritterSpecies.BaleenWhale).InitialEnergy + 2,
+            world.GetCritter(0).Energy);
     }
 }

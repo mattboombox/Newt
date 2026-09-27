@@ -3,7 +3,7 @@ namespace Newt.Game;
 /// <summary>Detects sustained host overload without changing simulation rules.</summary>
 internal sealed class SimulationSpeedGuard
 {
-    internal const double FallbackRate = 8;
+    internal const double FallbackRate = 1;
     internal const int MinimumCritterCount = 4_000;
     private bool _enabled = true;
     private double _slowSeconds;

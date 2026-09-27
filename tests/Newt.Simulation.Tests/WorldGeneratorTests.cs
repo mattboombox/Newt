@@ -4,6 +4,26 @@ namespace Newt.Simulation.Tests;
 
 public sealed class WorldGeneratorTests
 {
+    [Theory]
+    [InlineData(WorldMapType.Continents)]
+    [InlineData(WorldMapType.Pangaea)]
+    [InlineData(WorldMapType.Archipelago)]
+    [InlineData(WorldMapType.RingWorld)]
+    public void GeneratedSeasAreMostlyBarrenDeepOcean(WorldMapType mapType)
+    {
+        foreach (var seed in new ulong[] { 17, 42, 91 })
+        {
+            var world = WorldGenerator.Generate(new(WorldPreset.Micro, seed, MapType: mapType));
+            var seas = Enumerable.Range(0, world.Width * world.Height)
+                .Select(tile => new GridPosition(tile % world.Width, tile / world.Width))
+                .Where(p => world.GetTerrain(p) is Terrain.Ocean or Terrain.DeepOcean or Terrain.Shallows).ToArray();
+            var deep = seas.Where(p => world.GetTerrain(p) == Terrain.DeepOcean).ToArray();
+            Assert.True(deep.Length > seas.Length / 2, $"{mapType}, seed {seed}: {deep.Length}/{seas.Length} deep");
+            Assert.All(deep, p => Assert.Equal(0, world.GetTileNutritionCapacity(p)));
+            Assert.Contains(seas, p => world.GetTerrain(p) != Terrain.DeepOcean);
+        }
+    }
+
     [Fact]
     public void SameOptionsProduceSameTerrain()
     {

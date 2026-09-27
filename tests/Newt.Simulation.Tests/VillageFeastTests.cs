@@ -5,6 +5,21 @@ namespace Newt.Simulation.Tests;
 
 public sealed class VillageFeastTests
 {
+    [Fact]
+    public void FeastBudgetDoesNotGrowWithLaterFoodDeliveries()
+    {
+        var world = CreateWorld();
+        SetResidentEnergy(world, 12);
+        world.StoreApeVillageFood(Village, 3);
+        Assert.True(world.TryStartVillageFeast(Village));
+        world.StoreApeVillageFood(Village, 2);
+        SetResidentEnergy(world, 0);
+        typeof(SimulationWorld).GetMethod("FeedVillageFeast", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(world, [Village.Y * world.Width + Village.X]);
+        Assert.False(world.IsVillageFeasting(Village));
+        Assert.Equal(3, world.GetApeVillageFood(Village));
+    }
+
     private static readonly GridPosition Village = new(10, 10);
 
     private static SimulationWorld CreateWorld(ulong seed = 17)
@@ -32,9 +47,9 @@ public sealed class VillageFeastTests
     {
         var world = CreateWorld();
         SetResidentEnergy(world, 11);
-        world.StoreApeVillageFood(Village, 2);
+        world.StoreApeVillageFood(Village, 3);
         Assert.True(world.TryStartVillageFeast(Village));
-        Assert.Equal(0, world.GetApeVillageFood(Village));
+        Assert.Equal(1, world.GetApeVillageFood(Village));
         Assert.False(world.IsVillageFeasting(Village));
         Assert.All(Enumerable.Range(0, world.CritterCount).Select(world.GetCritter), ape =>
         {
@@ -54,9 +69,9 @@ public sealed class VillageFeastTests
             world.StoreApeVillageFood(Village, 3);
             Assert.True(world.TryStartVillageFeast(Village));
             var apes = Enumerable.Range(0, world.CritterCount).Select(world.GetCritter).ToArray();
-            Assert.Equal(new[] { 11, 12 }, apes.Select(ape => ape.Energy).Order().ToArray());
+            Assert.Equal(new[] { 10, 12 }, apes.Select(ape => ape.Energy).Order().ToArray());
             winners.Add(apes.Single(ape => ape.Energy == 12).Id.Value);
-            Assert.Equal(0, world.GetApeVillageFood(Village));
+            Assert.Equal(1, world.GetApeVillageFood(Village));
         }
         Assert.Equal(2, winners.Count);
     }
@@ -74,7 +89,7 @@ public sealed class VillageFeastTests
         for (var tick = 0; tick < 100 && world.IsVillageFeasting(Village); tick++)
             world.AdvanceOneTick();
         Assert.False(world.IsVillageFeasting(Village));
-        Assert.Equal(0, world.GetApeVillageFood(Village));
+        Assert.Equal(1, world.GetApeVillageFood(Village));
     }
 
     [Fact]
@@ -85,7 +100,7 @@ public sealed class VillageFeastTests
         var sick = world.GetCritter(0);
         Assert.True(world.TryInfectApeAt(sick.Position, PlagueKind.Plague, 0));
         var outsider = world.AddCritter(CritterSpecies.Ape, new(30, 20));
-        world.StoreApeVillageFood(Village, 1);
+        world.StoreApeVillageFood(Village, 2);
         Assert.True(world.TryStartVillageFeast(Village));
         Assert.True(world.TryGetCritter(sick.Id, out var unchanged));
         Assert.Equal(11, unchanged.Energy);
@@ -126,6 +141,6 @@ public sealed class VillageFeastTests
         for (var attempt = 0; attempt < 10000 && !triggered; attempt++)
             triggered = world.TryStartNaturalVillageFeast(tile);
         Assert.True(triggered);
-        Assert.Equal(0, world.GetApeVillageFood(Village));
+        Assert.Equal(1, world.GetApeVillageFood(Village));
     }
 }

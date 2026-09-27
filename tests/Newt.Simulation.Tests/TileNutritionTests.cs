@@ -5,8 +5,8 @@ namespace Newt.Simulation.Tests;
 public sealed class TileNutritionTests
 {
     [Theory]
-    [InlineData(Terrain.DeepOcean, Biome.None, SurfaceWaterKind.None, 1)]
-    [InlineData(Terrain.Shallows, Biome.None, SurfaceWaterKind.None, 2)]
+    [InlineData(Terrain.Ocean, Biome.None, SurfaceWaterKind.None, 2)]
+    [InlineData(Terrain.Shallows, Biome.None, SurfaceWaterKind.None, 4)]
     [InlineData(Terrain.Beach, Biome.None, SurfaceWaterKind.None, 1)]
     [InlineData(Terrain.Plains, Biome.Tundra, SurfaceWaterKind.None, 1)]
     [InlineData(Terrain.Plains, Biome.Grassland, SurfaceWaterKind.None, 3)]
@@ -16,9 +16,9 @@ public sealed class TileNutritionTests
     [InlineData(Terrain.Plains, Biome.Jungle, SurfaceWaterKind.None, 6)]
     [InlineData(Terrain.Plains, Biome.Desert, SurfaceWaterKind.None, 0)]
     [InlineData(Terrain.Mountain, Biome.Forest, SurfaceWaterKind.None, 0)]
-    [InlineData(Terrain.Ocean, Biome.None, SurfaceWaterKind.None, 0)]
-    [InlineData(Terrain.Plains, Biome.Desert, SurfaceWaterKind.River, 2)]
-    [InlineData(Terrain.Mountain, Biome.None, SurfaceWaterKind.FreshwaterLake, 2)]
+    [InlineData(Terrain.DeepOcean, Biome.None, SurfaceWaterKind.None, 0)]
+    [InlineData(Terrain.Plains, Biome.Desert, SurfaceWaterKind.River, 3)]
+    [InlineData(Terrain.Mountain, Biome.None, SurfaceWaterKind.FreshwaterLake, 3)]
     public void CapacityFollowsProductiveTerrainRules(
         Terrain terrain,
         Biome biome,
@@ -60,10 +60,10 @@ public sealed class TileNutritionTests
     [InlineData(Terrain.Beach, 0.25f, 1)]
     [InlineData(Terrain.Beach, 0.50f, 1)]
     [InlineData(Terrain.Beach, 0.80f, 1)]
-    [InlineData(Terrain.Shallows, 0.10f, 4)]
-    [InlineData(Terrain.Shallows, 0.25f, 3)]
-    [InlineData(Terrain.Shallows, 0.50f, 2)]
-    [InlineData(Terrain.Shallows, 0.80f, 1)]
+    [InlineData(Terrain.Shallows, 0.10f, 6)]
+    [InlineData(Terrain.Shallows, 0.25f, 5)]
+    [InlineData(Terrain.Shallows, 0.50f, 4)]
+    [InlineData(Terrain.Shallows, 0.80f, 3)]
     public void CoastalNutritionFollowsTemperatureBand(
         Terrain terrain,
         float temperature,
@@ -97,14 +97,14 @@ public sealed class TileNutritionTests
     }
 
     [Theory]
-    [InlineData(Terrain.Ocean, 0.10f, 0)]
-    [InlineData(Terrain.Ocean, 0.25f, 0)]
-    [InlineData(Terrain.Ocean, 0.50f, 0)]
-    [InlineData(Terrain.Ocean, 0.80f, 0)]
-    [InlineData(Terrain.DeepOcean, 0.10f, 1)]
-    [InlineData(Terrain.DeepOcean, 0.25f, 2)]
-    [InlineData(Terrain.DeepOcean, 0.50f, 1)]
-    [InlineData(Terrain.DeepOcean, 0.80f, 1)]
+    [InlineData(Terrain.DeepOcean, 0.10f, 0)]
+    [InlineData(Terrain.DeepOcean, 0.25f, 0)]
+    [InlineData(Terrain.DeepOcean, 0.50f, 0)]
+    [InlineData(Terrain.DeepOcean, 0.80f, 0)]
+    [InlineData(Terrain.Ocean, 0.10f, 2)]
+    [InlineData(Terrain.Ocean, 0.25f, 3)]
+    [InlineData(Terrain.Ocean, 0.50f, 2)]
+    [InlineData(Terrain.Ocean, 0.80f, 2)]
     public void OpenOceanNutritionFollowsDepthAndTemperature(
         Terrain terrain,
         float temperature,
@@ -118,14 +118,14 @@ public sealed class TileNutritionTests
     }
 
     [Theory]
-    [InlineData(SurfaceWaterKind.River, 0.10f, 2)]
-    [InlineData(SurfaceWaterKind.River, 0.25f, 2)]
-    [InlineData(SurfaceWaterKind.River, 0.50f, 2)]
-    [InlineData(SurfaceWaterKind.River, 0.80f, 2)]
-    [InlineData(SurfaceWaterKind.FreshwaterLake, 0.10f, 2)]
-    [InlineData(SurfaceWaterKind.FreshwaterLake, 0.25f, 2)]
-    [InlineData(SurfaceWaterKind.FreshwaterLake, 0.50f, 2)]
-    [InlineData(SurfaceWaterKind.FreshwaterLake, 0.80f, 2)]
+    [InlineData(SurfaceWaterKind.River, 0.10f, 3)]
+    [InlineData(SurfaceWaterKind.River, 0.25f, 3)]
+    [InlineData(SurfaceWaterKind.River, 0.50f, 3)]
+    [InlineData(SurfaceWaterKind.River, 0.80f, 3)]
+    [InlineData(SurfaceWaterKind.FreshwaterLake, 0.10f, 3)]
+    [InlineData(SurfaceWaterKind.FreshwaterLake, 0.25f, 3)]
+    [InlineData(SurfaceWaterKind.FreshwaterLake, 0.50f, 3)]
+    [InlineData(SurfaceWaterKind.FreshwaterLake, 0.80f, 3)]
     public void FreshwaterReplacesBiomeAndTemperatureNutrition(
         SurfaceWaterKind water,
         float temperature,
@@ -151,11 +151,11 @@ public sealed class TileNutritionTests
     }
 
     [Fact]
-    public void IceSheetOverDeepOceanHasOneNutrition()
+    public void IceSheetOverShelfOceanHasOneNutrition()
     {
         var world = new SimulationWorld(1, 1, Terrain.Ice);
         var position = new GridPosition(0, 0);
-        world.SetElevation(position, -0.3f);
+        world.SetElevation(position, -0.1f);
 
         Assert.Equal(1, world.GetTileNutritionCapacity(position));
         Assert.Equal(1, world.GetTileNutrition(position));
@@ -167,10 +167,10 @@ public sealed class TileNutritionTests
         var world = new SimulationWorld(1, 1, Terrain.Shallows, seed: 2001);
         world.SeasonsEnabled = false;
         var position = new GridPosition(0, 0);
-        world.SetTemperature(position, 0.5f); // Two food units for two feeding actions.
+        world.SetTemperature(position, 0.5f); // Four food units for four feeding actions.
         world.AddCritter(CritterSpecies.Worm, position);
 
-        for (var tick = 0; tick < 2 * SimulationWorld.GetMovementIntervalTicks(CritterSpecies.Worm); tick++)
+        for (var tick = 0; tick < 4 * SimulationWorld.GetMovementIntervalTicks(CritterSpecies.Worm); tick++)
         {
             world.AdvanceOneTick();
         }
@@ -192,7 +192,7 @@ public sealed class TileNutritionTests
     [Fact]
     public void StarvationDepositsNutritionEvenWhenNaturalCapacityIsZero()
     {
-        var world = new SimulationWorld(1, 1, Terrain.Ocean, seed: 2002);
+        var world = new SimulationWorld(1, 1, Terrain.DeepOcean, seed: 2002);
         world.SeasonsEnabled = false;
         var position = new GridPosition(0, 0);
         world.AddCritter(CritterSpecies.Fish, position);

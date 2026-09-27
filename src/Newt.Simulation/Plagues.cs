@@ -89,7 +89,7 @@ public sealed partial class SimulationWorld
             return false;
         }
 
-        // Do not seed another outbreak while either strain is circulating here.
+        // Do not seed another outbreak while any strain is circulating here.
         foreach (var infectedId in _plagues.Keys)
         {
             if (_apeVillageHomes.TryGetValue(infectedId, out var home) && home == villageTile)
@@ -115,7 +115,10 @@ public sealed partial class SimulationWorld
                 selected = index;
             }
         }
-        return selected >= 0 && TryInfectApeAt(_positions[selected], PlagueKind.Plague, immuneRemainder);
+        if (selected < 0) return false;
+        var roll = NextInt(100);
+        var kind = roll < 80 ? PlagueKind.Plague : roll < 90 ? PlagueKind.Zombie : PlagueKind.Vampire;
+        return TryInfectApeAt(_positions[selected], kind, immuneRemainder);
     }
 
     private int GetPlagueImmunityRemainder(int index)

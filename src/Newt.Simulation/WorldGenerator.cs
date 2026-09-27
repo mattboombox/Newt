@@ -106,12 +106,18 @@ public static class WorldGenerator
             _ => options.LandFraction,
         };
         var threshold = FindLandThreshold(elevation, landFraction);
+        // Preserve coastlines and land relief, but deepen the submerged basins so
+        // roughly three quarters lie beyond the productive continental shelf.
+        var depths = elevation.Where(value => value < threshold).Select(value => threshold - value).Order().ToArray();
+        var depthScale = depths.Length == 0 ? 1 :
+            Math.Max(1, TerrainClassifier.DeepOceanDepthThreshold / Math.Max(0.001, depths[depths.Length / 4]));
         for (var y = 0; y < preset.Height; y++)
         {
             for (var x = 0; x < preset.Width; x++)
             {
                 var position = new GridPosition(x, y);
                 var height = elevation[y * preset.Width + x] - threshold;
+                if (height < 0) height *= depthScale;
                 world.SetElevation(position, (float)height);
             }
         }

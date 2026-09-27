@@ -35,6 +35,6 @@ public sealed class FreshwaterFeedingTests
         }
 
         Assert.Equal(initialEnergy, world.GetCritter(0).Energy);
-        Assert.Equal(2, world.GetTileNutrition(position));
+        Assert.Equal(3, world.GetTileNutrition(position));
     }
 }

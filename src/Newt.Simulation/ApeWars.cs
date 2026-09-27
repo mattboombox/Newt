@@ -8,6 +8,7 @@ public sealed partial class SimulationWorld
         public int[] Distances = distances;
         public bool BloodWar = bloodWar;
         public bool CivilWar;
+        public HashSet<int> DemobilizedWorkers = [];
         public int[] BlueDistances = [];
         public Dictionary<int, CritterSpecies> OriginalRoles = [];
         public HashSet<int> AttackingWarriors = [], DefendingWarriors = [], Levies = [];
@@ -111,7 +112,7 @@ public sealed partial class SimulationWorld
 
     private void RefreshCivilWarRoutes(ApeWar war)
     {
-        IEnumerable<int> Positions(HashSet<int> army) => army.Where(IsSurvivingCivilWarFighter)
+        IEnumerable<int> Positions(HashSet<int> army) => army.Where(id => !war.DemobilizedWorkers.Contains(id) && IsSurvivingCivilWarFighter(id))
             .Select(id => GetIndex(_positions[_critterIndicesById[id]]));
         war.Distances = BuildWarDistances(Positions(war.DefendingWarriors));
         war.BlueDistances = BuildWarDistances(Positions(war.AttackingWarriors));
@@ -206,7 +207,8 @@ public sealed partial class SimulationWorld
         war = null!;
         return _apeVillageHomes.TryGetValue(_critterIds[index].Value, out var village) &&
             _apeWars.TryGetValue(village, out war!) && (!war.CivilWar ||
-                war.OriginalRoles.ContainsKey(_critterIds[index].Value));
+                war.OriginalRoles.ContainsKey(_critterIds[index].Value) &&
+                !war.DemobilizedWorkers.Contains(_critterIds[index].Value));
     }
 
     private bool AreWarEnemies(int first, int second) =>
@@ -214,7 +216,7 @@ public sealed partial class SimulationWorld
         _apeVillageHomes.TryGetValue(_critterIds[first].Value, out var home) &&
         _apeVillageHomes.TryGetValue(_critterIds[second].Value, out var other) &&
         (war.CivilWar
-            ? home == other && (war.AttackingWarriors.Contains(_critterIds[first].Value) &&
+            ? home == other && !war.DemobilizedWorkers.Contains(_critterIds[second].Value) && (war.AttackingWarriors.Contains(_critterIds[first].Value) &&
                 war.DefendingWarriors.Contains(_critterIds[second].Value) ||
                 war.DefendingWarriors.Contains(_critterIds[first].Value) && war.AttackingWarriors.Contains(_critterIds[second].Value))
             : other == (home == war.Attacker ? war.Defender : war.Attacker));
@@ -228,12 +230,34 @@ public sealed partial class SimulationWorld
     {
         foreach (var war in _apeWars.Values.Distinct().ToArray())
         {
-            var attackers = war.AttackingWarriors.Count(id => war.CivilWar ? IsSurvivingCivilWarFighter(id) : IsSurvivingWarrior(id));
-            var defenders = war.DefendingWarriors.Count(id => war.CivilWar ? IsSurvivingCivilWarFighter(id) : IsSurvivingWarrior(id));
-            var attackerLost = !IsRoadVillage(war.Attacker) || attackers * 10 <= war.AttackingWarriors.Count;
+            bool Surviving(int id) => war.CivilWar
+                ? !war.DemobilizedWorkers.Contains(id) && IsSurvivingCivilWarFighter(id)
+                : IsSurvivingWarrior(id);
+            var attackers = war.AttackingWarriors.Count(Surviving);
+            var defenders = war.DefendingWarriors.Count(Surviving);
+            if (war.CivilWar && (attackers * 10 <= war.AttackingWarriors.Count ||
+                defenders * 10 <= war.DefendingWarriors.Count))
+            {
+                foreach (var (id, role) in war.OriginalRoles)
+                {
+                    if (role is CritterSpecies.Ape or CritterSpecies.ApeWarrior or CritterSpecies.ApeChieftain ||
+                        !Surviving(id) || !war.DemobilizedWorkers.Add(id)) continue;
+                    var index = _critterIndicesById[id];
+                    if (!CanLiveOn(_species[index], GetIndex(_positions[index])))
+                        _returningWarSailors[id] = role;
+                    else
+                        ChangeCritterSpecies(index, role, preserveEnergy: true, preserveApeVillage: true);
+                }
+                attackers = war.AttackingWarriors.Count(Surviving);
+                defenders = war.DefendingWarriors.Count(Surviving);
+                RefreshCivilWarRoutes(war);
+            }
+            var attackerLost = !IsRoadVillage(war.Attacker) ||
+                (war.CivilWar ? attackers == 0 : attackers * 10 <= war.AttackingWarriors.Count);
             var defenderLost = war.BloodWar
                 ? !IsRoadVillage(war.Defender) || !GetBloodWarTargets(war).Any()
-                : !IsRoadVillage(war.Defender) || defenders * 10 <= war.DefendingWarriors.Count;
+                : !IsRoadVillage(war.Defender) ||
+                    (war.CivilWar ? defenders == 0 : defenders * 10 <= war.DefendingWarriors.Count);
             if (!attackerLost && !defenderLost)
             {
                 if (war.CivilWar && Tick % TicksPerSecond == 0)

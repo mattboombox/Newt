@@ -96,17 +96,20 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private Texture2D? _apeColonistSailorFlashSprite;
     private Texture2D? _apeBarbarianSprite;
     private Texture2D? _apeBarbarianFlashSprite;
+    private Texture2D? _apeBarbarianVeteranSprite, _apeBarbarianVeteranFlashSprite;
     private Texture2D? _apeBarbarianChiefSprite;
     private Texture2D? _apeBarbarianChiefFlashSprite;
     private Texture2D? _apePirateSprite;
     private Texture2D? _apePirateFlashSprite;
+    private Texture2D? _apePirateVeteranSprite, _apePirateVeteranFlashSprite;
     private Texture2D? _apePirateChiefSprite;
     private Texture2D? _apePirateChiefFlashSprite;
     private Texture2D? _apeWarriorVeteranSprite;
     private Texture2D? _apeWarriorVeteranFlashSprite;
     private Texture2D? _apeSailorWarriorSprite, _apeSailorWarriorFlashSprite;
+    private Texture2D? _apeSailorWarriorVeteranSprite, _apeSailorWarriorVeteranFlashSprite;
     private Texture2D? _apeSailorChiefSprite, _apeSailorChiefFlashSprite;
-    private readonly Dictionary<(bool Attacking, bool Sailing), (Texture2D Sprite, Texture2D Flash)> _apeWarTeamSprites = [];
+    private readonly Dictionary<(bool Attacking, bool Sailing, bool Veteran), (Texture2D Sprite, Texture2D Flash)> _apeWarTeamSprites = [];
     private TimeSpan _accumulator;
     private KeyboardState _previousKeyboard;
     private MouseState _previousMouse;
@@ -377,12 +380,19 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     {
         foreach (var attacking in new[] { true, false })
             foreach (var sailing in new[] { false, true })
+            foreach (var isVeteran in new[] { false, true })
             {
                 var color = attacking ? "red" : "blue";
                 var role = sailing ? "ape-sailor-warrior" : "ape-warrior";
-                if (TryLoadCritterSprite($"{role}-{color}.png", out var teamSprite, out var teamFlash))
-                    _apeWarTeamSprites[(attacking, sailing)] = (teamSprite, teamFlash);
+                var suffix = isVeteran ? "-veteran" : "";
+                if (TryLoadCritterSprite($"{role}-{color}{suffix}.png", out var teamSprite, out var teamFlash))
+                    _apeWarTeamSprites[(attacking, sailing, isVeteran)] = (teamSprite, teamFlash);
             }
+        if (TryLoadCritterSprite("ape-sailor-warrior-veteran.png", out var sailorVeteran, out var sailorVeteranFlash))
+        {
+            _apeSailorWarriorVeteranSprite = sailorVeteran;
+            _apeSailorWarriorVeteranFlashSprite = sailorVeteranFlash;
+        }
         if (TryLoadCritterSprite("ape-sailor-warrior.png", out var sailorWarrior, out var sailorWarriorFlash))
         {
             _apeSailorWarriorSprite = sailorWarrior;
@@ -417,6 +427,16 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         {
             _apeBarbarianSprite = sprite;
             _apeBarbarianFlashSprite = flashSprite;
+        }
+        if (TryLoadCritterSprite("ape-barbarian-veteran.png", out sprite, out flashSprite))
+        {
+            _apeBarbarianVeteranSprite = sprite;
+            _apeBarbarianVeteranFlashSprite = flashSprite;
+        }
+        if (TryLoadCritterSprite("ape-pirate-veteran.png", out sprite, out flashSprite))
+        {
+            _apePirateVeteranSprite = sprite;
+            _apePirateVeteranFlashSprite = flashSprite;
         }
         if (TryLoadCritterSprite("ape-barbarian-chieftain.png", out sprite, out flashSprite))
         {
@@ -556,9 +576,16 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         }
         else if (critter.Species is CritterSpecies.ApeWarrior &&
             _world.TryGetApeWarSide(critter.Id, out var attacking) &&
-            _apeWarTeamSprites.TryGetValue((attacking, IsWaterTile(critter.Position)), out var teamSprites))
+            (_apeWarTeamSprites.TryGetValue((attacking, IsWaterTile(critter.Position), critter.IsVeteranWarrior), out var teamSprites) ||
+             _apeWarTeamSprites.TryGetValue((attacking, IsWaterTile(critter.Position), false), out teamSprites)))
         {
             (sprite, flashSprite) = teamSprites;
+        }
+        else if (critter.IsVeteranWarrior && !_world.IsBarbarianApe(critter.Id) &&
+            IsWaterTile(critter.Position) && _apeSailorWarriorVeteranSprite is not null)
+        {
+            sprite = _apeSailorWarriorVeteranSprite;
+            flashSprite = _apeSailorWarriorVeteranFlashSprite;
         }
         else if (critter.Species is (CritterSpecies.ApeWarrior or CritterSpecies.ApeChieftain) &&
             !_world.IsBarbarianApe(critter.Id) && IsWaterTile(critter.Position) &&
@@ -571,6 +598,12 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         {
             sprite = _apeWarriorVeteranSprite;
             flashSprite = _apeWarriorVeteranFlashSprite;
+        }
+        else if (critter.IsVeteranWarrior && _world.IsBarbarianApe(critter.Id) &&
+            (_world.IsApePirate(critter.Id) ? _apePirateVeteranSprite : _apeBarbarianVeteranSprite) is not null)
+        {
+            sprite = _world.IsApePirate(critter.Id) ? _apePirateVeteranSprite : _apeBarbarianVeteranSprite;
+            flashSprite = _world.IsApePirate(critter.Id) ? _apePirateVeteranFlashSprite : _apeBarbarianVeteranFlashSprite;
         }
         else if (_world.IsBarbarianApe(critter.Id) &&
             (critter.Species switch
@@ -1611,7 +1644,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private string[] GetBuildingInspectionLines(GridPosition position)
     {
         if (_world.HasVampireLair(position))
-            return ["BUILDING", "Vampire Lair", $"Residents {_world.GetVampireLairPopulation(position)}/2", "Behavior Vampire nursery"];
+            return ["BUILDING", "Vampire Lair", $"Residents {_world.GetVampireLairPopulation(position)}/{SimulationWorld.VampireLairCapacity}", "Behavior Vampire nursery"];
         if (_world.GetVolcanoState(position) is { } volcanoState)
         {
             return ["BUILDING", "Volcano", $"Behavior {volcanoState}", "Energy None"];
@@ -2141,7 +2174,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         var connections = _world.GetRoadConnections(position);
         if (_spriteBatch is null || _pixel is null || connections is RiverConnection.None)
             return;
-        var color = _world.GetSurfaceWater(position) is SurfaceWaterKind.River
+        var color = _world.GetSurfaceWater(position) is SurfaceWaterKind.River || _world.GetTerrain(position) is Terrain.Shallows
             ? new Color(145, 145, 145) : new Color(170, 125, 78);
         var originX = MapOffsetX + screenX * TileSize;
         var originY = MapOffsetY + screenY * TileSize;
@@ -2699,8 +2732,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
 
     private static Color GetSurfaceWaterColor(SurfaceWaterKind water) => water switch
     {
-        SurfaceWaterKind.River => new Color(65, 175, 235),
-        SurfaceWaterKind.FreshwaterLake => new Color(50, 135, 205),
+        SurfaceWaterKind.River => new Color(52, 140, 188),
+        SurfaceWaterKind.FreshwaterLake => new Color(40, 108, 164),
         _ => Color.Magenta,
     };
 
@@ -2712,7 +2745,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         }
 
         var depthShade = Math.Clamp(depth / 0.20f, 0f, 1f);
-        return ScaleColor(new Color(50, 135, 205), 1f - 0.45f * depthShade);
+        return ScaleColor(new Color(50, 135, 205), 0.8f - 0.25f * depthShade);
     }
 
     private string GetToolHint(WorldTool tool) => tool switch
@@ -2739,10 +2772,10 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         WorldTool.Plague => "L infect ape",
         WorldTool.ZombiePlague => "L infect ape",
         WorldTool.VampirePlague => "L infect ape (non-contagious; vampire on death)",
-        WorldTool.Feast => "L village: feast until food stores are empty",
+        WorldTool.Feast => "L village: feast using up to 80% of stored food",
         WorldTool.NaturalEvents => "L on; R off",
         WorldTool.River => "L add; R remove",
-        WorldTool.Plankton => "L spawn: deep ocean",
+        WorldTool.Plankton => "L spawn: ocean",
         WorldTool.Jellyfish => "L spawn: water",
         WorldTool.Fish => "L spawn: water",
         WorldTool.Worm => "L spawn: ocean / shallows",

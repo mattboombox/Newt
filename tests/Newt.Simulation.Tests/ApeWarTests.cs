@@ -49,7 +49,7 @@ public sealed class ApeWarTests
         var indices = (Dictionary<int, int>)typeof(SimulationWorld).GetField("_critterIndicesById", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(world)!;
         var canLive = typeof(SimulationWorld).GetMethod("CanCritterLiveOn", BindingFlags.Instance | BindingFlags.NonPublic)!;
         var water = 15 * world.Width + 20;
-        Assert.False((bool)canLive.Invoke(world, [indices[id.Value], water])!);
+        Assert.Equal(species == CritterSpecies.ApeWarrior, (bool)canLive.Invoke(world, [indices[id.Value], water])!);
         Assert.True(world.TryStartApeWar(First, Second));
         Assert.True((bool)canLive.Invoke(world, [indices[id.Value], water])!);
         var move = typeof(SimulationWorld).GetMethod("TryMoveWarApe", BindingFlags.Instance | BindingFlags.NonPublic)!;
@@ -67,7 +67,7 @@ public sealed class ApeWarTests
         Assert.True(world.TryGetCritter(id, out var landed));
         Assert.Equal(19, landed.Position.X);
         Assert.Equal(species, landed.Species);
-        Assert.False((bool)canLive.Invoke(world, [indices[id.Value], water])!);
+        Assert.Equal(species == CritterSpecies.ApeWarrior, (bool)canLive.Invoke(world, [indices[id.Value], water])!);
     }
 
     [Fact]
@@ -367,6 +367,46 @@ public sealed class ApeWarTests
             Assert.Equal(roles[c.Id], c.Species);
             Assert.False(world.TryGetApeWarSide(c.Id, out _));
         });
+    }
+
+    [Fact]
+    public void CivilWarRestoresWorkersAtNinetyPercentButContinuesUntilOneArmyIsGone()
+    {
+        var world = CreateWorld();
+        var homes = (Dictionary<int, int>)typeof(SimulationWorld).GetField("_apeVillageHomes", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(world)!;
+        for (var i = 0; i < 10; i++)
+        {
+            var id = world.AddCritter(i % 2 == 0 ? CritterSpecies.ApeFarmer : CritterSpecies.ApeLumberjack,
+                new(10 + i % 5, 12 + i / 5));
+            homes[id.Value] = First.Y * world.Width + First.X;
+        }
+        var roles = Residents(world, First).ToDictionary(c => c.Id, c => c.Species);
+        Assert.True(world.TryStartApeCivilWar(First));
+        var red = Residents(world, First).Where(c => world.TryGetApeWarSide(c.Id, out var side) && side).ToArray();
+        Assert.Equal(10, red.Length);
+        var survivor = red.First(c => roles[c.Id] == CritterSpecies.Ape);
+        var casualties = red.Where(c => c.Id != survivor.Id).ToArray();
+        foreach (var unit in casualties.Take(8)) world.RemoveCritterAt(unit.Position);
+        world.AdvanceApeWars();
+        Assert.True(world.IsApeVillageAtWar(First));
+        Assert.All(Residents(world, First), c => Assert.Equal(CritterSpecies.ApeWarrior, c.Species));
+        world.RemoveCritterAt(casualties[8].Position);
+        world.AdvanceApeWars();
+        Assert.True(world.IsApeVillageAtWar(First));
+        var workers = Residents(world, First).Where(c => roles[c.Id] != CritterSpecies.Ape).ToArray();
+        Assert.NotEmpty(workers);
+        Assert.All(workers, c =>
+        {
+            Assert.Equal(roles[c.Id], c.Species);
+            Assert.False(world.TryGetApeWarSide(c.Id, out _));
+        });
+        Assert.True(world.TryGetApeWarSide(survivor.Id, out _));
+        world.AdvanceApeWars();
+        Assert.True(world.IsApeVillageAtWar(First));
+        world.RemoveCritterAt(survivor.Position);
+        world.AdvanceApeWars();
+        Assert.False(world.IsApeVillageAtWar(First));
+        Assert.All(Residents(world, First), c => Assert.Equal(roles[c.Id], c.Species));
     }
 
     [Fact]

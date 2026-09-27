@@ -129,11 +129,11 @@ The game starts in Critter Tools with Plankton selected.
   to support their Monkey, Deer, Wolf, and Toothed Whale descendant branches.
   Ambient feeding draws from finite tile nutrition. Land capacity is Jungle 6,
   Swamp 5, Forest 4, Grassland/Taiga 3, Bog/Arid 2, Tundra 1, and
-  Desert/Arctic 0. Ice Sheets over Deep Ocean hold 1, while shallower Ice Sheets
+  Desert/Arctic 0. Ice Sheets over shelf Ocean hold 1, while deep-ocean Ice Sheets
   hold 0. Beaches are 0 freezing and 1 otherwise; Shallows are
-  4 freezing, 3 cold, 2 temperate, and 1 hot; Ocean is 0; Deep Ocean is 2 cold and
-  1 otherwise. Rivers and Lakes both replace the underlying tile with a flat
-  capacity of 2, independent of biome and temperature. Only Worms, Fish,
+  6 freezing, 5 cold, 4 temperate, and 3 hot; Deep Ocean is 0; Ocean is 3 cold and
+  2 otherwise. Rivers and Lakes both replace the underlying tile with a flat
+  capacity of 3, independent of biome and temperature. Only Worms, Fish,
   and Newts consume this freshwater nutrition; Crabs and terrestrial foliage feeders may
   cross supported freshwater tiles but cannot graze natural or deposited food there.
   Tiles regenerate one unit
@@ -144,11 +144,11 @@ The game starts in Critter Tools with Plankton selected.
   one edible nutrient on its tile, including terrain with zero natural capacity; this
   uses a separate byte per tile and requires no additional world scan. Plankton photosynthesize,
   so their ambient feeding neither checks nor consumes tile nutrition. Complete
-  Plankton extinction recovers one Deep Ocean Plankton after 15,000 ticks while life is enabled.
+  Plankton extinction recovers one Ocean Plankton after 15,000 ticks while life is enabled.
   Trilobites continue to Crab or Sea Scorpion. Worms share Trilobite survival behavior:
   they move every six seconds, inhabit marine water and Beaches, seek feeding terrain
   within five Manhattan tiles, and flee predators detected within three. They graze
-  detritus in Deep Ocean, Shallows, Beaches, and Ice Sheets over Deep Ocean, carry up
+  detritus in Ocean, Shallows, Beaches, and Ice Sheets over shelf Ocean, carry up
   to seven energy, and reproduce at five energy for a cost of three. Squid and Sea Scorpions consume
   Worms only when adjacent, preserving most of the Fish and Nautilus branches.
   jellyfish consume only plankton on contact and leave worms and fish alone; fish consume or seek
@@ -170,7 +170,7 @@ The game starts in Critter Tools with Plankton selected.
   within three Manhattan tiles. Larger critters can shove smaller blockers into adjacent open
   habitat rather than losing their movement step; Worms and Trilobites can push
   through chains of up to four Plankton in dense blooms. Active Plankton hunters still eat them.
-  Slow shelled Nautiluses eat terrain food in Deep Ocean, Shallows, or deep-ocean Ice Sheets before hunting nearby Plankton,
+  Slow shelled Nautiluses eat terrain food in Ocean or Shallows before hunting nearby Plankton,
   flee visible predators, and are protected from Jellyfish. Sea Scorpions and Squid
   consume Nautiluses only on adjacent encounters.
   Squid hunt fish, trilobites, crabs, newts, Sea Scorpions, Deer, Elk, and Gazelles
@@ -304,7 +304,7 @@ The game starts in Critter Tools with Plankton selected.
   Jellyfish, Plankton, Worms, Squid Eggs, or smaller land animals.
   Baleen Whales evolve from Toothed Whales with the same body size, energy,
   metabolism, reproduction, movement timing, and saltwater habitat. They eat only
-  Plankton and search fourteen tiles away, twice the Toothed Whale's search radius.
+  Plankton, gaining two energy per meal, and search twenty-four tiles away.
   Building Tools can be cycled like Critter Tools; the Wolf Den entry places a
   den with one charge on left click and removes one with right click.
   Other / Jump Start enables life and fills every unoccupied Deep Ocean tile with
@@ -444,3 +444,11 @@ fields that classify plains and uplands.
 
 See [geology and hydrology](geology.md) for live elevation changes, springs,
 rivers, lakes, and the planned erosion model.
+
+Continents, Pangaea, Archipelago, and Ring World deepen submerged elevations
+without changing the land threshold. About three quarters of submerged basin
+elevations exceed the deep-ocean threshold before coastal shallows and ice are
+classified. Deep Ocean supplies no natural tile nutrition, but Plankton can
+photosynthesize across all ocean depths, including beneath sea ice;
+Ocean supplies 3 nutrition when cold and 2 otherwise. Earth and All Ocean retain
+their existing elevation generation.

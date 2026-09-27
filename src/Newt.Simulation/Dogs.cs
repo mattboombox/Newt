@@ -46,17 +46,18 @@ public sealed partial class SimulationWorld
 
     internal void TryRecruitDogFromWolfKill(int killerIndex)
     {
-        if (!IsLivingApe(_species[killerIndex]) ||
-            !_apeVillageHomes.TryGetValue(_critterIds[killerIndex].Value, out var village) ||
-            GetVillageDogCount(village) >= GetVillageDogLimit(village) ||
+        var hasVillage = _apeVillageHomes.TryGetValue(_critterIds[killerIndex].Value, out var village);
+        if (!(IsLivingApe(_species[killerIndex]) ||
+                _species[killerIndex] is CritterSpecies.ApeTrader or CritterSpecies.ApeTraderSailor) ||
+            (hasVillage && GetVillageDogCount(village) >= GetVillageDogLimit(village)) ||
             NextInt(100) >= DogRecruitmentChancePercent)
             return;
         var reservedBirthTiles = new HashSet<GridPosition>();
         var position = FindBirthPosition(killerIndex, CritterSpecies.Dog, reservedBirthTiles) ??
-            FindVillageDogBirthPosition(village, reservedBirthTiles);
+            (hasVillage ? FindVillageDogBirthPosition(village, reservedBirthTiles) : null);
         if (position is not { } spawn || !TryAddCritter(CritterSpecies.Dog, spawn))
             return;
-        _apeVillageHomes[_critterIds[_occupants[GetIndex(spawn)]].Value] = village;
+        if (hasVillage) _apeVillageHomes[_critterIds[_occupants[GetIndex(spawn)]].Value] = village;
     }
 
     private GridPosition? FindVillageDogBirthPosition(int village, IReadOnlySet<GridPosition> reservedBirthTiles) =>

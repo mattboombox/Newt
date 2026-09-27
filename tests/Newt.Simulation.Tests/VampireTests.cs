@@ -62,7 +62,7 @@ public sealed class VampireTests
             if (damage > 0)
             {
                 successfulHits++;
-                Assert.Equal(Math.Min(3, victimEnergy), damage);
+                Assert.Equal(Math.Min(4, victimEnergy), damage);
                 Assert.Equal(6 + damage, after.Energy);
             }
             if (alive)
@@ -72,7 +72,7 @@ public sealed class VampireTests
     }
 
     [Fact]
-    public void FirstBirthCreatesLairAndBothResidentsRespectItsCapacity()
+    public void FirstBirthCreatesLairAndFourResidentsRespectItsCapacity()
     {
         var world = CreateWorld();
         var parent = world.AddCritter(CritterSpecies.Vampire, new(10, 10));
@@ -86,13 +86,17 @@ public sealed class VampireTests
         foreach (var vampire in vampires)
             SetEnergy(world, vampire.Id, 12);
         world.AdvanceOneTick();
-        Assert.Equal(2, world.GetCritterCount(CritterSpecies.Vampire));
+        Assert.Equal(4, world.GetCritterCount(CritterSpecies.Vampire));
+        foreach (var vampire in Enumerable.Range(0, world.CritterCount).Select(world.GetCritter).ToArray())
+            SetEnergy(world, vampire.Id, 12);
+        world.AdvanceOneTick();
+        Assert.Equal(4, world.GetCritterCount(CritterSpecies.Vampire));
         Assert.All(Enumerable.Range(0, world.CritterCount).Select(world.GetCritter), vampire => Assert.False(vampire.CanReproduce));
         Assert.True(world.TryGetCritter(vampires[1].Id, out var child));
         world.RemoveCritterAt(child.Position);
         world.AdvanceOneTick();
-        Assert.Equal(2, world.GetCritterCount(CritterSpecies.Vampire));
-        Assert.Equal(2, world.GetVampireLairPopulation(new(10, 10)));
+        Assert.Equal(4, world.GetCritterCount(CritterSpecies.Vampire));
+        Assert.Equal(4, world.GetVampireLairPopulation(new(10, 10)));
     }
 
     [Theory]

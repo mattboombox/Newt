@@ -618,7 +618,7 @@ public sealed class ApeTests
         Assert.InRange(missedRolls, 1, 999);
         var infected = Assert.Single(Enumerable.Range(0, world.CritterCount)
             .Select(world.GetCritter), critter => critter.Plague is not PlagueKind.None);
-        Assert.Equal(PlagueKind.Plague, infected.Plague);
+        Assert.Contains(infected.Plague, new[] { PlagueKind.Plague, PlagueKind.Zombie, PlagueKind.Vampire });
         Assert.False(infected.IsPlagueImmune);
     }
 
