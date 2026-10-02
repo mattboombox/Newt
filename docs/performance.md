@@ -58,3 +58,37 @@ zero-allocation target is not met during outbreaks; infection dictionary growth
 and existing deferred death/combat collections allocate. Spread does only eight
 occupancy lookups per contagious ape once per second; undead reuse bounded hunter
 perception and stagger their movement cadence.
+
+## Ape worker and pathfinding optimization (2026-09-29)
+
+Farmers and lumberjacks now resolve their workplace through a worker-ID index
+instead of scanning all staff assignments. Recruitment, death, role changes,
+and building removal maintain the index; home-village validation remains in place.
+
+Ape worker, settler, and sailor searches share world-local scratch arrays, a
+priority queue, and a reverse-path stack. Visit generations avoid clearing the
+whole map per search. Each returned route remains separately owned. Scratch
+arrays allocate lazily and retain approximately 12 bytes per map tile, plus
+queue/stack capacity. Searches remain sequential within a world; future parallel
+pathfinding will need separate scratch storage per worker.
+
+`tools/ApePathBenchmark.cs` accepts a built simulation DLL so the same workload
+can compare builds. Build the simulation in Release, then run:
+
+```powershell
+dotnet run --file tools/ApePathBenchmark.cs -c Release -- src/Newt.Simulation/bin/Release/net10.0/Newt.Simulation.dll
+```
+
+Measured locally on Windows 10.0.26200, .NET 10.0.12, 16 logical CPUs, using
+optimized Release DLLs before and after this change. The workload warms 200
+searches then measures 10,000 four-step routes on a 320 × 192 plain world:
+
+| Implementation | Mean ms/search | Allocated bytes/search |
+| --- | ---: | ---: |
+| Previous | 0.046466 | 493,070 |
+| Reused scratch storage | 0.009671 | 208 |
+
+These figures include reflection and route validation. They demonstrate reduced
+short-search overhead, not a full-world speedup or a worker-lookup benchmark.
+Path exploration, collision rules, and route tie-breaking are unchanged; search
+budgets and congestion retry behavior are not part of this change.

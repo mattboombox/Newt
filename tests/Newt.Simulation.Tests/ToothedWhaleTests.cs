@@ -40,7 +40,7 @@ public sealed class ToothedWhaleTests
         for (var tick = 0; tick < 30 * SimulationWorld.TicksPerSecond && world.CritterCount == 2; tick++)
             world.AdvanceOneTick();
         Assert.Equal(1, world.CritterCount);
-        Assert.Equal(3, SimulationWorld.GetCombatDamage(CritterSpecies.ToothedWhale));
+        Assert.Equal(5, SimulationWorld.GetCombatDamage(CritterSpecies.ToothedWhale));
         Assert.Equal(1, SimulationWorld.GetCombatDamage(CritterSpecies.BaleenWhale));
     }
 

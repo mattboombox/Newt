@@ -276,7 +276,7 @@ Wolves are a fast third branch from Therapsids. They scan five tiles and move ev
 Gazelles. Therapsids are held as last-resort targets. Wolves never pursue Mega
 Toads, but Mega Toads do hunt Wolves; a Toad-initiated encounter still uses the
 mutual-predator 50/50 roll rather than instant predation, with the winner dealing
-two energy damage.
+four energy damage.
 
 Wolf reproduction is structure-mediated. On first reaching reproduction energy,
 a Wolf reserves the nearest suitable Hill within eight tiles, falling back to its
@@ -339,8 +339,10 @@ in a Freshwater Lake and eat it without entering the lake itself.
 Mega Toads and Wolves can hunt Therapsids, and the Therapsid uses the same 50/50
 combat roll as every other combatant. Therapsids still do not include either
 species in their hunting diet, so they defend themselves without pursuing them.
-A Therapsid win deals one energy damage; a win by a Toothed Whale, Sea Scorpion,
-Mega Toad, Mega Spider, Wolf, or Squid deals two. Apes also remain at one damage.
+A Therapsid win deals one energy damage. Toothed Whales deal five, Wolves and
+Mega Toads four, Sea Scorpions and Squid three, and Mega Spiders two. Both Sea
+Scorpions and Squid hunt Therapsids where their habitats overlap. Ordinary Apes
+remain at one damage; Dogs remain at three.
 Toothed Whales are the marine Therapsid branch. They inhabit Deep Ocean, Ocean,
 and Shallows, move every four seconds, and scan seven Manhattan tiles for
 animal-eating marine prey: Sea Scorpions, Fish, Squid, and Ape Sailors.
@@ -580,11 +582,15 @@ access; levies afloat defer demobilization until landing.
 Each side's initial warriors, including levies, form a fixed casualty baseline.
 At 90% losses, the war ends and all remaining stored food and wood transfer from
 the loser to the winner, without applying storage caps to the payout. Simultaneous
-defeat is a draw. Surviving levies become ordinary Apes again; standing warriors
-remain warriors. Movement uses a shared terrain-distance field, refreshed every
+defeat is a draw. Non-veteran levies become ordinary Apes again; standing warriors
+remain warriors, subject to veteran priority in military capacity. Movement uses a shared terrain-distance field, refreshed every
 30 simulation seconds, with local enemy searches rather than per-soldier global
 pathfinding.
-When allies block every forward step, war units search up to four steps for an
+Warriors can shove civilian apes (including workers, scholars, sailors and traders),
+but not other warriors or chiefs. If no sidestep is free, they can exchange tiles
+with a non-trader blocker when terrain and combat reservations allow it. Enemies
+remain combat targets rather than being pushed through. When allies still block
+every forward step, war units search up to four steps for an
 open route that moves sideways before making forward progress. The search avoids
 occupied, combat-reserved, and impassable tiles, never retreats, and holds position
 when no short detour exists. Direct movement and adjacent combat retain priority.
@@ -594,7 +600,19 @@ normal mobilization, while defenders recruit ordinary apes, scholars, and sailor
 Farmers and lumberjacks retain their jobs and keep producing food and wood; they
 remain attackable and fight back using their existing role damage. Chiefs retain their role and chief
 sprites; traders and sailor traders remain excluded from recruitment. Surviving
-defending recruits recover their prior roles when the conflict ends.
+non-veteran defending recruits recover their prior roles when the conflict ends.
+Veterancy adds two damage per successful hit. On their fifth combat kill, warriors become veterans and immediately refill to
+maximum energy; later kills do not repeat the refill. Veterans remain warriors
+after ordinary, blood, or civil wars, including after returning from sea. Returning
+veterans fill military capacity ahead of non-veterans: excess regular warriors
+return to ordinary Ape roles. All surviving veterans are retained even if they
+outnumber district capacity, so no civilian veteran sprites are required.
+Predator kills also count toward this threshold. Barbarian ordinary apes and
+sailor-role pirates can earn the same veterancy and retain their kill totals
+when changing between barbarian ape, warrior, and sailor roles. Their veteran
+appearance uses `ape-barbarian-veteran.png` ashore and `ape-pirate-veteran.png`
+afloat, with matching damage-flash variants. Non-combat prey such as Deer do
+not award veteran kill credit; ordinary civilian sailors remain ineligible.
 With either war tool, clicking any village already at war (or one of its buildings)
 immediately stops that conflict for both sides, regardless of variant or pending
 attacker selection. Manual peace transfers no stores and uses normal demobilization,

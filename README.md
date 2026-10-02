@@ -27,6 +27,13 @@ dotnet run --project src/Newt.Game/Newt.Game.csproj
 
 Press Escape to exit.
 
+For an animal-only run, select **Sentience** under World Tools and right-click
+the world to disable monkey-to-ape evolution, then generate a fresh world.
+Left-click with the tool to enable it again. The setting defaults to on and
+persists across world regeneration. Other evolution continues normally;
+existing apes and manually placed apes are unaffected. The Evolve tool also
+respects this setting when evolving monkeys.
+
 ## Publishing for Windows
 
 ```powershell

@@ -216,10 +216,10 @@ public sealed class ApeTests
     }
 
     [Fact]
-    public void DogsHaveWolfStatsAndWarriorHuntingRelationships()
+    public void DogsHaveWolfNutritionAndMovementWithWarriorHuntingRelationships()
     {
         Assert.Equal(CritterNutritions.Get(CritterSpecies.Wolf), CritterNutritions.Get(CritterSpecies.Dog));
-        Assert.Equal(SimulationWorld.GetCombatDamage(CritterSpecies.Wolf), SimulationWorld.GetCombatDamage(CritterSpecies.Dog));
+        Assert.Equal(3, SimulationWorld.GetCombatDamage(CritterSpecies.Dog));
         Assert.Equal(SimulationWorld.GetMovementIntervalTicks(CritterSpecies.Wolf), SimulationWorld.GetMovementIntervalTicks(CritterSpecies.Dog));
         Assert.True(SimulationWorld.CanSpeciesReproduce(CritterSpecies.Dog));
         Assert.Equal(CritterSpecies.Dog, new SimulationWorld(1, 1, Terrain.Plains).ChooseOffspringSpecies(CritterSpecies.Dog));
@@ -2157,7 +2157,7 @@ public sealed class ApeTests
         Assert.False(SimulationWorld.CanEat(CritterSpecies.BaleenWhale, CritterSpecies.ApeSailor));
         Assert.False(SimulationWorld.CanEat(CritterSpecies.ApeSailor, CritterSpecies.ToothedWhale));
         Assert.Equal(1, SimulationWorld.GetCombatDamage(CritterSpecies.BaleenWhale));
-        Assert.Equal(3, SimulationWorld.GetCombatDamage(CritterSpecies.ToothedWhale));
+        Assert.Equal(5, SimulationWorld.GetCombatDamage(CritterSpecies.ToothedWhale));
         for (ulong seed = 1; seed <= 20; seed++)
         {
             var world = new SimulationWorld(1, 2, Terrain.Ocean, seed);

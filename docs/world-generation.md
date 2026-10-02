@@ -173,11 +173,11 @@ The game starts in Critter Tools with Plankton selected.
   Slow shelled Nautiluses eat terrain food in Ocean or Shallows before hunting nearby Plankton,
   flee visible predators, and are protected from Jellyfish. Sea Scorpions and Squid
   consume Nautiluses only on adjacent encounters.
-  Squid hunt fish, trilobites, crabs, newts, Sea Scorpions, Deer, Elk, and Gazelles
+  Squid hunt fish, trilobites, crabs, newts, Sea Scorpions, Therapsids, Deer, Elk, and Gazelles
   in shared saltwater habitat. They consume Worms and Nautiluses only when already adjacent.
   They lay drifting eggs that move like Plankton and hatch when Squid prey comes
   within two tiles or when they enter Shallows. Squid and Sea Scorpions resolve mutual attacks with a 50/50
-  roll; either species deals two energy damage when it wins. Sea Scorpions
+  roll; either species deals three energy damage when it wins. Sea Scorpions
   move every four seconds and hunt Fish, Crabs, Newts, Squid,
   Therapsids, Monkeys, Apes, Wolves, Ape Sailors, Deer, Elk, and Gazelles
   across saltwater and Beaches; they consume Worms, Trilobites, and Nautiluses only when adjacent, while
@@ -188,9 +188,9 @@ The game starts in Critter Tools with Plankton selected.
   below breeding energy. They eat terrain food on their normal action and hunt when
   no usable forage is available. They do not hunt Mega Toads or Wolves, but defend
   themselves with the standard 50% chance to win when either predator attacks.
-  A Therapsid win deals one energy damage, while a win by a Toothed Whale, Sea
-  Scorpion, Mega Toad, Mega Spider, Wolf, or Squid deals two. Apes remain
-  one-damage combatants.
+  A Therapsid win deals one energy damage. Toothed Whales deal five damage,
+  Wolves and Mega Toads four, Sea Scorpions and Squid three, and Mega Spiders two.
+  Ordinary Apes remain one-damage combatants; Dogs remain at three.
   Monkeys are non-predatory,
   feed and remain on Swamp, Jungle, or Forest foliage until ready to breed,
   and reproduce at eight energy for a cost of five. Deer evolve as a second

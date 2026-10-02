@@ -345,10 +345,26 @@ identity, market ownership, provisions and metabolism timing are preserved.
 Open sea and lakes are navigable; road river crossings remain on foot. At least
 two distinct harbor villages are required for sailing.
 
-Traders can shove every species when there is space to move the blocker. They
+Traders can shove civilians and critters, but not warriors or chiefs. When all
+sidesteps are occupied, they can exchange tiles with a non-trader blocker if
+both can inhabit their new tiles and neither tile is reserved for combat.
+Trader-to-trader passing retains its route-aware exchange. They
 carry no trade goods and do not reproduce. Their food capacity is 48 energy;
 they consume one every 70 simulated seconds and refill from the village whose
 center, harbor or market they visit, limited by its stored food. Route validity
 is checked once per simulated second. Removed markets or invalid routes retire
 the affected traders; eligible markets can recruit replacements on their next
 recruitment check. Inspection shows market ownership and destination.
+
+After 30 simulated seconds without reaching a new furthest step on the current
+route, a trader can recover to the nearest eligible empty tile up to five route
+steps ahead (also within five tiles of its current position). Failed recovery
+retries every 10 simulated seconds. Ordinary movement remains available during
+that wait. Returning to the same step after a shove does not reset the stall
+timer; genuine forward progress and starting a new journey leg do.
+Recovery validates route edges and respects combat reservations and web traps.
+It may bypass an occupied harbor along the existing route, switching to the
+land or sailor form appropriate for the landing tile. Normal movement still
+boards and disembarks at harbors. Recovery preserves
+identity, energy, market, and destination and does not activate teleporters.
+Trader inspection shows individual and cumulative world recovery counts.

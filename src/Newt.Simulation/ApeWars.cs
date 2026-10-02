@@ -241,7 +241,7 @@ public sealed partial class SimulationWorld
                 foreach (var (id, role) in war.OriginalRoles)
                 {
                     if (role is CritterSpecies.Ape or CritterSpecies.ApeWarrior or CritterSpecies.ApeChieftain ||
-                        !Surviving(id) || !war.DemobilizedWorkers.Add(id)) continue;
+                        !Surviving(id) || IsVeteranWarrior(_critterIndicesById[id]) || !war.DemobilizedWorkers.Add(id)) continue;
                     var index = _critterIndicesById[id];
                     if (!CanLiveOn(_species[index], GetIndex(_positions[index])))
                         _returningWarSailors[id] = role;
@@ -296,7 +296,7 @@ public sealed partial class SimulationWorld
             if ((pair.Value == war.Attacker || pair.Value == war.Defender) &&
                 _critterIndicesById.TryGetValue(pair.Key, out var sailor) && CanWarApeSail(sailor) &&
                 !CanLiveOn(_species[sailor], GetIndex(_positions[sailor])))
-                _returningWarSailors[pair.Key] = war.OriginalRoles.TryGetValue(pair.Key, out var role)
+                _returningWarSailors[pair.Key] = IsVeteranWarrior(sailor) ? null : war.OriginalRoles.TryGetValue(pair.Key, out var role)
                     ? role : war.Levies.Contains(pair.Key) ? CritterSpecies.Ape : null;
         _apeWars.Remove(war.Attacker);
         _apeWars.Remove(war.Defender);
@@ -304,12 +304,14 @@ public sealed partial class SimulationWorld
             if (pair.Value == war.Attacker || pair.Value == war.Defender)
                 _chieftainAttackTargets.Remove(pair.Key);
         foreach (var id in war.Levies)
-            if (!_returningWarSailors.ContainsKey(id) && _critterIndicesById.TryGetValue(id, out var index) && _species[index] is CritterSpecies.ApeWarrior)
+            if (!_returningWarSailors.ContainsKey(id) && _critterIndicesById.TryGetValue(id, out var index) && _species[index] is CritterSpecies.ApeWarrior && !IsVeteranWarrior(index))
                 ChangeCritterSpecies(index, CritterSpecies.Ape, preserveEnergy: true, preserveApeVillage: true);
         foreach (var (id, role) in war.OriginalRoles)
             if (!_returningWarSailors.ContainsKey(id) && _critterIndicesById.TryGetValue(id, out var index) &&
-                _species[index] is CritterSpecies.ApeWarrior && role != CritterSpecies.ApeWarrior)
+                _species[index] is CritterSpecies.ApeWarrior && role != CritterSpecies.ApeWarrior && !IsVeteranWarrior(index))
                 ChangeCritterSpecies(index, role, preserveEnergy: true, preserveApeVillage: true);
+        PrioritizeVillageVeterans(war.Attacker);
+        if (war.Defender != war.Attacker) PrioritizeVillageVeterans(war.Defender);
     }
 
     private bool IsSurvivingWarrior(int id) => _critterIndicesById.TryGetValue(id, out var index) &&
@@ -324,7 +326,7 @@ public sealed partial class SimulationWorld
         var current = GetIndex(_positions[index]);
         if (CanLiveOn(_species[index], current))
         {
-            if (_returningWarSailors.Remove(id, out var role) && role is { } originalRole)
+            if (_returningWarSailors.Remove(id, out var role) && role is { } originalRole && !IsVeteranWarrior(index))
                 ChangeCritterSpecies(index, originalRole, preserveEnergy: true, preserveApeVillage: true);
             return null;
         }
@@ -343,7 +345,7 @@ public sealed partial class SimulationWorld
                     MoveCritter(index, step, GetPosition(step), activateTeleporter: false);
                     if (CanLiveOn(_species[index], step))
                     {
-                        if (_returningWarSailors.Remove(id, out var role) && role is { } originalRole)
+                        if (_returningWarSailors.Remove(id, out var role) && role is { } originalRole && !IsVeteranWarrior(index))
                             ChangeCritterSpecies(index, originalRole, preserveEnergy: true, preserveApeVillage: true);
                     }
                     return null;
@@ -388,6 +390,20 @@ public sealed partial class SimulationWorld
         var best = neighbors.Where(tile => CanCritterLiveOn(index, tile) && _occupants[tile] < 0 &&
                 reserved?.Contains(GetPosition(tile)) is not true && Distance(tile) < Distance(current))
             .OrderBy(Distance).ThenBy(_ => NextInt(8)).DefaultIfEmpty(-1).First();
+        if (best < 0 && _species[index] is CritterSpecies.ApeWarrior)
+            foreach (var tile in neighbors.Where(tile => CanCritterLiveOn(index, tile) &&
+                         reserved?.Contains(GetPosition(tile)) is not true && Distance(tile) < Distance(current))
+                         .OrderBy(Distance).ThenBy(tile => tile))
+            {
+                var blocker = _occupants[tile];
+                if (blocker < 0 || AreWarEnemies(index, blocker)) continue;
+                if (TryShoveMovementBlocker(index, tile, reserved))
+                {
+                    best = tile;
+                    break;
+                }
+                if (TrySwapPastMovementBlocker(index, tile, reserved)) return null;
+            }
         if (best < 0 && neighbors.Any(tile => Distance(tile) < Distance(current) &&
                 CanCritterLiveOn(index, tile) && _occupants[tile] is var blocker && blocker >= 0 &&
                 _apeVillageHomes.TryGetValue(_critterIds[blocker].Value, out var home) &&

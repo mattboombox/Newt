@@ -4,6 +4,9 @@ public sealed partial class SimulationWorld
 {
     internal const int ApeMarketRecruitmentIntervalTicks = 30 * TicksPerSecond;
     internal const int ApeTraderRecruitmentFoodCost = 3;
+    internal const int ApeTraderStallTicks = 30 * TicksPerSecond;
+    internal const int ApeTraderRecoveryRetryTicks = 10 * TicksPerSecond;
+    internal const int ApeTraderRecoverySteps = 5;
 
     private sealed class TraderJourney(int market, int origin, int destination, List<int> tiles)
     {
@@ -12,12 +15,62 @@ public sealed partial class SimulationWorld
         public int Destination = destination;
         public List<int> Tiles = tiles;
         public int Step;
+        public int FurthestStep;
+        public long LastProgressTick;
+        public long NextRecoveryTick;
+        public int Recoveries;
     }
 
     private readonly Dictionary<int, TraderJourney> _traderJourneys = [];
     private readonly Dictionary<int, HashSet<int>> _traderSettlementLinks = [];
     private long _nextMarketConstructionTick;
     private bool _traderSeaTravelEnabled;
+    public long ApeTraderRecoveryCount { get; private set; }
+
+    public int GetApeTraderRecoveryCount(CritterId trader) =>
+        _traderJourneys.TryGetValue(trader.Value, out var journey) ? journey.Recoveries : 0;
+
+    private void RecordTraderProgress(TraderJourney journey)
+    {
+        if (journey.Step <= journey.FurthestStep) return;
+        journey.FurthestStep = journey.Step;
+        journey.LastProgressTick = Tick;
+        journey.NextRecoveryTick = Tick + ApeTraderStallTicks;
+    }
+
+    private bool TryRecoverStalledTrader(int index, TraderJourney journey,
+        IReadOnlySet<GridPosition>? reserved)
+    {
+        if (Tick - journey.LastProgressTick < ApeTraderStallTicks || Tick < journey.NextRecoveryTick)
+            return false;
+        journey.NextRecoveryTick = Tick + ApeTraderRecoveryRetryTicks;
+        var current = _positions[index];
+        if (IsCaughtInMegaSpiderWeb(index) || reserved?.Contains(current) is true) return false;
+        for (var step = journey.Step + 1;
+             step < journey.Tiles.Count && step <= journey.Step + ApeTraderRecoverySteps; step++)
+        {
+            var tile = journey.Tiles[step];
+            // Follow valid route edges, but allow a stalled trader to bypass an
+            // occupied harbor and change travel mode at the recovery destination.
+            if (!CanTraverseTraderEdge(journey.Tiles[step - 1], tile))
+                break;
+            var position = GetPosition(tile);
+            var form = IsTraderWater(tile) ? CritterSpecies.ApeTraderSailor : CritterSpecies.ApeTrader;
+            if (step > journey.FurthestStep && _occupants[tile] < 0 &&
+                reserved?.Contains(position) is not true && CanLiveOn(form, tile) &&
+                GetApeSettlerPathEstimate(GetIndex(current), tile) <= ApeTraderRecoverySteps)
+            {
+                SetTraderTravelForm(index, tile);
+                MoveCritter(index, tile, position, activateTeleporter: false);
+                journey.Step = step;
+                RecordTraderProgress(journey);
+                journey.Recoveries++;
+                ApeTraderRecoveryCount++;
+                return true;
+            }
+        }
+        return false;
+    }
 
     private bool IsTraderWater(int tile) => IsFishTile(tile) && !IsRoadTerrain(tile);
     private bool IsTraderHarbor(int tile) =>
@@ -209,7 +262,11 @@ public sealed partial class SimulationWorld
         var index = _critterIndicesById[id.Value];
         _energy[index] = ApeTraderRecruitmentFoodCost;
         _apeVillageFood[village] -= ApeTraderRecruitmentFoodCost;
-        _traderJourneys[id.Value] = new(market, village, TraderDestinationVillage(path), path);
+        _traderJourneys[id.Value] = new(market, village, TraderDestinationVillage(path), path)
+        {
+            LastProgressTick = Tick,
+            NextRecoveryTick = Tick + ApeTraderStallTicks,
+        };
         RefillApeTraderProvisions(index);
         return true;
     }
@@ -254,9 +311,11 @@ public sealed partial class SimulationWorld
             // Wait for another trader to pass rather than shoving it back and forth.
             if (blocker >= 0 && _species[blocker] is (CritterSpecies.ApeTrader or CritterSpecies.ApeTraderSailor))
                 continue;
-            if (!CanEnterOrShoveMovementBlocker(index, tile, reservedPrey))
+            if (!CanEnterOrShoveMovementBlocker(index, tile, reservedPrey) &&
+                !TrySwapPastMovementBlocker(index, tile, reservedPrey))
                 continue;
-            MoveCritter(index, tile, position, activateTeleporter: false);
+            if (GetIndex(_positions[index]) != tile)
+                MoveCritter(index, tile, position, activateTeleporter: false);
             journey.Step = step;
             RefillApeTraderProvisions(index);
             return;
@@ -331,6 +390,8 @@ public sealed partial class SimulationWorld
         _occupants[current] = other;
         journey.Step++;
         otherJourney.Step = otherStep;
+        RecordTraderProgress(journey);
+        RecordTraderProgress(otherJourney);
         SetTraderTravelForm(index, next);
         SetTraderTravelForm(other, current);
         _nextMovementTicks[other] = Math.Max(_nextMovementTicks[other], Tick + GetMovementIntervalTicks(_species[other]));
@@ -354,6 +415,16 @@ public sealed partial class SimulationWorld
     {
         if (!_traderJourneys.TryGetValue(_critterIds[index].Value, out var journey))
             return null;
+        TryMoveApeTraderNormally(index, reservedPrey);
+        RecordTraderProgress(journey);
+        TryRecoverStalledTrader(index, journey, reservedPrey);
+        return null;
+    }
+
+    private GridPosition? TryMoveApeTraderNormally(int index, IReadOnlySet<GridPosition>? reservedPrey)
+    {
+        if (!_traderJourneys.TryGetValue(_critterIds[index].Value, out var journey))
+            return null;
         if (GetIndex(_positions[index]) != journey.Tiles[journey.Step])
         {
             TryRejoinTraderRoute(index, journey, reservedPrey);
@@ -370,6 +441,9 @@ public sealed partial class SimulationWorld
             journey.Destination = TraderDestinationVillage(path);
             journey.Tiles = path;
             journey.Step = 0;
+            journey.FurthestStep = 0;
+            journey.LastProgressTick = Tick;
+            journey.NextRecoveryTick = Tick + ApeTraderStallTicks;
         }
         var next = journey.Tiles[journey.Step + 1];
         if (reservedPrey?.Contains(GetPosition(next)) is true ||
@@ -382,7 +456,8 @@ public sealed partial class SimulationWorld
         var form = IsTraderWater(next) ? CritterSpecies.ApeTraderSailor : CritterSpecies.ApeTrader;
         var oldForm = _species[index];
         _species[index] = form;
-        if (!CanEnterOrShoveMovementBlocker(index, next, reservedPrey))
+        if (!CanEnterOrShoveMovementBlocker(index, next, reservedPrey) &&
+            !TrySwapPastMovementBlocker(index, next, reservedPrey))
         {
             _species[index] = oldForm;
             return null;
@@ -392,7 +467,8 @@ public sealed partial class SimulationWorld
             _speciesCounts[(int)oldForm]--;
             _speciesCounts[(int)form]++;
         }
-        MoveCritter(index, next, GetPosition(next), activateTeleporter: false);
+        if (GetIndex(_positions[index]) != next)
+            MoveCritter(index, next, GetPosition(next), activateTeleporter: false);
         journey.Step++;
 
         RefillApeTraderProvisions(index);

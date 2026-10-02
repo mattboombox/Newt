@@ -183,12 +183,12 @@ public static class CritterNutritions
         BodySize: CritterBodySize.Large,
         FeedingStrategy: CritterFeedingStrategy.TerrainFirst,
         InitialEnergy: 5,
-        MaximumEnergy: 12,
+        MaximumEnergy: 6,
         HungryThreshold: 4,
         MetabolismIntervalTicks: 70 * SimulationWorld.TicksPerSecond,
         MetabolismCost: 1,
-        ReproductionThreshold: 12,
-        ReproductionCost: 8);
+        ReproductionThreshold: 6,
+        ReproductionCost: 4);
 
     private static readonly CritterNutrition Monkey = new(
         BodySize: CritterBodySize.Big,

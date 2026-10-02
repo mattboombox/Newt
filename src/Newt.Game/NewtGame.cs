@@ -32,7 +32,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             ToolCategory.BuildingTools, ToolCategory.Events, ToolCategory.Other];
     private static readonly WorldTool[] WorldToolOrder =
         [WorldTool.SeaLevel, WorldTool.OceanSeed, WorldTool.Temperature,
-            WorldTool.Moisture, WorldTool.EvolutionChance, WorldTool.Seasons, WorldTool.Life];
+            WorldTool.Moisture, WorldTool.EvolutionChance, WorldTool.Sentience, WorldTool.Seasons, WorldTool.Life];
     private static readonly WorldTool[] EventToolOrder =
         [WorldTool.Meteor, WorldTool.Tsunami, WorldTool.WatershedShift,
             WorldTool.Evolve, WorldTool.NaturalEvents, WorldTool.Colonist,
@@ -131,6 +131,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private readonly SimulationSpeedGuard _simulationSpeedGuard = new();
     private bool _speedAutomaticallyReduced;
     private bool _lifeEnabled = true;
+    private bool _sentienceEnabled = true;
     private bool _paused;
     private bool _hudHidden;
     private bool _setupMenuOpen;
@@ -899,6 +900,10 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 break;
             case WorldTool.Seasons when primaryActivated:
                 SeasonSystem.SetEnabled(_world, true);
+                break;
+            case WorldTool.Sentience:
+                _sentienceEnabled = primaryActivated;
+                _world.SentienceEnabled = _sentienceEnabled;
                 break;
             case WorldTool.Seasons:
                 SeasonSystem.SetEnabled(_world, false);
@@ -1795,7 +1800,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 }
                 : Array.Empty<string>(),
         .. _world.GetApeTraderMarket(critter.Id) is { } market
-            ? new[] { $"Market X {market.X}, Y {market.Y}" }
+            ? new[] { $"Market X {market.X}, Y {market.Y}",
+                $"Stall recoveries {_world.GetApeTraderRecoveryCount(critter.Id)}   World total {_world.ApeTraderRecoveryCount}" }
             : Array.Empty<string>(),
         .. _world.GetApeTraderDestination(critter.Id) is { } destination
             ? new[] { $"Destination Village #{_world.GetApeVillageId(destination)}   {destination}" }
@@ -1989,6 +1995,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         _inspectedCritterId = default;
         _accumulator = TimeSpan.Zero;
         LifeSystem.SetEnabled(_world, _lifeEnabled);
+        _world.SentienceEnabled = _sentienceEnabled;
         foreach (var history in _populationHistory.Values)
         {
             history.Clear();
@@ -2758,6 +2765,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         WorldTool.Moisture => "L wetter; R drier",
         WorldTool.EvolutionChance =>
             $"L +0.5%; R -0.5%   {_world.EvolutionChancePercent:0.0}%",
+        WorldTool.Sentience => $"L on; R off   {(_world.SentienceEnabled ? "On" : "Off")}",
         WorldTool.Seasons => _world.Body is WorldBody.RingWorld
             ? "Fixed climate"
             : "L on; R off",
@@ -2865,6 +2873,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         Temperature,
         Moisture,
         EvolutionChance,
+        Sentience,
         Seasons,
         Life,
         Volcano,

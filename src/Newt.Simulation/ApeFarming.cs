@@ -36,7 +36,9 @@ public sealed partial class SimulationWorld
             return;
         if (HasApeFarmer(farmTile))
             return;
-        _apeFarmers.Remove(farmTile);
+        if (_apeFarmers.Remove(farmTile, out var previousId) &&
+            _apeWorkplaces.GetValueOrDefault(previousId, -1) == farmTile)
+            _apeWorkplaces.Remove(previousId);
         if (!_apeFarmerRecruitmentTicks.TryGetValue(farmTile, out var due))
         {
             _apeFarmerRecruitmentTicks[farmTile] = Tick + 30 * TicksPerSecond;
@@ -57,14 +59,18 @@ public sealed partial class SimulationWorld
         ChangeCritterSpecies(_critterIndicesById[recruitId], CritterSpecies.ApeFarmer,
             preserveEnergy: true, preserveApeVillage: true);
         _apeFarmers[farmTile] = recruitId;
+        _apeWorkplaces[recruitId] = farmTile;
         _apeFarmerRecruitmentTicks.Remove(farmTile);
     }
 
     private void RemoveApeFarmStaff(int farmTile)
     {
         _apeFarmerRecruitmentTicks.Remove(farmTile);
-        if (_apeFarmers.Remove(farmTile, out var id) &&
-            _critterIndicesById.TryGetValue(id, out var index) &&
+        if (!_apeFarmers.Remove(farmTile, out var id))
+            return;
+        if (_apeWorkplaces.GetValueOrDefault(id, -1) == farmTile)
+            _apeWorkplaces.Remove(id);
+        if (_critterIndicesById.TryGetValue(id, out var index) &&
             _species[index] is CritterSpecies.ApeFarmer)
             ChangeCritterSpecies(index, CritterSpecies.Ape,
                 preserveEnergy: true, preserveApeVillage: true);

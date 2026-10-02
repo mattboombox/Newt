@@ -59,6 +59,164 @@ public sealed class ApeTraderTests
     }
 
     [Fact]
+    public void StalledTraderRecoversAfterThirtySecondsWithoutChangingIdentityOrProvisions()
+    {
+        var world = CreateWorld();
+        Assert.True(world.TryPlaceVillageRoad(First));
+        var trader = Recruit(world, AddMarket(world, First));
+        trader = Arrive(world, trader, First);
+        var energy = trader.Energy;
+        var market = world.GetApeTraderMarket(trader.Id);
+        var destination = world.GetApeTraderDestination(trader.Id);
+        world.AddCritter(CritterSpecies.ApeWarrior, new(11, 10));
+        SetTick(world, SimulationWorld.ApeTraderStallTicks - 1);
+        trader = Move(world, trader);
+        Assert.Equal(First, trader.Position);
+        SetTick(world, SimulationWorld.ApeTraderStallTicks);
+        trader = Move(world, trader);
+        Assert.Equal(new GridPosition(12, 10), trader.Position);
+        Assert.Equal(energy, trader.Energy);
+        Assert.Equal(market, world.GetApeTraderMarket(trader.Id));
+        Assert.Equal(destination, world.GetApeTraderDestination(trader.Id));
+        Assert.Equal(First, world.GetApeHomeVillage(trader.Id));
+        Assert.Equal(1, world.GetApeTraderRecoveryCount(trader.Id));
+        Assert.Equal(1, world.ApeTraderRecoveryCount);
+    }
+
+    [Fact]
+    public void FullyBlockedRecoveryWaitsTenSecondsBeforeRetrying()
+    {
+        var world = CreateWorld();
+        Assert.True(world.TryPlaceVillageRoad(First));
+        var trader = Arrive(world, Recruit(world, AddMarket(world, First)), First);
+        for (var x = 11; x <= 15; x++) world.AddCritter(CritterSpecies.ApeWarrior, new(x, 10));
+        SetTick(world, SimulationWorld.ApeTraderStallTicks);
+        trader = Move(world, trader);
+        Assert.Equal(First, trader.Position);
+        Assert.Equal(0, world.ApeTraderRecoveryCount);
+        world.RemoveCritterAt(new(12, 10));
+        SetTick(world, SimulationWorld.ApeTraderStallTicks + SimulationWorld.ApeTraderRecoveryRetryTicks - 1);
+        trader = Move(world, trader);
+        Assert.Equal(First, trader.Position);
+        SetTick(world, SimulationWorld.ApeTraderStallTicks + SimulationWorld.ApeTraderRecoveryRetryTicks);
+        trader = Move(world, trader);
+        Assert.Equal(new GridPosition(12, 10), trader.Position);
+    }
+
+    [Fact]
+    public void RejoiningSameRouteStepDoesNotResetStallTimer()
+    {
+        var world = CreateWorld();
+        Assert.True(world.TryPlaceVillageRoad(First));
+        var trader = Arrive(world, Recruit(world, AddMarket(world, First)), First);
+        world.AddCritter(CritterSpecies.ApeWarrior, new(11, 10));
+        var indices = (Dictionary<int, int>)typeof(SimulationWorld).GetField("_critterIndicesById",
+            BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(world)!;
+        for (var time = 100; time < SimulationWorld.ApeTraderStallTicks; time += 100)
+        {
+            SetTick(world, time);
+            typeof(SimulationWorld).GetMethod("MoveCritter", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .Invoke(world, [indices[trader.Id.Value], 11 * world.Width + 10, new GridPosition(10, 11), false]);
+            trader = Move(world, trader);
+            Assert.Equal(First, trader.Position);
+        }
+        SetTick(world, SimulationWorld.ApeTraderStallTicks);
+        trader = Move(world, trader);
+        Assert.Equal(new GridPosition(12, 10), trader.Position);
+        Assert.Equal(1, world.ApeTraderRecoveryCount);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void StalledTraderBypassesOccupiedHarborAndChangesTravelForm(bool landing)
+    {
+        var world = CreateWorld(sea: true);
+        var trader = Recruit(world, AddMarket(world, First));
+        var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+        var journeys = (System.Collections.IDictionary)typeof(SimulationWorld).GetField("_traderJourneys", flags)!.GetValue(world)!;
+        var journey = journeys[trader.Id.Value]!;
+        var tiles = (List<int>)journey.GetType().GetField("Tiles")!.GetValue(journey)!;
+        var harbor = new GridPosition(landing ? Second.X : First.X, 9);
+        var harborStep = tiles.IndexOf(harbor.Y * world.Width + harbor.X);
+        Assert.True(harborStep > 0 && harborStep + 1 < tiles.Count);
+        for (var step = 0; step < harborStep - 1; step++) trader = Move(world, trader);
+        var origin = trader.Position;
+        var energy = trader.Energy;
+        var market = world.GetApeTraderMarket(trader.Id);
+        var destination = world.GetApeTraderDestination(trader.Id);
+        var blocker = world.AddCritter(CritterSpecies.ApeWarrior, harbor);
+        SetTick(world, SimulationWorld.ApeTraderStallTicks - 1);
+        trader = Move(world, trader);
+        Assert.Equal(origin, trader.Position);
+        Assert.Equal(0, world.ApeTraderRecoveryCount);
+        SetTick(world, SimulationWorld.ApeTraderStallTicks);
+        trader = Move(world, trader);
+        var expected = tiles[harborStep + 1];
+        Assert.Equal(new GridPosition(expected % world.Width, expected / world.Width), trader.Position);
+        Assert.Equal(1, world.ApeTraderRecoveryCount);
+        Assert.True(world.TryGetCritter(trader.Id, out var after));
+        Assert.Equal(landing ? CritterSpecies.ApeTrader : CritterSpecies.ApeTraderSailor, after.Species);
+        Assert.Equal(1, world.GetCritterCount(after.Species));
+        Assert.Equal(0, world.GetCritterCount(landing ? CritterSpecies.ApeTraderSailor : CritterSpecies.ApeTrader));
+        Assert.Equal(energy, after.Energy);
+        Assert.Equal(market, world.GetApeTraderMarket(trader.Id));
+        Assert.Equal(destination, world.GetApeTraderDestination(trader.Id));
+        Assert.Equal(First, world.GetApeHomeVillage(trader.Id));
+        Assert.True(world.TryGetCritter(blocker, out var untouched));
+        Assert.Equal(harbor, untouched.Position);
+    }
+
+    private static void SetTick(SimulationWorld world, long tick) =>
+        typeof(SimulationWorld).GetProperty(nameof(SimulationWorld.Tick))!.SetValue(world, tick);
+
+    [Fact]
+    public void RealForwardProgressRestartsTheThirtySecondTimer()
+    {
+        var world = CreateWorld();
+        Assert.True(world.TryPlaceVillageRoad(First));
+        var trader = Arrive(world, Recruit(world, AddMarket(world, First)), First);
+        SetTick(world, 500);
+        trader = Move(world, trader);
+        Assert.Equal(new GridPosition(11, 10), trader.Position);
+        world.AddCritter(CritterSpecies.ApeWarrior, new(12, 10));
+        SetTick(world, 500 + SimulationWorld.ApeTraderStallTicks - 1);
+        trader = Move(world, trader);
+        Assert.Equal(new GridPosition(11, 10), trader.Position);
+        SetTick(world, 500 + SimulationWorld.ApeTraderStallTicks);
+        trader = Move(world, trader);
+        Assert.Equal(new GridPosition(13, 10), trader.Position);
+    }
+
+    [Fact]
+    public void SeaRecoverySkipsReservedTilesAndPreservesSailingForm()
+    {
+        var world = CreateWorld(sea: true);
+        var trader = Recruit(world, AddMarket(world, First));
+        var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+        var journeys = (System.Collections.IDictionary)typeof(SimulationWorld).GetField("_traderJourneys", flags)!.GetValue(world)!;
+        var journey = journeys[trader.Id.Value]!;
+        var type = journey.GetType();
+        var tiles = (List<int>)type.GetField("Tiles")!.GetValue(journey)!;
+        var seaStep = tiles.FindIndex(tile => world.GetTerrain(new(tile % world.Width, tile / world.Width)) == Terrain.Ocean);
+        Assert.True(seaStep >= 0);
+        for (var i = 0; i < seaStep; i++) trader = Move(world, trader);
+        Assert.Equal(CritterSpecies.ApeTraderSailor, trader.Species);
+        var energy = trader.Energy;
+        var next = tiles[seaStep + 1];
+        var reserved = new HashSet<GridPosition> { new(next % world.Width, next / world.Width) };
+        SetTick(world, SimulationWorld.ApeTraderStallTicks);
+        var indices = (Dictionary<int, int>)typeof(SimulationWorld).GetField("_critterIndicesById", flags)!.GetValue(world)!;
+        Assert.True((bool)typeof(SimulationWorld).GetMethod("TryRecoverStalledTrader", flags)!
+            .Invoke(world, [indices[trader.Id.Value], journey, reserved])!);
+        Assert.True(world.TryGetCritter(trader.Id, out var after));
+        Assert.Equal(CritterSpecies.ApeTraderSailor, after.Species);
+        Assert.Equal(energy, after.Energy);
+        var target = tiles[seaStep + 2];
+        Assert.Equal(new GridPosition(target % world.Width, target / world.Width), after.Position);
+    }
+
+    [Fact]
     public void EligibleVillageBuildsMarketAutomaticallyWhenItCanAffordIt()
     {
         var world = CreateWorld();
@@ -222,10 +380,33 @@ public sealed class ApeTraderTests
     [Theory]
     [InlineData(CritterSpecies.ApeTrader)]
     [InlineData(CritterSpecies.ApeTraderSailor)]
-    public void TradersCanShoveEverySpecies(CritterSpecies trader)
+    public void TradersCanShoveEverySpeciesExceptMilitaryApes(CritterSpecies trader)
     {
         foreach (var blocker in Enum.GetValues<CritterSpecies>())
-            Assert.True(SimulationWorld.CanDisplace(trader, blocker));
+            Assert.Equal(blocker is not (CritterSpecies.ApeWarrior or CritterSpecies.ApeChieftain),
+                SimulationWorld.CanDisplace(trader, blocker));
+    }
+
+    [Fact]
+    public void TraderPassesCivilianEvenWhenAllSidestepsAreOccupied()
+    {
+        var world = CreateWorld();
+        Assert.True(world.TryPlaceVillageRoad(First));
+        var trader = Recruit(world, AddMarket(world, First));
+        trader = Arrive(world, trader, First);
+        for (var y = 9; y <= 11; y++)
+        for (var x = 10; x <= 12; x++)
+            if (new GridPosition(x, y) != First)
+                world.AddCritter(CritterSpecies.ApeFarmer, new(x, y));
+        var count = world.CritterCount;
+        trader = Move(world, trader);
+        Assert.Equal(new GridPosition(11, 10), trader.Position);
+        Assert.Equal(count, world.CritterCount);
+        Assert.Equal(count, Enumerable.Range(0, count).Select(i => world.GetCritter(i).Position).Distinct().Count());
+        Assert.Contains(Enumerable.Range(0, count).Select(world.GetCritter),
+            c => c.Species == CritterSpecies.ApeFarmer && c.Position == First);
+        trader = Move(world, trader);
+        Assert.Equal(new GridPosition(12, 10), trader.Position);
     }
 
     [Fact]

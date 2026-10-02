@@ -6,6 +6,83 @@ namespace Newt.Simulation.Tests;
 public sealed class ApeWarTests
 {
     private static readonly GridPosition First = new(10, 10), Second = new(30, 10);
+    [Theory]
+    [InlineData(false, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(true, false, false)]
+    [InlineData(false, false, true)]
+    [InlineData(true, false, true)]
+    public void VeteransRemainWarriorsAfterWarIncludingWorkersAndSailors(bool civil, bool blood, bool sea)
+    {
+        var world = CreateWorld();
+        var resident = Residents(world, civil ? First : Second).First();
+        var indices = (Dictionary<int, int>)typeof(SimulationWorld).GetField("_critterIndicesById", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(world)!;
+        if (civil || blood)
+            typeof(SimulationWorld).GetMethod("ChangeCritterSpecies", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .Invoke(world, [indices[resident.Id.Value], CritterSpecies.ApeScholar, true, true]);
+        Assert.True(civil ? world.TryStartApeCivilWar(First) : world.TryStartApeWar(First, Second, blood));
+        var record = typeof(SimulationWorld).GetMethod("RecordWarriorCombatKill", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        for (var i = 0; i < 5; i++) record.Invoke(world, [indices[resident.Id.Value]]);
+        var seaPosition = new GridPosition(20, 20);
+        if (sea)
+        {
+            world.SetTerrain(seaPosition, Terrain.Ocean);
+            typeof(SimulationWorld).GetMethod("MoveCritter", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .Invoke(world, [indices[resident.Id.Value], seaPosition.Y * world.Width + seaPosition.X, seaPosition, false]);
+        }
+        Assert.True(world.TryStopApeWar(First));
+        if (sea)
+            typeof(SimulationWorld).GetMethod("TryReturnWarSailor", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .Invoke(world, [indices[resident.Id.Value], null]);
+        Assert.True(world.TryGetCritter(resident.Id, out var veteran));
+        Assert.Equal(CritterSpecies.ApeWarrior, veteran.Species);
+        Assert.True(veteran.IsVeteranWarrior);
+        Assert.Equal(5, veteran.CombatKills);
+        Assert.False(world.TryGetApeWarSide(resident.Id, out _));
+        if (sea) Assert.NotEqual(seaPosition, veteran.Position);
+    }
+
+    [Fact]
+    public void ReturningVeteranReplacesRegularWarriorWhenDistrictIsFull()
+    {
+        var world = CreateWorld();
+        Assert.True(world.TryBuildApeStructure(First.Y * world.Width + First.X, ApeStructureKind.MilitaryDistrict));
+        var indices = (Dictionary<int, int>)typeof(SimulationWorld).GetField("_critterIndicesById", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(world)!;
+        var change = typeof(SimulationWorld).GetMethod("ChangeCritterSpecies", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        var regulars = Residents(world, First).Take(4).ToArray();
+        foreach (var regular in regulars)
+            change.Invoke(world, [indices[regular.Id.Value], CritterSpecies.ApeWarrior, true, true]);
+        var levy = Residents(world, First).First(c => c.Species == CritterSpecies.Ape);
+        Assert.True(world.TryStartApeWar(First, Second));
+        var record = typeof(SimulationWorld).GetMethod("RecordWarriorCombatKill", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        for (var i = 0; i < 5; i++) record.Invoke(world, [indices[levy.Id.Value]]);
+        Assert.True(world.TryStopApeWar(First));
+        Assert.Equal(4, world.GetApeVillageWarriorCount(First));
+        Assert.True(world.TryGetCritter(levy.Id, out var veteran));
+        Assert.True(veteran.IsVeteranWarrior);
+        Assert.Equal(3, regulars.Count(c => world.TryGetCritter(c.Id, out var current) && current.Species == CritterSpecies.ApeWarrior));
+    }
+
+    [Theory]
+    [InlineData(CritterSpecies.ApeFarmer)]
+    [InlineData(CritterSpecies.ApeLumberjack)]
+    [InlineData(CritterSpecies.ApeScholar)]
+    public void MarchingWarriorPushesThroughCivilianBlockade(CritterSpecies civilian)
+    {
+        var world = CreateWorld();
+        world.RemoveCritterAt(Residents(world, First).Last().Position);
+        var warrior = world.AddCritter(CritterSpecies.ApeWarrior, new(15, 10));
+        Assert.True(world.TryAssignApeToVillage(warrior, First));
+        for (var y = 9; y <= 11; y++) world.AddCritter(civilian, new(16, y));
+        Assert.True(world.TryStartApeWar(First, Second));
+        var indices = (Dictionary<int, int>)typeof(SimulationWorld).GetField("_critterIndicesById", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(world)!;
+        typeof(SimulationWorld).GetMethod("TryMoveWarApe", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(world, [indices[warrior.Value], null]);
+        Assert.True(world.TryGetCritter(warrior, out var moved));
+        Assert.Equal(16, moved.Position.X);
+        Assert.Equal(3, world.GetCritterCount(civilian));
+    }
+
     private static SimulationWorld CreateWorld()
     {
         var world = new SimulationWorld(50, 30, Terrain.Plains, seed: 17);

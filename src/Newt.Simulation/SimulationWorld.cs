@@ -159,6 +159,14 @@ public sealed partial class SimulationWorld
     private readonly Dictionary<int, (int VillageTile, GridPosition Position, long SinceTick)> _apeReproductionStalls = [];
     private readonly Dictionary<int, (int VillageTile, long SinceTick)> _apeVillageSeparationSinceTicks = [];
     private readonly Dictionary<int, (int TargetTile, Queue<int> Tiles)> _apeWorkerPaths = [];
+    // Scratch storage is world-local: simulation path searches run sequentially.
+    // Visit generations avoid clearing every map tile for each local search.
+    private int[]? _apePathParents;
+    private int[]? _apePathSteps;
+    private int[]? _apePathVisits;
+    private int _apePathGeneration;
+    private readonly PriorityQueue<(int Tile, int Steps), (int Estimate, int Order)> _apePathFrontier = new();
+    private readonly Stack<int> _apePathReverse = new();
     private readonly Dictionary<int, int> _apeVillageFood = [];
     private readonly Dictionary<int, int> _apeVillageGrowthFeedTargets = [];
     private readonly Dictionary<int, int> _apeVillageWood = [];
@@ -269,6 +277,9 @@ public sealed partial class SimulationWorld
     public bool LifeEnabled { get; internal set; } = true;
 
     public int EvolutionChanceSteps { get; private set; } = CritterEvolution.DefaultChanceSteps;
+
+    /// <summary>Allows monkeys to evolve into apes; existing and manually placed apes are unaffected.</summary>
+    public bool SentienceEnabled { get; set; } = true;
 
     public float EvolutionChancePercent =>
         EvolutionChanceSteps / (float)CritterEvolution.ChanceStepsPerPercent;
@@ -1082,6 +1093,7 @@ public sealed partial class SimulationWorld
 
     private void DetachApeFromVillage(int apeId)
     {
+        DetachApeWorker(apeId);
         _apeVillageHomes.Remove(apeId);
         _apeVillageTargets.Remove(apeId);
         _apeSettlerTargets.Remove(apeId);
@@ -3424,6 +3436,9 @@ public sealed partial class SimulationWorld
 
     internal CritterSpecies ChooseOffspringSpecies(CritterSpecies parentSpecies)
     {
+        if (!SentienceEnabled && parentSpecies is CritterSpecies.Monkey)
+            return CritterSpecies.Monkey;
+
         if (parentSpecies is CritterSpecies.Squid)
         {
             return CritterSpecies.SquidEgg;
@@ -3460,6 +3475,9 @@ public sealed partial class SimulationWorld
         }
 
         var currentSpecies = _species[critterIndex];
+        if (evolve && !SentienceEnabled && currentSpecies is CritterSpecies.Monkey)
+            return false;
+
         var branchCount = CritterEvolution.GetEvolvedSpeciesCount(currentSpecies);
         var changed = evolve
             ? CritterEvolution.TryGetEvolvedSpecies(
@@ -3494,8 +3512,11 @@ public sealed partial class SimulationWorld
         _species[critterIndex] = targetSpecies;
         var critterId = _critterIds[critterIndex].Value;
         _chieftainAttackTargets.Remove(critterId);
+        if (currentSpecies != targetSpecies)
+            DetachApeWorker(critterId);
         DetachVampireFromLair(critterId);
-        if (targetSpecies is not CritterSpecies.ApeWarrior)
+        if (!CanEarnWarriorVeterancy(critterIndex) ||
+            (!preserveApeVillage && targetSpecies is not CritterSpecies.ApeWarrior))
             _warriorCombatKills.Remove(critterId);
         _toothedWhaleHunts.Remove(critterId);
         if (!IsLivingApe(targetSpecies) || targetSpecies is CritterSpecies.ApeSailor)
@@ -4263,14 +4284,7 @@ public sealed partial class SimulationWorld
         IReadOnlySet<GridPosition>? reservedPrey)
     {
         var workerId = _critterIds[critterIndex].Value;
-        var workplace = _species[critterIndex] switch
-        {
-            CritterSpecies.ApeFarmer => _apeFarmers.FirstOrDefault(
-                pair => pair.Value == workerId && HasApeFarmer(pair.Key), new(-1, -1)).Key,
-            CritterSpecies.ApeLumberjack => _apeLumberjacks.FirstOrDefault(
-                pair => pair.Value == workerId && HasApeLumberjack(pair.Key), new(-1, -1)).Key,
-            _ => -1,
-        };
+        var workplace = GetApeWorkplace(workerId, _species[critterIndex]);
         if (TryHandleApeVillageSeparation(critterIndex, reservedPrey, out var separationMovement))
             return separationMovement;
 
@@ -4578,13 +4592,20 @@ public sealed partial class SimulationWorld
         CritterSpecies? pathSpecies = null)
     {
         var sailorRoute = sailorGoals is not null;
-        var cameFrom = new int[_terrain.Length];
-        var stepsFromStart = new int[_terrain.Length];
-        Array.Fill(cameFrom, -1);
-        Array.Fill(stepsFromStart, int.MaxValue);
+        var cameFrom = _apePathParents ??= new int[_terrain.Length];
+        var stepsFromStart = _apePathSteps ??= new int[_terrain.Length];
+        var visits = _apePathVisits ??= new int[_terrain.Length];
+        if (_apePathGeneration == int.MaxValue)
+        {
+            Array.Clear(visits);
+            _apePathGeneration = 0;
+        }
+        var generation = ++_apePathGeneration;
+        visits[startTile] = generation;
         stepsFromStart[startTile] = 0;
 
-        var frontier = new PriorityQueue<(int Tile, int Steps), (int Estimate, int Order)>();
+        var frontier = _apePathFrontier;
+        frontier.Clear();
         var order = 0;
         frontier.Enqueue((startTile, 0), (!sailorRoute ? GetApeSettlerPathEstimate(startTile, targetTile) : 0, order++));
         var reachedTile = -1;
@@ -4616,13 +4637,14 @@ public sealed partial class SimulationWorld
                     reservedPrey?.Contains(GetPosition(neighborTile)) is true ||
                     (_occupants[neighborTile] >= 0 && _occupants[neighborTile] != apeIndex &&
                         !CanShoveMovementBlocker(apeIndex, neighborTile, reservedPrey)) ||
-                    nextSteps >= stepsFromStart[neighborTile])
+                    (visits[neighborTile] == generation && nextSteps >= stepsFromStart[neighborTile]))
                 {
                     continue;
                 }
 
                 cameFrom[neighborTile] = node.Tile;
                 stepsFromStart[neighborTile] = nextSteps;
+                visits[neighborTile] = generation;
                 frontier.Enqueue(
                     (neighborTile, nextSteps),
                     (nextSteps + (!sailorRoute ? GetApeSettlerPathEstimate(neighborTile, targetTile) : 0), order++));
@@ -4634,7 +4656,8 @@ public sealed partial class SimulationWorld
             return null;
         }
 
-        var reversePath = new Stack<int>();
+        var reversePath = _apePathReverse;
+        reversePath.Clear();
         for (var tile = reachedTile; tile != startTile; tile = cameFrom[tile])
         {
             reversePath.Push(tile);
@@ -5586,7 +5609,7 @@ public sealed partial class SimulationWorld
             _preyTargets[predatorIndex] = -1;
             return;
         }
-        if (combatKill)
+        if (combatKill || IsPredator(preySpecies))
             RecordWarriorCombatKill(predatorIndex);
         RemoveCritterAt(preyPosition);
         // Removing the prey may compact the predator to another array index,
@@ -5684,7 +5707,7 @@ public sealed partial class SimulationWorld
             prey is CritterSpecies.Fish or CritterSpecies.Worm or CritterSpecies.Trilobite or
                 CritterSpecies.Nautilus or CritterSpecies.Crab or
                 CritterSpecies.Newt or CritterSpecies.SeaScorpion or
-                CritterSpecies.ApeSailor or
+                CritterSpecies.ApeSailor or CritterSpecies.Therapsid or
                 CritterSpecies.Deer or CritterSpecies.Elk or CritterSpecies.Gazelle,
         CritterSpecies.MegaToad => IsMegaToadPrey(prey),
         CritterSpecies.Therapsid => prey is CritterSpecies.Fish,
@@ -5790,11 +5813,13 @@ public sealed partial class SimulationWorld
         {
             CritterSpecies.ApeTrader or CritterSpecies.ApeTraderSailor => 1,
             CritterSpecies.ApeChieftain => 5,
-            CritterSpecies.MegaToad => 3,
+            CritterSpecies.MegaToad or CritterSpecies.Wolf => 4,
             CritterSpecies.Vampire => 4,
             CritterSpecies.MegaSpider => 2,
+            CritterSpecies.SeaScorpion or CritterSpecies.Squid => 3,
             CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack => 2,
-            CritterSpecies.ToothedWhale or CritterSpecies.Wolf or CritterSpecies.Dog => 3,
+            CritterSpecies.ToothedWhale => 5,
+            CritterSpecies.Dog => 3,
             CritterSpecies.ApeWarrior => 4,
             CritterSpecies.ApeSailor => 3,
             _ => IsHeavyCombatPredator(species) ? 2 : 1,
@@ -5802,7 +5827,7 @@ public sealed partial class SimulationWorld
 
     private int GetCombatDamage(int critterIndex) =>
         (IsBarbarianApe(critterIndex) ? GetCombatDamage(CritterSpecies.ApeWarrior) - 1 :
-            GetCombatDamage(_species[critterIndex])) + (IsVeteranWarrior(critterIndex) ? 1 : 0);
+            GetCombatDamage(_species[critterIndex])) + (IsVeteranWarrior(critterIndex) ? 2 : 0);
 
     private static bool CanCritterFight(CritterSpecies species) =>
         IsLivingApe(species) || IsPredator(species) || species is CritterSpecies.BaleenWhale or CritterSpecies.ApeTrader or CritterSpecies.ApeTraderSailor;
@@ -5859,7 +5884,11 @@ public sealed partial class SimulationWorld
                     prey is CritterSpecies.Trilobite or CritterSpecies.Nautilus));
 
     internal static bool CanDisplace(CritterSpecies mover, CritterSpecies blocker) =>
-        mover is CritterSpecies.ApeTrader or CritterSpecies.ApeTraderSailor ||
+        mover is CritterSpecies.ApeTrader or CritterSpecies.ApeTraderSailor
+            ? blocker is not (CritterSpecies.ApeWarrior or CritterSpecies.ApeChieftain) :
+        (mover is CritterSpecies.ApeWarrior && blocker is (CritterSpecies.Ape or
+            CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack or CritterSpecies.ApeScholar or
+            CritterSpecies.ApeSailor or CritterSpecies.ApeTrader or CritterSpecies.ApeTraderSailor)) ||
         (mover is CritterSpecies.ApeChieftain && blocker is (CritterSpecies.ApeWarrior or CritterSpecies.Dog)) ||
         CritterNutritions.Get(mover).BodySize > CritterNutritions.Get(blocker).BodySize;
 

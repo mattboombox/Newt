@@ -1443,7 +1443,7 @@ public sealed class SimulationWorldTests
     }
 
     [Fact]
-    public void HeavyMutualPredatorCombatDealsTwoDamageInsteadOfInstantPredation()
+    public void HeavyMutualPredatorCombatDealsThreeDamageInsteadOfInstantPredation()
     {
         var world = new SimulationWorld(1, 2, Terrain.Shallows, seed: 52);
         world.SeasonsEnabled = false;
@@ -1465,7 +1465,7 @@ public sealed class SimulationWorldTests
         Assert.Equal(1, world.GetCritterCount(CritterSpecies.Squid));
         Assert.Equal(1, world.GetCritterCount(CritterSpecies.SeaScorpion));
         Assert.Equal(
-            6,
+            5,
             Enumerable.Range(0, world.CritterCount)
                 .Select(world.GetCritter)
                 .Sum(critter => critter.Energy));
@@ -1497,7 +1497,7 @@ public sealed class SimulationWorldTests
         }
 
         Assert.Equal(2, world.CritterCount);
-        Assert.InRange(initialEnergy - totalEnergy, 1, 3);
+        Assert.InRange(initialEnergy - totalEnergy, 1, 5);
     }
 
     [Fact]
@@ -2380,7 +2380,7 @@ public sealed class SimulationWorldTests
         Assert.True(SimulationWorld.CanEat(CritterSpecies.MegaToad, prey));
         Assert.False(SimulationWorld.CanEat(prey, CritterSpecies.MegaToad));
         Assert.True(SimulationWorld.CanFightBackAgainst(prey, CritterSpecies.MegaToad));
-        Assert.Equal(2, SimulationWorld.GetCombatDamage(prey));
+        Assert.Equal(3, SimulationWorld.GetCombatDamage(prey));
 
         var world = new SimulationWorld(1, 2, Terrain.Shallows, seed: 73);
         world.SeasonsEnabled = false;
@@ -2796,9 +2796,10 @@ public sealed class SimulationWorldTests
             world.AdvanceOneTick();
         }
 
-        Assert.Equal(1, world.GetCritterCount(CritterSpecies.Therapsid));
+        // The meal reaches the new six-energy threshold, allowing a birth in the vacated river tile.
+        Assert.Equal(2, world.GetCritterCount(CritterSpecies.Therapsid));
         Assert.Equal(0, world.GetCritterCount(CritterSpecies.Fish));
-        Assert.Equal(9, world.GetCritter(0).Energy);
+        Assert.Equal(2, world.GetCritter(0).Energy);
     }
 
     [Fact]
@@ -2820,7 +2821,7 @@ public sealed class SimulationWorldTests
         Assert.Equal(1, world.GetCritterCount(CritterSpecies.Therapsid));
         Assert.Equal(0, world.GetCritterCount(CritterSpecies.Fish));
         Assert.Equal(shore, world.GetCritter(0).Position);
-        Assert.Equal(9, world.GetCritter(0).Energy);
+        Assert.Equal(6, world.GetCritter(0).Energy);
     }
 
     [Fact]
@@ -2860,8 +2861,8 @@ public sealed class SimulationWorldTests
     }
 
     [Theory]
-    [InlineData(Biome.Swamp, 9)]
-    [InlineData(Biome.Jungle, 11)]
+    [InlineData(Biome.Swamp, 6)]
+    [InlineData(Biome.Jungle, 6)]
     [InlineData(Biome.Forest, 4)]
     [InlineData(Biome.Arid, 6)]
     [InlineData(Biome.Bog, 4)]
@@ -2924,13 +2925,36 @@ public sealed class SimulationWorldTests
     }
 
     [Theory]
-    [InlineData(CritterSpecies.SeaScorpion, 2)]
-    [InlineData(CritterSpecies.MegaToad, 3)]
-    [InlineData(CritterSpecies.Wolf, 3)]
-    [InlineData(CritterSpecies.Squid, 2)]
+    [InlineData(CritterSpecies.SeaScorpion, 3)]
+    [InlineData(CritterSpecies.MegaToad, 4)]
+    [InlineData(CritterSpecies.Wolf, 4)]
+    [InlineData(CritterSpecies.Squid, 3)]
     public void HeavyPredatorsDealExpectedCombatDamage(CritterSpecies species, int damage)
     {
         Assert.Equal(damage, SimulationWorld.GetCombatDamage(species));
+        Assert.True(SimulationWorld.GetCombatDamage(CritterSpecies.ToothedWhale) > damage);
+    }
+
+    [Theory]
+    [InlineData(CritterSpecies.SeaScorpion)]
+    [InlineData(CritterSpecies.Squid)]
+    public void MarinePredatorsPursueTherapsidsInSharedShallows(CritterSpecies predator)
+    {
+        var world = new SimulationWorld(1, 2, Terrain.Shallows, seed: 52);
+        world.SeasonsEnabled = false;
+        NaturalEvents.SetEnabled(world, false);
+        world.AddCritter(predator, new(0, 0));
+        world.AddCritter(CritterSpecies.Therapsid, new(0, 1));
+        Assert.True(SimulationWorld.CanEat(predator, CritterSpecies.Therapsid));
+        var initialEnergy = world.GetCritter(0).Energy + world.GetCritter(1).Energy;
+        var remainingEnergy = initialEnergy;
+        for (var tick = 0; tick < 4 * SimulationWorld.TicksPerSecond && remainingEnergy == initialEnergy; tick++)
+        {
+            world.AdvanceOneTick();
+            remainingEnergy = Enumerable.Range(0, world.CritterCount).Select(world.GetCritter).Sum(c => c.Energy);
+        }
+        Assert.Equal(2, world.CritterCount);
+        Assert.Contains(initialEnergy - remainingEnergy, new[] { 1, 3 });
     }
 
     [Fact]
@@ -2961,7 +2985,7 @@ public sealed class SimulationWorldTests
         }
 
         Assert.True(loser.Id.IsValid);
-        Assert.Equal(2, loser.Energy);
+        Assert.Equal(1, loser.Energy);
         for (var tick = 1; tick < SimulationWorld.CombatDamageFlashTicks; tick++)
         {
             world.AdvanceOneTick();
@@ -3416,7 +3440,7 @@ public sealed class SimulationWorldTests
         Assert.Equal(1, world.GetCritterCount(predator));
         Assert.Equal(1, world.GetCritterCount(CritterSpecies.Therapsid));
         Assert.Equal(
-            predator is CritterSpecies.Wolf or CritterSpecies.MegaToad ? 7 : 8,
+            6,
             Enumerable.Range(0, world.CritterCount)
                 .Select(world.GetCritter)
                 .Sum(critter => critter.Energy));
@@ -3441,7 +3465,7 @@ public sealed class SimulationWorldTests
         Assert.Equal(1, world.GetCritterCount(CritterSpecies.MegaToad));
         Assert.Equal(1, world.GetCritterCount(CritterSpecies.Wolf));
         Assert.Equal(
-            7,
+            6,
             Enumerable.Range(0, world.CritterCount)
                 .Select(world.GetCritter)
                 .Sum(critter => critter.Energy));

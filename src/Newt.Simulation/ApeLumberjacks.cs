@@ -16,7 +16,9 @@ public sealed partial class SimulationWorld
     {
         if (HasApeLumberjack(campTile))
             return;
-        _apeLumberjacks.Remove(campTile);
+        if (_apeLumberjacks.Remove(campTile, out var previousId) &&
+            _apeWorkplaces.GetValueOrDefault(previousId, -1) == campTile)
+            _apeWorkplaces.Remove(previousId);
         if (!_apeLumberjackRecruitmentTicks.TryGetValue(campTile, out var due))
         {
             _apeLumberjackRecruitmentTicks[campTile] = Tick + 30 * TicksPerSecond;
@@ -37,14 +39,18 @@ public sealed partial class SimulationWorld
         ChangeCritterSpecies(_critterIndicesById[recruitId], CritterSpecies.ApeLumberjack,
             preserveEnergy: true, preserveApeVillage: true);
         _apeLumberjacks[campTile] = recruitId;
+        _apeWorkplaces[recruitId] = campTile;
         _apeLumberjackRecruitmentTicks.Remove(campTile);
     }
 
     private void RemoveApeLumberStaff(int campTile)
     {
         _apeLumberjackRecruitmentTicks.Remove(campTile);
-        if (_apeLumberjacks.Remove(campTile, out var id) &&
-            _critterIndicesById.TryGetValue(id, out var index) &&
+        if (!_apeLumberjacks.Remove(campTile, out var id))
+            return;
+        if (_apeWorkplaces.GetValueOrDefault(id, -1) == campTile)
+            _apeWorkplaces.Remove(id);
+        if (_critterIndicesById.TryGetValue(id, out var index) &&
             _species[index] is CritterSpecies.ApeLumberjack)
             ChangeCritterSpecies(index, CritterSpecies.Ape,
                 preserveEnergy: true, preserveApeVillage: true);
