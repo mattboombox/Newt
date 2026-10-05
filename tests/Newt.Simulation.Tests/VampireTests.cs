@@ -5,6 +5,48 @@ namespace Newt.Simulation.Tests;
 
 public sealed class VampireTests
 {
+    [Fact]
+    public void VampiresCannotHuntFightOrFeedOnEachOther()
+    {
+        var world = CreateWorld();
+        var first = world.AddCritter(CritterSpecies.Vampire, new(10, 10));
+        var second = world.AddCritter(CritterSpecies.Vampire, new(11, 10));
+        SetEnergy(world, first, 2);
+        Assert.Null(world.FindHunterPrey(0, CritterSpecies.Vampire, 8, null));
+        for (var attempt = 0; attempt < 20; attempt++)
+        {
+            world.CommitEncounter(new(10, 10), new(11, 10));
+            world.CommitEncounter(new(11, 10), new(10, 10));
+        }
+        typeof(SimulationWorld).GetMethod("ApplyCombatDamage", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(world, [0, 1]);
+        Assert.True(world.TryGetCritter(first, out var a));
+        Assert.True(world.TryGetCritter(second, out var b));
+        Assert.Equal(2, a.Energy);
+        Assert.Equal(6, b.Energy);
+        Assert.False(a.IsDamageFlashing);
+        Assert.False(b.IsDamageFlashing);
+    }
+
+    [Theory]
+    [InlineData(4, 5, true)]
+    [InlineData(3, 4, false)]
+    [InlineData(5, 6, false)]
+    public void HuntingPrefersPreyThatSurvivesDamageThenNearest(int nearEnergy, int farEnergy, bool preferFar)
+    {
+        var world = CreateWorld();
+        world.AddCritter(CritterSpecies.Vampire, new(10, 10));
+        var near = world.AddCritter(CritterSpecies.Ape, new(11, 10));
+        var far = world.AddCritter(CritterSpecies.Ape, new(13, 10));
+        SetEnergy(world, near, nearEnergy);
+        SetEnergy(world, far, farEnergy);
+        Assert.Equal(new GridPosition(preferFar ? 13 : 11, 10),
+            world.FindHunterPrey(0, CritterSpecies.Vampire, 8, null));
+        if (preferFar)
+            Assert.Equal(new GridPosition(11, 10), world.FindHunterPrey(0, CritterSpecies.Vampire, 8,
+                new HashSet<GridPosition> { new(13, 10) }));
+    }
+
     private static SimulationWorld CreateWorld(ulong seed = 17)
     {
         var world = new SimulationWorld(30, 20, Terrain.Plains, seed);
@@ -72,7 +114,7 @@ public sealed class VampireTests
     }
 
     [Fact]
-    public void FirstBirthCreatesLairAndFourResidentsRespectItsCapacity()
+    public void FirstBirthCreatesLairAndThreeResidentsRespectItsCapacity()
     {
         var world = CreateWorld();
         var parent = world.AddCritter(CritterSpecies.Vampire, new(10, 10));
@@ -86,17 +128,17 @@ public sealed class VampireTests
         foreach (var vampire in vampires)
             SetEnergy(world, vampire.Id, 12);
         world.AdvanceOneTick();
-        Assert.Equal(4, world.GetCritterCount(CritterSpecies.Vampire));
+        Assert.Equal(3, world.GetCritterCount(CritterSpecies.Vampire));
         foreach (var vampire in Enumerable.Range(0, world.CritterCount).Select(world.GetCritter).ToArray())
             SetEnergy(world, vampire.Id, 12);
         world.AdvanceOneTick();
-        Assert.Equal(4, world.GetCritterCount(CritterSpecies.Vampire));
+        Assert.Equal(3, world.GetCritterCount(CritterSpecies.Vampire));
         Assert.All(Enumerable.Range(0, world.CritterCount).Select(world.GetCritter), vampire => Assert.False(vampire.CanReproduce));
         Assert.True(world.TryGetCritter(vampires[1].Id, out var child));
         world.RemoveCritterAt(child.Position);
         world.AdvanceOneTick();
-        Assert.Equal(4, world.GetCritterCount(CritterSpecies.Vampire));
-        Assert.Equal(4, world.GetVampireLairPopulation(new(10, 10)));
+        Assert.Equal(3, world.GetCritterCount(CritterSpecies.Vampire));
+        Assert.Equal(3, world.GetVampireLairPopulation(new(10, 10)));
     }
 
     [Theory]
@@ -161,3 +203,4 @@ public sealed class VampireTests
         Assert.False(CritterNutritions.Get(CritterSpecies.Vampire).FeedsFromEnvironment);
     }
 }
+

@@ -19,18 +19,37 @@ public sealed class VolcanismTests
     }
 
     [Fact]
-    public void VolcanoRaisesMountainShouldersAndAHillSkirt()
+    public void VolcanoStartsAtOneLavaPointWithoutRaisingSurroundingLand()
     {
         var world = CreateLandWorld();
         var vent = new GridPosition(7, 7);
 
-        Volcanism.SpawnVolcano(world, vent, VolcanoState.Dormant);
-
         var nearby = Enumerable.Range(4, 7)
             .SelectMany(y => Enumerable.Range(4, 7).Select(x => new GridPosition(x, y)))
             .ToArray();
-        Assert.True(nearby.Count(position => world.GetTerrain(position) is Terrain.Mountain) >= 9);
-        Assert.Contains(nearby, position => world.GetTerrain(position) is Terrain.Hills);
+        var elevations = nearby.ToDictionary(position => position, world.GetElevation);
+        Assert.True(Volcanism.SpawnVolcano(world, vent, VolcanoState.Dormant));
+        Assert.Equal(1, CountCover(world, SurfaceCover.Lava));
+        Assert.InRange(world.GetElevation(vent) - elevations[vent], 0.012f, 0.047f);
+        Assert.All(nearby.Where(position => position != vent), position =>
+            Assert.Equal(elevations[position], world.GetElevation(position)));
+        Assert.DoesNotContain(nearby, position => world.GetTerrain(position) is Terrain.Mountain);
+    }
+
+    [Fact]
+    public void RepeatedEruptionsBuildVentGraduallyInsteadOfCreatingMountain()
+    {
+        var world = CreateLandWorld();
+        var vent = new GridPosition(7, 7);
+        Assert.True(Volcanism.SpawnVolcano(world, vent, VolcanoState.Dormant));
+        for (var eruption = 0; eruption < 5; eruption++)
+        {
+            var before = world.GetElevation(vent);
+            Assert.True(Volcanism.TriggerEruption(world, vent));
+            Assert.InRange(world.GetElevation(vent) - before, 0.012f, 0.047f);
+        }
+        Assert.True(world.GetElevation(vent) < TerrainClassifier.MountainElevationThreshold);
+        Assert.NotEqual(Terrain.Mountain, world.GetTerrain(vent));
     }
 
     [Fact]
@@ -136,12 +155,14 @@ public sealed class VolcanismTests
         var parentPosition = new GridPosition(7, 7);
         Volcanism.SpawnVolcano(world, parentPosition, VolcanoState.Dormant);
         var parent = world.Volcanoes.Single();
+        var elevation = world.GetElevation(parentPosition);
 
         Volcanism.MakeExtinct(world, parent, spawnSuccessor: true);
 
         Assert.Equal(VolcanoState.Extinct, parent.State);
         Assert.Equal(1, world.VolcanoCount);
-        Assert.Equal(Terrain.Mountain, world.GetTerrain(parentPosition));
+        Assert.Equal(elevation, world.GetElevation(parentPosition));
+        Assert.NotEqual(Terrain.Mountain, world.GetTerrain(parentPosition));
         var successor = world.GetVolcano(0);
         Assert.Equal(VolcanoState.Active, successor.State);
         Assert.InRange(Math.Abs(successor.Position.X - parentPosition.X), 0, 1);

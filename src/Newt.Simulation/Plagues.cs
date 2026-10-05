@@ -116,8 +116,12 @@ public sealed partial class SimulationWorld
             }
         }
         if (selected < 0) return false;
-        var roll = NextInt(100);
-        var kind = roll < 80 ? PlagueKind.Plague : roll < 90 ? PlagueKind.Zombie : PlagueKind.Vampire;
+        var kind = NextInt(3) switch
+        {
+            0 => PlagueKind.Plague,
+            1 => PlagueKind.Zombie,
+            _ => PlagueKind.Vampire,
+        };
         return TryInfectApeAt(_positions[selected], kind, immuneRemainder);
     }
 

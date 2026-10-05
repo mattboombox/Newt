@@ -301,7 +301,7 @@ public sealed class MegaSpiderTests
             var position = new GridPosition((spider.Position.X + offset) % world.Width, spider.Position.Y);
             if (!world.IsOccupied(position))
             {
-                Assert.True(world.TrySpawnCritter(CritterSpecies.Elk, position));
+                Assert.True(world.TrySpawnCritter(CritterSpecies.Monkey, position));
                 world.CommitEncounter(spider.Position, position);
                 spider = world.GetCritter(0);
                 count--;

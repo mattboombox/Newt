@@ -6,6 +6,81 @@ namespace Newt.Simulation.Tests;
 public sealed class ApeWarTests
 {
     private static readonly GridPosition First = new(10, 10), Second = new(30, 10);
+
+    private static SimulationWorld CreateCampWarWorld(bool coastal)
+    {
+        var world = new SimulationWorld(50, 30, Terrain.Plains, seed: 17);
+        world.ApeVillageMergingEnabled = false;
+        for (var y = 0; y < world.Height; y++)
+        for (var x = 0; x < world.Width; x++)
+            world.SetBiome(new(x, y), Biome.Grassland);
+        Assert.True(world.TrySpawnTestApeVillage(First));
+        if (coastal)
+        {
+            for (var y = 8; y <= 13; y++)
+            for (var x = 28; x <= 33; x++)
+                world.SetTerrain(new(x, y), Terrain.Beach);
+            world.SetTerrain(new(30, 11), Terrain.Shallows);
+        }
+        Assert.True(world.TrySpawnBarbarianApeVillage(Second));
+        return world;
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public void CampTargetsForceBloodWarAndKeepBarbarianRoles(bool requestedBloodWar, bool coastal)
+    {
+        var world = CreateCampWarWorld(coastal);
+        var roles = Residents(world, Second).ToDictionary(c => c.Id, c => c.Species);
+        Assert.True(world.TryStartApeWar(First, Second, requestedBloodWar));
+        var wars = (System.Collections.IDictionary)typeof(SimulationWorld)
+            .GetField("_apeWars", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(world)!;
+        var war = wars[First.Y * world.Width + First.X]!;
+        Assert.True((bool)war.GetType().GetField("BloodWar")!.GetValue(war)!);
+        Assert.All(Residents(world, Second), c =>
+        {
+            Assert.Equal(roles[c.Id], c.Species);
+            Assert.True(world.IsBarbarianApe(c.Id));
+        });
+        world.AdvanceApeWars();
+        Assert.True(world.IsApeVillageAtWar(First));
+        foreach (var resident in Residents(world, Second).Where(c => c.Species != CritterSpecies.ApeChieftain))
+            world.RemoveCritterAt(resident.Position);
+        world.AdvanceApeWars();
+        Assert.True(world.IsApeVillageAtWar(Second));
+        foreach (var resident in Residents(world, Second))
+            world.RemoveCritterAt(resident.Position);
+        world.AdvanceApeWars();
+        Assert.False(world.IsApeVillageAtWar(First));
+        Assert.False(world.IsApeVillageAtWar(Second));
+    }
+
+    [Fact]
+    public void NaturalRegularWarRollCanTargetSmallCampAndBecomesBloodWar()
+    {
+        var world = CreateCampWarWorld(false);
+        var tile = First.Y * world.Width + First.X;
+        var homes = (Dictionary<int, int>)typeof(SimulationWorld)
+            .GetField("_apeVillageHomes", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(world)!;
+        for (var i = Residents(world, First).Length; i < SimulationWorld.VillageWarPopulationThreshold; i++)
+        {
+            var id = world.AddCritter(CritterSpecies.Ape, new(1 + i % 45, 20 + i / 45));
+            homes[id.Value] = tile;
+        }
+        typeof(SimulationWorld).GetProperty(nameof(SimulationWorld.Tick))!
+            .SetValue(world, (long)SimulationWorld.VillageWarCooldownTicks);
+        var started = false;
+        for (var attempt = 0; attempt < 10000 && !started; attempt++)
+            started = world.TryStartVillageWar(tile);
+        Assert.True(started);
+        var wars = (System.Collections.IDictionary)typeof(SimulationWorld)
+            .GetField("_apeWars", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(world)!;
+        var war = wars[tile]!;
+        Assert.True((bool)war.GetType().GetField("BloodWar")!.GetValue(war)!);
+        Assert.False((bool)war.GetType().GetField("CivilWar")!.GetValue(war)!);
+    }
     [Theory]
     [InlineData(false, false, false)]
     [InlineData(false, true, false)]

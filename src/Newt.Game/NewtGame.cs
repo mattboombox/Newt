@@ -2,7 +2,6 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using Newt.Simulation;
-using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
@@ -63,7 +62,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         ", / .  slower / faster simulation",
         "- / =  decrease / increase magnitude",
         "P  pause or resume",
-        "G  toggle automatic slowdown",
+        "G  toggle auto speed",
         "WASD / arrows  pan camera",
         "Shift + pan  move faster",
         "Mouse wheel  zoom toward pointer",
@@ -91,11 +90,17 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private Texture2D? _sickApeSprite;
     private Texture2D? _sickApeFlashSprite;
     private Texture2D? _apeColonistSprite;
+    private Texture2D? _vampireColonistSprite;
+    private Texture2D? _vampireColonistFlashSprite;
+    private Texture2D? _vampireColonistSailorSprite;
+    private Texture2D? _vampireColonistSailorFlashSprite;
     private Texture2D? _apeColonistFlashSprite;
     private Texture2D? _apeColonistSailorSprite;
     private Texture2D? _apeColonistSailorFlashSprite;
     private Texture2D? _apeBarbarianSprite;
     private Texture2D? _apeBarbarianFlashSprite;
+    private Texture2D? _barbarianDogSprite;
+    private Texture2D? _barbarianDogFlashSprite;
     private Texture2D? _apeBarbarianVeteranSprite, _apeBarbarianVeteranFlashSprite;
     private Texture2D? _apeBarbarianChiefSprite;
     private Texture2D? _apeBarbarianChiefFlashSprite;
@@ -219,12 +224,10 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
 
     protected override void Update(GameTime gameTime)
     {
-        var updateStarted = Stopwatch.GetTimestamp();
         var keyboard = Keyboard.GetState();
         var mouse = Mouse.GetState();
         if (_setupMenuOpen)
         {
-            _simulationSpeedGuard.Reset();
             HandleSetupMenu(keyboard);
             _previousKeyboard = keyboard;
             _previousMouse = mouse;
@@ -242,6 +245,19 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         HandleActiveTool(mouse, gameTime.ElapsedGameTime.TotalSeconds);
         HandleCamera(keyboard, mouse);
 
+        if (!_paused && IsActive)
+        {
+            var rate = SimulationRates[_simulationRateIndex];
+            var adjusted = _simulationSpeedGuard.GetRate(rate, _world.CritterCount, _world.NonBarbarianApeCount);
+            _speedAutomaticallyReduced = _simulationSpeedGuard.AutomaticallyReduced;
+            if (adjusted != rate)
+            {
+                _simulationRateIndex = Array.IndexOf(SimulationRates, adjusted);
+                _accumulator = TimeSpan.Zero;
+                ResetElapsedTime();
+            }
+        }
+
         if (!_paused)
         {
             _accumulator += gameTime.ElapsedGameTime * SimulationRates[_simulationRateIndex];
@@ -257,22 +273,6 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         }
 
         UpdateInspectedCritterFollow();
-
-        if (_paused || !IsActive)
-        {
-            _simulationSpeedGuard.Reset();
-        }
-        else if (_simulationSpeedGuard.ShouldReduce(
-            SimulationRates[_simulationRateIndex], _world.CritterCount,
-            Stopwatch.GetElapsedTime(updateStarted),
-            TargetElapsedTime, gameTime.IsRunningSlowly))
-        {
-            _simulationRateIndex = Array.IndexOf(SimulationRates, SimulationSpeedGuard.FallbackRate);
-            _speedAutomaticallyReduced = true;
-            // Discard catch-up time, not world ticks, so old overload cannot delay recovery.
-            _accumulator = TimeSpan.Zero;
-            ResetElapsedTime();
-        }
 
         _previousKeyboard = keyboard;
         _previousMouse = mouse;
@@ -419,6 +419,16 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             _apeColonistSprite = sprite;
             _apeColonistFlashSprite = flashSprite;
         }
+        if (TryLoadCritterSprite("vampire-colonist.png", out sprite, out flashSprite))
+        {
+            _vampireColonistSprite = sprite;
+            _vampireColonistFlashSprite = flashSprite;
+        }
+        if (TryLoadCritterSprite("vampire-colonist-sailor.png", out sprite, out flashSprite))
+        {
+            _vampireColonistSailorSprite = sprite;
+            _vampireColonistSailorFlashSprite = flashSprite;
+        }
         if (TryLoadCritterSprite("ape-colonist-sailor.png", out sprite, out flashSprite))
         {
             _apeColonistSailorSprite = sprite;
@@ -428,6 +438,11 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         {
             _apeBarbarianSprite = sprite;
             _apeBarbarianFlashSprite = flashSprite;
+        }
+        if (TryLoadCritterSprite("wolf-dog.png", out sprite, out flashSprite))
+        {
+            _barbarianDogSprite = sprite;
+            _barbarianDogFlashSprite = flashSprite;
         }
         if (TryLoadCritterSprite("ape-barbarian-veteran.png", out sprite, out flashSprite))
         {
@@ -560,14 +575,26 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         Texture2D? sprite;
         Texture2D? flashSprite;
         var colonistInWater = critter.IsColonist && IsWaterTile(critter.Position);
-        if (critter.Species is CritterSpecies.Ape or CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack or CritterSpecies.ApeSailor &&
+        if (critter.Species is CritterSpecies.Dog && _world.IsBarbarianApe(critter.Id) &&
+            _barbarianDogSprite is not null)
+        {
+            sprite = _barbarianDogSprite;
+            flashSprite = _barbarianDogFlashSprite;
+        }
+        else if (critter.Species is CritterSpecies.Ape or CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack or CritterSpecies.ApeSailor &&
             critter.Plague is PlagueKind.Plague or PlagueKind.Zombie or PlagueKind.Vampire &&
             _sickApeSprite is not null)
         {
             sprite = _sickApeSprite;
             flashSprite = _sickApeFlashSprite;
         }
-        else if (critter.IsColonist &&
+        else if (critter.IsColonist && critter.Species is CritterSpecies.Vampire &&
+            (colonistInWater ? _vampireColonistSailorSprite : _vampireColonistSprite) is not null)
+        {
+            sprite = colonistInWater ? _vampireColonistSailorSprite : _vampireColonistSprite;
+            flashSprite = colonistInWater ? _vampireColonistSailorFlashSprite : _vampireColonistFlashSprite;
+        }
+        else if (critter.IsColonist && critter.Species is not CritterSpecies.Vampire &&
             (colonistInWater ? _apeColonistSailorSprite : _apeColonistSprite) is not null)
         {
             sprite = colonistInWater ? _apeColonistSailorSprite : _apeColonistSprite;
@@ -576,6 +603,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 : _apeColonistFlashSprite;
         }
         else if (critter.Species is CritterSpecies.ApeWarrior &&
+            !_world.IsBarbarianApe(critter.Id) &&
             _world.TryGetApeWarSide(critter.Id, out var attacking) &&
             (_apeWarTeamSprites.TryGetValue((attacking, IsWaterTile(critter.Position), critter.IsVeteranWarrior), out var teamSprites) ||
              _apeWarTeamSprites.TryGetValue((attacking, IsWaterTile(critter.Position), false), out teamSprites)))
@@ -606,7 +634,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             sprite = _world.IsApePirate(critter.Id) ? _apePirateVeteranSprite : _apeBarbarianVeteranSprite;
             flashSprite = _world.IsApePirate(critter.Id) ? _apePirateVeteranFlashSprite : _apeBarbarianVeteranFlashSprite;
         }
-        else if (_world.IsBarbarianApe(critter.Id) &&
+        else if (critter.Species is not CritterSpecies.Dog && _world.IsBarbarianApe(critter.Id) &&
             (critter.Species switch
             {
                 CritterSpecies.ApeChieftain when _world.IsApePirate(critter.Id) => _apePirateChiefSprite,
@@ -753,7 +781,6 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         else if (WasPressed(keyboard, Keys.P))
         {
             _paused = !_paused;
-            _simulationSpeedGuard.Reset();
         }
     }
 
@@ -1244,7 +1271,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             "Q / E  cycle tools",
             "R  cycle categories",
             "< / >  speed   P  pause",
-            $"M menu   G auto-slow {(_simulationSpeedGuard.Enabled ? "ON" : "OFF")}   ? key for help");
+            $"M menu   G auto speed {(_simulationSpeedGuard.Enabled ? "ON" : "OFF")}   ? key for help");
 
         var position = ScreenToWorld(mouse.X, mouse.Y);
         DrawHudLines(tileX + HudPadding, hudY + 8,
@@ -1801,6 +1828,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 : Array.Empty<string>(),
         .. _world.GetApeTraderMarket(critter.Id) is { } market
             ? new[] { $"Market X {market.X}, Y {market.Y}",
+                $"Wood cargo {_world.GetApeTraderWood(critter.Id)} / {SimulationWorld.ApeTraderWoodCapacity}",
                 $"Stall recoveries {_world.GetApeTraderRecoveryCount(critter.Id)}   World total {_world.ApeTraderRecoveryCount}" }
             : Array.Empty<string>(),
         .. _world.GetApeTraderDestination(critter.Id) is { } destination
@@ -1817,7 +1845,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     ];
 
     private string GetCritterDisplayName(CritterSnapshot critter) =>
-        critter.IsColonist ? "Colonist Ape" :
+        critter.IsColonist ? (critter.Species is CritterSpecies.Vampire ? "Vampire Colonist" : "Colonist Ape") :
         _world.IsBarbarianApe(critter.Id) ? critter.Species switch
         {
             CritterSpecies.Dog => "Barbarian Dog",
@@ -1875,13 +1903,13 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
 
     private static string GetCritterBehavior(CritterSnapshot critter)
     {
-        if (critter.Species is CritterSpecies.Vampire)
+        if (critter.Species is CritterSpecies.Vampire && !critter.IsColonist)
             return critter.CanReproduce ? "Seeking space for a two-vampire lair" : "Hunting living apes for energy";
         if (critter.IsColonist)
         {
             return critter.ColonistDestination is { } destination
-                ? $"Traveling to X {destination.X}, Y {destination.Y} to found a village"
-                : "Traveling to found a village";
+                ? $"Traveling to X {destination.X}, Y {destination.Y} to found a {(critter.Species is CritterSpecies.Vampire ? "lair" : "village")}"
+                : critter.Species is CritterSpecies.Vampire ? "Seeking a village with at least 50 residents" : "Traveling to found a village";
         }
         if (critter.Species is CritterSpecies.UndeadApe)
         {
@@ -2811,7 +2839,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         WorldTool.Stone => "L place; R clear",
         WorldTool.Lava => "L add; R clear",
         WorldTool.JumpStart => "L seed plankton",
-        WorldTool.Colonist => "L village: auto; tile: target",
+        WorldTool.Colonist => "L village/lair: auto; tile: target",
         WorldTool.War or WorldTool.BloodWar => _warToolStatus,
         WorldTool.CivilWar => "L village: start civil war / village at war: stop",
         WorldTool.ApeVillage => "L place village with 2 apes",

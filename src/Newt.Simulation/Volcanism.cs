@@ -85,49 +85,13 @@ public static class Volcanism
             world.Tick + RandomRange(world, 2, 5) * SimulationWorld.TicksPerSecond,
             world.Tick + RandomRange(world, 25, 46) * SimulationWorld.TicksPerSecond);
         world.Volcanoes.Add(volcano);
-        var changed = RaiseVolcanicMound(world, position);
-        changed |= DepositLava(world, position, 0.07f + world.NextUnitFloat() * 0.05f);
+        // A vent starts as a lava source; its flows build the surrounding land over time.
+        var changed = DepositLava(world, position, 0.012f + world.NextUnitFloat() * 0.035f);
         if (changed)
         {
             RebuildAfterDeposits(world);
         }
         return true;
-    }
-
-    private static bool RaiseVolcanicMound(SimulationWorld world, GridPosition center)
-    {
-        const int radius = 2;
-        var changed = false;
-        for (var offsetY = -radius; offsetY <= radius; offsetY++)
-        {
-            var y = center.Y + offsetY;
-            if (y < 0 || y >= world.Height)
-            {
-                continue;
-            }
-
-            for (var offsetX = -radius; offsetX <= radius; offsetX++)
-            {
-                var distance = MathF.Sqrt(offsetX * offsetX + offsetY * offsetY);
-                if (distance > 2.35f)
-                {
-                    continue;
-                }
-
-                var position = new GridPosition(Mod(center.X + offsetX, world.Width), y);
-                var targetElevation = distance <= 1.45f
-                    ? 0.68f - distance * 0.055f
-                    : 0.52f - (distance - 1.45f) * 0.12f;
-                if (world.GetElevation(position) >= targetElevation)
-                {
-                    continue;
-                }
-
-                world.SetElevation(position, targetElevation);
-                changed = true;
-            }
-        }
-        return changed;
     }
 
     /// <summary>Forces an eruption now; flow lobes continue animating on later ticks.</summary>
@@ -233,9 +197,6 @@ public static class Volcanism
         bool spawnSuccessor)
     {
         volcano.State = VolcanoState.Extinct;
-        world.SetElevation(
-            volcano.Position,
-            Math.Max(world.GetElevation(volcano.Position), 0.60f));
         if (spawnSuccessor)
         {
             SpawnChainVolcano(world, volcano);
@@ -246,7 +207,7 @@ public static class Volcanism
 
     private static bool BeginEruption(SimulationWorld world, VolcanoActivity volcano)
     {
-        var changed = DepositLava(world, volcano.Position, 0.05f + world.NextUnitFloat() * 0.06f);
+        var changed = DepositLava(world, volcano.Position, 0.012f + world.NextUnitFloat() * 0.035f);
         var flowCount = RandomRange(world, 1, 4);
         for (var flow = 0; flow < flowCount; flow++)
         {

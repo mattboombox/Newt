@@ -77,7 +77,7 @@ public static class CritterNutritions
         HungryThreshold: 1,
         MetabolismIntervalTicks: 60 * SimulationWorld.TicksPerSecond,
         MetabolismCost: 1,
-        ReproductionThreshold: 5,
+        ReproductionThreshold: 7,
         ReproductionCost: 3);
 
     private static readonly CritterNutrition SeaScorpion = new(
@@ -99,7 +99,7 @@ public static class CritterNutritions
         HungryThreshold: 4,
         MetabolismIntervalTicks: 70 * SimulationWorld.TicksPerSecond,
         MetabolismCost: 1,
-        ReproductionThreshold: 14,
+        ReproductionThreshold: 16,
         ReproductionCost: 9);
 
     private static readonly CritterNutrition Nautilus = new(
@@ -143,7 +143,7 @@ public static class CritterNutritions
         HungryThreshold: 4,
         MetabolismIntervalTicks: 70 * SimulationWorld.TicksPerSecond,
         MetabolismCost: 1,
-        ReproductionThreshold: 14,
+        ReproductionThreshold: 16,
         ReproductionCost: 9);
 
     private static readonly CritterNutrition Crab = new(
@@ -154,7 +154,7 @@ public static class CritterNutritions
         HungryThreshold: 2,
         MetabolismIntervalTicks: 45 * SimulationWorld.TicksPerSecond,
         MetabolismCost: 1,
-        ReproductionThreshold: 5,
+        ReproductionThreshold: 6,
         ReproductionCost: 3);
 
     private static readonly CritterNutrition Squid = new(
@@ -183,18 +183,18 @@ public static class CritterNutritions
         BodySize: CritterBodySize.Large,
         FeedingStrategy: CritterFeedingStrategy.TerrainFirst,
         InitialEnergy: 5,
-        MaximumEnergy: 6,
+        MaximumEnergy: 8,
         HungryThreshold: 4,
         MetabolismIntervalTicks: 70 * SimulationWorld.TicksPerSecond,
         MetabolismCost: 1,
-        ReproductionThreshold: 6,
+        ReproductionThreshold: 8,
         ReproductionCost: 4);
 
     private static readonly CritterNutrition Monkey = new(
         BodySize: CritterBodySize.Big,
         FeedingStrategy: CritterFeedingStrategy.TerrainOnly,
         InitialEnergy: 4,
-        MaximumEnergy: 9,
+        MaximumEnergy: 8,
         HungryThreshold: 3,
         MetabolismIntervalTicks: 75 * SimulationWorld.TicksPerSecond,
         MetabolismCost: 1,
@@ -248,12 +248,12 @@ public static class CritterNutritions
     private static readonly CritterNutrition ToothedWhale = new(
         BodySize: CritterBodySize.Huge,
         FeedingStrategy: CritterFeedingStrategy.Hunter,
-        InitialEnergy: 6,
-        MaximumEnergy: 18,
+        InitialEnergy: 10,
+        MaximumEnergy: 30,
         HungryThreshold: 5,
         MetabolismIntervalTicks: 90 * SimulationWorld.TicksPerSecond,
         MetabolismCost: 1,
-        ReproductionThreshold: 16,
+        ReproductionThreshold: 30,
         ReproductionCost: 11);
 
     public static CritterNutrition Get(CritterSpecies species) => species switch
@@ -273,9 +273,9 @@ public static class CritterNutritions
         CritterSpecies.SquidEgg => SquidEgg,
         CritterSpecies.Therapsid => Therapsid,
         CritterSpecies.Monkey => Monkey,
-        CritterSpecies.ApeTrader or CritterSpecies.ApeTraderSailor => Ape with { MaximumEnergy = 4 * Ape.MaximumEnergy, ReproductionThreshold = 0, ReproductionCost = 0 },
+        CritterSpecies.ApeTrader or CritterSpecies.ApeTraderSailor => Ape with { MaximumEnergy = 80, ReproductionThreshold = 0, ReproductionCost = 0 },
         CritterSpecies.Ape => Ape,
-        CritterSpecies.ApeSailor => Ape with { MaximumEnergy = 2 * Ape.MaximumEnergy },
+        CritterSpecies.ApeSailor => Ape with { MaximumEnergy = 2 * Ape.MaximumEnergy, ReproductionThreshold = 2 * Ape.MaximumEnergy },
         CritterSpecies.ApeWarrior => Ape,
         CritterSpecies.ApeChieftain => Ape,
         CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack => Ape,
@@ -291,3 +291,4 @@ public static class CritterNutritions
         _ => throw new ArgumentOutOfRangeException(nameof(species)),
     };
 }
+

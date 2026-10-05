@@ -226,7 +226,9 @@ public sealed class ApeTests
         foreach (var species in Enum.GetValues<CritterSpecies>())
         {
             Assert.Equal(SimulationWorld.CanEat(CritterSpecies.ApeWarrior, species), SimulationWorld.CanEat(CritterSpecies.Dog, species));
-            Assert.Equal(SimulationWorld.CanEat(species, CritterSpecies.ApeWarrior), SimulationWorld.CanEat(species, CritterSpecies.Dog));
+            // Vampires eat living apes, so dogs are an exception to the warrior diet alias.
+            Assert.Equal(species is not CritterSpecies.Vampire && SimulationWorld.CanEat(species, CritterSpecies.ApeWarrior),
+                SimulationWorld.CanEat(species, CritterSpecies.Dog));
         }
     }
 
@@ -687,7 +689,7 @@ public sealed class ApeTests
             world.AdvanceVillagePlagueOutbreaks();
         }
         Assert.Single(Enumerable.Range(0, world.CritterCount).Select(world.GetCritter),
-            critter => critter.Plague is PlagueKind.Plague);
+            critter => critter.Plague is not PlagueKind.None);
     }
 
     private static (SimulationWorld World, GridPosition Village) CreateVillageForPlague(int population)
@@ -2157,7 +2159,7 @@ public sealed class ApeTests
         Assert.False(SimulationWorld.CanEat(CritterSpecies.BaleenWhale, CritterSpecies.ApeSailor));
         Assert.False(SimulationWorld.CanEat(CritterSpecies.ApeSailor, CritterSpecies.ToothedWhale));
         Assert.Equal(1, SimulationWorld.GetCombatDamage(CritterSpecies.BaleenWhale));
-        Assert.Equal(5, SimulationWorld.GetCombatDamage(CritterSpecies.ToothedWhale));
+        Assert.Equal(6, SimulationWorld.GetCombatDamage(CritterSpecies.ToothedWhale));
         for (ulong seed = 1; seed <= 20; seed++)
         {
             var world = new SimulationWorld(1, 2, Terrain.Ocean, seed);
@@ -2204,6 +2206,7 @@ public sealed class ApeTests
     public void EmptyVillageAndConnectedBuildingsBecomeRuinsThatEventuallyDecay()
     {
         var world = CreateFedApeWorld(hasGrassland: true);
+        NaturalEvents.SetEnabled(world, false);
         AdvanceUntilVillage(world);
         var village = FindStructure(world, ApeStructureKind.Village);
         AddAssignedResidents(world, village, 4);
@@ -2233,7 +2236,12 @@ public sealed class ApeTests
             Assert.False(world.IsApeStructureOperational(structureTile));
         }
 
-        for (var tick = 0; tick < SimulationWorld.ApeRuinDecayTicks - 1; tick++)
+        var ruinDecay = (Dictionary<int, long>)typeof(SimulationWorld).GetField("_apeRuinDecayTicks",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(world)!;
+        var deadlines = structureTiles.Select(position => ruinDecay[position.Y * world.Width + position.X]).ToArray();
+        var firstDecay = deadlines.Min();
+        var lastDecay = deadlines.Max();
+        while (world.Tick < firstDecay - 1)
         {
             world.AdvanceOneTick();
         }
@@ -2242,7 +2250,8 @@ public sealed class ApeTests
             Assert.Equal(ApeStructureKind.Ruin, world.GetApeStructure(structureTile));
         }
 
-        world.AdvanceOneTick();
+        while (world.Tick < lastDecay)
+            world.AdvanceOneTick();
         foreach (var structureTile in structureTiles)
         {
             Assert.Null(world.GetApeStructure(structureTile));
@@ -2321,26 +2330,26 @@ public sealed class ApeTests
         var preyPosition = GetCardinalNeighbors(world, ape.Position)
             .First(position => !world.IsOccupied(position) &&
                 world.GetApeStructure(position) is null);
-        world.AddCritter(CritterSpecies.Deer, preyPosition);
+        world.AddCritter(CritterSpecies.Monkey, preyPosition);
 
         for (var tick = 0;
             tick < 10 * SimulationWorld.TicksPerSecond &&
-                world.GetCritterCount(CritterSpecies.Deer) > 0;
+                world.GetCritterCount(CritterSpecies.Monkey) > 0;
             tick++)
         {
             world.AdvanceOneTick();
         }
 
-        Assert.Equal(0, world.GetCritterCount(CritterSpecies.Deer));
+        Assert.Equal(0, world.GetCritterCount(CritterSpecies.Monkey));
         Assert.True(world.TryGetCritter(ape.Id, out var fedApe));
         var personalFood = fedApe.Energy - startingEnergy;
         var settlementFood = world.GetApeVillageFood(village) + world.GetApeCarriedFood(ape.Id);
         Assert.True(personalFood > 0);
-        Assert.Equal(5, personalFood + settlementFood);
+        Assert.Equal(4, personalFood + settlementFood);
     }
 
     [Fact]
-    public void StuckResidentAutomaticallyReturnsCarriedFoodAfterThirtySeconds()
+    public void StrandedResidentDetachesWithoutReturningCarriedFoodToUnreachableVillage()
     {
         var world = CreateFedApeWorld(hasGrassland: true);
         AdvanceUntilVillage(world);
@@ -2355,22 +2364,10 @@ public sealed class ApeTests
             .First();
         var residentId = world.AddCritter(CritterSpecies.Ape, remote);
         Assert.True(world.TryAssignApeToVillage(residentId, village));
-        for (var meal = 0; meal < 2 && world.GetApeCarriedFood(residentId) == 0; meal++)
-        {
-            Assert.True(world.TryGetCritter(residentId, out var hunter));
-            var preyPosition = GetCardinalNeighbors(world, hunter.Position)
-                .First(position => world.GetApeStructure(position) is null &&
-                    !world.IsOccupied(position));
-            world.AddCritter(CritterSpecies.Deer, preyPosition);
-            for (var tick = 0;
-                tick < 10 * SimulationWorld.TicksPerSecond &&
-                    world.GetCritterCount(CritterSpecies.Deer) > 0;
-                tick++)
-            {
-                world.AdvanceOneTick();
-            }
-        }
-
+        // Seed a returning hunter's cargo so this test isolates unreachable membership.
+        var cargo = (Dictionary<int, int>)typeof(SimulationWorld).GetField("_apeCarriedFood",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(world)!;
+        cargo[residentId.Value] = 3;
         var carriedFood = world.GetApeCarriedFood(residentId);
         Assert.True(carriedFood > 0);
         Assert.True(world.TryGetCritter(residentId, out var returningApe));
@@ -2390,7 +2387,8 @@ public sealed class ApeTests
         }
 
         Assert.Equal(0, world.GetApeCarriedFood(residentId));
-        Assert.Equal(carriedFood, world.GetApeVillageFood(village));
+        Assert.Equal(0, world.GetApeVillageFood(village));
+        Assert.Null(world.GetApeHomeVillage(residentId));
         Assert.True(world.TryGetCritter(residentId, out var unstuckApe));
         Assert.Equal(returningApe.Position, unstuckApe.Position);
     }
@@ -2425,7 +2423,7 @@ public sealed class ApeTests
             world.AdvanceOneTick();
         }
         Assert.True(world.TryGetCritter(residentId, out var hungry));
-        var expectedHungryEnergy = species is CritterSpecies.Ape ? 5 : 4;
+        var expectedHungryEnergy = 4;
         Assert.Equal(expectedHungryEnergy, hungry.Energy);
         world.StoreApeVillageFood(village, 4);
 
@@ -2436,11 +2434,11 @@ public sealed class ApeTests
 
         Assert.True(world.TryGetCritter(residentId, out var fed));
         Assert.Equal(6, fed.Energy);
-        Assert.Equal(species is CritterSpecies.Ape ? 1 : 0, world.GetApeVillageFood(village));
+        Assert.Equal(0, world.GetApeVillageFood(village));
     }
 
     [Fact]
-    public void StalledReadyApeReproducesLocallyAfterThirtySeconds()
+    public void StrandedReadyApeDetachesInsteadOfReproducingForUnreachableVillage()
     {
         var world = CreateFedApeWorld(hasGrassland: true, width: 25, height: 9);
         NaturalEvents.SetEnabled(world, false);
@@ -2478,15 +2476,13 @@ public sealed class ApeTests
         {
             world.AdvanceOneTick();
         }
-        Assert.Equal(1, world.GetApeVillageResidentCount(village));
+        Assert.Equal(0, world.GetApeVillageResidentCount(village));
         world.AdvanceOneTick();
 
-        Assert.Equal(2, world.GetApeVillageResidentCount(village));
+        Assert.Equal(0, world.GetApeVillageResidentCount(village));
+        Assert.Null(world.GetApeHomeVillage(parent));
         Assert.True(world.TryGetCritter(parent, out var after));
-        Assert.Equal(remote, after.Position);
-        Assert.Equal(4, after.Energy);
-        Assert.Contains(Enumerable.Range(0, world.CritterCount).Select(world.GetCritter),
-            critter => critter.Id != parent && critter.Position == birthSite);
+        Assert.Equal(1, world.CritterCount);
     }
 
     [Fact]
@@ -2555,7 +2551,7 @@ public sealed class ApeTests
     }
 
     [Fact]
-    public void HungryResidentConsumesVillageFoodWithoutReturningHome()
+    public void HungryStrandedResidentStopsConsumingUnreachableVillageFood()
     {
         var world = CreateFedApeWorld(hasGrassland: true);
         AdvanceUntilVillage(world);
@@ -2568,10 +2564,10 @@ public sealed class ApeTests
             var preyPosition = GetCardinalNeighbors(world, hunter.Position)
                 .First(position => !world.IsOccupied(position) &&
                     world.GetApeStructure(position) is null);
-            world.AddCritter(CritterSpecies.Deer, preyPosition);
+            world.AddCritter(CritterSpecies.Monkey, preyPosition);
             for (var tick = 0;
                 tick < 30 * SimulationWorld.TicksPerSecond &&
-                    (world.GetCritterCount(CritterSpecies.Deer) > 0 ||
+                    (world.GetCritterCount(CritterSpecies.Monkey) > 0 ||
                         world.GetApeVillageFood(village) == 0);
                 tick++)
             {
@@ -2620,8 +2616,8 @@ public sealed class ApeTests
 
         Assert.True(world.TryGetCritter(residentId, out var resident));
         Assert.Equal(remote, resident.Position);
-        Assert.Equal(6, resident.Energy);
-        Assert.Equal(storedFood - 1, world.GetApeVillageFood(village));
+        Assert.Equal(5, resident.Energy);
+        Assert.Null(world.GetApeHomeVillage(residentId));
     }
 
     [Fact]
@@ -2680,6 +2676,11 @@ public sealed class ApeTests
         AdvanceUntilVillage(world);
         var village = FindStructure(world, ApeStructureKind.Village);
         AddPreyToEmptyTiles(world, 3);
+        for (var meal = 0; meal < 8; meal++)
+        {
+            world.StoreApeVillageFood(village, 5);
+            world.FeedApeFromVillageSurplus(village.Y * world.Width + village.X);
+        }
 
         for (var tick = 0;
             tick < 4 * 60 * SimulationWorld.TicksPerSecond &&
@@ -2829,7 +2830,7 @@ public sealed class ApeTests
         }
         Assert.Equal(ApeStructureKind.Village, world.GetApeStructure(secondVillage));
         Assert.Equal(2, world.GetApeVillageResidentCount(secondVillage));
-        Assert.Equal(20, world.GetApeVillageWood(secondVillage));
+        Assert.Equal(world.IsBarbarianApe(firstColonist.Id) ? 0 : 20, world.GetApeVillageWood(secondVillage));
         Assert.True(world.TryGetCritter(firstColonist.Id, out var founder));
         Assert.False(founder.IsColonist);
         Assert.Equal(CritterNutritions.Get(CritterSpecies.Ape).InitialEnergy, founder.Energy);
@@ -2997,10 +2998,10 @@ public sealed class ApeTests
         }
 
         world.AddCritter(CritterSpecies.Ape, new GridPosition(4, 1));
-        world.AddCritter(CritterSpecies.Deer, new GridPosition(3, 1));
-        world.AddCritter(CritterSpecies.Deer, new GridPosition(5, 1));
-        world.AddCritter(CritterSpecies.Elk, new GridPosition(4, 0));
-        world.AddCritter(CritterSpecies.Elk, new GridPosition(4, 2));
+        // Settlement tests start with a fed founder, independently of hunting outcomes.
+        var energy = (int[])typeof(SimulationWorld).GetField("_energy",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(world)!;
+        energy[0] = CritterNutritions.Get(CritterSpecies.Ape).MaximumEnergy;
         return world;
     }
 
@@ -3080,6 +3081,14 @@ public sealed class ApeTests
         {
             world.AdvanceOneTick();
         }
+        // These fixtures exercise ordinary settlements, independently of the camp roll.
+        var camps = (HashSet<int>)typeof(SimulationWorld).GetField("_barbarianVillageTiles",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(world)!;
+        var wood = (Dictionary<int, int>)typeof(SimulationWorld).GetField("_apeVillageWood",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(world)!;
+        foreach (var camp in camps)
+            wood[camp] = 20;
+        camps.Clear();
     }
 
     private static IEnumerable<GridPosition> AllPositions(SimulationWorld world)
@@ -3134,7 +3143,7 @@ public sealed class ApeTests
                 var position = new GridPosition(x, y);
                 if (!world.IsOccupied(position) && world.GetApeStructure(position) is null)
                 {
-                    world.AddCritter(CritterSpecies.Deer, position);
+                    world.AddCritter(CritterSpecies.Monkey, position);
                     count--;
                 }
             }

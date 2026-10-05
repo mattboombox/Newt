@@ -4,6 +4,7 @@ public sealed partial class SimulationWorld
 {
     internal const int ApeMarketRecruitmentIntervalTicks = 30 * TicksPerSecond;
     internal const int ApeTraderRecruitmentFoodCost = 3;
+    public const int ApeTraderWoodCapacity = 30;
     internal const int ApeTraderStallTicks = 30 * TicksPerSecond;
     internal const int ApeTraderRecoveryRetryTicks = 10 * TicksPerSecond;
     internal const int ApeTraderRecoverySteps = 5;
@@ -19,6 +20,8 @@ public sealed partial class SimulationWorld
         public long LastProgressTick;
         public long NextRecoveryTick;
         public int Recoveries;
+        public int Wood;
+        public int LastTradedVillage = -1;
     }
 
     private readonly Dictionary<int, TraderJourney> _traderJourneys = [];
@@ -29,6 +32,9 @@ public sealed partial class SimulationWorld
 
     public int GetApeTraderRecoveryCount(CritterId trader) =>
         _traderJourneys.TryGetValue(trader.Value, out var journey) ? journey.Recoveries : 0;
+
+    public int GetApeTraderWood(CritterId trader) =>
+        _traderJourneys.TryGetValue(trader.Value, out var journey) ? journey.Wood : 0;
 
     private void RecordTraderProgress(TraderJourney journey)
     {
@@ -267,24 +273,50 @@ public sealed partial class SimulationWorld
             LastProgressTick = Tick,
             NextRecoveryTick = Tick + ApeTraderStallTicks,
         };
-        RefillApeTraderProvisions(index);
+        RefillApeTraderProvisions(index, loading: true);
         return true;
     }
 
-    private void RefillApeTraderProvisions(int index)
+    private void RefillApeTraderProvisions(int index, bool loading = false)
     {
         var position = _positions[index];
         if (GetApeStructure(position) is not (ApeStructureKind.Village or ApeStructureKind.NavalDistrict or ApeStructureKind.Market) ||
             GetApeStructureVillage(position) is not { } village || !IsRoadVillage(GetIndex(village)) ||
-            _plagues.ContainsKey(_critterIds[index].Value))
+            _plagues.ContainsKey(_critterIds[index].Value) ||
+            !_traderJourneys.TryGetValue(_critterIds[index].Value, out var journey))
             return;
         var villageTile = GetIndex(village);
-        var missing = CritterNutritions.Get(_species[index]).MaximumEnergy - _energy[index];
-        var amount = Math.Min(missing, _apeVillageFood.GetValueOrDefault(villageTile));
-        if (amount <= 0)
+        if (!loading && journey.LastTradedVillage == villageTile)
             return;
-        _apeVillageFood[villageTile] -= amount;
-        _energy[index] += amount;
+        journey.LastTradedVillage = villageTile;
+        var food = _apeVillageFood.GetValueOrDefault(villageTile);
+        if (!loading && food < 100)
+        {
+            var amount = Math.Min(_energy[index] / 2,
+                Math.Max(0, GetApeVillageFoodCapacityByTile(villageTile) - food));
+            _energy[index] -= amount;
+            _apeVillageFood[villageTile] = food + amount;
+        }
+        else
+        {
+            var amount = Math.Min(CritterNutritions.Get(_species[index]).MaximumEnergy - _energy[index], food);
+            _apeVillageFood[villageTile] = food - amount;
+            _energy[index] += amount;
+        }
+        var wood = _apeVillageWood.GetValueOrDefault(villageTile);
+        if (!loading && wood < 50)
+        {
+            var amount = Math.Min(journey.Wood / 2,
+                Math.Max(0, GetApeVillageWoodCapacityByTile(villageTile) - wood));
+            journey.Wood -= amount;
+            _apeVillageWood[villageTile] = wood + amount;
+        }
+        else
+        {
+            var amount = Math.Min(ApeTraderWoodCapacity - journey.Wood, wood);
+            journey.Wood += amount;
+            _apeVillageWood[villageTile] = wood - amount;
+        }
     }
 
     internal void MoveApeTrader(CritterId id)

@@ -5,6 +5,39 @@ namespace Newt.Simulation.Tests;
 
 public sealed class ApeTraderTests
 {
+    [Theory]
+    [InlineData(CritterSpecies.ApeTrader, CritterSpecies.Wolf, 1, 12)]
+    [InlineData(CritterSpecies.ApeTraderSailor, CritterSpecies.ToothedWhale, 10, 12)]
+    [InlineData(CritterSpecies.ApeTrader, CritterSpecies.Vampire, 1, 12)]
+    [InlineData(CritterSpecies.ApeTrader, CritterSpecies.Wolf, 10, 1)]
+    [InlineData(CritterSpecies.ApeTrader, CritterSpecies.Wolf, 100, 12)]
+    public void DamagingTraderStealsActualDamageAsEnergy(
+        CritterSpecies traderSpecies, CritterSpecies robberSpecies, int robberEnergy, int traderEnergy)
+    {
+        var world = new SimulationWorld(5, 5, Terrain.Plains, seed: 17);
+        var robberPosition = new GridPosition(1, 1);
+        var traderPosition = new GridPosition(2, 1);
+        if (robberSpecies is CritterSpecies.ToothedWhale)
+            world.SetTerrain(robberPosition, Terrain.Ocean);
+        if (traderSpecies is CritterSpecies.ApeTraderSailor)
+            world.SetTerrain(traderPosition, Terrain.Ocean);
+        world.AddCritter(robberSpecies, robberPosition);
+        world.AddCritter(traderSpecies, traderPosition);
+        var energies = (int[])typeof(SimulationWorld).GetField("_energy", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(world)!;
+        var maximum = CritterNutritions.Get(robberSpecies).MaximumEnergy;
+        energies[0] = Math.Min(robberEnergy, maximum);
+        energies[1] = traderEnergy;
+        var before = energies[0];
+
+        typeof(SimulationWorld).GetMethod("ApplyCombatDamage", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(world, new object[] { 0, 1 });
+
+        var damage = traderEnergy - energies[1];
+        Assert.True(damage > 0);
+        Assert.Equal(Math.Min(maximum, before + damage), energies[0]);
+    }
+
     private static readonly GridPosition First = new(10, 10);
     private static readonly GridPosition Second = new(30, 10);
 
@@ -580,7 +613,7 @@ public sealed class ApeTraderTests
     }
 
     [Fact]
-    public void SameTraderBoardsAtHarborAndDisembarksWithoutLosingProvisionsOrOwnership()
+    public void SameTraderBoardsAndDisembarksPreservingOwnershipAndTradingOnlyAtVillage()
     {
         var world = CreateWorld(sea: true);
         var market = AddMarket(world, First);
@@ -591,7 +624,8 @@ public sealed class ApeTraderTests
         {
             trader = Move(world, trader);
             forms.Add(trader.Species);
-            Assert.Equal(initialEnergy, trader.Energy);
+            Assert.Equal(world.GetApeStructureVillage(trader.Position) == Second
+                ? initialEnergy - initialEnergy / 2 : initialEnergy, trader.Energy);
             Assert.Equal(market, world.GetApeTraderMarket(trader.Id));
             Assert.Equal(First, world.GetApeHomeVillage(trader.Id));
             Assert.Equal(1, world.GetCritterCount(CritterSpecies.ApeTrader) + world.GetCritterCount(CritterSpecies.ApeTraderSailor));
@@ -638,37 +672,48 @@ public sealed class ApeTraderTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void TradersRefillFromVisitedVillageOnly(bool sea)
+    [InlineData(false, 0, 0, 4, 10, 4, 10)]
+    [InlineData(true, 0, 0, 4, 10, 4, 10)]
+    [InlineData(false, 100, 50, 80, 30, 28, 40)]
+    [InlineData(true, 100, 50, 80, 30, 28, 40)]
+    [InlineData(false, 0, 50, 4, 30, 4, 40)]
+    [InlineData(false, 100, 0, 80, 10, 28, 10)]
+    public void TradersExchangeFoodAndWoodOncePerVisitedVillage(bool sea, int food, int wood,
+        int expectedEnergy, int expectedCargo, int expectedFood, int expectedWood)
     {
         var world = CreateWorld(sea);
         if (!sea)
             Assert.True(world.TryPlaceVillageRoad(First));
-        var trader = Recruit(world, AddMarket(world, First));
-        var initial = trader.Energy;
-        // Move beyond the origin's center and harbor before giving it more food.
+        var market = AddMarket(world, First);
+        var woods = (Dictionary<int, int>)typeof(SimulationWorld)
+            .GetField("_apeVillageWood", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(world)!;
+        woods[First.Y * world.Width + First.X] = 20;
+        var trader = Recruit(world, market);
+        Assert.Equal(20, world.GetApeTraderWood(trader.Id));
+        Assert.Equal(0, world.GetApeVillageWood(First));
         for (var i = 0; i < 5; i++)
             trader = Move(world, trader);
-        world.StoreApeVillageFood(First, 5);
-        world.StoreApeVillageFood(Second, 5);
+        var indices = (Dictionary<int, int>)typeof(SimulationWorld)
+            .GetField("_critterIndicesById", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(world)!;
+        var energies = (int[])typeof(SimulationWorld)
+            .GetField("_energy", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(world)!;
+        energies[indices[trader.Id.Value]] = 8;
+        var foods = (Dictionary<int, int>)typeof(SimulationWorld)
+            .GetField("_apeVillageFood", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(world)!;
+        foods[Second.Y * world.Width + Second.X] = food;
+        woods[Second.Y * world.Width + Second.X] = wood;
         trader = Arrive(world, trader, Second);
-        Assert.Equal(initial + 5, trader.Energy);
-        Assert.Equal(0, world.GetApeVillageFood(Second));
-        Assert.Equal(5, world.GetApeVillageFood(First));
-        trader = Arrive(world, trader, world.GetApeTraderMarket(trader.Id)!.Value);
-        Assert.Equal(initial + 10, trader.Energy);
-        Assert.Equal(0, world.GetApeVillageFood(First));
-        for (var i = 0; i < 12; i++)
-        {
-            world.StoreApeVillageFood(Second, 5);
-            trader = Arrive(world, trader, Second);
-            trader = Arrive(world, trader, world.GetApeTraderMarket(trader.Id)!.Value);
-        }
-        Assert.Equal(48, trader.Energy);
-        Assert.True(world.GetApeVillageFood(Second) > 0);
+        Assert.Equal(expectedEnergy, trader.Energy);
+        Assert.Equal(expectedCargo, world.GetApeTraderWood(trader.Id));
+        Assert.Equal(expectedFood, world.GetApeVillageFood(Second));
+        Assert.Equal(expectedWood, world.GetApeVillageWood(Second));
+        var refill = typeof(SimulationWorld).GetMethod("RefillApeTraderProvisions",
+            BindingFlags.Instance | BindingFlags.NonPublic)!;
+        for (var tick = 0; tick < 10; tick++)
+            refill.Invoke(world, new object[] { indices[trader.Id.Value], false });
+        Assert.Equal(expectedFood, world.GetApeVillageFood(Second));
+        Assert.Equal(expectedWood, world.GetApeVillageWood(Second));
     }
-
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

@@ -4,6 +4,80 @@ namespace Newt.Simulation.Tests;
 
 public sealed class ToothedWhaleTests
 {
+    [Theory]
+    [InlineData(CritterSpecies.ToothedWhale)]
+    [InlineData(CritterSpecies.BaleenWhale)]
+    public void WhalesReproduceOnlyAtFullEnergy(CritterSpecies species)
+    {
+        var world = new SimulationWorld(10, 10, Terrain.Ocean, seed: 17);
+        NaturalEvents.SetEnabled(world, false);
+        world.SeasonsEnabled = false;
+        world.AddCritter(species, new(5, 5));
+        var nutrition = CritterNutritions.Get(species);
+        var energies = (int[])typeof(SimulationWorld).GetField("_energy",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(world)!;
+        Assert.Equal(nutrition.MaximumEnergy, nutrition.ReproductionThreshold);
+        energies[0] = nutrition.MaximumEnergy - 1;
+        Assert.False(world.GetCritter(0).CanReproduce);
+        world.AdvanceOneTick();
+        Assert.Equal(1, world.CritterCount);
+        energies[0] = nutrition.MaximumEnergy;
+        Assert.True(world.GetCritter(0).CanReproduce);
+        world.AdvanceOneTick();
+        Assert.Equal(2, world.CritterCount);
+        Assert.Equal(nutrition.MaximumEnergy - nutrition.ReproductionCost, world.GetCritter(0).Energy);
+    }
+
+    [Fact]
+    public void NewlyEvolvedWhaleCrossesLandAtNormalSpeedToReachOcean()
+    {
+        var world = new SimulationWorld(1, 6, Terrain.Plains, seed: 51);
+        world.SeasonsEnabled = false;
+        NaturalEvents.SetEnabled(world, false);
+        world.SetTerrain(new GridPosition(0, 5), Terrain.Ocean);
+        var id = world.AddCritter(CritterSpecies.Therapsid, new GridPosition(0, 0));
+        typeof(SimulationWorld).GetMethod("ChangeCritterSpecies",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .Invoke(world, new object[] { 0, CritterSpecies.ToothedWhale, false, false });
+        world.AdvanceOneTick();
+        Assert.True(world.TryGetCritter(id, out var first));
+        Assert.Equal(new GridPosition(0, 1), first.Position);
+        for (var tick = 0; tick < 4 * SimulationWorld.GetMovementIntervalTicks(CritterSpecies.ToothedWhale); tick++)
+            world.AdvanceOneTick();
+        Assert.True(world.TryGetCritter(id, out var recovered));
+        Assert.Equal(new GridPosition(0, 5), recovered.Position);
+    }
+
+    [Theory]
+    [InlineData(CritterSpecies.ToothedWhale)]
+    [InlineData(CritterSpecies.BaleenWhale)]
+    public void WhalesStartWithMoreEnergyAndHaveLargerReserves(CritterSpecies species)
+    {
+        var nutrition = CritterNutritions.Get(species);
+        Assert.Equal(10, nutrition.InitialEnergy);
+        Assert.Equal(30, nutrition.MaximumEnergy);
+    }
+
+    [Theory]
+    [InlineData(CritterSpecies.ApeSailor)]
+    [InlineData(CritterSpecies.ApeTraderSailor)]
+    [InlineData(CritterSpecies.ApeWarrior)]
+    [InlineData(CritterSpecies.ApeChieftain)]
+    public void WhaleTargetsSailingApesInOcean(CritterSpecies species)
+    {
+        var world = new SimulationWorld(20, 1, Terrain.Ocean, seed: 51);
+        world.AddCritter(CritterSpecies.ToothedWhale, new GridPosition(0, 0));
+        var prey = new GridPosition(3, 0);
+        Assert.True(world.TrySpawnCritter(species, prey));
+        if (species is CritterSpecies.ApeChieftain)
+        {
+            var returning = (Dictionary<int, CritterSpecies?>)typeof(SimulationWorld).GetField("_returningWarSailors",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(world)!;
+            returning[world.GetCritter(1).Id.Value] = null;
+        }
+        Assert.Equal(prey, world.FindToothedWhalePrey(0, null));
+    }
+
     [Fact]
     public void WhaleTracksMovingPreyBeyondDetectionRangeInsteadOfSwitchingToCloserFood()
     {
@@ -40,7 +114,7 @@ public sealed class ToothedWhaleTests
         for (var tick = 0; tick < 30 * SimulationWorld.TicksPerSecond && world.CritterCount == 2; tick++)
             world.AdvanceOneTick();
         Assert.Equal(1, world.CritterCount);
-        Assert.Equal(5, SimulationWorld.GetCombatDamage(CritterSpecies.ToothedWhale));
+        Assert.Equal(6, SimulationWorld.GetCombatDamage(CritterSpecies.ToothedWhale));
         Assert.Equal(1, SimulationWorld.GetCombatDamage(CritterSpecies.BaleenWhale));
     }
 
@@ -82,6 +156,7 @@ public sealed class ToothedWhaleTests
             CritterSpecies.Fish,
             CritterSpecies.Squid,
             CritterSpecies.ApeSailor,
+            CritterSpecies.ApeTraderSailor,
             CritterSpecies.Crab,
             CritterSpecies.MegaToad,
             CritterSpecies.MegaSpider,
@@ -135,7 +210,9 @@ public sealed class ToothedWhaleTests
         }
 
         Assert.Equal(1, ocean.GetCritterCount(CritterSpecies.Deer));
-        Assert.Equal(0, shallows.GetCritterCount(CritterSpecies.Deer));
+        Assert.Equal(1, shallows.GetCritterCount(CritterSpecies.Deer));
+        Assert.True(shallows.GetCritter(0).Energy < CritterNutritions.Get(CritterSpecies.ToothedWhale).InitialEnergy ||
+            shallows.GetCritter(1).Energy < CritterNutritions.Get(CritterSpecies.Deer).InitialEnergy);
     }
 
     [Fact]

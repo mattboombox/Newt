@@ -3,7 +3,7 @@ namespace Newt.Simulation;
 public sealed partial class SimulationWorld
 {
     public const int VillageFeastCheckIntervalTicks = 60 * TicksPerSecond;
-    public const int VillageFeastChancePercent = 1;
+    public const int VillageFeastChancePercent = 10;
     private readonly Dictionary<int, int> _villageFeasts = [];
 
     public bool IsVillageFeasting(GridPosition position) =>

@@ -34,7 +34,7 @@ public sealed class BarbarianReproductionTests
         {
             Assert.True(world.TryGetCritter(parent, out var before));
             var prey = new GridPosition(before.Position.X == 16 ? 17 : 16, 5);
-            world.AddCritter(CritterSpecies.Elk, prey);
+            world.AddCritter(CritterSpecies.Monkey, prey);
             world.CommitEncounter(before.Position, prey);
         }
         Assert.True(world.TryGetCritter(parent, out var ready));

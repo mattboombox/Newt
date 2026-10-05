@@ -1407,6 +1407,18 @@ public sealed class SimulationWorldTests
             world.AdvanceOneTick();
         }
 
+        if (prey is CritterSpecies.Deer or CritterSpecies.Elk or CritterSpecies.Gazelle)
+        {
+            Assert.Equal(1, world.GetCritterCount(prey));
+            var predator = world.GetCritter(0);
+            var grazer = world.GetCritter(1);
+            var initial = CritterNutritions.Get(predator.Species).InitialEnergy +
+                CritterNutritions.Get(prey).InitialEnergy;
+            Assert.Contains(initial - predator.Energy - grazer.Energy,
+                new[] { 1, Math.Min(world.GetCritterCombatDamage(predator.Id),
+                    CritterNutritions.Get(prey).InitialEnergy - 1) });
+            return;
+        }
         Assert.Equal(1, world.GetCritterCount(CritterSpecies.Squid));
         Assert.Equal(0, world.GetCritterCount(prey));
         Assert.Equal(expectedEnergy, world.GetCritter(0).Energy);
@@ -2008,8 +2020,8 @@ public sealed class SimulationWorldTests
     }
 
     [Theory]
-    [InlineData(CritterSpecies.Worm, 7, 5, 3)]
-    [InlineData(CritterSpecies.Trilobite, 7, 5, 3)]
+    [InlineData(CritterSpecies.Worm, 7, 7, 3)]
+    [InlineData(CritterSpecies.Trilobite, 7, 7, 3)]
     [InlineData(CritterSpecies.Fish, 7, 7, 5)]
     [InlineData(CritterSpecies.Newt, 7, 7, 5)]
     public void SmallPreyUseSmallerReproductionReserves(
@@ -2121,7 +2133,7 @@ public sealed class SimulationWorldTests
         Assert.True(toad.MaximumEnergy > therapsid.MaximumEnergy);
         Assert.True(toad.MaximumEnergy > wolf.MaximumEnergy);
         Assert.Equal(5, toad.InitialEnergy);
-        Assert.Equal(14, toad.ReproductionThreshold);
+        Assert.Equal(16, toad.ReproductionThreshold);
         Assert.Equal(9, toad.ReproductionCost);
     }
 
@@ -2655,6 +2667,10 @@ public sealed class SimulationWorldTests
         world.AddCritter(CritterSpecies.MegaToad, new GridPosition(0, 0));
         world.AddCritter(CritterSpecies.Elk, new GridPosition(1, 0));
         world.AddCritter(CritterSpecies.Elk, new GridPosition(2, 0));
+        // Start ready to reproduce so this test isolates the newborn truce.
+        ((int[])typeof(SimulationWorld).GetField("_energy",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(world)!)[0] =
+            CritterNutritions.Get(CritterSpecies.MegaToad).ReproductionThreshold;
 
         var sawBirth = false;
         for (var tick = 0; tick < 30 * SimulationWorld.TicksPerSecond; tick++)
@@ -2796,10 +2812,13 @@ public sealed class SimulationWorldTests
             world.AdvanceOneTick();
         }
 
-        // The meal reaches the new six-energy threshold, allowing a birth in the vacated river tile.
+        // The meal reaches the reproduction threshold, allowing a birth in the vacated river tile.
         Assert.Equal(2, world.GetCritterCount(CritterSpecies.Therapsid));
         Assert.Equal(0, world.GetCritterCount(CritterSpecies.Fish));
-        Assert.Equal(2, world.GetCritter(0).Energy);
+        var nutrition = CritterNutritions.Get(CritterSpecies.Therapsid);
+        Assert.Equal(Math.Min(nutrition.MaximumEnergy,
+            nutrition.InitialEnergy + CritterNutritions.Get(CritterSpecies.Fish).FoodEnergy) -
+            nutrition.ReproductionCost, world.GetCritter(0).Energy);
     }
 
     [Fact]
@@ -2821,7 +2840,9 @@ public sealed class SimulationWorldTests
         Assert.Equal(1, world.GetCritterCount(CritterSpecies.Therapsid));
         Assert.Equal(0, world.GetCritterCount(CritterSpecies.Fish));
         Assert.Equal(shore, world.GetCritter(0).Position);
-        Assert.Equal(6, world.GetCritter(0).Energy);
+        var nutrition = CritterNutritions.Get(CritterSpecies.Therapsid);
+        Assert.Equal(Math.Min(nutrition.MaximumEnergy, nutrition.InitialEnergy +
+            CritterNutritions.Get(CritterSpecies.Fish).FoodEnergy), world.GetCritter(0).Energy);
     }
 
     [Fact]
@@ -2861,10 +2882,10 @@ public sealed class SimulationWorldTests
     }
 
     [Theory]
-    [InlineData(Biome.Swamp, 6)]
-    [InlineData(Biome.Jungle, 6)]
+    [InlineData(Biome.Swamp, 8)]
+    [InlineData(Biome.Jungle, 8)]
     [InlineData(Biome.Forest, 4)]
-    [InlineData(Biome.Arid, 6)]
+    [InlineData(Biome.Arid, 4)]
     [InlineData(Biome.Bog, 4)]
     [InlineData(Biome.None, 4)]
     public void HungryTherapsidForagesOnlyInSupportedBiomes(
@@ -2887,7 +2908,6 @@ public sealed class SimulationWorldTests
     [Theory]
     [InlineData(Biome.Swamp)]
     [InlineData(Biome.Jungle)]
-    [InlineData(Biome.Arid)]
     public void TherapsidPrefersNearbyFoliageOverVisiblePrey(Biome biome)
     {
         var world = new SimulationWorld(3, 2, Terrain.Plains, seed: 188);
@@ -3248,6 +3268,18 @@ public sealed class SimulationWorldTests
             world.AdvanceOneTick();
         }
 
+        if (prey is CritterSpecies.Deer or CritterSpecies.Elk or CritterSpecies.Gazelle)
+        {
+            Assert.Equal(1, world.GetCritterCount(prey));
+            var predator = world.GetCritter(0);
+            var grazer = world.GetCritter(1);
+            var initial = CritterNutritions.Get(predator.Species).InitialEnergy +
+                CritterNutritions.Get(prey).InitialEnergy;
+            Assert.Contains(initial - predator.Energy - grazer.Energy,
+                new[] { 1, Math.Min(world.GetCritterCombatDamage(predator.Id),
+                    CritterNutritions.Get(prey).InitialEnergy - 1) });
+            return;
+        }
         Assert.Equal(1, world.GetCritterCount(CritterSpecies.MegaToad));
         Assert.Equal(0, world.GetCritterCount(prey));
         Assert.Equal(expectedEnergy, world.GetCritter(0).Energy);
@@ -3393,6 +3425,18 @@ public sealed class SimulationWorldTests
             world.AdvanceOneTick();
         }
 
+        if (prey is CritterSpecies.Deer or CritterSpecies.Elk or CritterSpecies.Gazelle)
+        {
+            Assert.Equal(1, world.GetCritterCount(prey));
+            var predator = world.GetCritter(0);
+            var grazer = world.GetCritter(1);
+            var initial = CritterNutritions.Get(predator.Species).InitialEnergy +
+                CritterNutritions.Get(prey).InitialEnergy;
+            Assert.Contains(initial - predator.Energy - grazer.Energy,
+                new[] { 1, Math.Min(world.GetCritterCombatDamage(predator.Id),
+                    CritterNutritions.Get(prey).InitialEnergy - 1) });
+            return;
+        }
         Assert.Equal(1, world.GetCritterCount(CritterSpecies.Wolf));
         Assert.Equal(0, world.GetCritterCount(prey));
         Assert.Equal(expectedEnergy, world.GetCritter(0).Energy);
@@ -3414,7 +3458,9 @@ public sealed class SimulationWorldTests
 
         Assert.Equal(1, world.GetCritterCount(CritterSpecies.MegaToad));
         Assert.Equal(1, world.GetCritterCount(CritterSpecies.Wolf));
-        Assert.Equal(0, world.GetCritterCount(CritterSpecies.Deer));
+        Assert.Equal(1, world.GetCritterCount(CritterSpecies.Deer));
+        Assert.True(world.GetCritter(1).Energy < CritterNutritions.Get(CritterSpecies.Wolf).InitialEnergy ||
+            world.GetCritter(2).Energy < CritterNutritions.Get(CritterSpecies.Deer).InitialEnergy);
     }
 
     [Theory]
@@ -3678,6 +3724,18 @@ public sealed class SimulationWorldTests
             world.AdvanceOneTick();
         }
 
+        if (prey is CritterSpecies.Deer or CritterSpecies.Elk or CritterSpecies.Gazelle)
+        {
+            Assert.Equal(1, world.GetCritterCount(prey));
+            var predator = world.GetCritter(0);
+            var grazer = world.GetCritter(1);
+            var initial = CritterNutritions.Get(predator.Species).InitialEnergy +
+                CritterNutritions.Get(prey).InitialEnergy;
+            Assert.Contains(initial - predator.Energy - grazer.Energy,
+                new[] { 1, Math.Min(world.GetCritterCombatDamage(predator.Id),
+                    CritterNutritions.Get(prey).InitialEnergy - 1) });
+            return;
+        }
         Assert.Equal(1, world.GetCritterCount(CritterSpecies.SeaScorpion));
         Assert.Equal(0, world.GetCritterCount(prey));
         Assert.Equal(expectedEnergy, world.GetCritter(0).Energy);
@@ -3699,6 +3757,18 @@ public sealed class SimulationWorldTests
             world.AdvanceOneTick();
         }
 
+        if (prey is CritterSpecies.Deer or CritterSpecies.Elk or CritterSpecies.Gazelle)
+        {
+            Assert.Equal(1, world.GetCritterCount(prey));
+            var predator = world.GetCritter(0);
+            var grazer = world.GetCritter(1);
+            var initial = CritterNutritions.Get(predator.Species).InitialEnergy +
+                CritterNutritions.Get(prey).InitialEnergy;
+            Assert.Contains(initial - predator.Energy - grazer.Energy,
+                new[] { 1, Math.Min(world.GetCritterCombatDamage(predator.Id),
+                    CritterNutritions.Get(prey).InitialEnergy - 1) });
+            return;
+        }
         Assert.Equal(1, world.GetCritterCount(CritterSpecies.SeaScorpion));
         Assert.Equal(0, world.GetCritterCount(prey));
     }

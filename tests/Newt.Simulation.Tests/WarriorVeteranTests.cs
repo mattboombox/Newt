@@ -167,7 +167,7 @@ public sealed class WarriorVeteranTests
         {
             Assert.True(world.TryGetCritter(warrior, out var hunter));
             var prey = new GridPosition(hunter.Position.X + 1, hunter.Position.Y);
-            world.AddCritter(CritterSpecies.Deer, prey);
+            world.AddCritter(CritterSpecies.Monkey, prey);
             world.CommitEncounter(hunter.Position, prey);
         }
         Assert.True(world.TryGetCritter(warrior, out var regular));

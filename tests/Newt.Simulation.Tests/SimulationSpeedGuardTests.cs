@@ -1,126 +1,121 @@
 using Newt.Game;
+using Newt.Simulation;
 
 namespace Newt.Simulation.Tests;
 
 public sealed class SimulationSpeedGuardTests
 {
-    private static readonly TimeSpan Target = TimeSpan.FromSeconds(1d / 60);
-
     [Fact]
-    public void AutomaticSlowdownIsEnabledByDefault()
-    {
-        Assert.True(new SimulationSpeedGuard().Enabled);
-    }
+    public void AutoSpeedIsEnabledByDefault() => Assert.True(new SimulationSpeedGuard().Enabled);
 
-    [Fact]
-    public void DisablingAutomaticSlowdownPreventsFallbackAndClearsSlowHistory()
+    [Theory]
+    [InlineData(15_000, 0)]
+    [InlineData(100, 250)]
+    [InlineData(15_000, 250)]
+    public void EitherPopulationLimitImmediatelyEngagesSlowdown(int critters, int apes)
     {
         var guard = new SimulationSpeedGuard();
-        for (var update = 0; update < 3; update++)
-        {
-            Assert.False(guard.ShouldReduce(
-                32, 4_000, TimeSpan.FromMilliseconds(250), Target, false));
-        }
-
-        guard.Enabled = false;
-        Assert.False(guard.ShouldReduce(
-            32, 4_000, TimeSpan.FromSeconds(2), Target, true));
-
-        guard.Enabled = true;
-        Assert.False(guard.ShouldReduce(
-            32, 4_000, TimeSpan.FromMilliseconds(250), Target, false));
+        Assert.Equal(1, guard.GetRate(32, critters, apes));
+        Assert.True(guard.AutomaticallyReduced);
+        Assert.Equal(1, guard.GetRate(1, critters, apes));
     }
 
     [Theory]
-    [InlineData(16)]
     [InlineData(2)]
     [InlineData(4)]
     [InlineData(8)]
+    [InlineData(16)]
     [InlineData(32)]
-    public void SustainedSlowUpdatesTriggerFallback(double rate)
+    public void MaximumSpeedReturnsOnlyWhenBothPopulationsDropBelowLimits(double rate)
     {
         var guard = new SimulationSpeedGuard();
-        for (var update = 0; update < 3; update++)
-        {
-            Assert.False(guard.ShouldReduce(rate, 4_000, TimeSpan.FromMilliseconds(250), Target, false));
-        }
-        Assert.True(guard.ShouldReduce(rate, 4_000, TimeSpan.FromMilliseconds(250), Target, false));
+        Assert.Equal(1, guard.GetRate(rate, 15_000, 250));
+        Assert.Equal(1, guard.GetRate(1, 14_999, 250));
+        Assert.Equal(1, guard.GetRate(1, 15_000, 249));
+        Assert.Equal(32, guard.GetRate(1, 14_999, 249));
+        Assert.False(guard.AutomaticallyReduced);
+        Assert.Equal(32, guard.GetRate(32, 14_999, 249));
+    }
+
+    [Theory]
+    [InlineData(1)]
+    public void AutoSpeedSelectsNormalSpeedAboveLimitEvenFromLowerManualRate(double rate)
+    {
+        var guard = new SimulationSpeedGuard();
+        Assert.Equal(1, guard.GetRate(rate, 20_000, 500));
+        Assert.True(guard.AutomaticallyReduced);
+    }
+
+    [Theory]
+    [InlineData(0.125)]
+    [InlineData(0.25)]
+    [InlineData(0.5)]
+    public void PopulationSlowdownNeverIncreasesAnAlreadySlowRate(double rate)
+    {
+        var guard = new SimulationSpeedGuard();
+        Assert.Equal(rate, guard.GetRate(rate, 15_000, 0));
+        Assert.Equal(rate, guard.GetRate(rate, 0, 250));
+        Assert.False(guard.AutomaticallyReduced);
+        Assert.Equal(32, guard.GetRate(rate, 14_999, 249));
+        guard.Enabled = false;
+        Assert.Equal(rate, guard.GetRate(32, 14_999, 249));
+    }
+
+    [Fact]
+    public void DisablingGuardRestoresPreviousRate()
+    {
+        var guard = new SimulationSpeedGuard();
+        Assert.Equal(1, guard.GetRate(32, 15_000, 0));
+        guard.Enabled = false;
+        Assert.Equal(32, guard.GetRate(1, 15_000, 0));
+        Assert.False(guard.AutomaticallyReduced);
+    }
+
+    [Fact]
+    public void ManualSpeedResetDiscardsPreviousRate()
+    {
+        var guard = new SimulationSpeedGuard();
+        Assert.Equal(1, guard.GetRate(32, 15_000, 0));
+        guard.Reset();
+        Assert.Equal(1, guard.GetRate(8, 15_000, 0));
+        Assert.Equal(32, guard.GetRate(1, 14_999, 0));
     }
 
     [Theory]
     [InlineData(0.25)]
     [InlineData(1)]
-    public void LowerSpeedsAreNeverReduced(double rate)
+    [InlineData(8)]
+    public void EnablingAutoSpeedImmediatelyMaxesSpeedBelowLimits(double rate)
     {
         var guard = new SimulationSpeedGuard();
-        for (var update = 0; update < 20; update++)
-        {
-            Assert.False(guard.ShouldReduce(rate, 4_000, TimeSpan.FromSeconds(1), Target, true));
-        }
-    }
-
-    [Theory]
-    [InlineData(0)]
-    [InlineData(3_999)]
-    public void PopulationsBelowFourThousandAreNeverReduced(int critterCount)
-    {
-        var guard = new SimulationSpeedGuard();
-        for (var update = 0; update < 20; update++)
-        {
-            Assert.False(guard.ShouldReduce(
-                32, critterCount, TimeSpan.FromSeconds(1), Target, true));
-        }
+        Assert.Equal(32, guard.GetRate(rate, 14_999, 249));
+        Assert.False(guard.AutomaticallyReduced);
+        guard.Enabled = false;
+        Assert.Equal(rate, guard.GetRate(32, 14_999, 249));
+        Assert.Equal(rate, guard.GetRate(rate, 14_999, 249));
     }
 
     [Fact]
-    public void PopulationDroppingBelowThresholdClearsSlowHistory()
+    public void ApeCountIncludesRolesAndTradersButExcludesBarbariansAndOtherAnimals()
     {
-        var guard = new SimulationSpeedGuard();
-        for (var update = 0; update < 3; update++)
+        var world = new SimulationWorld(30, 20, Terrain.Plains, seed: 17);
+        for (var y = 0; y < world.Height; y++)
+        for (var x = 0; x < world.Width; x++)
+            world.SetBiome(new(x, y), Biome.Grassland);
+        Assert.True(world.TrySpawnBarbarianApeVillage(new(15, 10)));
+        Assert.Equal(0, world.NonBarbarianApeCount);
+        var species = new[] { CritterSpecies.Ape, CritterSpecies.ApeFarmer, CritterSpecies.ApeLumberjack,
+            CritterSpecies.ApeWarrior, CritterSpecies.ApeChieftain, CritterSpecies.ApeScholar,
+            CritterSpecies.ApeSailor, CritterSpecies.ApeTrader, CritterSpecies.ApeTraderSailor };
+        for (var i = 0; i < species.Length; i++)
         {
-            Assert.False(guard.ShouldReduce(
-                32, 4_000, TimeSpan.FromMilliseconds(250), Target, false));
+            var position = new GridPosition(i, 0);
+            world.SetTerrain(position, Terrain.Shallows);
+            world.AddCritter(species[i], position);
         }
-
-        Assert.False(guard.ShouldReduce(
-            32, 3_999, TimeSpan.FromMilliseconds(250), Target, false));
-        Assert.False(guard.ShouldReduce(
-            32, 4_000, TimeSpan.FromMilliseconds(250), Target, false));
-    }
-
-    [Fact]
-    public void IsolatedStallDoesNotReduceSpeed()
-    {
-        var guard = new SimulationSpeedGuard();
-        Assert.False(guard.ShouldReduce(32, 4_000, TimeSpan.FromSeconds(5), Target, true));
-        Assert.False(guard.ShouldReduce(32, 4_000, Target, Target, false));
-        for (var update = 0; update < 3; update++)
-        {
-            Assert.False(guard.ShouldReduce(32, 4_000, TimeSpan.FromMilliseconds(250), Target, false));
-        }
-    }
-
-    [Fact]
-    public void FrameworkSlowFlagDetectsOverloadEvenWhenIndividualUpdatesAreFast()
-    {
-        var guard = new SimulationSpeedGuard();
-        var reduced = false;
-        for (var update = 0; update < 70 && !reduced; update++)
-        {
-            reduced = guard.ShouldReduce(16, 4_000, TimeSpan.FromMilliseconds(1), Target, true);
-        }
-        Assert.True(reduced);
-    }
-
-    [Fact]
-    public void ResetDiscardsEarlierSlowUpdates()
-    {
-        var guard = new SimulationSpeedGuard();
-        for (var update = 0; update < 3; update++)
-        {
-            Assert.False(guard.ShouldReduce(32, 4_000, TimeSpan.FromMilliseconds(250), Target, false));
-        }
-        guard.Reset();
-        Assert.False(guard.ShouldReduce(32, 4_000, TimeSpan.FromMilliseconds(250), Target, false));
+        world.AddCritter(CritterSpecies.Deer, new(0, 1));
+        Assert.Equal(species.Length, world.NonBarbarianApeCount);
+        world.RemoveCritterAt(new(0, 0));
+        Assert.Equal(species.Length - 1, world.NonBarbarianApeCount);
     }
 }

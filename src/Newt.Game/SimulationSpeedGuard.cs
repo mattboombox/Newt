@@ -1,54 +1,35 @@
 namespace Newt.Game;
 
-/// <summary>Detects sustained host overload without changing simulation rules.</summary>
+/// <summary>Selects maximum speed below the population limits and caps speed above them.</summary>
 internal sealed class SimulationSpeedGuard
 {
     internal const double FallbackRate = 1;
-    internal const int MinimumCritterCount = 4_000;
-    private bool _enabled = true;
-    private double _slowSeconds;
+    internal const double MaximumRate = 32;
+    internal const int MinimumCritterCount = 15_000;
+    internal const int MinimumNonBarbarianApeCount = 250;
+    private double? _previousRate;
 
-    internal bool Enabled
+    internal bool Enabled { get; set; } = true;
+    internal bool AutomaticallyReduced { get; private set; }
+
+    internal double GetRate(double rate, int critterCount, int nonBarbarianApeCount)
     {
-        get => _enabled;
-        set
+        var aboveLimit = critterCount >= MinimumCritterCount ||
+            nonBarbarianApeCount >= MinimumNonBarbarianApeCount;
+        if (!Enabled)
         {
-            if (_enabled == value)
-            {
-                return;
-            }
-
-            _enabled = value;
+            var restored = _previousRate ?? rate;
             Reset();
+            return restored;
         }
+        _previousRate ??= rate;
+        AutomaticallyReduced = aboveLimit && rate >= FallbackRate;
+        return aboveLimit ? Math.Min(rate, FallbackRate) : MaximumRate;
     }
 
-    internal bool ShouldReduce(
-        double rate,
-        int critterCount,
-        TimeSpan updateDuration,
-        TimeSpan targetDuration,
-        bool runningSlowly)
+    internal void Reset()
     {
-        if (!Enabled || rate <= FallbackRate || critterCount < MinimumCritterCount ||
-            (!runningSlowly && updateDuration <= targetDuration * 1.25))
-        {
-            Reset();
-            return false;
-        }
-
-        // A single stall must not count as multiple slow updates. The framework's
-        // slow flag also catches rendering pressure and fixed-step catch-up loops.
-        _slowSeconds += Math.Min(0.25,
-            Math.Max(updateDuration.TotalSeconds, targetDuration.TotalSeconds));
-        if (_slowSeconds < 1)
-        {
-            return false;
-        }
-
-        Reset();
-        return true;
+        _previousRate = null;
+        AutomaticallyReduced = false;
     }
-
-    internal void Reset() => _slowSeconds = 0;
 }

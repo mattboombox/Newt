@@ -22,6 +22,9 @@ public sealed partial class SimulationWorld
     public const int VillageWarChancePercent = 1;
     private readonly Dictionary<int, long> _villageWarCooldowns = [];
 
+    private bool IsWarVillage(int tile) =>
+        _apeStructures.TryGetValue(tile, out var kind) && kind is ApeStructureKind.Village;
+
     internal void AdvanceVillageWarOutbreaks()
     {
         if (!LifeEnabled || !NaturalEventsEnabled || Tick < VillageWarCooldownTicks ||
@@ -46,7 +49,12 @@ public sealed partial class SimulationWorld
         if (!Eligible(village, minimum)) return false;
         if (variant == 2) return TryStartApeCivilWar(GetPosition(village));
         var opponents = _apeStructures.Where(pair => pair.Key != village &&
-                pair.Value == ApeStructureKind.Village && Eligible(pair.Key, minimum))
+                pair.Value == ApeStructureKind.Village &&
+                (_barbarianVillageTiles.Contains(pair.Key)
+                    ? !_apeWars.ContainsKey(pair.Key) && Tick >= _villageWarCooldowns.GetValueOrDefault(pair.Key) &&
+                        _apeVillageHomes.Any(home => home.Value == pair.Key &&
+                            _critterIndicesById.TryGetValue(home.Key, out var index) && IsLivingApe(_species[index]))
+                    : Eligible(pair.Key, minimum)))
             .Select(pair => pair.Key).Order().ToArray();
         // Try candidates in a random order; unreachable villages must not block reachable ones.
         for (var i = opponents.Length - 1; i >= 0; i--)
@@ -125,9 +133,11 @@ public sealed partial class SimulationWorld
             return false;
         var attacker = GetIndex(attackerPosition);
         var defender = GetIndex(defenderPosition);
-        if (attacker == defender || !IsRoadVillage(attacker) || !IsRoadVillage(defender) ||
+        if (attacker == defender || !IsRoadVillage(attacker) || !IsWarVillage(defender) ||
             _apeWars.ContainsKey(attacker) || _apeWars.ContainsKey(defender))
             return false;
+        var barbarianDefender = _barbarianVillageTiles.Contains(defender);
+        bloodWar |= barbarianDefender;
         var distances = BuildWarDistances(defender);
         if (distances[attacker] < 0)
             return false;
@@ -141,6 +151,13 @@ public sealed partial class SimulationWorld
         var war = new ApeWar(attacker, defender, distances, bloodWar);
         for (var side = 0; side < 2; side++)
         {
+            if (side == 1 && barbarianDefender)
+            {
+                // Camps fight with their existing warriors, pirates, and chiefs.
+                war.DefendingWarriors.UnionWith(residents[side].Where(id =>
+                    _species[_critterIndicesById[id]] is CritterSpecies.ApeWarrior));
+                continue;
+            }
             if (bloodWar && side == 1)
             {
                 // Keep food and wood production running; chiefs also retain their role.
@@ -255,7 +272,7 @@ public sealed partial class SimulationWorld
             var attackerLost = !IsRoadVillage(war.Attacker) ||
                 (war.CivilWar ? attackers == 0 : attackers * 10 <= war.AttackingWarriors.Count);
             var defenderLost = war.BloodWar
-                ? !IsRoadVillage(war.Defender) || !GetBloodWarTargets(war).Any()
+                ? !IsWarVillage(war.Defender) || !GetBloodWarTargets(war).Any()
                 : !IsRoadVillage(war.Defender) ||
                     (war.CivilWar ? defenders == 0 : defenders * 10 <= war.DefendingWarriors.Count);
             if (!attackerLost && !defenderLost)
@@ -311,7 +328,8 @@ public sealed partial class SimulationWorld
                 _species[index] is CritterSpecies.ApeWarrior && role != CritterSpecies.ApeWarrior && !IsVeteranWarrior(index))
                 ChangeCritterSpecies(index, role, preserveEnergy: true, preserveApeVillage: true);
         PrioritizeVillageVeterans(war.Attacker);
-        if (war.Defender != war.Attacker) PrioritizeVillageVeterans(war.Defender);
+        if (war.Defender != war.Attacker && !_barbarianVillageTiles.Contains(war.Defender))
+            PrioritizeVillageVeterans(war.Defender);
     }
 
     private bool IsSurvivingWarrior(int id) => _critterIndicesById.TryGetValue(id, out var index) &&

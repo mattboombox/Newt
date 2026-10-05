@@ -82,7 +82,7 @@ public sealed class BalanceBatchTests
     }
 
     [Fact]
-    public void NaturalOutbreaksIncludeRareZombieAndVampireStrains()
+    public void NaturalOutbreaksChooseAllThreeStrainsEqually()
     {
         var world = new SimulationWorld(40, 30, Terrain.Plains, seed: 17);
         NaturalEvents.SetEnabled(world, true);
@@ -105,8 +105,22 @@ public sealed class BalanceBatchTests
             world.RemoveCritterAt(sick.Position);
             homes[world.AddCritter(CritterSpecies.Ape, sick.Position).Value] = tile;
         }
-        Assert.InRange(counts.GetValueOrDefault(PlagueKind.Plague), 215, 265);
-        Assert.InRange(counts.GetValueOrDefault(PlagueKind.Zombie), 15, 50);
-        Assert.InRange(counts.GetValueOrDefault(PlagueKind.Vampire), 15, 50);
+        Assert.InRange(counts.GetValueOrDefault(PlagueKind.Plague), 70, 130);
+        Assert.InRange(counts.GetValueOrDefault(PlagueKind.Zombie), 70, 130);
+        Assert.InRange(counts.GetValueOrDefault(PlagueKind.Vampire), 70, 130);
+    }
+
+    [Fact]
+    public void UndeadApesDealOneDamage()
+    {
+        Assert.Equal(1, SimulationWorld.GetCombatDamage(CritterSpecies.UndeadApe));
+        var world = new SimulationWorld(5, 5, Terrain.Plains, seed: 17);
+        world.AddCritter(CritterSpecies.UndeadApe, new(1, 1));
+        var victim = world.AddCritter(CritterSpecies.Ape, new(2, 1));
+        Assert.True(world.TryGetCritter(victim, out var before));
+        typeof(SimulationWorld).GetMethod("ApplyCombatDamage", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(world, [0, 1]);
+        Assert.True(world.TryGetCritter(victim, out var after));
+        Assert.Equal(before.Energy - 1, after.Energy);
     }
 }

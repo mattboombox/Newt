@@ -4,6 +4,68 @@ namespace Newt.Simulation.Tests;
 
 public sealed class CombatProtectionTests
 {
+    [Theory]
+    [InlineData(CritterSpecies.Deer)]
+    [InlineData(CritterSpecies.Elk)]
+    [InlineData(CritterSpecies.Gazelle)]
+    public void HerbivoresDealOneDamageAndEveryEligiblePredatorMustFightThem(CritterSpecies species)
+    {
+        var sawRetaliation = false;
+        var sawPredatorHit = false;
+        foreach (var predator in Enum.GetValues<CritterSpecies>().Where(p => SimulationWorld.CanEat(p, species)))
+        for (ulong seed = 1; seed <= 20; seed++)
+        {
+            var world = new SimulationWorld(2, 1, Terrain.Shallows, seed);
+            var attackerPosition = new GridPosition(0, 0);
+            var defenderPosition = new GridPosition(1, 0);
+            var attacker = world.AddCritter(predator, attackerPosition);
+            var defender = world.AddCritter(species, defenderPosition);
+            var beforeAttacker = world.GetCritter(0).Energy;
+            var beforeDefender = world.GetCritter(1).Energy;
+            Assert.Equal(1, world.GetCritterCombatDamage(defender));
+
+            world.CommitEncounter(attackerPosition, defenderPosition);
+
+            Assert.True(world.TryGetCritter(attacker, out var afterAttacker));
+            Assert.True(world.TryGetCritter(defender, out var afterDefender), $"{predator} instantly killed {species}");
+            if (afterDefender.Energy < beforeDefender)
+            {
+                sawPredatorHit = true;
+                Assert.Equal(beforeAttacker, afterAttacker.Energy);
+                Assert.Equal(beforeDefender - Math.Min(world.GetCritterCombatDamage(attacker),
+                    beforeDefender - 1), afterDefender.Energy);
+            }
+            else
+            {
+                sawRetaliation = true;
+                Assert.Equal(beforeDefender, afterDefender.Energy);
+                Assert.Equal(beforeAttacker - 1, afterAttacker.Energy);
+            }
+        }
+        Assert.True(sawRetaliation);
+        Assert.True(sawPredatorHit);
+    }
+
+    [Theory]
+    [InlineData(CritterSpecies.Deer)]
+    [InlineData(CritterSpecies.Elk)]
+    [InlineData(CritterSpecies.Gazelle)]
+    public void SpiderCannotStoreLivingHerbivoreWithoutFighting(CritterSpecies species)
+    {
+        for (ulong seed = 1; seed <= 20; seed++)
+        {
+            var world = new SimulationWorld(2, 1, Terrain.Plains, seed);
+            var attackerPosition = new GridPosition(0, 0);
+            var web = new GridPosition(1, 0);
+            var spider = world.AddCritter(CritterSpecies.MegaSpider, attackerPosition);
+            Assert.True(world.TryCreateMegaSpiderWeb(spider, web));
+            var prey = world.AddCritter(species, web);
+            world.CommitEncounter(attackerPosition, web);
+            Assert.True(world.TryGetCritter(prey, out _));
+            Assert.Equal(0, world.GetMegaSpiderWebFood(web));
+        }
+    }
+
     [Fact]
     public void ChieftainsMustExchangeCombatHitsWithTherapsids()
     {
@@ -59,11 +121,13 @@ public sealed class CombatProtectionTests
             world.CommitEncounter(attackPosition, traderPosition);
             Assert.True(world.TryGetCritter(trader, out var afterTrader), $"{attackerSpecies} ate {traderSpecies}");
             Assert.True(world.TryGetCritter(attacker, out var afterAttacker));
-            var lost = beforeTrader.Energy + beforeAttacker.Energy - afterTrader.Energy - afterAttacker.Energy;
             if (SimulationWorld.CanEat(attackerSpecies, traderSpecies))
-                Assert.Contains(lost, new[] { 1, world.GetCritterCombatDamage(attacker) });
+                AssertTraderCombatEnergy(beforeAttacker, beforeTrader, afterAttacker, afterTrader);
             else
-                Assert.Equal(0, lost);
+            {
+                Assert.Equal(beforeAttacker.Energy, afterAttacker.Energy);
+                Assert.Equal(beforeTrader.Energy, afterTrader.Energy);
+            }
         }
     }
 
@@ -92,11 +156,12 @@ public sealed class CombatProtectionTests
             var attacker = world.AddCritter(attackerSpecies, attackPosition);
             Assert.True(world.TryAssignApeToVillage(attacker, camp));
             var trader = world.AddCritter(traderSpecies, traderPosition);
-            var total = world.GetCritter(0).Energy + world.GetCritter(1).Energy;
+            var beforeAttacker = world.GetCritter(0);
+            var beforeTrader = world.GetCritter(1);
             world.CommitEncounter(attackPosition, traderPosition);
             Assert.True(world.TryGetCritter(trader, out var afterTrader));
             Assert.True(world.TryGetCritter(attacker, out var afterAttacker));
-            Assert.Contains(total - afterTrader.Energy - afterAttacker.Energy, new[] { 1, 3 });
+            AssertTraderCombatEnergy(beforeAttacker, beforeTrader, afterAttacker, afterTrader);
         }
     }
 
@@ -116,12 +181,27 @@ public sealed class CombatProtectionTests
             Assert.True(world.TrySpawnCritter(traderSpecies, web));
             Assert.True(world.TryGetCritterAt(web, out var trader));
             Assert.True(world.IsCritterCaughtInMegaSpiderWeb(trader.Id));
-            var total = trader.Energy + world.GetCritter(0).Energy;
+            var beforeSpider = world.GetCritter(0);
             world.CommitEncounter(attackPosition, web);
             Assert.True(world.TryGetCritter(trader.Id, out var afterTrader));
             Assert.True(world.TryGetCritter(spider, out var afterSpider));
-            Assert.Contains(total - afterTrader.Energy - afterSpider.Energy, new[] { 1, 2 });
+            AssertTraderCombatEnergy(beforeSpider, trader, afterSpider, afterTrader);
             Assert.Equal(0, world.GetMegaSpiderWebFood(web));
+        }
+    }
+    private static void AssertTraderCombatEnergy(CritterSnapshot beforeAttacker, CritterSnapshot beforeTrader,
+        CritterSnapshot afterAttacker, CritterSnapshot afterTrader)
+    {
+        var stolen = beforeTrader.Energy - afterTrader.Energy;
+        if (stolen > 0)
+        {
+            Assert.Equal(Math.Min(CritterNutritions.Get(beforeAttacker.Species).MaximumEnergy,
+                beforeAttacker.Energy + stolen), afterAttacker.Energy);
+        }
+        else
+        {
+            Assert.Equal(beforeTrader.Energy, afterTrader.Energy);
+            Assert.Equal(beforeAttacker.Energy - 1, afterAttacker.Energy);
         }
     }
     [Theory]
