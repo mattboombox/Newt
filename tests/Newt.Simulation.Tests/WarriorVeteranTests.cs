@@ -6,6 +6,7 @@ public sealed class WarriorVeteranTests
 {
     [Theory]
     [InlineData(CritterSpecies.ApeWarrior, false, CritterSpecies.Wolf, Terrain.Plains)]
+    [InlineData(CritterSpecies.ApeRoyalGuard, false, CritterSpecies.Wolf, Terrain.Plains)]
     [InlineData(CritterSpecies.ApeWarrior, true, CritterSpecies.Wolf, Terrain.Plains)]
     [InlineData(CritterSpecies.Ape, true, CritterSpecies.Wolf, Terrain.Plains)]
     [InlineData(CritterSpecies.ApeSailor, true, CritterSpecies.SeaScorpion, Terrain.Shallows)]
@@ -51,7 +52,7 @@ public sealed class WarriorVeteranTests
         }
         Assert.Equal(barbarian && terrain == Terrain.Shallows, world.IsApePirate(id));
         Assert.True(world.TryGetCritter(id, out var veteran));
-        Assert.Equal(barbarian ? 5 : 6, world.GetCritterCombatDamage(id));
+        Assert.Equal(barbarian ? 5 : SimulationWorld.GetCombatDamage(species) + 2, world.GetCritterCombatDamage(id));
         Assert.Equal(CritterNutritions.Get(species).MaximumEnergy, veteran.Energy);
         if (barbarian)
         {
@@ -91,7 +92,7 @@ public sealed class WarriorVeteranTests
             Assert.True(world.TrySpawnBarbarianApeVillage(camp));
             while (world.CritterCount > 0) world.RemoveCritterAt(world.GetCritter(0).Position);
         }
-        // Keep this combat test's zombie strain immune to the warrior's ID remainder.
+        // Use a final-stage undead opponent so the defeated body does not rise again.
         for (var x = 0; x < 4; x++)
             world.AddCritter(CritterSpecies.Ape, new GridPosition(x, 0));
         var warrior = world.AddCritter(CritterSpecies.ApeWarrior, new GridPosition(10, 10));
@@ -102,14 +103,22 @@ public sealed class WarriorVeteranTests
             Assert.True(world.TryGetCritter(warrior, out var fighter));
             if (sailing) world.SetTerrain(fighter.Position, Terrain.Ocean);
             Assert.Equal(sailing, world.IsApePirate(warrior));
-            var enemy = world.AddCritter(CritterSpecies.UndeadApe, new GridPosition(fighter.Position.X + 1, fighter.Position.Y));
+            var enemy = world.AddCritter(CritterSpecies.UndeadWarrior, new GridPosition(fighter.Position.X + 1, fighter.Position.Y));
             var immunity = (Dictionary<int, int>)typeof(SimulationWorld)
                 .GetField("_plagueImmunityRemainders", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
                 .GetValue(world)!;
-            immunity[enemy.Value] = warrior.Value % 5;
+            immunity[enemy.Value] = warrior.Value % 2;
             for (var exchange = 0; exchange < 100 && world.TryGetCritter(enemy, out var opponent); exchange++)
             {
                 Assert.True(world.TryGetCritter(warrior, out fighter));
+                // Isolate promotion from the tougher opponent's cumulative combat damage.
+                var indices = (Dictionary<int, int>)typeof(SimulationWorld)
+                    .GetField("_critterIndicesById", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                    .GetValue(world)!;
+                var energies = (int[])typeof(SimulationWorld)
+                    .GetField("_energy", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                    .GetValue(world)!;
+                energies[indices[warrior.Value]] = CritterNutritions.Get(CritterSpecies.ApeWarrior).MaximumEnergy;
                 world.CommitEncounter(defending ? opponent.Position : fighter.Position,
                     defending ? fighter.Position : opponent.Position);
             }

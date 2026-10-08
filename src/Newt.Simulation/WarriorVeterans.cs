@@ -6,7 +6,7 @@ public sealed partial class SimulationWorld
     private const int WarriorVeteranKillThreshold = 5;
 
     private bool CanEarnWarriorVeterancy(int index) =>
-        _species[index] is CritterSpecies.ApeWarrior ||
+        IsApeMilitary(_species[index]) ||
         (IsBarbarianApe(index) && _species[index] is (CritterSpecies.Ape or CritterSpecies.ApeSailor));
 
     private bool IsVeteranWarrior(int index) => CanEarnWarriorVeterancy(index) &&
@@ -18,7 +18,7 @@ public sealed partial class SimulationWorld
         {
             var id = _critterIds[index].Value;
             _warriorCombatKills[id] = _warriorCombatKills.GetValueOrDefault(id) + 1;
-            if (_warriorCombatKills[id] == WarriorVeteranKillThreshold)
+            if (_species[index] is not CritterSpecies.ApeBomber && _warriorCombatKills[id] == WarriorVeteranKillThreshold)
                 _energy[index] = CritterNutritions.Get(_species[index]).MaximumEnergy;
         }
     }

@@ -52,14 +52,19 @@ public sealed class VampireColonyTests
     {
         var small = CreateWorld(49);
         Assert.False(small.TrySendApeColonist(Lair));
+        Assert.False(small.TrySendVampireColonist(Lair, out var smallStatus));
+        Assert.Equal("Needs another regular village with 50+ residents", smallStatus);
         var world = CreateWorld(50);
-        Assert.True(world.TrySendApeColonist(Lair));
+        Assert.True(world.TrySendVampireColonist(Lair, out var launchedStatus));
+        Assert.Equal("Vampire colonist launched!", launchedStatus);
         var colonist = Colonist(world);
         Assert.Equal(CritterSpecies.Vampire, colonist.Species);
         Assert.Equal(100, colonist.Energy);
         Assert.Equal(100, colonist.MaximumEnergy);
         Assert.False(colonist.CanReproduce);
         Assert.False(world.TrySendApeColonist(Lair));
+        Assert.False(world.TrySendVampireColonist(Lair, out var duplicateStatus));
+        Assert.Equal("This lair already has a traveling colonist", duplicateStatus);
         Assert.Equal(2, world.GetVampireLairPopulation(Lair));
     }
 
@@ -119,6 +124,8 @@ public sealed class VampireColonyTests
             world.SetTerrain(new(0, y), Terrain.Mountain);
         }
         Assert.False(world.TrySendApeColonist(Lair));
+        Assert.False(world.TrySendVampireColonist(Lair, out var status));
+        Assert.Equal("No reachable colony site near another 50+ resident village", status);
     }
 
     [Fact]

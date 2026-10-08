@@ -12,8 +12,11 @@ public sealed partial class SimulationWorld
     }
     private readonly Dictionary<int, VampireColony> _vampireColonists = [];
 
-    public bool TrySendVampireColonist(GridPosition lair)
+    public bool TrySendVampireColonist(GridPosition lair) => TrySendVampireColonist(lair, out _);
+
+    public bool TrySendVampireColonist(GridPosition lair, out string status)
     {
+        status = "Select an active vampire lair";
         if (!LifeEnabled || !Contains(lair) || !_vampireLairs.Contains(GetIndex(lair)))
             return false;
         var origin = GetIndex(lair);
@@ -23,20 +26,42 @@ public sealed partial class SimulationWorld
             .OrderBy(tile => WrappedManhattanDistance(lair, GetPosition(tile)))
             .ThenBy(tile => tile).DefaultIfEmpty(-1).First();
         if (_vampireColonists.Values.Any(colony => colony.Origin == origin))
+        {
+            status = "This lair already has a traveling colonist";
             return false;
+        }
         var scout = _vampireHomes.Where(pair => pair.Value == origin && _critterIndicesById.ContainsKey(pair.Key))
             .Select(pair => _critterIndicesById[pair.Key]).DefaultIfEmpty(-1).First();
         if (scout < 0)
+        {
+            status = "This lair has no resident vampire";
             return false;
+        }
         var spawn = RoadNeighbors(origin).FirstOrDefault(tile => _occupants[tile] < 0 &&
             CanLiveOn(CritterSpecies.Vampire, tile) && !_apeStructures.ContainsKey(tile) &&
             !_vampireLairs.Contains(tile) && !_teleporters.Contains(tile), -1);
-        if (spawn < 0 || !FindVampireColonySite(scout, spawn, huntingVillage, out var village, out var target, out var path))
+        if (spawn < 0)
+        {
+            status = "No free spawn tile beside this lair";
             return false;
+        }
+        if (!_apeStructures.Any(pair => pair.Value is ApeStructureKind.Village &&
+            pair.Key != huntingVillage && IsRoadVillage(pair.Key) &&
+            GetApeVillageResidentCountByTile(pair.Key) >= VampireColonyVillagePopulation))
+        {
+            status = "Needs another regular village with 50+ residents";
+            return false;
+        }
+        if (!FindVampireColonySite(scout, spawn, huntingVillage, out var village, out var target, out var path))
+        {
+            status = "No reachable colony site near another 50+ resident village";
+            return false;
+        }
         var id = AddCritter(CritterSpecies.Vampire, GetPosition(spawn));
         _energy[_critterIndicesById[id.Value]] = ApeSettlerInitialEnergy;
         _vampireColonists[id.Value] = new(origin, huntingVillage, village, target);
         _apeSettlerPaths[id.Value] = (target, path!);
+        status = "Vampire colonist launched!";
         return true;
     }
 

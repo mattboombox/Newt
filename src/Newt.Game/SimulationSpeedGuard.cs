@@ -7,7 +7,6 @@ internal sealed class SimulationSpeedGuard
     internal const double MaximumRate = 32;
     internal const int MinimumCritterCount = 15_000;
     internal const int MinimumNonBarbarianApeCount = 250;
-    private double? _previousRate;
 
     internal bool Enabled { get; set; } = true;
     internal bool AutomaticallyReduced { get; private set; }
@@ -18,18 +17,15 @@ internal sealed class SimulationSpeedGuard
             nonBarbarianApeCount >= MinimumNonBarbarianApeCount;
         if (!Enabled)
         {
-            var restored = _previousRate ?? rate;
             Reset();
-            return restored;
+            return rate;
         }
-        _previousRate ??= rate;
         AutomaticallyReduced = aboveLimit && rate >= FallbackRate;
         return aboveLimit ? Math.Min(rate, FallbackRate) : MaximumRate;
     }
 
     internal void Reset()
     {
-        _previousRate = null;
         AutomaticallyReduced = false;
     }
 }

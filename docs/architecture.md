@@ -51,8 +51,9 @@ if no adjacent habitat is open, the parent retains that energy for a later tick.
 
 The Events category includes Colonist, Plague, and Zombie Plague tools. Left-click a living
 Ape to seed an outbreak. Each new outbreak of Plague, Zombie Plague, or Vampire
-Plague randomly chooses a remainder from zero through four; apes with matching
-`ID % 5` resist that outbreak (about 20%). Spread and reanimated zombies retain
+Plague randomly chooses a remainder of zero or one; apes with matching
+`ID % 2` resist that outbreak (about half). Lich-borne zombie plague uses the same
+immunity rule. Spread and reanimated zombies retain
 the originating outbreak's remainder, while later outbreaks can infect earlier
 survivors. Sailors and vampires retain unconditional immunity. Every simulation
 second, infected apes expose their eight neighboring

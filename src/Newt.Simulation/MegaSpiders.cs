@@ -139,7 +139,7 @@ public sealed partial class SimulationWorld
         tileIndex >= 0 && tileIndex < _terrain.Length &&
         _surfaceCovers[tileIndex] is SurfaceCover.None &&
         _surfaceWater[tileIndex] is SurfaceWaterKind.None &&
-        _biomes[tileIndex] is not (Biome.Taiga or Biome.Bog or Biome.Tundra or Biome.Arctic) &&
+        _biomes[tileIndex] is Biome.Swamp or Biome.Jungle or Biome.Forest or Biome.Taiga &&
         _terrain[tileIndex] is Terrain.Beach or Terrain.Lowlands or
             Terrain.Canyon or Terrain.Trench or Terrain.Plains or Terrain.Hills;
 

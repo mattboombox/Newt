@@ -49,12 +49,12 @@ public sealed class ApeTests
         var dogs = Enumerable.Range(0, world.CritterCount).Select(world.GetCritter)
             .Where(critter => critter.Species is CritterSpecies.Dog)
             .ToArray();
-        Assert.Equal(5, dogs.Length);
-        Assert.Equal(5, world.GetApeVillageDogCapacity(camp));
+        Assert.Equal(8, dogs.Length);
+        Assert.Equal(8, world.GetApeVillageDogCapacity(camp));
         var dog = dogs[0];
         Assert.Equal(camp, world.GetApeHomeVillage(dog.Id));
         Assert.True(world.IsBarbarianApe(dog.Id));
-        Assert.Equal(5, world.GetBarbarianPopulationBySpecies()[(int)CritterSpecies.Dog]);
+        Assert.Equal(8, world.GetBarbarianPopulationBySpecies()[(int)CritterSpecies.Dog]);
     }
 
     [Fact]
@@ -226,8 +226,8 @@ public sealed class ApeTests
         foreach (var species in Enum.GetValues<CritterSpecies>())
         {
             Assert.Equal(SimulationWorld.CanEat(CritterSpecies.ApeWarrior, species), SimulationWorld.CanEat(CritterSpecies.Dog, species));
-            // Vampires eat living apes, so dogs are an exception to the warrior diet alias.
-            Assert.Equal(species is not CritterSpecies.Vampire && SimulationWorld.CanEat(species, CritterSpecies.ApeWarrior),
+            // Ape-only hunters do not inherit the dog-to-warrior diet alias.
+            Assert.Equal(species is not (CritterSpecies.Vampire or CritterSpecies.Lich or CritterSpecies.UndeadWarrior) && SimulationWorld.CanEat(species, CritterSpecies.ApeWarrior),
                 SimulationWorld.CanEat(species, CritterSpecies.Dog));
         }
     }
@@ -372,13 +372,13 @@ public sealed class ApeTests
         Assert.Equal(0, world.SickApeCount);
 
         Assert.True(world.TryInfectApeAt(ape, PlagueKind.Plague, 0));
-        Assert.True(world.TryInfectApeAt(sailor, PlagueKind.Zombie, 0));
-        Assert.False(world.TryInfectApeAt(immune, PlagueKind.Plague, 0));
+        Assert.True(world.TryInfectApeAt(sailor, PlagueKind.Zombie, 1));
+        Assert.False(world.TryInfectApeAt(immune, PlagueKind.Plague, 1));
         Assert.Equal(2, world.SickApeCount);
         Assert.Equal(5, world.CritterCount);
 
         Assert.True(world.TryInfectApeAt(ape, PlagueKind.Zombie, 0));
-        Assert.False(world.TryInfectApeAt(sailor, PlagueKind.Zombie, 0));
+        Assert.False(world.TryInfectApeAt(sailor, PlagueKind.Zombie, 1));
         Assert.Equal(2, world.SickApeCount);
         Assert.True(world.RemoveCritterAt(healthy));
         Assert.Equal(2, world.SickApeCount);
@@ -393,29 +393,21 @@ public sealed class ApeTests
     [InlineData(PlagueKind.Zombie)]
     public void PlagueSpreadsOneRingPerSecondIncludingDiagonalsAndHorizontalWrap(PlagueKind kind)
     {
-        var world = CreatePlagueWorld(6, 3);
-        foreach (var position in AllPositions(world))
-        {
-            world.AddCritter(CritterSpecies.Ape, position);
-        }
-        Assert.True(world.TryInfectApeAt(new GridPosition(0, 0), kind, 0));
+        var world = CreatePlagueWorld(5, 3);
+        foreach (var position in AllPositions(world)) world.AddCritter(CritterSpecies.Ape, position);
+        Assert.True(world.TryInfectApeAt(new(0, 0), kind, 0));
         AdvancePlagueTicks(world, SimulationWorld.PlagueSpreadIntervalTicks);
-
-        Assert.Equal(kind, CritterAt(world, new GridPosition(1, 0)).Plague);
-        Assert.Equal(kind, CritterAt(world, new GridPosition(1, 1)).Plague);
-        Assert.Equal(kind, CritterAt(world, new GridPosition(5, 0)).Plague);
-        Assert.Equal(kind, CritterAt(world, new GridPosition(5, 1)).Plague);
-        Assert.Equal(PlagueKind.None, CritterAt(world, new GridPosition(2, 0)).Plague);
-        Assert.Equal(PlagueKind.None, CritterAt(world, new GridPosition(0, 2)).Plague);
-        Assert.False(CritterAt(world, new GridPosition(4, 0)).IsPlagueImmune);
-        Assert.False(world.TryInfectApeAt(new GridPosition(4, 0), kind, 0));
-        Assert.Equal(PlagueKind.None, CritterAt(world, new GridPosition(4, 0)).Plague);
-        Assert.Equal(PlagueKind.None, CritterAt(world, new GridPosition(4, 1)).Plague);
-
+        Assert.Equal(PlagueKind.None, CritterAt(world, new(1, 0)).Plague);
+        Assert.Equal(kind, CritterAt(world, new(1, 1)).Plague);
+        Assert.Equal(kind, CritterAt(world, new(4, 0)).Plague);
+        Assert.Equal(PlagueKind.None, CritterAt(world, new(4, 1)).Plague);
+        Assert.Equal(PlagueKind.None, CritterAt(world, new(2, 0)).Plague);
+        Assert.Equal(PlagueKind.None, CritterAt(world, new(0, 2)).Plague);
+        Assert.False(world.TryInfectApeAt(new(3, 0), kind, 0));
         AdvancePlagueTicks(world, SimulationWorld.PlagueSpreadIntervalTicks);
-        Assert.Equal(kind, CritterAt(world, new GridPosition(2, 0)).Plague);
-        Assert.Equal(kind, CritterAt(world, new GridPosition(4, 1)).Plague);
-        Assert.Equal(PlagueKind.None, CritterAt(world, new GridPosition(4, 0)).Plague);
+        Assert.Equal(kind, CritterAt(world, new(2, 0)).Plague);
+        Assert.Equal(kind, CritterAt(world, new(3, 1)).Plague);
+        Assert.Equal(PlagueKind.None, CritterAt(world, new(3, 0)).Plague);
     }
 
     [Theory]
@@ -477,12 +469,12 @@ public sealed class ApeTests
         var second = new GridPosition(1, 0);
         world.AddCritter(CritterSpecies.Ape, first);
         var id = world.AddCritter(CritterSpecies.Ape, second);
-        Assert.True(world.TryInfectApeAt(second, PlagueKind.Plague, 0));
+        Assert.True(world.TryInfectApeAt(second, PlagueKind.Plague, 1));
         AdvancePlagueTicks(world, SimulationWorld.PlagueDrainIntervalTicks - 1);
         Assert.True(world.RemoveCritterAt(first));
-        Assert.True(world.TryInfectApeAt(second, PlagueKind.Zombie, 0));
-        Assert.False(world.TryInfectApeAt(second, PlagueKind.Plague, 0));
-        Assert.False(world.TryInfectApeAt(second, PlagueKind.Zombie, 0));
+        Assert.True(world.TryInfectApeAt(second, PlagueKind.Zombie, 1));
+        Assert.False(world.TryInfectApeAt(second, PlagueKind.Plague, 1));
+        Assert.False(world.TryInfectApeAt(second, PlagueKind.Zombie, 1));
         world.AdvanceOneTick();
         Assert.True(world.TryGetCritter(id, out var infected));
         Assert.Equal(PlagueKind.Zombie, infected.Plague);
@@ -497,7 +489,7 @@ public sealed class ApeTests
     {
         foreach (var species in Enum.GetValues<CritterSpecies>())
         {
-            Assert.Equal(species is CritterSpecies.Dog or CritterSpecies.Ape or CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack or CritterSpecies.ApeSailor or CritterSpecies.ApeWarrior or CritterSpecies.ApeScholar or CritterSpecies.ApeChieftain,
+            Assert.Equal(species is CritterSpecies.Dog or CritterSpecies.Ape or CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack or CritterSpecies.ApeSailor or CritterSpecies.ApeWarrior or CritterSpecies.ApeBomber or CritterSpecies.ApeLudditePriest or CritterSpecies.ApeBishop or CritterSpecies.ApeScholar or CritterSpecies.ApeChieftain or CritterSpecies.ApeKing or CritterSpecies.ApeQueen or CritterSpecies.ApeRoyalGuard or CritterSpecies.ApeTrader or CritterSpecies.ApeTraderSailor,
                 SimulationWorld.CanEat(CritterSpecies.UndeadApe, species));
         }
         var world = CreatePlagueWorld(2, 1, Terrain.Ice);
@@ -528,7 +520,7 @@ public sealed class ApeTests
             if (!world.TryGetCritter(sailor, out _))
             {
                 sailorsKilled++;
-                Assert.Equal(1, world.GetCritterCount(CritterSpecies.UndeadApe));
+                Assert.Equal(1, world.GetCritterCount(CritterSpecies.UndeadApe) + world.GetCritterCount(CritterSpecies.UndeadWarrior));
             }
             else
                 Assert.Equal(0, world.GetCritterCount(CritterSpecies.UndeadApe));
@@ -575,10 +567,12 @@ public sealed class ApeTests
             }
             world.TryInfectApeAt(new GridPosition(0, 0), PlagueKind.Zombie, 0);
         }
+        var sawUndead = false;
         for (var tick = 0; tick < 100 * SimulationWorld.TicksPerSecond; tick++)
         {
             first.AdvanceOneTick();
             second.AdvanceOneTick();
+            sawUndead |= first.GetCritterCount(CritterSpecies.UndeadApe) > 0;
             Assert.Equal(first.CritterCount, second.CritterCount);
             for (var index = 0; index < first.CritterCount; index++)
             {
@@ -587,7 +581,7 @@ public sealed class ApeTests
                 Assert.Equal(critter, CritterAt(first, critter.Position));
             }
         }
-        Assert.True(first.GetCritterCount(CritterSpecies.UndeadApe) > 0);
+        Assert.True(sawUndead);
     }
 
     [Theory]
@@ -631,7 +625,7 @@ public sealed class ApeTests
     {
         var (world, village) = CreateVillageForPlague(201);
         var target = Enumerable.Range(0, world.CritterCount).Select(world.GetCritter)
-            .First(critter => !critter.IsPlagueImmune && critter.Id.Value % 5 != 0);
+            .First(critter => !critter.IsPlagueImmune && critter.Id.Value % 2 != 0);
         Assert.True(world.TryInfectApeAt(target.Position, kind, 0));
 
         for (var attempt = 0; attempt < 1000; attempt++)
@@ -717,11 +711,11 @@ public sealed class ApeTests
     {
         var world = CreatePlagueWorld(5, 1);
         for (var x = 0; x < 5; x++) world.AddCritter(CritterSpecies.Ape, new(x, 0));
-        Assert.True(world.TryInfectApeAt(new(0, 0), kind, 2));
+        Assert.True(world.TryInfectApeAt(new(1, 0), kind, 1));
         AdvancePlagueTicks(world, 2 * SimulationWorld.PlagueSpreadIntervalTicks);
-        Assert.Equal(PlagueKind.None, CritterAt(world, new(1, 0)).Plague);
-        Assert.Equal(kind, CritterAt(world, new(4, 0)).Plague);
-        Assert.Equal(kind, CritterAt(world, new(3, 0)).Plague);
+        Assert.Equal(kind, CritterAt(world, new(1, 0)).Plague);
+        Assert.Equal(PlagueKind.None, CritterAt(world, new(4, 0)).Plague);
+        Assert.Equal(PlagueKind.None, CritterAt(world, new(3, 0)).Plague);
     }
 
     private static SimulationWorld CreatePlagueWorld(int width, int height, Terrain terrain = Terrain.Plains)
@@ -763,7 +757,7 @@ public sealed class ApeTests
         {
             var isApePrey = species is not
                 (CritterSpecies.Dog or CritterSpecies.Plankton or CritterSpecies.Worm or CritterSpecies.ToothedWhale or CritterSpecies.BaleenWhale or
-                    CritterSpecies.ApeTrader or CritterSpecies.ApeTraderSailor or CritterSpecies.Ape or CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack or CritterSpecies.ApeSailor or CritterSpecies.ApeWarrior or CritterSpecies.ApeScholar or CritterSpecies.ApeChieftain);
+                    CritterSpecies.ApeTrader or CritterSpecies.ApeTraderSailor or CritterSpecies.Ape or CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack or CritterSpecies.ApeSailor or CritterSpecies.ApeWarrior or CritterSpecies.ApeBomber or CritterSpecies.ApeLudditePriest or CritterSpecies.ApeBishop or CritterSpecies.ApeScholar or CritterSpecies.ApeChieftain or CritterSpecies.ApeKing or CritterSpecies.ApeQueen or CritterSpecies.ApeRoyalGuard);
             Assert.Equal(
                 isApePrey,
                 SimulationWorld.CanEat(CritterSpecies.Ape, species));
@@ -1869,6 +1863,8 @@ public sealed class ApeTests
             CritterSpecies.MegaToad,
             CritterSpecies.Wolf,
             CritterSpecies.UndeadApe,
+            CritterSpecies.Lich,
+            CritterSpecies.UndeadWarrior,
         };
         Assert.Equal(
             expectedPrey,

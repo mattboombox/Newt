@@ -36,4 +36,13 @@ public enum CritterSpecies : byte
     Vampire,
     ApeTrader,
     ApeTraderSailor,
+    Lich,
+    UndeadWarrior,
+    ApeLudditePriest,
+    ApeBomber,
+    ApeKing,
+    ApeQueen,
+    ApeBishop,
+    ApeRoyalGuard,
+    Snail,
 }

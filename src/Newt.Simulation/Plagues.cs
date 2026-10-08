@@ -12,38 +12,39 @@ public sealed partial class SimulationWorld
     private readonly Dictionary<int, (PlagueKind Kind, long InfectedTick, long DrainTick)> _plagues = [];
     private readonly Dictionary<int, int> _plagueImmunityRemainders = [];
 
+    public int SickCritterCount => _plagues.Count;
     /// <summary>Infected living apes and specialists; excludes undead and vampires.</summary>
-    public int SickApeCount => _plagues.Count;
+    public int SickApeCount => _plagues.Keys.Count(id => _critterIndicesById.TryGetValue(id, out var index) && IsLivingApe(_species[index]));
 
-    /// <summary>Seeds an outbreak with a random immune ID remainder, protecting about one ape in five.</summary>
+    /// <summary>Seeds an outbreak with a random immune ID remainder, protecting about half of apes.</summary>
     public bool TryInfectApeAt(GridPosition position, PlagueKind kind) =>
-        TryInfectApeAt(position, kind, NextInt(5));
+        TryInfectApeAt(position, kind, NextInt(2));
 
-    internal bool TryInfectApeAt(GridPosition position, PlagueKind kind, int immuneRemainder)
+    internal bool TryInfectApeAt(GridPosition position, PlagueKind kind, int immuneRemainder, int? lichOrigin = null)
+        => TryInfectCritterAt(position, kind, immuneRemainder, lichOrigin);
+
+    /// <summary>Seeds an outbreak; the outbreak's immune ID remainder is shared by every subsequent infection.</summary>
+    public bool TryInfectCritterAt(GridPosition position, PlagueKind kind) =>
+        TryInfectCritterAt(position, kind, NextInt(2));
+
+    internal bool TryInfectCritterAt(GridPosition position, PlagueKind kind, int immuneRemainder, int? lichOrigin = null)
     {
         if (kind is not (PlagueKind.Plague or PlagueKind.Zombie or PlagueKind.Vampire) || !Contains(position))
         {
             return false;
         }
         var index = _occupants[GetIndex(position)];
-        if (index < 0 || !IsLivingApe(_species[index]) ||
-            _species[index] is CritterSpecies.ApeSailor || _critterIds[index].Value % 5 == immuneRemainder)
+        if (index < 0 || _critterIds[index].Value % 2 == immuneRemainder ||
+            (!IsLivingApe(_species[index]) || _species[index] is CritterSpecies.ApeSailor))
         {
             return false;
         }
         var id = _critterIds[index].Value;
-        if (_species[index] is CritterSpecies.ApeWarrior or CritterSpecies.ApeScholar or CritterSpecies.ApeChieftain)
-        {
-            ChangeCritterSpecies(
-                index,
-                CritterSpecies.Ape,
-                preserveEnergy: true,
-                preserveApeVillage: true);
-        }
         if (_plagues.TryGetValue(id, out var infection))
         {
             // Stronger strains supersede ordinary plague without resetting its damage clock.
-            if (infection.Kind is PlagueKind.Vampire || kind == infection.Kind || kind is PlagueKind.Plague)
+            if (kind == infection.Kind ||
+                (infection.Kind is PlagueKind.Vampire || kind is PlagueKind.Plague))
             {
                 return false;
             }
@@ -53,13 +54,28 @@ public sealed partial class SimulationWorld
         {
             _plagues[id] = (kind, Tick, Tick + PlagueDrainIntervalTicks);
         }
+        if (_species[index] is (CritterSpecies.ApeWarrior or CritterSpecies.ApeRoyalGuard or CritterSpecies.ApeScholar or CritterSpecies.ApeChieftain or CritterSpecies.ApeKing or CritterSpecies.ApeQueen))
+        {
+            ChangeCritterSpecies(index, CritterSpecies.Ape, preserveEnergy: true, preserveApeVillage: true);
+        }
         _plagueImmunityRemainders[id] = immuneRemainder;
+        if (kind is PlagueKind.Zombie && lichOrigin is { } lich)
+            _lichArmy[id] = lich;
+        else
+            _lichArmy.Remove(id);
         return true;
     }
 
+    private bool TrySpreadCritterPlague(int source, GridPosition position, PlagueKind kind, int immuneRemainder) =>
+        TryInfectCritterAt(position, kind, immuneRemainder,
+            _lichArmy.TryGetValue(_critterIds[source].Value, out var lich) ? lich : null);
+
     private static bool IsLivingApe(CritterSpecies species) =>
-        species is CritterSpecies.Ape or CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack or CritterSpecies.ApeSailor or CritterSpecies.ApeWarrior or
-            CritterSpecies.ApeScholar or CritterSpecies.ApeChieftain;
+        species is CritterSpecies.Ape or CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack or CritterSpecies.ApeSailor or CritterSpecies.ApeWarrior or CritterSpecies.ApeRoyalGuard or
+            CritterSpecies.ApeScholar or CritterSpecies.ApeChieftain or CritterSpecies.ApeKing or CritterSpecies.ApeQueen or CritterSpecies.ApeLudditePriest or CritterSpecies.ApeBishop or CritterSpecies.ApeBomber;
+
+    private bool CanRecruitApe(int index) =>
+        IsLivingApe(_species[index]) && !_plagues.ContainsKey(_critterIds[index].Value);
 
     internal void AdvanceVillagePlagueOutbreaks()
     {
@@ -104,10 +120,10 @@ public sealed partial class SimulationWorld
 
         var selected = -1;
         var candidates = 0;
-        var immuneRemainder = NextInt(5);
+        var immuneRemainder = NextInt(2);
         foreach (var (id, home) in _apeVillageHomes)
         {
-            if (home == villageTile && id % 5 != immuneRemainder &&
+            if (home == villageTile && id % 2 != immuneRemainder &&
                 _critterIndicesById.TryGetValue(id, out var index) && IsLivingApe(_species[index]) &&
                 _species[index] is not CritterSpecies.ApeSailor &&
                 NextInt(++candidates) == 0)
@@ -129,7 +145,7 @@ public sealed partial class SimulationWorld
     {
         var id = _critterIds[index].Value;
         if (!_plagueImmunityRemainders.TryGetValue(id, out var remainder))
-            _plagueImmunityRemainders[id] = remainder = NextInt(5);
+            _plagueImmunityRemainders[id] = remainder = NextInt(2);
         return remainder;
     }
 
@@ -158,7 +174,7 @@ public sealed partial class SimulationWorld
             foreach (var direction in MovementDirections)
             {
                 var position = _positions[index];
-                TryInfectApeAt(new GridPosition(
+                TrySpreadCritterPlague(index, new GridPosition(
                     Mod(position.X + direction.X, Width), position.Y + direction.Y), kind, immuneRemainder);
             }
         }
@@ -182,11 +198,18 @@ public sealed partial class SimulationWorld
 
     private bool TryReanimateApe(int index)
     {
+        if (_species[index] is CritterSpecies.UndeadApe && _lichArmy.ContainsKey(_critterIds[index].Value))
+        {
+            ChangeCritterSpecies(index, CritterSpecies.UndeadWarrior, preserveEnergy: false);
+            return true;
+        }
         if (!IsLivingApe(_species[index]) || GetPlague(index) is not (PlagueKind.Zombie or PlagueKind.Vampire))
         {
             return false;
         }
         var risen = GetPlague(index) is PlagueKind.Vampire ? CritterSpecies.Vampire : CritterSpecies.UndeadApe;
+        if (risen is CritterSpecies.Vampire)
+            _lichArmy.Remove(_critterIds[index].Value);
         ChangeCritterSpecies(index, risen, preserveEnergy: false);
         _reproductionTruces.Remove(_critterIds[index].Value);
         return true;

@@ -9,12 +9,15 @@ public enum CritterHabitat
     LandDweller,
     FreshwaterDweller,
     Flier,
+    LandAndWaterDweller,
 }
 
 public static class CritterHabitats
 {
     public static CritterHabitat GetHabitat(CritterSpecies species) => species switch
     {
+        CritterSpecies.ApeLudditePriest or CritterSpecies.ApeBishop or CritterSpecies.ApeBomber => CritterHabitat.LandDweller,
+        CritterSpecies.Lich or CritterSpecies.UndeadWarrior => CritterHabitat.LandAndWaterDweller,
         CritterSpecies.Plankton or CritterSpecies.Jellyfish or CritterSpecies.Worm or
             CritterSpecies.Trilobite or
             CritterSpecies.Nautilus or CritterSpecies.Fish or CritterSpecies.Squid or
@@ -22,8 +25,8 @@ public static class CritterHabitats
             CritterHabitat.OceanDweller,
         CritterSpecies.SeaScorpion => CritterHabitat.ShorelineHunter,
         CritterSpecies.ApeSailor or CritterSpecies.ApeTraderSailor => CritterHabitat.ShorelineHunter,
-        CritterSpecies.Newt or CritterSpecies.MegaToad or CritterSpecies.MegaSpider or CritterSpecies.Therapsid or
-            CritterSpecies.ApeTrader or CritterSpecies.Monkey or CritterSpecies.Ape or CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack or CritterSpecies.ApeWarrior or CritterSpecies.ApeScholar or CritterSpecies.ApeChieftain or CritterSpecies.UndeadApe or CritterSpecies.Deer or CritterSpecies.Elk or
+        CritterSpecies.Newt or CritterSpecies.Snail or CritterSpecies.MegaToad or CritterSpecies.MegaSpider or CritterSpecies.Therapsid or
+            CritterSpecies.ApeTrader or CritterSpecies.Monkey or CritterSpecies.Ape or CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack or CritterSpecies.ApeWarrior or CritterSpecies.ApeRoyalGuard or CritterSpecies.ApeScholar or CritterSpecies.ApeChieftain or CritterSpecies.ApeKing or CritterSpecies.ApeQueen or CritterSpecies.UndeadApe or CritterSpecies.Deer or CritterSpecies.Elk or
             CritterSpecies.Gazelle or
             CritterSpecies.Wolf or CritterSpecies.Dog or CritterSpecies.Crab or CritterSpecies.Vampire =>
             CritterHabitat.LandDweller,
@@ -56,6 +59,9 @@ public static class CritterHabitats
 
         return habitat switch
         {
+            CritterHabitat.LandAndWaterDweller =>
+                terrain is Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows or Terrain.Beach or
+                    Terrain.Lowlands or Terrain.Canyon or Terrain.Trench or Terrain.Plains or Terrain.Hills,
             CritterHabitat.OceanDweller =>
             terrain is Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows,
 

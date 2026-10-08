@@ -15,4 +15,6 @@ public enum ApeStructureKind : byte
     Ruin,
     Library,
     Market,
+    LudditeTemple,
+    Castle,
 }

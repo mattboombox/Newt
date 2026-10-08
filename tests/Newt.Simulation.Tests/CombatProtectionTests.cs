@@ -58,6 +58,7 @@ public sealed class CombatProtectionTests
             var attackerPosition = new GridPosition(0, 0);
             var web = new GridPosition(1, 0);
             var spider = world.AddCritter(CritterSpecies.MegaSpider, attackerPosition);
+            world.SetBiome(web, Biome.Forest);
             Assert.True(world.TryCreateMegaSpiderWeb(spider, web));
             var prey = world.AddCritter(species, web);
             world.CommitEncounter(attackerPosition, web);
@@ -176,6 +177,7 @@ public sealed class CombatProtectionTests
             var attackPosition = new GridPosition(0, 0);
             var web = new GridPosition(1, 0);
             var spider = world.AddCritter(CritterSpecies.MegaSpider, attackPosition);
+            world.SetBiome(web, Biome.Forest);
             Assert.True(world.TryCreateMegaSpiderWeb(spider, web));
             // Include a stranded sailor so even an unusual web placement cannot bypass combat.
             Assert.True(world.TrySpawnCritter(traderSpecies, web));
@@ -247,6 +249,9 @@ public sealed class CombatProtectionTests
         foreach (var attacker in Enum.GetValues<CritterSpecies>())
         foreach (var defender in Enum.GetValues<CritterSpecies>())
         {
+            // Bombers bypass fresh-fighter protection and reflect damage; covered in ApeCultureTests.
+            if (attacker is CritterSpecies.ApeBomber || defender is CritterSpecies.ApeBomber)
+                continue;
             if (!SimulationWorld.CanEat(attacker, defender))
                 continue;
             // Cannibal spiders only attack while hungry; newly spawned ones are full.
@@ -278,8 +283,8 @@ public sealed class CombatProtectionTests
                 Assert.Equal(initial, survivingAttacker.Energy + survivingDefender.Energy);
                 continue;
             }
-            Assert.Contains(initial - survivingAttacker.Energy - survivingDefender.Energy,
-                new[] { attackDamage, defenseDamage });
+            Assert.True(new[] { attackDamage, defenseDamage }.Contains(
+                initial - survivingAttacker.Energy - survivingDefender.Energy), $"{attacker} vs {defender}");
         }
     }
 

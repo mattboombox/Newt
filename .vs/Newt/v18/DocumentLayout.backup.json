@@ -3,12 +3,12 @@
   "WorkspaceRootPath": "C:\\Users\\1Matt\\Desktop\\Newt\\",
   "Documents": [
     {
-      "AbsoluteMoniker": "D:0:0:{1E593B46-9B10-4AE5-A7D8-E6939C133584}|tests\\Newt.Simulation.Tests\\Newt.Simulation.Tests.csproj|c:\\users\\1matt\\desktop\\newt\\tests\\newt.simulation.tests\\baleenwhaletests.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{1E593B46-9B10-4AE5-A7D8-E6939C133584}|tests\\Newt.Simulation.Tests\\Newt.Simulation.Tests.csproj|solutionrelative:tests\\newt.simulation.tests\\baleenwhaletests.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
       "AbsoluteMoniker": "D:0:0:{1E593B46-9B10-4AE5-A7D8-E6939C133584}|tests\\Newt.Simulation.Tests\\Newt.Simulation.Tests.csproj|c:\\users\\1matt\\desktop\\newt\\tests\\newt.simulation.tests\\apetests.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{1E593B46-9B10-4AE5-A7D8-E6939C133584}|tests\\Newt.Simulation.Tests\\Newt.Simulation.Tests.csproj|solutionrelative:tests\\newt.simulation.tests\\apetests.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{1E593B46-9B10-4AE5-A7D8-E6939C133584}|tests\\Newt.Simulation.Tests\\Newt.Simulation.Tests.csproj|c:\\users\\1matt\\desktop\\newt\\tests\\newt.simulation.tests\\baleenwhaletests.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{1E593B46-9B10-4AE5-A7D8-E6939C133584}|tests\\Newt.Simulation.Tests\\Newt.Simulation.Tests.csproj|solutionrelative:tests\\newt.simulation.tests\\baleenwhaletests.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{228BFD20-ED4C-4A59-A9A1-457E22762FB2}|src\\Newt.Simulation\\Newt.Simulation.csproj|c:\\users\\1matt\\desktop\\newt\\src\\newt.simulation\\assemblyinfo.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
@@ -82,7 +82,7 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 2,
+          "SelectedChildIndex": 1,
           "Children": [
             {
               "$type": "Bookmark",
@@ -90,25 +90,26 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 1,
+              "DocumentIndex": 0,
               "Title": "ApeTests.cs",
               "DocumentMoniker": "C:\\Users\\1Matt\\Desktop\\Newt\\tests\\Newt.Simulation.Tests\\ApeTests.cs",
               "RelativeDocumentMoniker": "tests\\Newt.Simulation.Tests\\ApeTests.cs",
-              "ToolTip": "C:\\Users\\1Matt\\Desktop\\Newt\\tests\\Newt.Simulation.Tests\\ApeTests.cs",
-              "RelativeToolTip": "tests\\Newt.Simulation.Tests\\ApeTests.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAM8LAAAyAAAAAAAAAA==",
+              "ToolTip": "C:\\Users\\1Matt\\Desktop\\Newt\\tests\\Newt.Simulation.Tests\\ApeTests.cs*",
+              "RelativeToolTip": "tests\\Newt.Simulation.Tests\\ApeTests.cs*",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAMkLAAAyAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-09-08T05:09:41Z"
+              "WhenOpened": "2026-09-08T05:09:41Z",
+              "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 0,
+              "DocumentIndex": 1,
               "Title": "BaleenWhaleTests.cs",
               "DocumentMoniker": "C:\\Users\\1Matt\\Desktop\\Newt\\tests\\Newt.Simulation.Tests\\BaleenWhaleTests.cs",
               "RelativeDocumentMoniker": "tests\\Newt.Simulation.Tests\\BaleenWhaleTests.cs",
               "ToolTip": "C:\\Users\\1Matt\\Desktop\\Newt\\tests\\Newt.Simulation.Tests\\BaleenWhaleTests.cs",
               "RelativeToolTip": "tests\\Newt.Simulation.Tests\\BaleenWhaleTests.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAgAAAAbAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2026-09-08T05:09:32.04Z",
               "EditorCaption": ""

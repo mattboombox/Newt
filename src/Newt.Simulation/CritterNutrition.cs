@@ -258,6 +258,8 @@ public static class CritterNutritions
 
     public static CritterNutrition Get(CritterSpecies species) => species switch
     {
+        CritterSpecies.Lich => new(CritterBodySize.Large, CritterFeedingStrategy.Hunter, 20, 40, 0, 0, 0, 0, 0),
+        CritterSpecies.UndeadWarrior => new(CritterBodySize.Large, CritterFeedingStrategy.Hunter, 6, 6, 0, 0, 0, 0, 0),
         CritterSpecies.Plankton => Plankton,
         CritterSpecies.Jellyfish => Jellyfish,
         CritterSpecies.Worm => Trilobite,
@@ -266,7 +268,7 @@ public static class CritterNutritions
         CritterSpecies.MegaSpider => MegaSpider,
         CritterSpecies.Nautilus => Nautilus,
         CritterSpecies.Fish => Fish,
-        CritterSpecies.Newt => Newt,
+        CritterSpecies.Newt or CritterSpecies.Snail => Newt,
         CritterSpecies.MegaToad => MegaToad,
         CritterSpecies.Crab => Crab,
         CritterSpecies.Squid => Squid,
@@ -276,8 +278,10 @@ public static class CritterNutritions
         CritterSpecies.ApeTrader or CritterSpecies.ApeTraderSailor => Ape with { MaximumEnergy = 80, ReproductionThreshold = 0, ReproductionCost = 0 },
         CritterSpecies.Ape => Ape,
         CritterSpecies.ApeSailor => Ape with { MaximumEnergy = 2 * Ape.MaximumEnergy, ReproductionThreshold = 2 * Ape.MaximumEnergy },
-        CritterSpecies.ApeWarrior => Ape,
-        CritterSpecies.ApeChieftain => Ape,
+        CritterSpecies.ApeWarrior or CritterSpecies.ApeRoyalGuard => Ape,
+        CritterSpecies.ApeBomber => Ape with { InitialEnergy = 20, MaximumEnergy = 20, ReproductionThreshold = 0, ReproductionCost = 0 },
+        CritterSpecies.ApeLudditePriest or CritterSpecies.ApeBishop => Ape with { ReproductionThreshold = 0, ReproductionCost = 0 },
+        CritterSpecies.ApeChieftain or CritterSpecies.ApeKing or CritterSpecies.ApeQueen => Ape,
         CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack => Ape,
         CritterSpecies.ApeScholar => Ape with { ReproductionThreshold = 0, ReproductionCost = 0 },
         CritterSpecies.UndeadApe => Ape with { ReproductionThreshold = 0, ReproductionCost = 0 },

@@ -9,6 +9,7 @@ public sealed partial class SimulationWorld
     private readonly Dictionary<int, HashSet<ApeTechnology>> _apeColonistTechnologies = [];
 
     private bool ApeKnowsTechnology(int apeIndex, ApeTechnology technology) => apeIndex >= 0 &&
+        (!_apeVillageHomes.TryGetValue(_critterIds[apeIndex].Value, out var home) || !ApeCultureBlocksTechnology(home)) &&
         ((_apeColonistTechnologies.TryGetValue(_critterIds[apeIndex].Value, out var known) && known.Contains(technology)) ||
             (_apeVillageHomes.TryGetValue(_critterIds[apeIndex].Value, out var village) && HasApeTechnology(village, technology)));
 
@@ -27,12 +28,14 @@ public sealed partial class SimulationWorld
             ? known.OrderBy(technology => technology).ToArray() : Array.Empty<ApeTechnology>();
 
     internal bool HasApeTechnology(int villageTile, ApeTechnology technology) =>
+        !ApeCultureBlocksTechnology(villageTile) &&
         _apeVillageTechnologies.TryGetValue(villageTile, out var known) && known.Contains(technology);
 
     internal bool TryResearchApeTechnology(int villageTile, ApeTechnology technology)
     {
         var definition = ApeTechnologies.All.SingleOrDefault(item => item.Technology == technology);
         if (!_apeStructures.TryGetValue(villageTile, out var structure) || structure is not ApeStructureKind.Village ||
+            ApeCultureBlocksTechnology(villageTile) ||
             definition is null || !definition.Prerequisites.All(required => HasApeTechnology(villageTile, required)))
             return false;
         if (!_apeVillageTechnologies.TryGetValue(villageTile, out var known))
@@ -40,7 +43,8 @@ public sealed partial class SimulationWorld
         return known.Add(technology);
     }
 
-    private bool IsApeBuildingTechnologyUnlocked(int villageTile, ApeStructureKind kind) => kind switch
+    private bool IsApeBuildingTechnologyUnlocked(int villageTile, ApeStructureKind kind) =>
+        !(kind is ApeStructureKind.Library && ApeCultureBlocksTechnology(villageTile)) && kind switch
     {
         ApeStructureKind.Aquaculture => HasApeTechnology(villageTile, ApeTechnology.Aquaculture),
         _ => true,
@@ -54,6 +58,8 @@ public sealed partial class SimulationWorld
 
     private void AdvanceApeLibrary(int villageTile, int libraryTile)
     {
+        if (ApeCultureBlocksTechnology(villageTile))
+            return;
         if (!_apeStructureNextActionTicks.TryGetValue(libraryTile, out var nextTick))
             nextTick = Tick + ApeResearchIntervalTicks;
         if (Tick < nextTick)

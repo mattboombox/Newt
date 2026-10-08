@@ -45,20 +45,23 @@ public sealed partial class SimulationWorld
         var damage = Math.Min(_energy[victim], GetCombatDamage(attacker));
         // A fresh fighter must survive a hit, even against a stronger opponent.
         // Use starting energy rather than current energy so wounded fighters can die.
-        if (CanCritterFight(_species[victim]))
+        if (_species[attacker] is not CritterSpecies.ApeBomber && CanCritterFight(_species[victim]))
             damage = Math.Min(damage, GetMaximumHitDamage(attacker, victim));
         _energy[victim] -= damage;
         // Traders lose provisions when hit; the robber gains the energy actually taken.
         // Combine this with vampire feeding so vampires do not collect twice.
-        if (_species[victim] is CritterSpecies.ApeTrader or CritterSpecies.ApeTraderSailor ||
-            _species[attacker] is CritterSpecies.Vampire && IsLivingApe(_species[victim]))
+        if (_species[attacker] is not CritterSpecies.ApeBomber &&
+            (_species[victim] is CritterSpecies.ApeTrader or CritterSpecies.ApeTraderSailor ||
+            _species[attacker] is CritterSpecies.Vampire && IsLivingApe(_species[victim])))
             _energy[attacker] = Math.Min(_vampireColonists.ContainsKey(_critterIds[attacker].Value)
                     ? ApeSettlerInitialEnergy : CritterNutritions.Get(_species[attacker]).MaximumEnergy,
                 _energy[attacker] + damage);
+        if (_species[attacker] is CritterSpecies.ApeBomber)
+            _energy[attacker] = Math.Max(0, _energy[attacker] - damage);
     }
 
     private int GetMaximumHitDamage(int attacker, int victim) =>
-        CanCritterFight(_species[victim])
+        _species[attacker] is CritterSpecies.ApeBomber ? 20 : CanCritterFight(_species[victim])
             ? Math.Min(GetCombatDamage(attacker), Math.Max(1, CritterNutritions.Get(_species[victim]).InitialEnergy - 1))
             : GetCombatDamage(attacker);
 }

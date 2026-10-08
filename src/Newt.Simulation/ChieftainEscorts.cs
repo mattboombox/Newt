@@ -8,13 +8,13 @@ public sealed partial class SimulationWorld
 
     private void RememberChieftainTarget(int chief, int target)
     {
-        if (_species[chief] is CritterSpecies.ApeChieftain)
+        if (_species[chief] is CritterSpecies.ApeChieftain or CritterSpecies.ApeKing or CritterSpecies.ApeQueen)
             _chieftainAttackTargets[_critterIds[chief].Value] =
                 (_critterIds[target].Value, Tick + 2 * GetMovementIntervalTicks(CritterSpecies.ApeChieftain));
     }
 
     private bool IsChieftainEscortTarget(int index, int target) =>
-        _species[index] is (CritterSpecies.ApeWarrior or CritterSpecies.Dog) &&
+        CanFollowVillageChieftain(index) &&
         _apeVillageHomes.TryGetValue(_critterIds[index].Value, out var village) &&
         TryGetVillageChieftain(village, out var chief) &&
         _chieftainAttackTargets.TryGetValue(_critterIds[chief].Value, out var attack) &&
@@ -27,20 +27,31 @@ public sealed partial class SimulationWorld
         var tile = GetIndex(village);
         if (!TryGetVillageChieftain(tile, out _))
             return [];
+        if (GetApeCultureDefinition(tile)?.Culture == ApeCulture.Monarchy)
+            return _apeVillageHomes.Where(pair => pair.Value == tile &&
+                _critterIndicesById.TryGetValue(pair.Key, out var index) &&
+                _species[index] is CritterSpecies.ApeRoyalGuard).OrderBy(pair => pair.Key)
+                .Take(ChieftainEscortSize).Select(pair => new CritterId(pair.Key)).ToArray();
         var warriors = new Queue<int>();
         var dogs = new Queue<int>();
         foreach (var pair in _apeVillageHomes.Where(pair => pair.Value == tile).OrderBy(pair => pair.Key))
         {
             if (!_critterIndicesById.TryGetValue(pair.Key, out var index))
                 continue;
-            if (_species[index] is CritterSpecies.ApeWarrior)
+            if (_species[index] is not CritterSpecies.Dog && CanFollowVillageChieftain(index))
                 warriors.Enqueue(pair.Key);
             else if (_species[index] is CritterSpecies.Dog && !IsReservedVillageDog(index))
                 dogs.Enqueue(pair.Key);
         }
-        return warriors.Take(ChieftainEscortSize).Concat(dogs.Take(2))
+        var escortSize = _barbarianVillageTiles.Contains(tile) ? (warriors.Count + 1) / 2 : ChieftainEscortSize;
+        return warriors.Take(escortSize).Concat(dogs.Take(2))
             .Select(id => new CritterId(id)).ToArray();
     }
+
+    private bool CanFollowVillageChieftain(int index) =>
+        _species[index] is CritterSpecies.ApeWarrior or CritterSpecies.ApeRoyalGuard or CritterSpecies.ApeBomber or CritterSpecies.Dog ||
+        (IsBarbarianApe(index) && IsLivingApe(_species[index]) &&
+            _species[index] is not (CritterSpecies.ApeChieftain or CritterSpecies.ApeKing or CritterSpecies.ApeQueen));
 
     private bool TryGetVillageChieftain(int village, out int chiefIndex)
     {
@@ -49,7 +60,7 @@ public sealed partial class SimulationWorld
         foreach (var pair in _apeVillageHomes)
             if (pair.Value == village && pair.Key < chiefId &&
                 _critterIndicesById.TryGetValue(pair.Key, out var index) &&
-                _species[index] is CritterSpecies.ApeChieftain)
+                _species[index] is CritterSpecies.ApeChieftain or CritterSpecies.ApeKing or CritterSpecies.ApeQueen)
             {
                 chiefId = pair.Key;
                 chiefIndex = index;
@@ -61,7 +72,7 @@ public sealed partial class SimulationWorld
         out GridPosition? prey)
     {
         prey = null;
-        if (_species[index] is not (CritterSpecies.ApeWarrior or CritterSpecies.Dog) ||
+        if (!CanFollowVillageChieftain(index) ||
             !_apeVillageHomes.TryGetValue(_critterIds[index].Value, out var village) ||
             !TryGetVillageChieftain(village, out var chief) ||
             !GetChieftainEscort(GetPosition(village)).Contains(_critterIds[index]))
@@ -88,7 +99,7 @@ public sealed partial class SimulationWorld
         prey = FindHunterPrey(index, _species[index], 1, reservedPrey);
         if (prey is not null)
             return true;
-        if (IsBarbarianApe(index) && _species[index] is CritterSpecies.ApeWarrior && TryFeedApeFoliage(index))
+        if (IsBarbarianApe(index) && IsLivingApe(_species[index]) && TryFeedApeFoliage(index))
             return true;
         if (WrappedManhattanDistance(_positions[index], _positions[chief]) > ChieftainEscortDistance)
             TryMoveTowardApeStructure(index, GetIndex(_positions[chief]), reservedPrey);

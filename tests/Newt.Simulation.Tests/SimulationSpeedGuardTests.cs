@@ -58,25 +58,26 @@ public sealed class SimulationSpeedGuardTests
         Assert.False(guard.AutomaticallyReduced);
         Assert.Equal(32, guard.GetRate(rate, 14_999, 249));
         guard.Enabled = false;
-        Assert.Equal(rate, guard.GetRate(32, 14_999, 249));
+        Assert.Equal(32, guard.GetRate(32, 14_999, 249));
     }
 
     [Fact]
-    public void DisablingGuardRestoresPreviousRate()
+    public void DisablingGuardKeepsCurrentRate()
     {
         var guard = new SimulationSpeedGuard();
         Assert.Equal(1, guard.GetRate(32, 15_000, 0));
         guard.Enabled = false;
-        Assert.Equal(32, guard.GetRate(1, 15_000, 0));
+        Assert.Equal(1, guard.GetRate(1, 15_000, 0));
         Assert.False(guard.AutomaticallyReduced);
     }
 
     [Fact]
-    public void ManualSpeedResetDiscardsPreviousRate()
+    public void ManualSpeedResetClearsSlowdownIndicator()
     {
         var guard = new SimulationSpeedGuard();
         Assert.Equal(1, guard.GetRate(32, 15_000, 0));
         guard.Reset();
+        Assert.False(guard.AutomaticallyReduced);
         Assert.Equal(1, guard.GetRate(8, 15_000, 0));
         Assert.Equal(32, guard.GetRate(1, 14_999, 0));
     }
@@ -91,7 +92,7 @@ public sealed class SimulationSpeedGuardTests
         Assert.Equal(32, guard.GetRate(rate, 14_999, 249));
         Assert.False(guard.AutomaticallyReduced);
         guard.Enabled = false;
-        Assert.Equal(rate, guard.GetRate(32, 14_999, 249));
+        Assert.Equal(32, guard.GetRate(32, 14_999, 249));
         Assert.Equal(rate, guard.GetRate(rate, 14_999, 249));
     }
 

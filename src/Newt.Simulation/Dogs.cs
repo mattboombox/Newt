@@ -41,7 +41,7 @@ public sealed partial class SimulationWorld
 
     private int GetVillageDogLimit(int village) =>
         _barbarianVillageTiles.Contains(village)
-            ? Math.Max(5, GetApeVillageResidentCountByTile(village) / 5)
+            ? 8
             : Math.Max(2, GetApeVillageResidentCountByTile(village) / 10);
 
     internal void TryRecruitDogFromWolfKill(int killerIndex)

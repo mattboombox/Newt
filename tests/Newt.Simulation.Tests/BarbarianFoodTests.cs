@@ -31,16 +31,16 @@ public sealed class BarbarianFoodTests
                 .First(critter => critter.Species == CritterSpecies.Dog).Id;
         }
 
-        Assert.Equal(25, world.GetApeVillageFoodCapacity(camp));
+        Assert.Equal(50, world.GetApeVillageFoodCapacity(camp));
         Assert.True(world.ShouldApeHunt(resident));
-        world.StoreApeVillageFood(camp, 6);
-        Assert.Equal(6, world.GetApeVillageFood(camp));
+        world.StoreApeVillageFood(camp, 12);
+        Assert.Equal(12, world.GetApeVillageFood(camp));
         Assert.True(world.ShouldApeHunt(resident));
         world.StoreApeVillageFood(camp, 1);
-        Assert.Equal(7, world.GetApeVillageFood(camp));
+        Assert.Equal(13, world.GetApeVillageFood(camp));
         Assert.False(world.ShouldApeHunt(resident));
         world.StoreApeVillageFood(camp, 100);
-        Assert.Equal(25, world.GetApeVillageFood(camp));
+        Assert.Equal(50, world.GetApeVillageFood(camp));
         Assert.False(world.ShouldApeHunt(resident));
     }
 }

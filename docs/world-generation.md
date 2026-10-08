@@ -94,6 +94,23 @@ terrain ceiling, and terrain-changing events cannot permanently erode them.
 
 ## Prototype controls
 
+### Monarchy culture
+
+Select **Monarchy Culture** in Culture tools and left-click an uncultured ape
+village at peace. The tool bypasses the natural culture population threshold,
+but the village needs space for a castle and its recruits. Monarchy can also
+develop through the existing natural culture checks.
+
+The castle replaces the chieftain with one randomly selected king or queen,
+recruits one bishop with the same idle behavior as a Luddite priest, and maintains
+four royal guards. The guards follow and protect their village's monarch; lost
+staff are replaced while the village is at peace. Monarchy allows normal research.
+Removing the castle removes the culture and restores ordinary ape roles.
+
+Kings, queens, and royal guards use their own sprites, including sailor variants
+and veteran royal guards. Bishops use their own sprite. The castle
+is drawn as a gray building with three crenellations.
+
 The game starts in Critter Tools with Plankton selected.
 
 - `M`: open or close the world setup menu; use arrows and Enter to generate. On

@@ -1173,6 +1173,8 @@ public sealed class SimulationWorldTests
             CritterSpecies.ApeLumberjack,
             CritterSpecies.ApeSailor,
             CritterSpecies.ApeChieftain,
+            CritterSpecies.ApeKing,
+            CritterSpecies.ApeQueen,
             CritterSpecies.Wolf,
             CritterSpecies.ToothedWhale,
         };

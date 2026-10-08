@@ -5,13 +5,18 @@ namespace Newt.Simulation.Tests;
 public sealed class MegaSpiderTests
 {
     [Theory]
-    [InlineData(Biome.Taiga)]
+    [InlineData(Biome.None)]
+    [InlineData(Biome.Grassland)]
+    [InlineData(Biome.Desert)]
+    [InlineData(Biome.Arid)]
     [InlineData(Biome.Bog)]
     [InlineData(Biome.Tundra)]
     [InlineData(Biome.Arctic)]
-    public void ColdBiomesRemoveAndPreventWebs(Biome biome)
+    public void UnsupportedBiomesRemoveAndPreventWebs(Biome biome)
     {
         var world = new SimulationWorld(2, 1, Terrain.Plains, seed: 301);
+        for (var tile = 0; tile < world.Width * world.Height; tile++)
+            world.SetBiome(new GridPosition(tile % world.Width, tile / world.Width), Biome.Forest);
         var position = new GridPosition(0, 0);
         var spider = world.AddCritter(CritterSpecies.MegaSpider, position);
         Assert.True(world.TryCreateMegaSpiderWeb(spider, position));
@@ -22,10 +27,29 @@ public sealed class MegaSpiderTests
         Assert.False(world.TryCreateMegaSpiderWeb(spider, new GridPosition(1, 0)));
     }
 
+    [Theory]
+    [InlineData(Biome.Swamp)]
+    [InlineData(Biome.Jungle)]
+    [InlineData(Biome.Forest)]
+    [InlineData(Biome.Taiga)]
+    public void WebsCanBeCreatedInSupportedBiomes(Biome biome)
+    {
+        var world = new SimulationWorld(1, 1, Terrain.Plains, seed: 303);
+        for (var tile = 0; tile < world.Width * world.Height; tile++)
+            world.SetBiome(new GridPosition(tile % world.Width, tile / world.Width), Biome.Forest);
+        var position = new GridPosition(0, 0);
+        world.SetBiome(position, biome);
+        var spider = world.AddCritter(CritterSpecies.MegaSpider, position);
+        Assert.True(world.TryCreateMegaSpiderWeb(spider, position));
+        Assert.Equal(1, world.MegaSpiderWebCount);
+    }
+
     [Fact]
     public void SpidersOnlyCannibalizeWhenHungryAndOtherPreyIsAbsent()
     {
         var world = new SimulationWorld(3, 1, Terrain.Plains, seed: 302);
+        for (var tile = 0; tile < world.Width * world.Height; tile++)
+            world.SetBiome(new GridPosition(tile % world.Width, tile / world.Width), Biome.Forest);
         world.SeasonsEnabled = false;
         world.AddCritter(CritterSpecies.MegaSpider, new GridPosition(0, 0));
         world.AddCritter(CritterSpecies.MegaSpider, new GridPosition(1, 0));
@@ -97,6 +121,8 @@ public sealed class MegaSpiderTests
     public void WebsCanOnlyBeBuiltOnDryLand()
     {
         var world = new SimulationWorld(5, 1, Terrain.Plains, seed: 204);
+        for (var tile = 0; tile < world.Width * world.Height; tile++)
+            world.SetBiome(new GridPosition(tile % world.Width, tile / world.Width), Biome.Forest);
         world.SetTerrain(new GridPosition(1, 0), Terrain.Shallows);
         world.SetTerrain(new GridPosition(2, 0), Terrain.Ocean);
         world.SetSurfaceWater(new GridPosition(3, 0), SurfaceWaterKind.River);
@@ -115,6 +141,8 @@ public sealed class MegaSpiderTests
     public void WebTrapsPreyAndOwnerReturnsToStoreItAsFood()
     {
         var world = new SimulationWorld(9, 1, Terrain.Plains, seed: 205);
+        for (var tile = 0; tile < world.Width * world.Height; tile++)
+            world.SetBiome(new GridPosition(tile % world.Width, tile / world.Width), Biome.Forest);
         world.SeasonsEnabled = false;
         var spiderId = world.AddCritter(CritterSpecies.MegaSpider, new GridPosition(0, 0));
         var web = new GridPosition(4, 0);
@@ -140,6 +168,8 @@ public sealed class MegaSpiderTests
     public void MegaSpidersAreImmuneToWebsAndCanEatEachOther()
     {
         var world = new SimulationWorld(2, 1, Terrain.Plains, seed: 206);
+        for (var tile = 0; tile < world.Width * world.Height; tile++)
+            world.SetBiome(new GridPosition(tile % world.Width, tile / world.Width), Biome.Forest);
         var ownerId = world.AddCritter(CritterSpecies.MegaSpider, new GridPosition(0, 0));
         var web = new GridPosition(1, 0);
         Assert.True(world.TryCreateMegaSpiderWeb(ownerId, web));
@@ -165,6 +195,8 @@ public sealed class MegaSpiderTests
     public void LivingApesAreImmuneToMegaSpiderWebs(CritterSpecies species)
     {
         var world = new SimulationWorld(2, 1, Terrain.Beach, seed: 2202);
+        for (var tile = 0; tile < world.Width * world.Height; tile++)
+            world.SetBiome(new GridPosition(tile % world.Width, tile / world.Width), Biome.Forest);
         var ownerId = world.AddCritter(CritterSpecies.MegaSpider, new GridPosition(0, 0));
         var web = new GridPosition(1, 0);
         Assert.True(world.TryCreateMegaSpiderWeb(ownerId, web));
@@ -178,6 +210,8 @@ public sealed class MegaSpiderTests
     public void UndeadApesAreImmuneToMegaSpiderWebs()
     {
         var world = new SimulationWorld(2, 1, Terrain.Beach, seed: 2204);
+        for (var tile = 0; tile < world.Width * world.Height; tile++)
+            world.SetBiome(new GridPosition(tile % world.Width, tile / world.Width), Biome.Forest);
         var ownerId = world.AddCritter(CritterSpecies.MegaSpider, new GridPosition(0, 0));
         var web = new GridPosition(1, 0);
         Assert.True(world.TryCreateMegaSpiderWeb(ownerId, web));
@@ -191,6 +225,8 @@ public sealed class MegaSpiderTests
     public void StoredWebFoodOffsetsMetabolismOneUnitAtATime()
     {
         var world = new SimulationWorld(2, 1, Terrain.Plains, seed: 207);
+        for (var tile = 0; tile < world.Width * world.Height; tile++)
+            world.SetBiome(new GridPosition(tile % world.Width, tile / world.Width), Biome.Forest);
         world.SeasonsEnabled = false;
         var spiderId = world.AddCritter(CritterSpecies.MegaSpider, new GridPosition(0, 0));
         var web = new GridPosition(1, 0);
@@ -215,6 +251,8 @@ public sealed class MegaSpiderTests
     public void ReturningSpiderShovesABlockerInsteadOfSharingItsTile()
     {
         var world = new SimulationWorld(7, 1, Terrain.Plains, seed: 208);
+        for (var tile = 0; tile < world.Width * world.Height; tile++)
+            world.SetBiome(new GridPosition(tile % world.Width, tile / world.Width), Biome.Forest);
         world.SeasonsEnabled = false;
         var spiderId = world.AddCritter(CritterSpecies.MegaSpider, new GridPosition(0, 0));
         var blockerId = world.AddCritter(CritterSpecies.Newt, new GridPosition(1, 0));
@@ -243,6 +281,8 @@ public sealed class MegaSpiderTests
     public void MegaSpiderFightsWolfInsteadOfEatingItOutright()
     {
         var world = new SimulationWorld(1, 2, Terrain.Plains, seed: 209);
+        for (var tile = 0; tile < world.Width * world.Height; tile++)
+            world.SetBiome(new GridPosition(tile % world.Width, tile / world.Width), Biome.Forest);
         world.SeasonsEnabled = false;
         world.AddCritter(CritterSpecies.MegaSpider, new GridPosition(0, 0));
         world.AddCritter(CritterSpecies.Wolf, new GridPosition(0, 1));
@@ -283,6 +323,8 @@ public sealed class MegaSpiderTests
     private static SimulationWorld CreateFedSpiderWorld(ulong seed)
     {
         var world = new SimulationWorld(4, 1, Terrain.Plains, seed);
+        for (var tile = 0; tile < world.Width * world.Height; tile++)
+            world.SetBiome(new GridPosition(tile % world.Width, tile / world.Width), Biome.Forest);
         world.SeasonsEnabled = false;
         world.AdjustEvolutionChance(-CritterEvolution.MaximumChanceSteps);
         world.AddCritter(CritterSpecies.MegaSpider, new GridPosition(0, 0));

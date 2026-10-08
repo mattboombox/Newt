@@ -35,6 +35,8 @@ public sealed partial class SimulationWorld
                 !_barbarianVillageTiles.Contains(pair.Key))
             .Select(pair => pair.Key).Order().ToArray())
         {
+            if (kind is ApeStructureKind.Library && ApeCultureBlocksTechnology(village)) continue;
+            if (kind is ApeStructureKind.LudditeTemple or ApeStructureKind.Castle) return false;
             if (!GetPlayerConnectedVillageTiles(village).Any(connected =>
                 ArePlayerBuildingsAdjacent(connected, tile, kind)))
                 continue;

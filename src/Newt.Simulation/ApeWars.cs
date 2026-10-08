@@ -8,6 +8,10 @@ public sealed partial class SimulationWorld
         public int[] Distances = distances;
         public bool BloodWar = bloodWar;
         public bool CivilWar;
+        public int? LichId;
+        public bool LichAttacking;
+        public bool MergeOnVictory;
+        public HashSet<int> Bombers = [];
         public HashSet<int> DemobilizedWorkers = [];
         public int[] BlueDistances = [];
         public Dictionary<int, CritterSpecies> OriginalRoles = [];
@@ -55,7 +59,12 @@ public sealed partial class SimulationWorld
                         _apeVillageHomes.Any(home => home.Value == pair.Key &&
                             _critterIndicesById.TryGetValue(home.Key, out var index) && IsLivingApe(_species[index]))
                     : Eligible(pair.Key, minimum)))
-            .Select(pair => pair.Key).Order().ToArray();
+            .Select(pair => pair.Key)
+            .Concat(Enumerable.Range(0, _count).Where(index => _species[index] is CritterSpecies.Lich &&
+                !_lichWars.ContainsKey(_critterIds[index].Value) &&
+                Tick >= _villageWarCooldowns.GetValueOrDefault(-_critterIds[index].Value))
+                .Select(index => GetIndex(_positions[index])))
+            .Distinct().Order().ToArray();
         // Try candidates in a random order; unreachable villages must not block reachable ones.
         for (var i = opponents.Length - 1; i >= 0; i--)
         {
@@ -68,7 +77,7 @@ public sealed partial class SimulationWorld
     }
 
     private bool CanWarApeSail(int index) =>
-        _species[index] is (CritterSpecies.ApeWarrior or CritterSpecies.ApeChieftain) &&
+        _species[index] is (CritterSpecies.ApeWarrior or CritterSpecies.ApeRoyalGuard or CritterSpecies.ApeBomber or CritterSpecies.ApeChieftain or CritterSpecies.ApeKing or CritterSpecies.ApeQueen) &&
         (TryGetApeWar(index, out _) || _returningWarSailors.ContainsKey(_critterIds[index].Value));
 
     private bool IsWarTransitTile(int tile) =>
@@ -81,7 +90,8 @@ public sealed partial class SimulationWorld
         attacking = false;
         if (!_critterIndicesById.TryGetValue(id.Value, out var index) || !TryGetApeWar(index, out var war))
             return false;
-        attacking = war.CivilWar ? war.AttackingWarriors.Contains(id.Value) : _apeVillageHomes[id.Value] == war.Attacker;
+        attacking = war.LichId is { } lich ? IsLichArmyMember(index, lich) == war.LichAttacking :
+            war.CivilWar ? war.AttackingWarriors.Contains(id.Value) : _apeVillageHomes[id.Value] == war.Attacker;
         return true;
     }
 
@@ -94,7 +104,8 @@ public sealed partial class SimulationWorld
         var residents = _apeVillageHomes.Where(pair => pair.Value == village &&
                 _critterIndicesById.TryGetValue(pair.Key, out var index) &&
                 _species[index] is not (CritterSpecies.ApeTrader or CritterSpecies.ApeTraderSailor) &&
-                IsLivingApe(_species[index]))
+                CanRecruitApe(index) &&
+                !(GetApeCultureDefinition(village)?.Units.Any(unit => unit.Species == _species[index] && !unit.Combatant) is true))
             .Select(pair => pair.Key).Order().ToArray();
         if (residents.Length < 2) return false;
         // Shuffle once, then split evenly. Team membership stays fixed as casualties occur.
@@ -104,16 +115,20 @@ public sealed partial class SimulationWorld
             (residents[i], residents[other]) = (residents[other], residents[i]);
         }
         var war = new ApeWar(village, village, [], false) { CivilWar = true };
+        var culturalDefenders = residents.Where(id => IsApeCulturalCombatUnit(village, _species[_critterIndicesById[id]])).ToHashSet();
+        var redSlots = (residents.Length - culturalDefenders.Count) / 2;
         for (var i = 0; i < residents.Length; i++)
         {
             var id = residents[i];
             var index = _critterIndicesById[id];
             war.OriginalRoles[id] = _species[index];
-            (i < residents.Length / 2 ? war.AttackingWarriors : war.DefendingWarriors).Add(id);
-            if (_species[index] is not (CritterSpecies.ApeWarrior or CritterSpecies.ApeChieftain))
+            (culturalDefenders.Contains(id) || redSlots == 0 ? war.DefendingWarriors : war.AttackingWarriors).Add(id);
+            if (!culturalDefenders.Contains(id) && war.AttackingWarriors.Contains(id)) redSlots--;
+            if (_species[index] is not (CritterSpecies.ApeWarrior or CritterSpecies.ApeRoyalGuard or CritterSpecies.ApeBomber or CritterSpecies.ApeChieftain or CritterSpecies.ApeKing or CritterSpecies.ApeQueen))
                 ChangeCritterSpecies(index, CritterSpecies.ApeWarrior, preserveEnergy: true, preserveApeVillage: true);
         }
         _apeWars[village] = war;
+        RecruitApeCultureBombers(war, village);
         RefreshCivilWarRoutes(war);
         return true;
     }
@@ -128,6 +143,14 @@ public sealed partial class SimulationWorld
 
     public bool TryStartApeWar(GridPosition attackerBuilding, GridPosition defenderBuilding, bool bloodWar = false)
     {
+        if (!Contains(attackerBuilding) || !Contains(defenderBuilding))
+            return false;
+        var attackingLich = GetLichAt(attackerBuilding);
+        var defendingLich = GetLichAt(defenderBuilding);
+        if (attackingLich >= 0 || defendingLich >= 0)
+            return attackingLich >= 0 && defendingLich >= 0 ? false :
+                TryStartLichWar(attackingLich >= 0 ? attackingLich : defendingLich,
+                    attackingLich >= 0 ? defenderBuilding : attackerBuilding, attackingLich >= 0);
         if (!LifeEnabled || GetApeStructureVillage(attackerBuilding) is not { } attackerPosition ||
             GetApeStructureVillage(defenderBuilding) is not { } defenderPosition)
             return false;
@@ -144,9 +167,9 @@ public sealed partial class SimulationWorld
         var residents = new[] { attacker, defender }.Select(village => _apeVillageHomes
             .Where(pair => pair.Value == village && _critterIndicesById.ContainsKey(pair.Key))
             .Select(pair => pair.Key).Order().ToArray()).ToArray();
-        if (!residents[0].Any(id => _species[_critterIndicesById[id]] is CritterSpecies.Ape or CritterSpecies.ApeWarrior) ||
+        if (!residents[0].Any(id => _species[_critterIndicesById[id]] is CritterSpecies.Ape or CritterSpecies.ApeWarrior or CritterSpecies.ApeRoyalGuard) ||
             (bloodWar ? residents[1].Length == 0 : !residents[1].Any(id =>
-                _species[_critterIndicesById[id]] is CritterSpecies.Ape or CritterSpecies.ApeWarrior)))
+                _species[_critterIndicesById[id]] is CritterSpecies.Ape or CritterSpecies.ApeWarrior or CritterSpecies.ApeRoyalGuard)))
             return false;
         var war = new ApeWar(attacker, defender, distances, bloodWar);
         for (var side = 0; side < 2; side++)
@@ -155,7 +178,7 @@ public sealed partial class SimulationWorld
             {
                 // Camps fight with their existing warriors, pirates, and chiefs.
                 war.DefendingWarriors.UnionWith(residents[side].Where(id =>
-                    _species[_critterIndicesById[id]] is CritterSpecies.ApeWarrior));
+                    _species[_critterIndicesById[id]] is CritterSpecies.ApeWarrior or CritterSpecies.ApeRoyalGuard));
                 continue;
             }
             if (bloodWar && side == 1)
@@ -165,19 +188,21 @@ public sealed partial class SimulationWorld
                 {
                     var index = _critterIndicesById[id];
                     if (_species[index] is CritterSpecies.ApeTrader or CritterSpecies.ApeTraderSailor ||
-                        !IsLivingApe(_species[index]) ||
-                        _species[index] is CritterSpecies.ApeWarrior or CritterSpecies.ApeChieftain or
-                            CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack)
+                        !CanRecruitApe(index) ||
+                        _species[index] is CritterSpecies.ApeWarrior or CritterSpecies.ApeRoyalGuard or CritterSpecies.ApeBomber or CritterSpecies.ApeChieftain or CritterSpecies.ApeKing or CritterSpecies.ApeQueen or
+                            CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack ||
+                        GetApeCultureDefinition(side == 0 ? attacker : defender)?.Units.Any(unit =>
+                            unit.Species == _species[index] && !unit.Combatant) is true)
                         continue;
                     war.OriginalRoles[id] = _species[index];
                     ChangeCritterSpecies(index, CritterSpecies.ApeWarrior,
                         preserveEnergy: true, preserveApeVillage: true);
                 }
                 war.DefendingWarriors.UnionWith(residents[side].Where(id =>
-                    _species[_critterIndicesById[id]] is CritterSpecies.ApeWarrior));
+                    _species[_critterIndicesById[id]] is CritterSpecies.ApeWarrior or CritterSpecies.ApeRoyalGuard));
                 continue;
             }
-            var unemployed = residents[side].Where(id => _species[_critterIndicesById[id]] is CritterSpecies.Ape).ToArray();
+            var unemployed = residents[side].Where(id => _species[_critterIndicesById[id]] is CritterSpecies.Ape && CanRecruitApe(_critterIndicesById[id])).ToArray();
             foreach (var id in unemployed.Take((int)Math.Ceiling(unemployed.Length * 0.9)))
             {
                 ChangeCritterSpecies(_critterIndicesById[id], CritterSpecies.ApeWarrior,
@@ -185,9 +210,11 @@ public sealed partial class SimulationWorld
                 war.Levies.Add(id);
             }
             var army = side == 0 ? war.AttackingWarriors : war.DefendingWarriors;
-            army.UnionWith(residents[side].Where(id => _species[_critterIndicesById[id]] is CritterSpecies.ApeWarrior));
+            army.UnionWith(residents[side].Where(id => _species[_critterIndicesById[id]] is CritterSpecies.ApeWarrior or CritterSpecies.ApeRoyalGuard));
         }
         _apeWars[attacker] = _apeWars[defender] = war;
+        RecruitApeCultureBombers(war, attacker);
+        RecruitApeCultureBombers(war, defender);
         if (bloodWar) war.Distances = BuildWarDistances(GetBloodWarTargets(war));
         return true;
     }
@@ -221,6 +248,8 @@ public sealed partial class SimulationWorld
 
     private bool TryGetApeWar(int index, out ApeWar war)
     {
+        if (TryGetLichWar(index, out war))
+            return true;
         war = null!;
         return _apeVillageHomes.TryGetValue(_critterIds[index].Value, out var village) &&
             _apeWars.TryGetValue(village, out war!) && (!war.CivilWar ||
@@ -229,6 +258,7 @@ public sealed partial class SimulationWorld
     }
 
     private bool AreWarEnemies(int first, int second) =>
+        AreLichWarEnemies(first, second) ||
         TryGetApeWar(first, out var war) &&
         _apeVillageHomes.TryGetValue(_critterIds[first].Value, out var home) &&
         _apeVillageHomes.TryGetValue(_critterIds[second].Value, out var other) &&
@@ -238,15 +268,20 @@ public sealed partial class SimulationWorld
                 war.DefendingWarriors.Contains(_critterIds[first].Value) && war.AttackingWarriors.Contains(_critterIds[second].Value))
             : other == (home == war.Attacker ? war.Defender : war.Attacker));
 
-    private bool CanTargetWarApe(int first, int second) => AreWarEnemies(first, second) &&
-        (_species[second] is CritterSpecies.ApeWarrior or CritterSpecies.ApeChieftain ||
+    private bool CanTargetWarApe(int first, int second) => AreLichWarEnemies(first, second) || (AreWarEnemies(first, second) &&
+        (_species[second] is CritterSpecies.ApeWarrior or CritterSpecies.ApeRoyalGuard or CritterSpecies.ApeBomber or CritterSpecies.ApeChieftain or CritterSpecies.ApeKing or CritterSpecies.ApeQueen ||
             TryGetApeWar(first, out var war) && war.BloodWar &&
-            _apeVillageHomes[_critterIds[first].Value] == war.Attacker);
+            _apeVillageHomes[_critterIds[first].Value] == war.Attacker));
 
     internal void AdvanceApeWars()
     {
         foreach (var war in _apeWars.Values.Distinct().ToArray())
         {
+            if (war.LichId is not null)
+            {
+                AdvanceLichWar(war);
+                continue;
+            }
             bool Surviving(int id) => war.CivilWar
                 ? !war.DemobilizedWorkers.Contains(id) && IsSurvivingCivilWarFighter(id)
                 : IsSurvivingWarrior(id);
@@ -257,7 +292,8 @@ public sealed partial class SimulationWorld
             {
                 foreach (var (id, role) in war.OriginalRoles)
                 {
-                    if (role is CritterSpecies.Ape or CritterSpecies.ApeWarrior or CritterSpecies.ApeChieftain ||
+                    if (role is CritterSpecies.Ape or CritterSpecies.ApeWarrior or CritterSpecies.ApeRoyalGuard or CritterSpecies.ApeBomber or CritterSpecies.ApeChieftain or CritterSpecies.ApeKing or CritterSpecies.ApeQueen ||
+                        war.Bombers.Contains(id) || IsApeCulturalCombatUnit(war.Attacker, role) ||
                         !Surviving(id) || IsVeteranWarrior(_critterIndicesById[id]) || !war.DemobilizedWorkers.Add(id)) continue;
                     var index = _critterIndicesById[id];
                     if (!CanLiveOn(_species[index], GetIndex(_positions[index])))
@@ -292,13 +328,30 @@ public sealed partial class SimulationWorld
                 _apeVillageWood[winner] = _apeVillageWood.GetValueOrDefault(winner) + _apeVillageWood.GetValueOrDefault(loser);
                 _apeVillageFood[loser] = _apeVillageWood[loser] = 0;
             }
+            if (war.CivilWar && defenderLost)
+                RemoveApeCulture(war.Attacker);
+            var mergeWinner = war.MergeOnVictory && attackerLost != defenderLost ?
+                attackerLost ? war.Defender : war.Attacker : -1;
+            var mergeLoser = mergeWinner < 0 ? -1 : mergeWinner == war.Attacker ? war.Defender : war.Attacker;
             EndApeWar(war);
+            if (mergeWinner >= 0 && IsWarVillage(mergeWinner) && IsWarVillage(mergeLoser))
+            {
+                RemoveApeCulture(mergeLoser);
+                MergeApeVillageInto(mergeLoser, mergeWinner);
+            }
         }
     }
 
     /// <summary>Ends either war variant without declaring a winner or transferring stores.</summary>
     public bool TryStopApeWar(GridPosition villageBuilding)
     {
+        if (!Contains(villageBuilding))
+            return false;
+        if (GetLichAt(villageBuilding) is var lich && lich >= 0 && _lichWars.TryGetValue(lich, out var lichWar))
+        {
+            EndApeWar(lichWar);
+            return true;
+        }
         if (GetApeStructureVillage(villageBuilding) is not { } village ||
             !_apeWars.TryGetValue(GetIndex(village), out var war))
             return false;
@@ -308,6 +361,12 @@ public sealed partial class SimulationWorld
 
     private void EndApeWar(ApeWar war)
     {
+        _apeVillageMergeCheckNeeded = true;
+        foreach (var id in war.Bombers)
+            if (_critterIndicesById.TryGetValue(id, out var index) && _species[index] is CritterSpecies.ApeBomber)
+                ChangeCritterSpecies(index, CritterSpecies.ApeWarrior, true, true);
+        if (war.LichId is { } lich)
+            _lichWars.Remove(lich);
         _villageWarCooldowns[war.Attacker] = _villageWarCooldowns[war.Defender] = Tick + VillageWarCooldownTicks;
         foreach (var pair in _apeVillageHomes)
             if ((pair.Value == war.Attacker || pair.Value == war.Defender) &&
@@ -321,11 +380,11 @@ public sealed partial class SimulationWorld
             if (pair.Value == war.Attacker || pair.Value == war.Defender)
                 _chieftainAttackTargets.Remove(pair.Key);
         foreach (var id in war.Levies)
-            if (!_returningWarSailors.ContainsKey(id) && _critterIndicesById.TryGetValue(id, out var index) && _species[index] is CritterSpecies.ApeWarrior && !IsVeteranWarrior(index))
+            if (!_returningWarSailors.ContainsKey(id) && _critterIndicesById.TryGetValue(id, out var index) && _species[index] is CritterSpecies.ApeWarrior or CritterSpecies.ApeRoyalGuard && !IsVeteranWarrior(index))
                 ChangeCritterSpecies(index, CritterSpecies.Ape, preserveEnergy: true, preserveApeVillage: true);
         foreach (var (id, role) in war.OriginalRoles)
             if (!_returningWarSailors.ContainsKey(id) && _critterIndicesById.TryGetValue(id, out var index) &&
-                _species[index] is CritterSpecies.ApeWarrior && role != CritterSpecies.ApeWarrior && !IsVeteranWarrior(index))
+                _species[index] is CritterSpecies.ApeWarrior or CritterSpecies.ApeRoyalGuard && role != CritterSpecies.ApeWarrior && !IsVeteranWarrior(index))
                 ChangeCritterSpecies(index, role, preserveEnergy: true, preserveApeVillage: true);
         PrioritizeVillageVeterans(war.Attacker);
         if (war.Defender != war.Attacker && !_barbarianVillageTiles.Contains(war.Defender))
@@ -333,10 +392,10 @@ public sealed partial class SimulationWorld
     }
 
     private bool IsSurvivingWarrior(int id) => _critterIndicesById.TryGetValue(id, out var index) &&
-        _species[index] is CritterSpecies.ApeWarrior;
+        IsApeMilitary(_species[index]);
 
     private bool IsSurvivingCivilWarFighter(int id) => _critterIndicesById.TryGetValue(id, out var index) &&
-        _species[index] is CritterSpecies.ApeWarrior or CritterSpecies.ApeChieftain;
+        (IsApeMilitary(_species[index]) || _species[index] is CritterSpecies.ApeChieftain or CritterSpecies.ApeKing or CritterSpecies.ApeQueen);
 
     private GridPosition? TryReturnWarSailor(int index, IReadOnlySet<GridPosition>? reserved)
     {
@@ -377,6 +436,8 @@ public sealed partial class SimulationWorld
     {
         if (!TryGetApeWar(index, out var war))
             return null;
+        if (war.LichId is not null)
+            return TryMoveLichWarMember(index, war, reserved);
         var current = GetIndex(_positions[index]);
         var neighbors = RoadNeighbors(current).ToArray();
         foreach (var tile in neighbors)
@@ -408,7 +469,7 @@ public sealed partial class SimulationWorld
         var best = neighbors.Where(tile => CanCritterLiveOn(index, tile) && _occupants[tile] < 0 &&
                 reserved?.Contains(GetPosition(tile)) is not true && Distance(tile) < Distance(current))
             .OrderBy(Distance).ThenBy(_ => NextInt(8)).DefaultIfEmpty(-1).First();
-        if (best < 0 && _species[index] is CritterSpecies.ApeWarrior)
+        if (best < 0 && IsApeMilitary(_species[index]))
             foreach (var tile in neighbors.Where(tile => CanCritterLiveOn(index, tile) &&
                          reserved?.Contains(GetPosition(tile)) is not true && Distance(tile) < Distance(current))
                          .OrderBy(Distance).ThenBy(tile => tile))

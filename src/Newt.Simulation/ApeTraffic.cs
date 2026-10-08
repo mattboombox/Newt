@@ -9,14 +9,14 @@ public sealed partial class SimulationWorld
     {
         var blocker = _occupants[destination];
         var origin = GetIndex(_positions[mover]);
-        if (_species[mover] is not (CritterSpecies.ApeWarrior or CritterSpecies.ApeTrader or CritterSpecies.ApeTraderSailor) ||
+        if (_species[mover] is not (CritterSpecies.ApeWarrior or CritterSpecies.ApeRoyalGuard or CritterSpecies.ApeBomber or CritterSpecies.ApeTrader or CritterSpecies.ApeTraderSailor) ||
             blocker < 0 || blocker == mover ||
             _species[blocker] is CritterSpecies.ApeTrader or CritterSpecies.ApeTraderSailor ||
             !CanDisplace(_species[mover], _species[blocker]) ||
             IsCaughtInMegaSpiderWeb(mover) || IsCaughtInMegaSpiderWeb(blocker) ||
             reserved?.Contains(_positions[mover]) is true || reserved?.Contains(_positions[blocker]) is true ||
             !CanCritterLiveOn(mover, destination) || !CanCritterLiveOn(blocker, origin) ||
-            (_species[mover] is CritterSpecies.ApeWarrior && AreWarEnemies(mover, blocker)))
+            (IsApeMilitary(_species[mover]) && AreWarEnemies(mover, blocker)))
             return false;
 
         var from = _positions[mover];
