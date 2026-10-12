@@ -29,6 +29,9 @@ public sealed class VampireColonyTests
         Assert.True(world.TrySpawnTestApeVillage(new(10, 10)));
         var homes = (Dictionary<int, int>)typeof(SimulationWorld).GetField("_apeVillageHomes", Private)!.GetValue(world)!;
         var villageTile = Village.Y * world.Width + Village.X;
+        if (population == 0)
+            foreach (var id in homes.Where(pair => pair.Value == villageTile).Select(pair => pair.Key).ToArray())
+                homes.Remove(id);
         while (homes.Count(pair => pair.Value == villageTile) < population)
         {
             var count = homes.Count(pair => pair.Value == villageTile);
@@ -47,14 +50,13 @@ public sealed class VampireColonyTests
         typeof(SimulationWorld).GetMethod("TryMoveVampire", Private)!.Invoke(world, [index, null]);
     }
 
-    [Fact]
-    public void ColonyToolRequiresFiftyResidentsAndUsesApeColonistEnergy()
+    [Theory]
+    [InlineData(0)]
+    [InlineData(49)]
+    [InlineData(50)]
+    public void ColonyToolHasNoPopulationRequirementAndUsesApeColonistEnergy(int population)
     {
-        var small = CreateWorld(49);
-        Assert.False(small.TrySendApeColonist(Lair));
-        Assert.False(small.TrySendVampireColonist(Lair, out var smallStatus));
-        Assert.Equal("Needs another regular village with 50+ residents", smallStatus);
-        var world = CreateWorld(50);
+        var world = CreateWorld(population);
         Assert.True(world.TrySendVampireColonist(Lair, out var launchedStatus));
         Assert.Equal("Vampire colonist launched!", launchedStatus);
         var colonist = Colonist(world);
@@ -93,15 +95,16 @@ public sealed class VampireColonyTests
     }
 
     [Fact]
-    public void ShrinkingVillageInvalidatesDestination()
+    public void ShrinkingVillageDoesNotInvalidateDestination()
     {
         var world = CreateWorld(50);
         Assert.True(world.TrySendApeColonist(Lair));
         var colonist = Colonist(world);
         var homes = (Dictionary<int, int>)typeof(SimulationWorld).GetField("_apeVillageHomes", Private)!.GetValue(world)!;
-        homes.Remove(homes.First(pair => pair.Value == Village.Y * world.Width + Village.X).Key);
+        foreach (var id in homes.Where(pair => pair.Value == Village.Y * world.Width + Village.X).Select(pair => pair.Key).ToArray())
+            homes.Remove(id);
         Move(world, colonist.Id);
-        Assert.Null(Colonist(world).ColonistDestination);
+        Assert.Equal(colonist.ColonistDestination, Colonist(world).ColonistDestination);
         Assert.False(world.HasVampireLair(colonist.ColonistDestination!.Value));
     }
 
@@ -111,6 +114,8 @@ public sealed class VampireColonyTests
         var world = CreateWorld(50);
         var homes = (Dictionary<int, int>)typeof(SimulationWorld).GetField("_apeVillageHomes", Private)!.GetValue(world)!;
         foreach (var id in homes.Keys.ToArray()) homes[id] = 10 * world.Width + 10;
+        var structures = (Dictionary<int, ApeStructureKind>)typeof(SimulationWorld).GetField("_apeStructures", Private)!.GetValue(world)!;
+        structures.Remove(Village.Y * world.Width + Village.X);
         Assert.False(world.TrySendApeColonist(Lair));
     }
 
@@ -125,7 +130,7 @@ public sealed class VampireColonyTests
         }
         Assert.False(world.TrySendApeColonist(Lair));
         Assert.False(world.TrySendVampireColonist(Lair, out var status));
-        Assert.Equal("No reachable colony site near another 50+ resident village", status);
+        Assert.Equal("No reachable colony site near another regular village", status);
     }
 
     [Fact]
@@ -140,7 +145,7 @@ public sealed class VampireColonyTests
     [Fact]
     public void FullLairsLaunchNaturalColoniesOnlyWhenEventsEnabled()
     {
-        var world = CreateWorld(50, full: true);
+        var world = CreateWorld(0, full: true);
         typeof(SimulationWorld).GetProperty("Tick")!.SetValue(world, 60L * SimulationWorld.TicksPerSecond);
         var tile = Lair.Y * world.Width + Lair.X;
         Assert.False(world.TryLaunchVampireColony(tile));

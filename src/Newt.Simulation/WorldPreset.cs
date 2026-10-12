@@ -14,6 +14,8 @@ public readonly record struct WorldPreset(string Name, int Width, int Height)
 
     public static WorldPreset Ring => new("Ring World", 1280, 44);
 
+    public static WorldPreset RingMega => new("Mega", Ring.Width * 2, Ring.Height);
+
     public static WorldPreset Earth => new("Earth", 1280, 642);
 
     // Stress-test preset: fills a 2560x1440 display above the 156px HUD at 2px per tile.

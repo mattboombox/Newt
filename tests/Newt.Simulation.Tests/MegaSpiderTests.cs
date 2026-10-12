@@ -5,6 +5,25 @@ namespace Newt.Simulation.Tests;
 public sealed class MegaSpiderTests
 {
     [Theory]
+    [InlineData(CritterSpecies.Lich, false)]
+    [InlineData(CritterSpecies.UndeadWarrior, false)]
+    [InlineData(CritterSpecies.UndeadApe, true)]
+    public void UndeadDietExcludesLichesAndWarriorsButIncludesZombies(CritterSpecies prey, bool canHunt)
+    {
+        Assert.Equal(canHunt, SimulationWorld.CanEat(CritterSpecies.MegaSpider, prey));
+        var world = new SimulationWorld(3, 1, Terrain.Plains);
+        world.AddCritter(CritterSpecies.MegaSpider, new(0, 0));
+        world.AddCritter(prey, new(1, 0));
+        Assert.Equal(canHunt, world.FindHunterPrey(0, CritterSpecies.MegaSpider, 6, null) is not null);
+        if (!canHunt)
+        {
+            var energy = world.GetCritter(1).Energy;
+            world.CommitEncounter(new(0, 0), new(1, 0));
+            Assert.Equal(energy, world.GetCritter(1).Energy);
+        }
+    }
+
+    [Theory]
     [InlineData(Biome.None)]
     [InlineData(Biome.Grassland)]
     [InlineData(Biome.Desert)]

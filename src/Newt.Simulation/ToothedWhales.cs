@@ -17,6 +17,20 @@ public sealed partial class SimulationWorld
     internal GridPosition? FindToothedWhalePrey(int whaleIndex, IReadOnlySet<GridPosition>? reservedPrey)
     {
         var whaleId = _critterIds[whaleIndex].Value;
+        if (!CritterNutritions.Get(CritterSpecies.ToothedWhale).WantsToHuntAt(_energy[whaleIndex]))
+        {
+            _toothedWhaleHunts.Remove(whaleId);
+            return null;
+        }
+        // Rebuild reserves before continuing a costly fight when safe food is nearby.
+        if (CritterNutritions.Get(CritterSpecies.ToothedWhale).IsHungryAt(_energy[whaleIndex]) &&
+            FindHunterPrey(whaleIndex, CritterSpecies.ToothedWhale,
+                ToothedWhalePerceptionRadius, reservedPrey, nonCombatPreyOnly: true) is { } food)
+        {
+            var prey = _occupants[GetIndex(food)];
+            _toothedWhaleHunts[whaleId] = (_critterIds[prey].Value, Tick + ToothedWhalePursuitTicks);
+            return food;
+        }
         if (_toothedWhaleHunts.TryGetValue(whaleId, out var hunt) && Tick < hunt.UntilTick &&
             _critterIndicesById.TryGetValue(hunt.PreyId, out var preyIndex) &&
             CanPursuePrey(whaleIndex, preyIndex) &&

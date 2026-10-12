@@ -5,19 +5,22 @@ namespace Newt.Simulation.Tests;
 
 public sealed class SnailTests
 {
-    [Fact]
-    public void SnailFeedsOnBeachWhileNewtDoesNot()
+    [Theory]
+    [InlineData(Biome.None)]
+    [InlineData(Biome.Forest)]
+    public void SnailCannotFeedOnBeaches(Biome biome)
     {
         var world = new SimulationWorld(2, 1, Terrain.Beach) { SeasonsEnabled = false };
         world.SetTemperature(new GridPosition(0, 0), 0.5f);
         world.SetTemperature(new GridPosition(1, 0), 0.5f);
+        world.SetBiome(new(0, 0), biome);
         var snail = world.AddCritter(CritterSpecies.Snail, new(0, 0));
         world.AddCritter(CritterSpecies.Newt, new(1, 0));
         var feed = typeof(SimulationWorld).GetMethod("TryFeedFromTerrain", BindingFlags.NonPublic | BindingFlags.Instance)!;
-        Assert.Equal(true, feed.Invoke(world, [0]));
+        Assert.Equal(false, feed.Invoke(world, [0]));
         Assert.Equal(false, feed.Invoke(world, [1]));
         Assert.True(world.TryGetCritter(snail, out var fed));
-        Assert.Equal(CritterNutritions.Get(CritterSpecies.Snail).InitialEnergy + 1, fed.Energy);
+        Assert.Equal(CritterNutritions.Get(CritterSpecies.Snail).InitialEnergy, fed.Energy);
     }
     [Fact]
     public void NautilusCanEvolveIntoEitherSquidOrSnail()
@@ -39,20 +42,23 @@ public sealed class SnailTests
         Assert.True(SimulationWorld.GetMovementIntervalTicks(CritterSpecies.Snail) > SimulationWorld.GetMovementIntervalTicks(CritterSpecies.Newt));
         foreach (var predator in Enum.GetValues<CritterSpecies>())
         {
-            Assert.Equal(SimulationWorld.CanEat(predator, CritterSpecies.Newt), SimulationWorld.CanEat(predator, CritterSpecies.Snail));
+            if (predator is not CritterSpecies.Monkey)
+                Assert.Equal(SimulationWorld.CanEat(predator, CritterSpecies.Newt), SimulationWorld.CanEat(predator, CritterSpecies.Snail));
             if (!SimulationWorld.CanEat(predator, CritterSpecies.Snail)) continue;
             Assert.True(SimulationWorld.CanPursuePreyAtDistance(predator, CritterSpecies.Snail, 1));
-            Assert.False(SimulationWorld.CanPursuePreyAtDistance(predator, CritterSpecies.Snail, 2));
+            Assert.Equal(predator is CritterSpecies.Monkey,
+                SimulationWorld.CanPursuePreyAtDistance(predator, CritterSpecies.Snail, 2));
         }
     }
 
     [Theory]
     [InlineData(Biome.Swamp, SurfaceWaterKind.None, true)]
     [InlineData(Biome.Jungle, SurfaceWaterKind.None, true)]
-    [InlineData(Biome.Grassland, SurfaceWaterKind.River, true)]
-    [InlineData(Biome.Grassland, SurfaceWaterKind.FreshwaterLake, true)]
+    [InlineData(Biome.Forest, SurfaceWaterKind.None, false)]
+    [InlineData(Biome.Grassland, SurfaceWaterKind.River, false)]
+    [InlineData(Biome.Grassland, SurfaceWaterKind.FreshwaterLake, false)]
     [InlineData(Biome.Grassland, SurfaceWaterKind.None, false)]
-    public void SnailFeedsInWetlandsAndFreshwater(Biome biome, SurfaceWaterKind water, bool feeds)
+    public void SnailFeedsInWetlandsButNotForestOrFreshwater(Biome biome, SurfaceWaterKind water, bool feeds)
     {
         var world = new SimulationWorld(1, 1, Terrain.Plains) { SeasonsEnabled = false };
         NaturalEvents.SetEnabled(world, false);

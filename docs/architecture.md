@@ -101,7 +101,7 @@ blocker dies and counts as a meal only when the mover can legally eat that speci
 otherwise movement remains blocked. Deliberate hunting always consumes legal prey.
 
 Ambient food is finite per tile. Terrestrial capacity is Jungle 6, Swamp 5,
-Forest 4, Grassland and Taiga 3, Bog and Arid 2, Tundra 1, and Desert and Arctic
+Forest 4, Grassland, Taiga, and Bog 3, Arid 2, Tundra and Desert 1, and Arctic
 0. Ice Sheets over shelf Ocean hold 1; deep-ocean Ice Sheets hold 0. Beaches hold
 0 when freezing and 1 otherwise. Shallows hold
 6 freezing, 5 cold, 4 temperate, and 3 hot. Deep Ocean is always 0. Ordinary
@@ -117,13 +117,23 @@ Feeding consumes one unit. Regeneration is
 computed lazily only when a tile is queried, at `480 / capacity` seconds per unit,
 so no world-sized nutrition update runs each tick. Capacity differences are retained
 instead of flattening biomes; only the shared regeneration curve is slower. Jungle
-therefore needs 80 seconds per unit, slightly longer than a Therapsid's 70-second
+therefore needs 80 seconds per unit, slightly longer than the shared 75-second
 metabolism, so a continent packed tile-for-tile cannot support the population forever.
+Every species starts with one-third of its maximum energy, rounded down with a
+minimum of one. Breeding requires full energy and costs half the maximum, rounded
+up. Metabolizing critters lose one energy every 75 seconds. Their first metabolism
+ticks are staggered across one second by stable critter ID to spread mass-spawn
+work without changing random outcomes. Non-breeding and non-metabolizing species
+retain explicit exemptions.
 When a critter starves, it leaves one deposited nutrient on its tile. Deposited
 nutrition is stored as a separate byte per tile, can temporarily exceed the natural
 capacity, and remains edible even on terrain whose natural capacity is zero. The
 deposit is made during the existing lifecycle pass, so it adds no map-wide scan.
 Terrain feeding is part of the critter's normal action, with no separate feeding timer.
+Snails eat Swamp and Jungle foliage, not Forest foliage, leaving Forest food for
+Mega Slugs and other forest feeders. As an ecology balancing guideline, reduce
+diet overlap between ancestors and descendants so stronger evolved forms do not
+displace their ancestors purely through competition for the same food.
 Terrain-first omnivores flee first, eat available terrain food, approach nearby productive
 terrain, and hunt the nearest legal prey only when no terrain food is usable. Pure grazers
 stop before hunting, while dedicated hunters skip terrain food. Plankton photosynthesize
@@ -185,7 +195,7 @@ Deep Ocean remains impassable. Every active predator except Fish may consume Cra
 encounters rather than pursuing them at range, including strikes across habitat boundaries.
 Crabs consume detritus from Beaches, Shallows, Swamps, and Jungles without freshwater on
 their normal movement action, remain there while building breeding energy,
-and reproduce directly on those coastal tiles at five energy for a cost of three,
+and reproduce directly on those coastal tiles at seven energy for a cost of four,
 leaving the parent safely fed. Feeding remains
 wetland and coastal, and hungry Crabs detect suitable food within five Manhattan tiles
 and move back toward it. Rivers and Freshwater Lakes remain traversable but provide no
@@ -325,15 +335,15 @@ open adjacent tile that is valid habitat for the offspring.
 Therapsids form the terrestrial amniote branch from Newts and evolve into
 Monkeys, Deer, Wolves, or Toothed Whales; Deer continue into Elk or Gazelle. Deer and Gazelles
 move every three seconds, while Elk move every six seconds. Gazelles graze Arid
-and Grassland foliage, but not Forest or Desert. Therapsids hunt only Fish within
+and Grassland foliage plus Desert nutrition, but not Forest. Therapsids hunt only Fish within
 a Manhattan radius of four; Monkeys and larger animals are not prey.
 Their six-second movement interval gives terrestrial prey more time to escape.
 Below breeding energy they remain on, or seek within four tiles, available Jungle,
-Swamp, or Arid foliage before hunting. Forest and Bog nutrition is reserved for other
+Swamp, Bog, or Arid foliage. Forest nutrition is reserved for other
 ecological niches. They eat one available terrain nutrient
 on their normal six-second action; Therapsids resume hunting when no supported forage is available.
 Deer feed only on Grassland and Forest, Elk only on Grassland, Tundra, and Taiga,
-and Gazelles only on Grassland and Arid. These restrictions apply to both natural
+and Gazelles only on Grassland, Arid, and Desert. These restrictions apply to both natural
 and deposited tile nutrition.
 From shore, a Therapsid can strike an immediately adjacent Fish
 in a Freshwater Lake and eat it without entering the lake itself.
@@ -352,11 +362,25 @@ They also consume feeder Crabs only when adjacent, following the universal Crab 
 Large land animals are eligible only while standing in Shallows; the whale will not
 pursue them on land or in deeper water. Toothed Whales ignore Jellyfish, Plankton,
 Worms, Squid Eggs, and smaller land animals.
+Below 20 energy, Toothed Whales are hungry and prioritize nearby prey that
+cannot fight, interrupting remembered combat targets to replenish their reserves.
+When no such food is available, they continue their normal hunting behavior.
+While pursuing prey, both whale species check adjacent target attacks before shoving
+blockers and shove only along a step toward their target, avoiding diversions in
+Plankton-filled oceans.
+Ordinary food hunters pursue prey only while strictly below two-thirds of maximum
+energy. Both whale species hunt whenever below full energy so they can reach their
+breeding threshold; Toothed Whales prioritize safe food below two-thirds energy.
+Tile feeders continue eating
+available nutrients whenever below full energy. The critter UI shows energy and
+behavior without separate hunting or reproduction status fields. Village feeding, military defense, and supernatural attacks
+retain their separate rules.
 Baleen Whales evolve from Toothed Whales and reuse their saltwater habitat, huge
 body size, energy economy, and four-second movement interval. Their perception
 radius is twenty-four tiles. Their diet contains only Plankton, which give them two energy each.
-The critter that loses any mutual-predator combat roll exposes a deterministic
-half-second damage-flash state. The presentation renders that critter white for
+The winner of a mutual-predator combat roll deals its combat damage, limited only
+by the loser's remaining energy; newborn starting energy does not cap hits.
+The loser exposes a deterministic half-second damage-flash state. The presentation renders that critter white for
 the duration without changing combat timing or movement.
 Every naturally born critter records its parent's species for a deterministic
 thirty-second reproduction truce. During that window neither the offspring nor
@@ -371,13 +395,18 @@ Toad restores eight. Either survivor therefore reaches only thirteen energy—on
 short of another birth—so a closed population cannot sustain itself without
 outside prey.
 
-Monkeys are non-predatory and eat available Swamp, Jungle, or Forest foliage on their normal
+Monkeys eat available Swamp, Jungle, Forest, or Bog foliage on their normal
 five-second action. Their reproduction threshold is
-eight energy with a cost of five. A Monkey below breeding energy remains on
-Swamp, Jungle, or Forest foliage to keep feeding, while a hungry Monkey adjacent to
+eight energy with a cost of four. A Monkey below breeding energy remains on
+Swamp, Jungle, Forest, or Bog foliage to keep feeding, while a hungry Monkey adjacent to
 one of those biomes moves toward it. Wolves and Mega Toads may eat Monkeys only
 when adjacent, including diagonal neighbors and neighbors across the horizontal
 map seam. Monkeys receive no special target priority and are not pursued at range.
+When no tile food is available, Monkeys strictly below two-thirds energy spot and
+pursue Snails and Crabs within four tiles. They do not hunt Newts. Other hunters
+retain their adjacency restrictions for Snails and Crabs.
+Jellyfish always consume Plankton they drift into, even at full energy, rather
+than shoving it. They remain directionless drifters and always hunt on contact.
 
 Barbarian apes combine land and sailor habitats, allowing them to enter saltwater,
 rivers, and lakes while retaining their species, energy, and village membership.

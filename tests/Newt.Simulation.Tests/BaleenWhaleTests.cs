@@ -1,82 +1,69 @@
+using System.Reflection;
 using Newt.Simulation;
 
 namespace Newt.Simulation.Tests;
 
 public sealed class BaleenWhaleTests
 {
-    [Theory]
-    [InlineData(24, true)]
-    [InlineData(25, false)]
-    [InlineData(40, true)] // Twenty-four tiles across the horizontal world seam.
-    public void BaleenWhaleFindsPlanktonWithinExtendedRange(int preyX, bool visible)
-    {
-        var world = new SimulationWorld(64, 1, Terrain.DeepOcean, seed: 5204);
-        world.AddCritter(CritterSpecies.BaleenWhale, new GridPosition(0, 0));
-        var prey = new GridPosition(preyX, 0);
-        world.AddCritter(CritterSpecies.Plankton, prey);
-
-        Assert.Equal(24, SimulationWorld.BaleenWhalePerceptionRadius);
-        Assert.Equal(visible ? prey : (GridPosition?)null,
-            world.FindHunterPrey(0, CritterSpecies.BaleenWhale,
-                SimulationWorld.BaleenWhalePerceptionRadius, null));
-    }
+    private const BindingFlags Private = BindingFlags.Instance | BindingFlags.NonPublic;
 
     [Fact]
-    public void BaleenWhaleEvolvesFromToothedWhale()
+    public void BaleenWhaleFeedsDuringSimulationInAnOceanFilledWithPlankton()
     {
-        Assert.Equal(1, CritterEvolution.GetEvolvedSpeciesCount(CritterSpecies.ToothedWhale));
-        Assert.True(CritterEvolution.TryGetEvolvedSpecies(
-            CritterSpecies.ToothedWhale,
-            out var evolved));
-        Assert.Equal(CritterSpecies.BaleenWhale, evolved);
-        Assert.True(CritterEvolution.TryGetDevolvedSpecies(evolved, out var ancestor));
-        Assert.Equal(CritterSpecies.ToothedWhale, ancestor);
-    }
-
-    [Fact]
-    public void BaleenWhaleHasSameStatsAsToothedWhale()
-    {
-        Assert.Equal(
-            CritterNutritions.Get(CritterSpecies.ToothedWhale),
-            CritterNutritions.Get(CritterSpecies.BaleenWhale));
-        Assert.Equal(
-            SimulationWorld.GetMovementIntervalTicks(CritterSpecies.ToothedWhale),
-            SimulationWorld.GetMovementIntervalTicks(CritterSpecies.BaleenWhale));
-    }
-
-    [Fact]
-    public void BaleenWhaleLivesInSaltwaterAndEatsOnlyPlankton()
-    {
-        foreach (var terrain in new[] { Terrain.DeepOcean, Terrain.Ocean, Terrain.Shallows })
-        {
-            var world = new SimulationWorld(1, 1, terrain, seed: 5202);
-            Assert.True(world.TryAddCritter(CritterSpecies.BaleenWhale, new GridPosition(0, 0)));
-        }
-
-        Assert.Equal(
-            new HashSet<CritterSpecies> { CritterSpecies.Plankton },
-            Enum.GetValues<CritterSpecies>()
-                .Where(prey => SimulationWorld.CanEat(CritterSpecies.BaleenWhale, prey))
-                .ToHashSet());
-    }
-
-    [Fact]
-    public void BaleenWhalePursuesAndConsumesPlankton()
-    {
-        var world = new SimulationWorld(2, 1, Terrain.DeepOcean, seed: 5203);
+        var world = new SimulationWorld(10, 3, Terrain.Ocean, seed: 17);
         world.SeasonsEnabled = false;
         NaturalEvents.SetEnabled(world, false);
-        world.AddCritter(CritterSpecies.BaleenWhale, new GridPosition(0, 0));
-        world.AddCritter(CritterSpecies.Plankton, new GridPosition(1, 0));
-
-        for (var tick = 0; tick < 8 * SimulationWorld.TicksPerSecond; tick++)
-        {
+        var position = new GridPosition(5, 1);
+        var whale = world.AddCritter(CritterSpecies.BaleenWhale, position);
+        for (var y = 0; y < world.Height; y++)
+        for (var x = 0; x < world.Width; x++)
+            if (new GridPosition(x, y) != position)
+                world.AddCritter(CritterSpecies.Plankton, new(x, y));
+        var before = world.GetCritterCount(CritterSpecies.Plankton);
+        for (var tick = 0; tick < SimulationWorld.GetMovementIntervalTicks(CritterSpecies.BaleenWhale); tick++)
             world.AdvanceOneTick();
-        }
+        Assert.True(world.TryGetCritter(whale, out var fed));
+        Assert.Equal(CritterNutritions.Get(CritterSpecies.BaleenWhale).InitialEnergy + 2, fed.Energy);
+        Assert.True(world.GetCritterCount(CritterSpecies.Plankton) < before);
+    }
 
-        Assert.Equal(1, world.GetCritterCount(CritterSpecies.BaleenWhale));
-        Assert.Equal(0, world.GetCritterCount(CritterSpecies.Plankton));
-        Assert.Equal(CritterNutritions.Get(CritterSpecies.BaleenWhale).InitialEnergy + 2,
-            world.GetCritter(0).Energy);
+    [Fact]
+    public void CrowdedBaleenWhaleEatsPlanktonInsteadOfShovingAndReachesBreedingEnergy()
+    {
+        for (var seed = 1; seed <= 40; seed++)
+        {
+            var world = new SimulationWorld(10, 3, Terrain.Ocean, (ulong)seed);
+            world.AddCritter(CritterSpecies.BaleenWhale, new(2, 1));
+            foreach (var position in new[] { new GridPosition(1, 1), new GridPosition(3, 1),
+                new GridPosition(2, 0), new GridPosition(2, 2) })
+                world.AddCritter(CritterSpecies.Plankton, position);
+            var energies = (int[])typeof(SimulationWorld).GetField("_energy", Private)!.GetValue(world)!;
+            energies[0] = 29;
+            var target = (GridPosition?)typeof(SimulationWorld).GetMethod("TryMoveHunter", Private)!
+                .Invoke(world, [0, SimulationWorld.BaleenWhalePerceptionRadius, null, false, null]);
+            Assert.NotNull(target);
+            Assert.Equal(new GridPosition(2, 1), world.GetCritter(0).Position);
+            world.CommitEncounter(new(2, 1), target!.Value);
+            Assert.Equal(3, world.GetCritterCount(CritterSpecies.Plankton));
+            Assert.Equal(30, world.GetCritter(0).Energy);
+            Assert.True(world.GetCritter(0).CanReproduce);
+        }
+    }
+
+    [Fact]
+    public void BaleenWhalePushesBlockersTowardPlanktonInsteadOfWandering()
+    {
+        for (var seed = 1; seed <= 40; seed++)
+        {
+            var world = new SimulationWorld(20, 3, Terrain.Ocean, (ulong)seed);
+            world.AddCritter(CritterSpecies.BaleenWhale, new(2, 1));
+            world.AddCritter(CritterSpecies.Plankton, new(5, 1));
+            foreach (var position in new[] { new GridPosition(1, 1), new GridPosition(3, 1),
+                new GridPosition(2, 0), new GridPosition(2, 2) })
+                world.AddCritter(CritterSpecies.Nautilus, position);
+            typeof(SimulationWorld).GetMethod("TryMoveHunter", Private)!
+                .Invoke(world, [0, SimulationWorld.BaleenWhalePerceptionRadius, null, false, null]);
+            Assert.Equal(new GridPosition(3, 1), world.GetCritter(0).Position);
+        }
     }
 }

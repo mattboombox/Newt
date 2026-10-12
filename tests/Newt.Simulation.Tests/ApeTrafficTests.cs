@@ -6,6 +6,25 @@ namespace Newt.Simulation.Tests;
 public sealed class ApeTrafficTests
 {
     [Theory]
+    [InlineData(Terrain.Ocean, true)]
+    [InlineData(Terrain.Mountain, true)]
+    [InlineData(Terrain.RingWorldWall, false)]
+    public void ShoveCanUseUnsuitableTerrainExceptRingWalls(Terrain surrounding, bool expected)
+    {
+        var world = new SimulationWorld(10, 10, surrounding);
+        world.SetTerrain(new(4, 5), Terrain.Plains);
+        world.SetTerrain(new(5, 5), Terrain.Plains);
+        world.AddCritter(CritterSpecies.ApeTrader, new(4, 5));
+        var ape = world.AddCritter(CritterSpecies.Ape, new(5, 5));
+        var shoved = (bool)typeof(SimulationWorld).GetMethod("TryShoveCritter",
+            BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(world, [0, 55, null])!;
+        Assert.Equal(expected, shoved);
+        Assert.True(world.TryGetCritter(ape, out var displaced));
+        Assert.Equal(CritterSpecies.Ape, displaced.Species);
+        Assert.Equal(expected ? surrounding : Terrain.Plains, world.GetTerrain(displaced.Position));
+    }
+
+    [Theory]
     [InlineData(CritterSpecies.Ape)]
     [InlineData(CritterSpecies.ApeFarmer)]
     [InlineData(CritterSpecies.ApeLumberjack)]
@@ -43,13 +62,33 @@ public sealed class ApeTrafficTests
     }
 
     [Fact]
-    public void SwapDoesNotPushLandCivilianIntoOcean()
+    public void SwapPushesLandCivilianIntoOceanWithPenaltyAndPreservesSpecies()
     {
         var world = new SimulationWorld(10, 10, Terrain.Plains, seed: 1);
         world.SetTerrain(new(4, 5), Terrain.Ocean);
         world.SetTerrain(new(5, 5), Terrain.Shallows);
         world.AddCritter(CritterSpecies.ApeTraderSailor, new(4, 5));
         world.AddCritter(CritterSpecies.ApeFarmer, new(5, 5));
+        Assert.True(Swap(world));
+        Assert.Equal(new GridPosition(4, 5), world.GetCritter(1).Position);
+        Assert.Equal(CritterSpecies.ApeFarmer, world.GetCritter(1).Species);
+        var schedules = (long[])typeof(SimulationWorld).GetField("_nextMovementTicks",
+            BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(world)!;
+        var delay = 4 * SimulationWorld.GetMovementIntervalTicks(CritterSpecies.ApeFarmer);
+        Assert.True(schedules[1] >= world.Tick + delay);
+        for (var tick = 0; tick < delay; tick++)
+            world.AdvanceOneTick();
+        Assert.Equal(CritterSpecies.ApeFarmer, world.GetCritter(1).Species);
+        Assert.NotEqual(Terrain.Ocean, world.GetTerrain(world.GetCritter(1).Position));
+    }
+
+    [Fact]
+    public void SwapNeverPushesApeOntoRingWall()
+    {
+        var world = new SimulationWorld(10, 10, Terrain.Plains);
+        world.SetTerrain(new(4, 5), Terrain.RingWorldWall);
+        Assert.True(world.TrySpawnCritter(CritterSpecies.ApeTrader, new(4, 5)));
+        world.AddCritter(CritterSpecies.Ape, new(5, 5));
         Assert.False(Swap(world));
     }
 

@@ -4,6 +4,46 @@ namespace Newt.Simulation.Tests;
 
 public sealed class ToothedWhaleTests
 {
+    [Fact]
+    public void WhaleAttacksAdjacentPreyBeforeShovingPlankton()
+    {
+        for (var seed = 1; seed <= 40; seed++)
+        {
+            var world = new SimulationWorld(5, 3, Terrain.Ocean, (ulong)seed);
+            world.AddCritter(CritterSpecies.ToothedWhale, new(2, 1));
+            var prey = new GridPosition(2, 0);
+            world.AddCritter(CritterSpecies.Fish, prey);
+            foreach (var position in new[] { new GridPosition(1, 1), new GridPosition(3, 1), new GridPosition(2, 2) })
+                world.AddCritter(CritterSpecies.Plankton, position);
+            var destination = (GridPosition?)typeof(SimulationWorld).GetMethod("TryMoveToothedWhale",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                .Invoke(world, [0, null]);
+            Assert.Equal(prey, destination);
+            Assert.Equal(new GridPosition(2, 1), world.GetCritter(0).Position);
+            world.CommitEncounter(new(2, 1), destination!.Value);
+            Assert.Equal(14, world.GetCritter(0).Energy);
+            Assert.Equal(0, world.GetCritterCount(CritterSpecies.Fish));
+        }
+    }
+
+    [Fact]
+    public void WhaleShovesPlanktonTowardDistantPreyInsteadOfWandering()
+    {
+        for (var seed = 1; seed <= 40; seed++)
+        {
+            var world = new SimulationWorld(10, 3, Terrain.Ocean, (ulong)seed);
+            world.AddCritter(CritterSpecies.ToothedWhale, new(2, 1));
+            world.AddCritter(CritterSpecies.Fish, new(5, 1));
+            foreach (var position in new[] { new GridPosition(1, 1), new GridPosition(3, 1),
+                new GridPosition(2, 0), new GridPosition(2, 2) })
+                world.AddCritter(CritterSpecies.Plankton, position);
+            typeof(SimulationWorld).GetMethod("TryMoveToothedWhale",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                .Invoke(world, [0, null]);
+            Assert.Equal(new GridPosition(3, 1), world.GetCritter(0).Position);
+        }
+    }
+
     [Theory]
     [InlineData(CritterSpecies.ToothedWhale)]
     [InlineData(CritterSpecies.BaleenWhale)]
@@ -79,10 +119,13 @@ public sealed class ToothedWhaleTests
     }
 
     [Fact]
-    public void WhaleTracksMovingPreyBeyondDetectionRangeInsteadOfSwitchingToCloserFood()
+    public void WhaleTracksMovingPreyBeyondDetectionRangeInsteadOfSwitchingToCloserCombatPrey()
     {
         var world = new SimulationWorld(40, 1, Terrain.Ocean, seed: 51);
         world.AddCritter(CritterSpecies.ToothedWhale, new GridPosition(0, 0));
+        var energies = (int[])typeof(SimulationWorld).GetField("_energy",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(world)!;
+        energies[0] = 19;
         var preyPosition = new GridPosition(6, 0);
         Assert.True(world.TryPlaceTeleporter(preyPosition));
         var preyId = world.AddCritter(CritterSpecies.Squid, preyPosition);
@@ -93,11 +136,36 @@ public sealed class ToothedWhaleTests
         Assert.True(world.TryGetCritter(preyId, out var movedPrey));
         Assert.True(movedPrey.Position.X > SimulationWorld.ToothedWhalePerceptionRadius);
         var fishPosition = new GridPosition(1, 0);
-        world.AddCritter(CritterSpecies.Fish, fishPosition);
+        world.AddCritter(CritterSpecies.Squid, fishPosition);
         Assert.Equal(movedPrey.Position, world.FindToothedWhalePrey(0, null));
         // Removing the target compacts the critter arrays; its replacement is not the remembered prey.
         world.RemoveCritterAt(movedPrey.Position);
         Assert.Equal(fishPosition, world.FindToothedWhalePrey(0, null));
+    }
+
+    [Theory]
+    [InlineData(19, true)]
+    [InlineData(10, true)]
+    [InlineData(5, true)]
+    [InlineData(20, false)]
+    [InlineData(21, false)]
+    [InlineData(30, false)]
+    public void HungryWhaleSwitchesFromCombatTargetToSafeFood(int energy, bool hungry)
+    {
+        var world = new SimulationWorld(40, 1, Terrain.Ocean, seed: 51);
+        world.AddCritter(CritterSpecies.ToothedWhale, new(0, 0));
+        var energies = (int[])typeof(SimulationWorld).GetField("_energy",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(world)!;
+        energies[0] = 19;
+        var squid = new GridPosition(1, 0);
+        world.AddCritter(CritterSpecies.Squid, squid);
+        Assert.Equal(squid, world.FindToothedWhalePrey(0, null));
+        var fish = new GridPosition(3, 0);
+        world.AddCritter(CritterSpecies.Fish, fish);
+        energies[0] = energy;
+        Assert.Equal(hungry, world.GetCritter(0).IsHungry);
+        Assert.Equal(hungry ? fish : energy < 30 ? squid : (GridPosition?)null,
+            world.FindToothedWhalePrey(0, null));
     }
 
     [Fact]
@@ -175,6 +243,7 @@ public sealed class ToothedWhaleTests
             CritterSpecies.ApeFarmer,
             CritterSpecies.ApeLumberjack,
             CritterSpecies.Deer,
+            CritterSpecies.MegaSlug,
             CritterSpecies.Elk,
             CritterSpecies.Gazelle,
             CritterSpecies.Wolf,
@@ -208,6 +277,9 @@ public sealed class ToothedWhaleTests
         NaturalEvents.SetEnabled(shallows, false);
         shallows.AddCritter(CritterSpecies.ToothedWhale, new GridPosition(0, 0));
         shallows.AddCritter(CritterSpecies.Deer, new GridPosition(1, 0));
+        var energies = (int[])typeof(SimulationWorld).GetField("_energy",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(shallows)!;
+        energies[1] = CritterNutritions.Get(CritterSpecies.Deer).MaximumEnergy;
 
         for (var tick = 0; tick < 4 * SimulationWorld.TicksPerSecond; tick++)
         {
@@ -218,7 +290,7 @@ public sealed class ToothedWhaleTests
         Assert.Equal(1, ocean.GetCritterCount(CritterSpecies.Deer));
         Assert.Equal(1, shallows.GetCritterCount(CritterSpecies.Deer));
         Assert.True(shallows.GetCritter(0).Energy < CritterNutritions.Get(CritterSpecies.ToothedWhale).InitialEnergy ||
-            shallows.GetCritter(1).Energy < CritterNutritions.Get(CritterSpecies.Deer).InitialEnergy);
+            shallows.GetCritter(1).Energy < CritterNutritions.Get(CritterSpecies.Deer).MaximumEnergy);
     }
 
     [Fact]
@@ -229,18 +301,18 @@ public sealed class ToothedWhaleTests
         NaturalEvents.SetEnabled(world, false);
         world.AddCritter(CritterSpecies.ToothedWhale, new GridPosition(0, 0));
         world.AddCritter(CritterSpecies.Squid, new GridPosition(1, 0));
-
-        for (var tick = 0; tick < 4 * SimulationWorld.TicksPerSecond; tick++)
-        {
-            world.AdvanceOneTick();
-        }
+        var energies = (int[])typeof(SimulationWorld).GetField("_energy",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(world)!;
+        energies[1] = CritterNutritions.Get(CritterSpecies.Squid).MaximumEnergy;
+        Assert.Equal(new GridPosition(1, 0), world.FindToothedWhalePrey(0, null));
+        world.CommitEncounter(new(0, 0), new(1, 0));
 
         Assert.Equal(1, world.GetCritterCount(CritterSpecies.ToothedWhale));
         Assert.Equal(1, world.GetCritterCount(CritterSpecies.Squid));
         var damage = CritterNutritions.Get(CritterSpecies.ToothedWhale).InitialEnergy +
-            CritterNutritions.Get(CritterSpecies.Squid).InitialEnergy -
+            CritterNutritions.Get(CritterSpecies.Squid).MaximumEnergy -
             world.GetCritter(0).Energy - world.GetCritter(1).Energy;
-        Assert.InRange(damage, 2, 3);
+        Assert.Contains(damage, new[] { 3, 6 });
     }
 
     [Theory]

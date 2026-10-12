@@ -24,7 +24,8 @@ public static class WorldGenerator
         }
 
         var preset = options.Preset;
-        var isRingWorld = options.MapType is WorldMapType.RingWorld || preset == WorldPreset.Ring;
+        var isRingWorld = options.MapType is WorldMapType.RingWorld ||
+            preset == WorldPreset.Ring || preset == WorldPreset.RingMega;
         var world = new SimulationWorld(preset.Width, preset.Height, Terrain.DeepOcean, options.Seed)
         {
             Body = isRingWorld ? WorldBody.RingWorld : WorldBody.Terrarium,
@@ -129,6 +130,7 @@ public static class WorldGenerator
         SeedRingWorldTeleporters(world);
         SeedNaturalVolcanoes(world, options.Seed);
         StartNaturalSprings(world, options.Seed);
+        world.SeedRingWorldCustodians();
         return world;
     }
 
@@ -245,7 +247,7 @@ public static class WorldGenerator
             return;
         }
 
-        const int teleporterCount = 4;
+        var teleporterCount = world.Width >= WorldPreset.RingMega.Width ? 8 : 4;
         var y = world.Height / 2;
         for (var index = 0; index < teleporterCount; index++)
         {

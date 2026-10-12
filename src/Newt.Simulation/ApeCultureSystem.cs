@@ -11,7 +11,8 @@ public sealed partial class SimulationWorld
         if (!_apeVillageCultures.TryGetValue(village, out var culture) || culture is not ApeCulture.Luddite) return;
         var warriors = _apeVillageHomes.Where(pair => pair.Value == village &&
             _critterIndicesById.TryGetValue(pair.Key, out var index) && CanRecruitApe(index) && _species[index] is CritterSpecies.ApeWarrior &&
-            (!war.CivilWar || war.DefendingWarriors.Contains(pair.Key)))
+            (!war.CivilWar || war.DefendingWarriors.Contains(pair.Key)) &&
+            (village != war.Attacker || war.AttackingParticipants is null || war.AttackingParticipants.Contains(pair.Key)))
             .Select(pair => pair.Key).Order().ToArray();
         foreach (var id in warriors.Take((warriors.Length + 3) / 4))
         {
@@ -51,8 +52,7 @@ public sealed partial class SimulationWorld
             FindApeConstructionSite(village, definition.Building);
         if (site < 0 || !IsValidApeAuxiliaryTile(site, definition.Building))
             return false;
-        if (FindCultureRecruitmentTiles(site).Take(definition.Units.Sum(unit => unit.Count)).Count() < definition.Units.Sum(unit => unit.Count))
-            return false;
+        // Cultural roles recruit existing residents, so only the building needs an empty tile.
         _apeVillageCultures[village] = culture;
         if (definition.BlocksTechnology)
         {
@@ -67,8 +67,8 @@ public sealed partial class SimulationWorld
             }
         }
         BuildApeStructureAt(village, site, definition.Building);
-        RecruitApeCultureUnits(village);
         RecruitApeCultureLeader(village);
+        RecruitApeCultureUnits(village);
         _apeVillageMergeCheckNeeded = true;
         return true;
     }
@@ -106,11 +106,9 @@ public sealed partial class SimulationWorld
             foreach (var id in residents.Skip(unit.Count))
                 ChangeCritterSpecies(_critterIndicesById[id], CritterSpecies.Ape, true, true);
             var count = Math.Min(residents.Length, unit.Count);
-            foreach (var tile in FindCultureRecruitmentTiles(building).Take(Math.Max(0, unit.Count - count)).ToArray())
-            {
-                var id = AddCritter(unit.Species, GetPosition(tile));
-                _apeVillageHomes[id.Value] = village;
-            }
+            foreach (var id in FindHealthyUnemployedCultureRecruits(village)
+                .Take(Math.Max(0, unit.Count - count)).ToArray())
+                ChangeCritterSpecies(_critterIndicesById[id], unit.Species, true, true);
         }
     }
 
@@ -120,6 +118,14 @@ public sealed partial class SimulationWorld
             return false;
         if (_apeVillageHomes.Any(pair => pair.Value == village && _critterIndicesById.TryGetValue(pair.Key, out var index) &&
             IsCultureLeader(definition, _species[index]))) return true;
+        if (definition.Culture == ApeCulture.Monarchy)
+        {
+            var recruit = FindHealthyUnemployedCultureRecruits(village).FirstOrDefault(-1);
+            if (recruit < 0) return false;
+            ChangeCritterSpecies(_critterIndicesById[recruit],
+                NextInt(2) == 1 ? CritterSpecies.ApeQueen : CritterSpecies.ApeKing, true, true);
+            return true;
+        }
         var candidate = _apeVillageHomes.Where(pair => pair.Value == village &&
             _critterIndicesById.TryGetValue(pair.Key, out var index) && CanRecruitApe(index) && _species[index] is CritterSpecies.ApeChieftain or CritterSpecies.Ape)
             .OrderBy(pair => _species[_critterIndicesById[pair.Key]] is CritterSpecies.ApeChieftain ? 0 : 1)
@@ -140,6 +146,12 @@ public sealed partial class SimulationWorld
         }
         return true;
     }
+
+    private IEnumerable<int> FindHealthyUnemployedCultureRecruits(int village) =>
+        _apeVillageHomes.Where(pair => pair.Value == village &&
+            _critterIndicesById.TryGetValue(pair.Key, out var index) &&
+            IsUnemployedResidentApe(index) && CanRecruitApe(index))
+            .Select(pair => pair.Key).Order();
 
     private void RemoveApeCulture(int village)
     {

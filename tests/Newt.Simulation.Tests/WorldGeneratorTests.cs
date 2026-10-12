@@ -246,6 +246,30 @@ public sealed class WorldGeneratorTests
     }
 
     [Fact]
+    public void MegaRingWorldDoublesLengthAndRetainsRingFeatures()
+    {
+        Assert.Equal(WorldPreset.Ring.Width * 2, WorldPreset.RingMega.Width);
+        Assert.Equal(WorldPreset.Ring.Height, WorldPreset.RingMega.Height);
+        var world = WorldGenerator.Generate(new WorldGenerationOptions(WorldPreset.RingMega, Seed: 9));
+        Assert.Equal(2560, world.Width);
+        Assert.Equal(44, world.Height);
+        Assert.Equal(WorldBody.RingWorld, world.Body);
+        Assert.False(world.SeasonsEnabled);
+        Assert.Equal(8, world.TeleporterCount);
+        Assert.Equal(2, world.CustodianFabricators.Count);
+        Assert.Equal(new GridPosition(640, 0), world.CustodianFabricators[0]);
+        Assert.Equal(new GridPosition(1920, 0), world.CustodianFabricators[1]);
+        Assert.Equal(10, world.GetCritterCount(CritterSpecies.Custodian));
+        for (var portal = 0; portal < 8; portal++)
+            Assert.True(world.HasTeleporter(new(world.Width * (portal * 2 + 1) / 16, world.Height / 2)));
+        for (var x = 0; x < world.Width; x++)
+        {
+            Assert.Equal(Terrain.RingWorldWall, world.GetTerrain(new(x, 0)));
+            Assert.Equal(Terrain.RingWorldWall, world.GetTerrain(new(x, world.Height - 1)));
+        }
+    }
+
+    [Fact]
     public void RingWorldIsLongWithoutScalingItsLocalFeaturesByFullWidth()
     {
         Assert.Equal(1280, WorldPreset.Ring.Width);

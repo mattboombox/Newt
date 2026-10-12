@@ -55,8 +55,13 @@ Press `M` to open the new-world menu. World size and map shape are selected
 independently. The current shapes are Continents, Pangaea, Archipelago, Water World,
 Ring World, and Earth. Earth supports every regular size by resampling the embedded
 1280 × 642 NOAA relief grid; Standard (320 × 192) is the default while
-Huge retains the full source detail. Ring World keeps its fixed 1280 × 44
-engineered dimensions. Each game launch chooses a fresh initial seed. Select the
+Huge retains the full source detail. Ring World offers Standard (1280 × 44) and
+Mega (2560 × 44), doubling the length while keeping the same width across the ring.
+Standard has four teleporters and one Custodian fabricator supporting five drones.
+Mega has eight evenly spaced teleporters and two fabricators supporting ten drones;
+each fabricator replaces one lost drone per minute, and damaged drones repair at
+the nearest fabricator.
+Each game launch chooses a fresh initial seed. Select the
 Seed row and type digits to replace it, or use Backspace and the left/right arrows
 to edit it. Reusing the displayed seed keeps world generation deterministic.
 
@@ -73,6 +78,7 @@ keeps every tile submerged while retaining varied bathymetry and polar sea ice.
 | 4 | Large | 640 × 311 |
 | 5 | Huge (stress test) | 1280 × 642 |
 | 6 | Ring World | 1280 × 44 |
+| | Ring World Mega | 2560 × 44 |
 | 7 | Earth | 1280 × 642 |
 
 Ring World is an artificial megastructure conservatory rather than a planet.
@@ -86,7 +92,9 @@ lake with OceanSeed to convert it by the same rule; this measurement excludes ri
 
 Its climate varies along the ring instead of by latitude. Repeating engineered
 hot, cold, wet, and dry longitudinal sections create distinct conservatory
-regions. Planetary seasons are permanently disabled for this preset.
+regions. Each climate set spans 640 tiles: Standard repeats twice and Mega four
+times, with the same zone lengths on both sizes. Planetary seasons are permanently
+disabled for this preset.
 
 Continuous steel-colored Ring World Wall tiles run along its top and bottom
 edges. Their structural elevation is `2.15`, slightly above the normal `2.0`
@@ -145,8 +153,8 @@ The game starts in Critter Tools with Plankton selected.
   Therapsid offspring use twice the configured evolution chance, capped at 100%,
   to support their Monkey, Deer, Wolf, and Toothed Whale descendant branches.
   Ambient feeding draws from finite tile nutrition. Land capacity is Jungle 6,
-  Swamp 5, Forest 4, Grassland/Taiga 3, Bog/Arid 2, Tundra 1, and
-  Desert/Arctic 0. Ice Sheets over shelf Ocean hold 1, while deep-ocean Ice Sheets
+  Swamp 5, Forest 4, Grassland/Taiga/Bog 3, Arid 2, Tundra 1, and
+  Desert 1, Arctic 0. Ice Sheets over shelf Ocean hold 1, while deep-ocean Ice Sheets
   hold 0. Beaches are 0 freezing and 1 otherwise; Shallows are
   6 freezing, 5 cold, 4 temperate, and 3 hot; Deep Ocean is 0; Ocean is 3 cold and
   2 otherwise. Rivers and Lakes both replace the underlying tile with a flat
@@ -166,7 +174,7 @@ The game starts in Critter Tools with Plankton selected.
   they move every six seconds, inhabit marine water and Beaches, seek feeding terrain
   within five Manhattan tiles, and flee predators detected within three. They graze
   detritus in Ocean, Shallows, Beaches, and Ice Sheets over shelf Ocean, carry up
-  to seven energy, and reproduce at five energy for a cost of three. Squid and Sea Scorpions consume
+  to seven energy, and reproduce at seven energy for a cost of four. Squid and Sea Scorpions consume
   Worms only when adjacent, preserving most of the Fish and Nautilus branches.
   jellyfish consume only plankton on contact and leave worms and fish alone; fish consume or seek
   available terrain food first, then pursue Plankton as their only animal prey.
@@ -208,9 +216,9 @@ The game starts in Critter Tools with Plankton selected.
   A Therapsid win deals one energy damage. Toothed Whales deal five damage,
   Wolves and Mega Toads four, Sea Scorpions and Squid three, and Mega Spiders two.
   Ordinary Apes remain one-damage combatants; Dogs remain at three.
-  Monkeys are non-predatory,
-  feed and remain on Swamp, Jungle, or Forest foliage until ready to breed,
-  and reproduce at eight energy for a cost of five. Deer evolve as a second
+  Monkeys hunt Snails and Crabs within four tiles when below two-thirds energy and no tile food is available,
+  feed and remain on Swamp, Jungle, Forest, or Bog foliage until ready to breed,
+  and reproduce at eight energy for a cost of four. Deer evolve as a second
   Therapsid branch, move every three seconds, and graze Grasslands but not Forests; slower, more
   reproduction-intensive Elk evolve from Deer and can graze Grasslands, Tundra,
   and Taiga while moving every six seconds. Gazelles also evolve from Deer, move
@@ -400,6 +408,8 @@ OceanSeed, Volcano, Meteor, Watershed Shift, Evolve, and River remain single-cli
 - Arrow keys or `WASD`: move the camera.
 - Hold Shift while moving: pan four times faster.
 - Mouse wheel: zoom toward or away from the tile beneath the pointer.
+  The minimum zoom is one pixel per tile, fitting the full 2560-tile Mega Ring
+  World across a 2560-pixel-wide display. The starting zoom remains eight pixels per tile.
 - `H`: toggle the bottom HUD. When hidden, the map fills the full window.
 - Maps smaller than the available viewport are centered horizontally and
   vertically; larger maps retain normal panning and horizontal wrapping.

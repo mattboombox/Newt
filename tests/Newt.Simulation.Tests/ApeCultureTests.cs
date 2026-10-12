@@ -6,12 +6,13 @@ namespace Newt.Simulation.Tests;
 public sealed class ApeCultureTests
 {
     private static readonly GridPosition First = new(15, 15), Second = new(35, 15);
-    private static SimulationWorld World()
+    private static SimulationWorld World(ulong seed = 17)
     {
-        var world = new SimulationWorld(80, 40, Terrain.Plains, 17) { ApeVillageMergingEnabled = false, SeasonsEnabled = false };
+        var world = new SimulationWorld(80, 40, Terrain.Plains, seed) { ApeVillageMergingEnabled = false, SeasonsEnabled = false };
         NaturalEvents.SetEnabled(world, false);
         foreach (var p in Positions(world)) world.SetBiome(p, Biome.Grassland);
         Assert.True(world.TrySpawnTestApeVillage(First));
+        Add(world, First, CritterSpecies.Ape, 1);
         return world;
     }
     private static IEnumerable<GridPosition> Positions(SimulationWorld w) => Enumerable.Range(0, w.Width * w.Height)
@@ -29,7 +30,7 @@ public sealed class ApeCultureTests
     private static void Convert(SimulationWorld w, GridPosition village) => Assert.True(w.TryAssignApeCulture(village, ApeCulture.Luddite, true));
 
     [Fact]
-    public void ManualConversionCreatesThreePriestsKeepsChiefAndStripsResearch()
+    public void ManualConversionRecruitsThreeExistingApesKeepsChiefAndStripsResearch()
     {
         var w = World();
         Add(w, First, CritterSpecies.ApeChieftain, 1);
@@ -38,8 +39,11 @@ public sealed class ApeCultureTests
         Assert.True(w.TryResearchApeTechnology(Tile(w, First), ApeTechnology.Aquaculture));
         Assert.False(w.TryAssignApeCulture(First, ApeCulture.Luddite));
         var before = w.CritterCount;
+        var recruits = Residents(w, First).Where(c => c.Species == CritterSpecies.Ape).Select(c => c.Id).ToHashSet();
         Convert(w, First);
-        Assert.Equal(before + 3, w.CritterCount);
+        Assert.Equal(before, w.CritterCount);
+        Assert.All(Residents(w, First).Where(c => c.Species == CritterSpecies.ApeLudditePriest),
+            c => Assert.Contains(c.Id, recruits));
         Assert.Equal(ApeCulture.Luddite, w.GetApeVillageCulture(First));
         Assert.Equal(3, Residents(w, First).Count(c => c.Species == CritterSpecies.ApeLudditePriest));
         Assert.True(w.TryGetCritter(chief, out var retained));
@@ -72,6 +76,65 @@ public sealed class ApeCultureTests
         Assert.True(converted);
     }
 
+    [Fact]
+    public void NaturalCultureEventsCanDevelopBothMonarchyAndLudditeWithoutSpawningResidents()
+    {
+        var observed = new HashSet<ApeCulture>();
+        for (ulong seed = 1; seed <= 32 && observed.Count < 2; seed++)
+        {
+            var w = World(seed);
+            Add(w, First, CritterSpecies.Ape, SimulationWorld.ApeCulturePopulationThreshold - Residents(w, First).Length);
+            var originalIds = Residents(w, First).Select(c => c.Id).ToHashSet();
+            var population = w.CritterCount;
+            NaturalEvents.SetEnabled(w, true);
+            typeof(SimulationWorld).GetProperty(nameof(w.Tick))!
+                .SetValue(w, (long)SimulationWorld.ApeCultureCheckIntervalTicks);
+            var developed = false;
+            for (var roll = 0; roll < 2000 && !developed; roll++)
+                developed = w.TryDevelopApeCulture(Tile(w, First));
+            Assert.True(developed);
+            var culture = w.GetApeVillageCulture(First)!.Value;
+            observed.Add(culture);
+            Assert.Equal(population, w.CritterCount);
+            Assert.All(Residents(w, First), resident => Assert.Contains(resident.Id, originalIds));
+            var definition = ApeCultures.Get(culture);
+            Assert.Single(Positions(w), p => w.GetApeStructure(p) == definition.Building);
+            foreach (var unit in definition.Units)
+                Assert.Equal(unit.Count, Residents(w, First).Count(c => c.Species == unit.Species));
+            if (culture == ApeCulture.Monarchy)
+                Assert.Single(Residents(w, First), c => c.Species is CritterSpecies.ApeKing or CritterSpecies.ApeQueen);
+        }
+        Assert.Contains(ApeCulture.Monarchy, observed);
+        Assert.Contains(ApeCulture.Luddite, observed);
+    }
+
+    [Theory]
+    [InlineData(ApeCulture.Monarchy)]
+    [InlineData(ApeCulture.Luddite)]
+    public void CrowdedVillageDevelopsCultureByRecruitingResidentsWithoutEmptySpawnTiles(ApeCulture culture)
+    {
+        var w = World();
+        var definition = ApeCultures.Get(culture);
+        var site = (int)typeof(SimulationWorld)
+            .GetMethod("FindApeConstructionSite", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(w, [Tile(w, First), definition.Building])!;
+        Assert.True(site >= 0);
+        // Leave only the construction site free: cultural roles need residents, not spawn space.
+        foreach (var p in Positions(w).Where(p => Tile(w, p) != site && !w.IsOccupied(p)).ToArray())
+            Homes(w)[w.AddCritter(CritterSpecies.Ape, p).Value] = Tile(w, First);
+        var population = w.CritterCount;
+
+        Assert.True(w.TryAssignApeCulture(First, culture));
+
+        Assert.Equal(culture, w.GetApeVillageCulture(First));
+        Assert.Equal(population, w.CritterCount);
+        Assert.Equal(definition.Building, w.GetApeStructure(new(site % w.Width, site / w.Width)));
+        foreach (var unit in definition.Units)
+            Assert.Equal(unit.Count, Residents(w, First).Count(c => c.Species == unit.Species));
+        if (culture == ApeCulture.Monarchy)
+            Assert.Single(Residents(w, First), c => c.Species is CritterSpecies.ApeKing or CritterSpecies.ApeQueen);
+    }
+
     [Theory]
     [InlineData(1, 1)]
     [InlineData(4, 1)]
@@ -82,6 +145,7 @@ public sealed class ApeCultureTests
         Assert.True(w.TrySpawnTestApeVillage(Second));
         foreach (var c in Residents(w, First)) w.RemoveCritterAt(c.Position);
         Add(w, First, CritterSpecies.ApeWarrior, count);
+        Add(w, First, CritterSpecies.Ape, 3);
         Convert(w, First);
         Assert.True(w.TryStartApeWar(First, Second));
         Assert.Equal(bombers, Residents(w, First).Count(c => c.Species == CritterSpecies.ApeBomber));
@@ -148,10 +212,48 @@ public sealed class ApeCultureTests
         Assert.True(hits > 0);
     }
 
+    [Theory]
+    [InlineData(CritterSpecies.Ape, true, false)]
+    [InlineData(CritterSpecies.Ape, false, true)]
+    [InlineData(CritterSpecies.UndeadApe, false, false)]
+    [InlineData(CritterSpecies.UndeadWarrior, false, false)]
+    [InlineData(CritterSpecies.Lich, false, false)]
+    [InlineData(CritterSpecies.ApeWarrior, false, false)]
+    [InlineData(CritterSpecies.ApeChieftain, false, false)]
+    public void TempleCannotSpawnLudditesOrRecruitIneligibleResidents(CritterSpecies species, bool sick, bool employed)
+    {
+        var w = World();
+        foreach (var resident in Residents(w, First)) w.RemoveCritterAt(resident.Position);
+        Add(w, First, species, 1);
+        var candidate = Assert.Single(Residents(w, First));
+        if (sick) Assert.True(w.TryInfectApeAt(candidate.Position, PlagueKind.Plague, (candidate.Id.Value + 1) % 2));
+        if (employed)
+        {
+            var workplaces = (Dictionary<int, int>)typeof(SimulationWorld)
+                .GetField("_apeWorkplaces", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(w)!;
+            workplaces[candidate.Id.Value] = Tile(w, First);
+        }
+        var population = w.CritterCount;
+        Convert(w, First);
+        typeof(SimulationWorld).GetMethod("RecruitApeCultureUnits", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(w, [Tile(w, First)]);
+        Assert.Equal(population, w.CritterCount);
+        Assert.Equal(0, w.GetCritterCount(CritterSpecies.ApeLudditePriest));
+        Assert.True(w.TryGetCritter(candidate.Id, out var unchanged));
+        Assert.Equal(species, unchanged.Species);
+        Add(w, First, CritterSpecies.Ape, 1);
+        var recruit = Residents(w, First).Single(c => c.Id != candidate.Id);
+        typeof(SimulationWorld).GetMethod("RecruitApeCultureUnits", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(w, [Tile(w, First)]);
+        var luddite = Assert.Single(Residents(w, First), c => c.Species == CritterSpecies.ApeLudditePriest);
+        Assert.Equal(recruit.Id, luddite.Id);
+        Assert.Equal(population + 1, w.CritterCount);
+    }
+
     [Fact]
     public void TempleRecruitsReplacementPriestsWithoutDuplicates()
     {
-        var w = World(); Convert(w, First);
+        var w = World(); Add(w, First, CritterSpecies.Ape, 1); Convert(w, First);
         var priest = Residents(w, First).First(c => c.Species == CritterSpecies.ApeLudditePriest);
         w.RemoveCritterAt(priest.Position);
         for (var i = 0; i < 2 * SimulationWorld.TicksPerSecond; i++) w.AdvanceOneTick();
@@ -224,6 +326,7 @@ public sealed class ApeCultureTests
     public void TouchingCulturesFightAndWinnerAbsorbsVillage(bool attackerWins)
     {
         var w = World(); Assert.True(w.TrySpawnTestApeVillage(Second));
+        Add(w, Second, CritterSpecies.Ape, 1);
         Add(w, First, CritterSpecies.ApeWarrior, 5); Add(w, Second, CritterSpecies.ApeWarrior, 5);
         Convert(w, First); Convert(w, Second);
         for (var i = 0; i < 1500; i++)

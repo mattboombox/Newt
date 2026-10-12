@@ -314,20 +314,23 @@ public static class ClimateSystem
     private static float DistanceInfluence(int distance, float strength, float reach) =>
         distance == Unreachable ? 0 : strength * MathF.Exp(-distance / reach);
 
-    private static float GetRingTemperatureNormal(SimulationWorld world, int x)
+    private static float GetRingClimatePhase(int x) =>
+        (x + 0.5f) / (WorldPreset.Ring.Width / 2) * MathF.Tau;
+
+    internal static float GetRingTemperatureNormal(SimulationWorld world, int x)
     {
-        var phase = (x + 0.5f) / world.Width * MathF.Tau;
+        var phase = GetRingClimatePhase(x);
         var seedPhase = (world.Seed % 10_000) / 10_000f * MathF.Tau;
-        return 0.49f + MathF.Sin(phase * 3 + seedPhase) * 0.30f +
-            MathF.Sin(phase * 7 - seedPhase * 0.5f) * 0.08f;
+        return 0.49f + MathF.Sin(phase + seedPhase) * 0.30f +
+            MathF.Sin(phase * 2 - seedPhase * 0.5f) * 0.08f;
     }
 
-    private static float GetRingMoistureNormal(SimulationWorld world, int x)
+    internal static float GetRingMoistureNormal(SimulationWorld world, int x)
     {
-        var phase = (x + 0.5f) / world.Width * MathF.Tau;
+        var phase = GetRingClimatePhase(x);
         var seedPhase = (world.Seed % 8_192) / 8_192f * MathF.Tau;
-        return MathF.Sin(phase * 4 + seedPhase) * 0.24f +
-            MathF.Sin(phase * 9 - seedPhase) * 0.07f;
+        return MathF.Sin(phase + seedPhase) * 0.24f +
+            MathF.Sin(phase * 2 - seedPhase) * 0.07f;
     }
 
     private static bool IsSubmerged(Terrain terrain) => terrain is

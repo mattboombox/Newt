@@ -2,7 +2,6 @@ namespace Newt.Simulation;
 
 public sealed partial class SimulationWorld
 {
-    internal const int VampireColonyVillagePopulation = 50;
     internal const int VampireColonyVillageRadius = 8;
     private sealed class VampireColony(int origin, int huntingVillage, int village, int target)
     {
@@ -46,15 +45,14 @@ public sealed partial class SimulationWorld
             return false;
         }
         if (!_apeStructures.Any(pair => pair.Value is ApeStructureKind.Village &&
-            pair.Key != huntingVillage && IsRoadVillage(pair.Key) &&
-            GetApeVillageResidentCountByTile(pair.Key) >= VampireColonyVillagePopulation))
+            pair.Key != huntingVillage && IsRoadVillage(pair.Key)))
         {
-            status = "Needs another regular village with 50+ residents";
+            status = "Needs another regular village";
             return false;
         }
         if (!FindVampireColonySite(scout, spawn, huntingVillage, out var village, out var target, out var path))
         {
-            status = "No reachable colony site near another 50+ resident village";
+            status = "No reachable colony site near another regular village";
             return false;
         }
         var id = AddCritter(CritterSpecies.Vampire, GetPosition(spawn));
@@ -85,7 +83,6 @@ public sealed partial class SimulationWorld
 
     private bool IsVampireColonySite(int index, int village, int tile) =>
         tile >= 0 && tile < _terrain.Length && IsRoadVillage(village) &&
-        GetApeVillageResidentCountByTile(village) >= VampireColonyVillagePopulation &&
         WrappedManhattanDistance(GetPosition(tile), GetPosition(village)) is >= 2 and <= VampireColonyVillageRadius &&
         (_occupants[tile] < 0 || _occupants[tile] == index) &&
         CanLiveOn(CritterSpecies.Vampire, tile) && _surfaceWater[tile] is SurfaceWaterKind.None &&
@@ -98,7 +95,7 @@ public sealed partial class SimulationWorld
         village = target = -1;
         path = null;
         foreach (var home in _apeStructures.Where(pair => pair.Value is ApeStructureKind.Village &&
-                pair.Key != huntingVillage && IsRoadVillage(pair.Key) && GetApeVillageResidentCountByTile(pair.Key) >= VampireColonyVillagePopulation)
+                pair.Key != huntingVillage && IsRoadVillage(pair.Key))
             .Select(pair => pair.Key).OrderBy(tile => WrappedManhattanDistance(GetPosition(start), GetPosition(tile))))
         {
             var center = GetPosition(home);

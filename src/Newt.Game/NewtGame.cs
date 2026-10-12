@@ -23,9 +23,10 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private const double ToolRepeatIntervalSeconds = 0.075;
     private const int PopulationSampleIntervalTicks = 5 * SimulationWorld.TicksPerSecond;
     private const int PopulationHistoryLength = 90;
-    private static readonly int[] ZoomLevels = [2, 4, 8, 16, 24, 32, 48, 64, 96, 128];
+    private static readonly int[] ZoomLevels = [1, 2, 4, 8, 16, 24, 32, 48, 64, 96, 128];
     private static readonly WorldPreset[] MenuSizes =
         [WorldPreset.Micro, WorldPreset.Small, WorldPreset.Standard, WorldPreset.Large, WorldPreset.Huge];
+    private static readonly WorldPreset[] RingMenuSizes = [WorldPreset.Ring, WorldPreset.RingMega];
     private static readonly WorldMapType[] MenuMapTypes =
         [WorldMapType.Continents, WorldMapType.Pangaea, WorldMapType.Archipelago, WorldMapType.AllOcean,
             WorldMapType.RingWorld, WorldMapType.Earth];
@@ -45,7 +46,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private static readonly WorldTool[] CritterToolOrder =
         [WorldTool.Plankton, WorldTool.Jellyfish, WorldTool.Worm, WorldTool.Trilobite,
             WorldTool.SeaScorpion, WorldTool.Nautilus, WorldTool.Squid, WorldTool.SquidEgg,
-            WorldTool.Fish, WorldTool.Newt, WorldTool.Snail, WorldTool.MegaToad, WorldTool.MegaSpider, WorldTool.Therapsid,
+            WorldTool.Fish, WorldTool.Newt, WorldTool.Snail, WorldTool.MegaSlug, WorldTool.MegaToad, WorldTool.MegaSpider, WorldTool.Therapsid,
             WorldTool.Monkey, WorldTool.Ape, WorldTool.Deer, WorldTool.Elk,
             WorldTool.Gazelle, WorldTool.Wolf, WorldTool.Dog, WorldTool.Crab, WorldTool.ToothedWhale,
             WorldTool.BaleenWhale, WorldTool.Lich];
@@ -59,7 +60,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private static readonly string[] ControlLines =
     [
         "?  open or close controls",
-        "[  toggle population chart",
+        "[  population: condensed / detailed / close",
         "Esc  quit",
         "H  hide or show HUD",
         "M  open world menu",
@@ -94,6 +95,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private SpriteFont? _hudFont;
     private readonly Dictionary<CritterSpecies, Texture2D> _critterSprites = [];
     private readonly Dictionary<CritterSpecies, Texture2D> _critterFlashSprites = [];
+    private Texture2D? _ancientCustodianSprite, _ancientCustodianFlashSprite;
     private Texture2D? _sickApeSprite;
     private Texture2D? _sickApeFlashSprite;
     private Texture2D? _apeColonistSprite;
@@ -132,7 +134,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private MouseState _previousMouse;
     private int _cameraX;
     private int _cameraY;
-    private int _zoomIndex = 2;
+    private int _zoomIndex = 3;
     private int _toolCategoryIndex = Array.IndexOf(ToolCategoryOrder, ToolCategory.CritterTools);
     private int _toolIndex;
     private WorldTool? _repeatingTool;
@@ -155,9 +157,11 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private bool _seedTypingActive;
     private int _setupRow;
     private int _menuSizeIndex = 2;
+    private int _menuRingSizeIndex;
     private int _menuMapTypeIndex;
     private CritterId _inspectedCritterId;
-    private bool _populationWindowOpen;
+    private int _populationWindowMode;
+    private readonly List<int> _combinedApeHistory = [];
     private bool _controlsWindowOpen;
     private readonly Dictionary<CritterSpecies, List<int>> _populationHistory =
         Enum.GetValues<CritterSpecies>().ToDictionary(species => species, _ => new List<int>());
@@ -209,6 +213,10 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         LoadCritterSprite(CritterSpecies.Fish, "fish.png");
         LoadCritterSprite(CritterSpecies.Newt, "newt.png");
         LoadCritterSprite(CritterSpecies.Snail, "snail.png");
+        LoadCritterSprite(CritterSpecies.MegaSlug, "mega-slug.png");
+        LoadCritterSprite(CritterSpecies.Custodian, "Custodian.png");
+        if (TryLoadCritterSprite("ancient-custodian.png", out var ancientCustodian, out var ancientCustodianFlash))
+            (_ancientCustodianSprite, _ancientCustodianFlashSprite) = (ancientCustodian, ancientCustodianFlash);
         LoadCritterSprite(CritterSpecies.MegaToad, "mega-toad.png");
         LoadCritterSprite(CritterSpecies.Therapsid, "therapsid.png");
         LoadCritterSprite(CritterSpecies.Monkey, "monkey.png");
@@ -348,6 +356,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 DrawWolfDen(screenX, screenY, position);
                 DrawMegaSpiderWeb(screenX, screenY, position);
                 DrawTeleporter(screenX, screenY, position);
+                DrawCustodianFabricator(screenX, screenY, position);
                 DrawVolcanoVent(screenX, screenY, position);
                 DrawImpactWave(screenX, screenY, position);
             }
@@ -370,7 +379,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         {
             DrawHud();
         }
-        if (_populationWindowOpen)
+        if (_populationWindowMode != 0)
         {
             DrawPopulationWindow();
         }
@@ -739,6 +748,9 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             _critterFlashSprites.TryGetValue(critter.Species, out flashSprite);
         }
 
+        if (critter.IsAncientCustodian && _ancientCustodianSprite is not null)
+            (sprite, flashSprite) = (_ancientCustodianSprite, _ancientCustodianFlashSprite);
+
         if (sprite is not null)
         {
             if (critter.IsDamageFlashing && flashSprite is not null)
@@ -786,7 +798,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         }
         else if (WasPressed(keyboard, Keys.OemOpenBrackets))
         {
-            _populationWindowOpen = !_populationWindowOpen;
+            _populationWindowMode = (_populationWindowMode + 1) % 3;
         }
         else if (WasPressed(keyboard, Keys.OemMinus))
         {
@@ -808,6 +820,9 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 _menuMapTypeIndex = 0;
             }
             var currentSize = _preset == WorldPreset.Earth ? WorldPreset.Huge : _preset;
+            var ringSizeIndex = Array.IndexOf(RingMenuSizes, _preset);
+            if (ringSizeIndex >= 0)
+                _menuRingSizeIndex = ringSizeIndex;
             var sizeIndex = Array.IndexOf(MenuSizes, currentSize);
             if (sizeIndex >= 0)
             {
@@ -1067,7 +1082,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             case WorldTool.Plankton or WorldTool.Jellyfish or WorldTool.Worm or
                 WorldTool.Trilobite or WorldTool.SeaScorpion or WorldTool.Nautilus or
                 WorldTool.Squid or WorldTool.SquidEgg or
-                WorldTool.Fish or WorldTool.Newt or WorldTool.Snail or WorldTool.MegaToad or
+                WorldTool.Fish or WorldTool.Newt or WorldTool.Snail or WorldTool.MegaSlug or WorldTool.MegaToad or
                 WorldTool.MegaSpider or
                 WorldTool.Therapsid or WorldTool.Monkey or WorldTool.Deer or
                 WorldTool.Ape or WorldTool.Elk or WorldTool.Gazelle or
@@ -1219,6 +1234,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         WorldTool.Fish => CritterSpecies.Fish,
         WorldTool.Newt => CritterSpecies.Newt,
         WorldTool.Snail => CritterSpecies.Snail,
+        WorldTool.MegaSlug => CritterSpecies.MegaSlug,
         WorldTool.MegaToad => CritterSpecies.MegaToad,
         WorldTool.Therapsid => CritterSpecies.Therapsid,
         WorldTool.Monkey => CritterSpecies.Monkey,
@@ -1411,16 +1427,24 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         var chiefs = barbarians[(int)CritterSpecies.ApeChieftain];
         var warriors = barbarians.Sum() - chiefs;
         var populations = Enum.GetValues<CritterSpecies>()
+            .Where(species => _populationWindowMode == 2 || !IsPopulationApe(species))
             .Select(species => (Name: GetCritterDisplayName(species),
                 Count: _world.GetCritterCount(species) - barbarians[(int)species], Color: GetCritterColor(species),
                 History: _populationHistory[species]))
             .Where(entry => entry.Count > 0)
             .ToList();
-        if (warriors > 0)
+        if (_populationWindowMode == 1)
+        {
+            var apes = Enum.GetValues<CritterSpecies>().Where(IsPopulationApe)
+                .Sum(_world.GetCritterCount);
+            if (apes > 0)
+                populations.Add(("Apes", apes, GetCritterColor(CritterSpecies.Ape), _combinedApeHistory));
+        }
+        if (_populationWindowMode == 2 && warriors > 0)
             populations.Add(("Ape Barbarian", warriors, new Color(190, 95, 60), _barbarianHistory));
-        if (chiefs > 0)
-            populations.Add(("Barbarian Chieftain", chiefs, new Color(210, 75, 55), _barbarianChiefHistory));
-        if (_world.SickApeCount > 0)
+        if (_populationWindowMode == 2 && chiefs > 0)
+            populations.Add(("Ape Barbarian Chief", chiefs, new Color(210, 75, 55), _barbarianChiefHistory));
+        if (_populationWindowMode == 2 && _world.SickApeCount > 0)
         {
             populations.Add(("Sick Apes", _world.SickApeCount,
                 new Color(205, 195, 55), _sickApeHistory));
@@ -1451,7 +1475,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
 
         _spriteBatch.DrawString(
             _hudFont,
-            "CRITTER POPULATION",
+            _populationWindowMode == 1 ? "CRITTER POPULATION (CONDENSED)" : "CRITTER POPULATION (DETAILED)",
             new Vector2(bounds.X + padding, bounds.Y + 11),
             new Color(126, 190, 213));
         _spriteBatch.DrawString(
@@ -1561,6 +1585,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         AppendPopulationSample(_barbarianHistory, barbarians.Sum() - chiefs);
         AppendPopulationSample(_barbarianChiefHistory, chiefs);
         AppendPopulationSample(_sickApeHistory, _world.SickApeCount);
+        AppendPopulationSample(_combinedApeHistory,
+            Enum.GetValues<CritterSpecies>().Where(IsPopulationApe).Sum(_world.GetCritterCount));
         _nextPopulationSampleTick = _world.Tick + PopulationSampleIntervalTicks;
     }
 
@@ -1633,12 +1659,20 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         }
     }
 
+    private static bool IsPopulationApe(CritterSpecies species) => species is
+        CritterSpecies.Ape or CritterSpecies.ApeSailor or CritterSpecies.ApeWarrior or
+        CritterSpecies.ApeScholar or CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack or
+        CritterSpecies.ApeChieftain or CritterSpecies.ApeKing or CritterSpecies.ApeQueen or
+        CritterSpecies.ApeBishop or CritterSpecies.ApeRoyalGuard or CritterSpecies.ApeLudditePriest or
+        CritterSpecies.ApeBomber or CritterSpecies.ApeTrader or CritterSpecies.ApeTraderSailor;
+
     private static string GetCritterDisplayName(CritterSpecies species) => species switch
     {
         CritterSpecies.SeaScorpion => "Sea Scorpion",
         CritterSpecies.MegaSpider => "Mega Spider",
         CritterSpecies.SquidEgg => "Squid Egg",
         CritterSpecies.MegaToad => "Mega Toad",
+        CritterSpecies.MegaSlug => "Mega Slug",
         CritterSpecies.ApeTrader => "Ape Trader",
         CritterSpecies.ApeTraderSailor => "Ape Trader Sailor",
         CritterSpecies.ApeSailor => "Ape Sailor",
@@ -1651,11 +1685,11 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         CritterSpecies.ApeKing => "Ape King",
         CritterSpecies.ApeQueen => "Ape Queen",
         CritterSpecies.ApeBishop => "Ape Bishop",
-        CritterSpecies.ApeRoyalGuard => "Royal Guard",
+        CritterSpecies.ApeRoyalGuard => "Ape Royal Guard",
         CritterSpecies.UndeadApe => "Undead Ape",
         CritterSpecies.Lich => "Lich",
         CritterSpecies.UndeadWarrior => "Undead Warrior",
-        CritterSpecies.ApeLudditePriest => "Luddite Priest",
+        CritterSpecies.ApeLudditePriest => "Ape Luddite",
         CritterSpecies.ApeBomber => "Ape Bomber",
         CritterSpecies.ToothedWhale => "Toothed Whale",
         CritterSpecies.BaleenWhale => "Baleen Whale",
@@ -1795,6 +1829,10 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
 
     private string[] GetBuildingInspectionLines(GridPosition position)
     {
+        if (_world.IsCustodianFabricator(position))
+            return ["BUILDING", "Custodian Fabricator",
+                $"Active drones {_world.GetCritterCount(CritterSpecies.Custodian)} / {_world.CustodianCapacity}",
+                "Behavior Replacing losses (one drone per minute)"];
         if (_world.HasVampireLair(position))
             return ["BUILDING", "Vampire Lair", $"Residents {_world.GetVampireLairPopulation(position)}/{SimulationWorld.VampireLairCapacity}", "Behavior Vampire nursery"];
         if (_world.GetVolcanoState(position) is { } volcanoState)
@@ -1916,17 +1954,6 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             : [$"Production inactive ({production} when active)"];
     }
 
-    private string GetCritterReproductionStatus(CritterSnapshot critter)
-    {
-        if (!critter.CanReproduce)
-            return "no";
-        if (critter.Species is not CritterSpecies.Dog &&
-            _world.GetApeHomeVillage(critter.Id) is { } village &&
-            _world.GetApeVillageResidentCount(village) >= _world.GetApeVillagePopulationCapacity(village))
-            return "blocked (housing full)";
-        return "ready";
-    }
-
     private string[] GetCritterInspectionLines(CritterSnapshot critter, bool following) =>
     [
         following ? "CRITTER (FOLLOWING)" : "CRITTER",
@@ -1934,9 +1961,9 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         critter.MaximumEnergy > 0
             ? $"Energy {critter.Energy} / {critter.MaximumEnergy}   Damage {_world.GetCritterCombatDamage(critter.Id)}"
             : $"Energy None   Damage {_world.GetCritterCombatDamage(critter.Id)}",
-        $"Hungry {(critter.IsHungry ? "yes" : "no")}   Reproduce {GetCritterReproductionStatus(critter)}",
         $"Habitat {CritterHabitats.GetHabitat(critter.Species)}",
         $"Diet {GetCritterDiet(critter.Species)}",
+        $"Behavior {GetCritterBehavior(critter)}",
         .. _world.IsCritterCaughtInMegaSpiderWeb(critter.Id)
             ? new[] { "Web status Trapped" }
             : Array.Empty<string>(),
@@ -1972,7 +1999,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             CritterSpecies.Dog => "Barbarian Dog",
             CritterSpecies.ApeChieftain when _world.IsApePirate(critter.Id) => "Pirate Chieftain",
             _ when _world.IsApePirate(critter.Id) => "Ape Pirate",
-            CritterSpecies.ApeChieftain => "Barbarian Chieftain",
+            CritterSpecies.ApeChieftain => "Ape Barbarian Chief",
             _ => "Barbarian Warrior",
         } : GetCritterDisplayName(critter.Species);
 
@@ -1992,6 +2019,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
 
     private static string GetCritterDiet(CritterSpecies species) => species switch
     {
+        CritterSpecies.Custodian => "no food required; attacks sick apes and undead",
         CritterSpecies.Vampire => "living ape damage (1 energy per damage)",
         CritterSpecies.UndeadApe => "all living ape roles, including traders and barbarians",
         CritterSpecies.Lich or CritterSpecies.UndeadWarrior => "all apes; gains energy on kills",
@@ -2006,10 +2034,11 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         CritterSpecies.Jellyfish => "plankton only",
         CritterSpecies.Fish => "shallow/freshwater forage and plankton",
         CritterSpecies.Newt => "freshwater food; feeds and breeds in swamps and jungles",
-        CritterSpecies.Snail => "beach forage, freshwater food, and swamp / jungle foliage",
+        CritterSpecies.Snail => "swamp / jungle foliage",
+        CritterSpecies.MegaSlug => "swamp, jungle, bog, and forest foliage",
         CritterSpecies.MegaToad => "broad prey; adjacent worms/cannibalism; fights sea scorpions and squid",
-        CritterSpecies.Therapsid => "prefers wetland forage; fish as fallback",
-        CritterSpecies.Monkey => "swamp and jungle foliage only",
+        CritterSpecies.Therapsid => "swamp, jungle, bog, and arid forage",
+        CritterSpecies.Monkey => "swamp, jungle, forest, and bog foliage; snails and crabs",
         CritterSpecies.Ape or CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack => "prey except plankton, worms, whales, and its civilization; plus wetland foliage",
         CritterSpecies.ApeTrader or CritterSpecies.ApeTraderSailor => "stocks up on food at each village visited",
         CritterSpecies.ApeSailor => "sea life except plankton, worms, and whales",
@@ -2018,7 +2047,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         CritterSpecies.ApeKing or CritterSpecies.ApeQueen or CritterSpecies.ApeChieftain => "ape prey when village food is low; predators of apes",
         CritterSpecies.Deer => "grassland and forest foliage",
         CritterSpecies.Elk => "grassland, tundra, and taiga foliage",
-        CritterSpecies.Gazelle => "arid, forest, and grassland foliage",
+        CritterSpecies.Gazelle => "arid, desert, and grassland foliage",
         CritterSpecies.Wolf => "broad terrestrial prey; therapsids last; never toads",
         CritterSpecies.Crab => "beach and shallow detritus",
         CritterSpecies.ToothedWhale => "marine predators; land prey in shallows; adjacent nautiluses/crabs",
@@ -2026,15 +2055,17 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         _ => "not implemented",
     };
 
-    private static string GetCritterBehavior(CritterSnapshot critter)
+    private string GetCritterBehavior(CritterSnapshot critter)
     {
+        if (_world.GetApeWarBehavior(critter.Id) is { } warBehavior)
+            return warBehavior;
         if (critter.Species is CritterSpecies.Vampire && !critter.IsColonist)
             return critter.CanReproduce ? "Seeking space for a two-vampire lair" : "Hunting living apes for energy";
         if (critter.IsColonist)
         {
             return critter.ColonistDestination is { } destination
                 ? $"Traveling to X {destination.X}, Y {destination.Y} to found a {(critter.Species is CritterSpecies.Vampire ? "lair" : "village")}"
-                : critter.Species is CritterSpecies.Vampire ? "Seeking a village with at least 50 residents" : "Traveling to found a village";
+                : critter.Species is CritterSpecies.Vampire ? "Seeking another village" : "Traveling to found a village";
         }
         if (critter.Species is CritterSpecies.UndeadApe)
         {
@@ -2062,15 +2093,16 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 CritterSpecies.Jellyfish => "Seeking plankton",
                 CritterSpecies.Fish => "Seeking shallow or freshwater forage, hunting, or fleeing",
                 CritterSpecies.Newt => "Seeking freshwater or wetland foliage",
-                CritterSpecies.Snail => "Seeking beach forage, freshwater, or wetland foliage",
+                CritterSpecies.Snail => "Seeking wetland foliage",
                 CritterSpecies.MegaToad => "Ambushing aquatic prey",
-                CritterSpecies.Therapsid => "Hunting or foraging in lush wetlands",
-                CritterSpecies.Monkey => "Seeking wetland foliage or fleeing predators",
+                CritterSpecies.Therapsid => "Foraging in wetlands and arid terrain",
+                CritterSpecies.Monkey => "Foraging, hunting snails and crabs, or fleeing predators",
                 CritterSpecies.Ape or CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack => "Hunting below 10 village food, wetland foraging, or returning",
                 CritterSpecies.ApeSailor => "Hunting at sea or returning food to harbor",
                 CritterSpecies.ApeWarrior => "Hunting predators of apes",
                 CritterSpecies.ApeKing or CritterSpecies.ApeQueen or CritterSpecies.ApeChieftain => "Defending, hunting for village food, or returning food",
                 CritterSpecies.Deer => "Grazing or fleeing predators",
+                CritterSpecies.MegaSlug => "Seeking swamp, jungle, bog, or forest foliage",
                 CritterSpecies.Elk => "Grazing or fleeing predators",
                 CritterSpecies.Gazelle => "Grazing or fleeing predators",
                 CritterSpecies.Wolf => "Hunting broad terrestrial prey",
@@ -2094,9 +2126,9 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             CritterSpecies.Jellyfish => "Drifting and hunting",
             CritterSpecies.Fish => "Foraging in freshwater and shallows",
             CritterSpecies.Newt => "Foraging in wetlands and freshwater",
-            CritterSpecies.Snail => "Slowly foraging on beaches, in wetlands, and in freshwater",
+            CritterSpecies.Snail => "Slowly foraging in wetlands",
             CritterSpecies.MegaToad => "Patrolling the water's edge",
-            CritterSpecies.Therapsid => "Patrolling terrestrial hunting grounds",
+            CritterSpecies.Therapsid => "Foraging in swamps, jungles, bogs, and arid terrain",
             CritterSpecies.Monkey => "Foraging while watching for predators",
             CritterSpecies.Ape or CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack => "Hunting below 10 village food or wetland foraging",
             CritterSpecies.ApeTrader => "Traveling between villages on roads (no trading yet)",
@@ -2108,6 +2140,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             CritterSpecies.ApeWarrior => "Defending its village from predators",
             CritterSpecies.ApeChieftain => "Leading the defense of its village",
             CritterSpecies.Deer => "Roaming while watching for predators",
+            CritterSpecies.MegaSlug => "Slowly grazing or fleeing predators",
+            CritterSpecies.Custodian => "Flying ring patrols, suppressing infections, and visiting teleporters",
             CritterSpecies.Elk => "Slowly roaming while watching for predators",
             CritterSpecies.Gazelle => "Roaming while watching for predators",
             CritterSpecies.Wolf => "Quickly patrolling its hunting grounds",
@@ -2159,6 +2193,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             history.Clear();
         }
         _sickApeHistory.Clear();
+        _combinedApeHistory.Clear();
         _barbarianHistory.Clear();
         _barbarianChiefHistory.Clear();
         RecordPopulationSample();
@@ -2192,7 +2227,10 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             }
             else if (_setupRow == 1)
             {
-                _menuSizeIndex = Mod(_menuSizeIndex + direction, MenuSizes.Length);
+                if (MenuMapTypes[_menuMapTypeIndex] is WorldMapType.RingWorld)
+                    _menuRingSizeIndex = Mod(_menuRingSizeIndex + direction, RingMenuSizes.Length);
+                else
+                    _menuSizeIndex = Mod(_menuSizeIndex + direction, MenuSizes.Length);
             }
             else if (_setupRow == 2)
             {
@@ -2209,7 +2247,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         if (WasPressed(keyboard, Keys.Enter) || (_setupRow == 3 && WasPressed(keyboard, Keys.Space)))
         {
             _mapType = MenuMapTypes[_menuMapTypeIndex];
-            _preset = _mapType is WorldMapType.RingWorld ? WorldPreset.Ring : MenuSizes[_menuSizeIndex];
+            _preset = _mapType is WorldMapType.RingWorld
+                ? RingMenuSizes[_menuRingSizeIndex] : MenuSizes[_menuSizeIndex];
             GenerateWorld();
             _setupMenuOpen = false;
         }
@@ -2231,9 +2270,10 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         _spriteBatch.DrawString(_hudFont, "NEW WORLD", new Vector2(left + 24, top + 20), new Color(126, 190, 213));
 
         var type = MenuMapTypes[_menuMapTypeIndex];
-        var sizeText = type is WorldMapType.RingWorld
-            ? $"Fixed  {WorldPreset.Ring.Width} x {WorldPreset.Ring.Height}"
-            : $"{MenuSizes[_menuSizeIndex].Name}  {MenuSizes[_menuSizeIndex].Width} x {MenuSizes[_menuSizeIndex].Height}";
+        var selectedSize = type is WorldMapType.RingWorld
+            ? RingMenuSizes[_menuRingSizeIndex] : MenuSizes[_menuSizeIndex];
+        var sizeName = selectedSize == WorldPreset.Ring ? "Standard" : selectedSize.Name;
+        var sizeText = $"{sizeName}  {selectedSize.Width} x {selectedSize.Height}";
         string[] rows =
         [
             $"Map Shape       <  {GetMapTypeName(type)}  >",
@@ -2458,6 +2498,21 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 new Rectangle(center.X - cacheSize / 2, center.Y - cacheSize / 2, cacheSize, cacheSize),
                 new Color(170, 85, 65));
         }
+    }
+
+    private void DrawCustodianFabricator(int screenX, int screenY, GridPosition position)
+    {
+        if (_spriteBatch is null || _pixel is null || !_world.IsCustodianFabricator(position))
+            return;
+        var size = Math.Max(3, TileSize);
+        var x = MapOffsetX + screenX * TileSize;
+        var y = MapOffsetY + screenY * TileSize;
+        var edge = Math.Max(1, size / 4);
+        _spriteBatch.Draw(_pixel, new Rectangle(x, y, size, size), new Color(65, 82, 94));
+        _spriteBatch.Draw(_pixel, new Rectangle(x + edge, y + edge,
+            Math.Max(1, size - edge * 2), Math.Max(1, size - edge * 2)), new Color(170, 200, 210));
+        _spriteBatch.Draw(_pixel, new Rectangle(x + edge, y + size - edge,
+            Math.Max(1, size - edge * 2), edge), new Color(100, 245, 240));
     }
 
     private void DrawTeleporter(int screenX, int screenY, GridPosition position)
@@ -2881,6 +2936,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
 
     private static Color GetCritterColor(CritterSpecies species) => species switch
     {
+        CritterSpecies.Custodian => new Color(190, 220, 235),
         CritterSpecies.Plankton => new Color(160, 255, 180),
         CritterSpecies.Jellyfish => new Color(180, 160, 240),
         CritterSpecies.Worm => new Color(210, 105, 145),
@@ -2893,6 +2949,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         CritterSpecies.Fish => new Color(80, 220, 235),
         CritterSpecies.Newt => new Color(245, 145, 55),
         CritterSpecies.Snail => new Color(170, 150, 105),
+        CritterSpecies.MegaSlug => new Color(145, 160, 95),
         CritterSpecies.MegaToad => new Color(90, 155, 65),
         CritterSpecies.Therapsid => new Color(214, 242, 162),
         CritterSpecies.Monkey => new Color(190, 135, 85),
@@ -2980,13 +3037,14 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         WorldTool.SquidEgg => "L spawn egg",
         WorldTool.Newt => "L spawn: amphibious",
         WorldTool.Snail => "L spawn: wetlands / freshwater",
+        WorldTool.MegaSlug => "L spawn: swamp / jungle / bog / forest",
         WorldTool.MegaToad => "L spawn: land / shallows",
         WorldTool.Therapsid => "L spawn: land",
         WorldTool.Monkey => "L spawn: land / jungle",
         WorldTool.Ape => "L spawn: land",
         WorldTool.Deer => "L spawn: grass / forest",
         WorldTool.Elk => "L spawn: grass / tundra / taiga",
-        WorldTool.Gazelle => "L spawn: grass / arid",
+        WorldTool.Gazelle => "L spawn: grass / arid / desert",
         WorldTool.Wolf => "L spawn: land",
         WorldTool.Dog => "L spawn: joins nearest village; otherwise wolf",
         WorldTool.Lich => "L spawn: raises apes; crosses water slowly",
@@ -3091,6 +3149,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         Fish,
         Newt,
         Snail,
+        MegaSlug,
         MegaToad,
         Therapsid,
         Monkey,

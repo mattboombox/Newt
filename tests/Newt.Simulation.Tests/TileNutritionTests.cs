@@ -14,7 +14,7 @@ public sealed class TileNutritionTests
     [InlineData(Terrain.Plains, Biome.Forest, SurfaceWaterKind.None, 4)]
     [InlineData(Terrain.Plains, Biome.Swamp, SurfaceWaterKind.None, 5)]
     [InlineData(Terrain.Plains, Biome.Jungle, SurfaceWaterKind.None, 6)]
-    [InlineData(Terrain.Plains, Biome.Desert, SurfaceWaterKind.None, 0)]
+    [InlineData(Terrain.Plains, Biome.Desert, SurfaceWaterKind.None, 1)]
     [InlineData(Terrain.Mountain, Biome.Forest, SurfaceWaterKind.None, 0)]
     [InlineData(Terrain.DeepOcean, Biome.None, SurfaceWaterKind.None, 0)]
     [InlineData(Terrain.Plains, Biome.Desert, SurfaceWaterKind.River, 3)]
@@ -82,10 +82,10 @@ public sealed class TileNutritionTests
     [InlineData(Biome.Forest, 4)]
     [InlineData(Biome.Grassland, 3)]
     [InlineData(Biome.Taiga, 3)]
-    [InlineData(Biome.Bog, 2)]
+    [InlineData(Biome.Bog, 3)]
     [InlineData(Biome.Arid, 2)]
     [InlineData(Biome.Tundra, 1)]
-    [InlineData(Biome.Desert, 0)]
+    [InlineData(Biome.Desert, 1)]
     [InlineData(Biome.Arctic, 0)]
     public void LandNutritionFollowsBiomeHierarchy(Biome biome, int expectedCapacity)
     {
@@ -279,7 +279,7 @@ public sealed class TileNutritionTests
         {
             CritterSpecies.Deer => biome is Biome.Grassland or Biome.Forest,
             CritterSpecies.Elk => biome is Biome.Grassland or Biome.Tundra or Biome.Taiga,
-            CritterSpecies.Gazelle => biome is Biome.Grassland or Biome.Arid,
+            CritterSpecies.Gazelle => biome is Biome.Grassland or Biome.Arid or Biome.Desert,
             _ => false,
         };
 }

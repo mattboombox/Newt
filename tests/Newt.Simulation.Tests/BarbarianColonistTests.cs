@@ -79,6 +79,33 @@ public sealed class BarbarianColonistTests
         Assert.Equal(barbarian, world.IsBarbarianApe(founder.Id));
     }
 
+    [Theory]
+    [InlineData(1, Terrain.Plains, true)]
+    [InlineData(2, Terrain.Plains, false)]
+    [InlineData(1, Terrain.Shallows, false)]
+    public void LowEnergyColonistSettlesImmediatelyNearOrigin(int energy, Terrain terrain, bool settles)
+    {
+        var world = CreateWorld();
+        Assert.True(world.TrySendApeColonist(new(60, 10)));
+        var colonist = Assert.Single(Residents(world), critter => critter.IsColonist);
+        var index = Index(world, colonist.Id);
+        var position = new GridPosition(12, 10);
+        world.SetTerrain(position, terrain);
+        typeof(SimulationWorld).GetMethod("MoveCritter", PrivateInstance)!
+            .Invoke(world, [index, position.Y * world.Width + position.X, position, false]);
+        var energies = (int[])typeof(SimulationWorld).GetField("_energy", PrivateInstance)!.GetValue(world)!;
+        energies[index] = energy;
+
+        typeof(SimulationWorld).GetMethod("TryAdvanceApeSettler", PrivateInstance)!.Invoke(world, [index]);
+
+        Assert.Equal(settles ? ApeStructureKind.Village : (ApeStructureKind?)null,
+            world.GetApeStructure(position));
+        Assert.True(world.TryGetCritter(colonist.Id, out var founder));
+        Assert.Equal(!settles, founder.IsColonist);
+        if (settles)
+            Assert.Equal(CritterNutritions.Get(CritterSpecies.Ape).InitialEnergy, founder.Energy);
+    }
+
     private static CritterSnapshot[] Residents(SimulationWorld world) =>
         Enumerable.Range(0, world.CritterCount).Select(world.GetCritter).ToArray();
 

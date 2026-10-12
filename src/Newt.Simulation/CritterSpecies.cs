@@ -45,4 +45,6 @@ public enum CritterSpecies : byte
     ApeBishop,
     ApeRoyalGuard,
     Snail,
+    MegaSlug,
+    Custodian,
 }

@@ -2,6 +2,21 @@ namespace Newt.Simulation;
 
 public sealed partial class SimulationWorld
 {
+    private bool CanBeShovedOnto(int blocker, int tile) =>
+        IsLivingApe(_species[blocker])
+            ? _terrain[tile] is not Terrain.RingWorldWall
+            : CanCritterLiveOn(blocker, tile);
+
+    private void DelayShovedApeMovement(int index)
+    {
+        if (!IsLivingApe(_species[index]))
+            return;
+        var penalty = CanCritterRemainOnTile(index, GetIndex(_positions[index]))
+            ? 1 : StrandedMovementIntervalMultiplier;
+        _nextMovementTicks[index] = Math.Max(_nextMovementTicks[index],
+            Tick + GetCritterMovementIntervalTicks(index) * penalty);
+    }
+
     // When there is no free sidestep, the blocker can use the tile the mover vacates.
     // Traders passing other traders use their route-aware exchange instead.
     private bool TrySwapPastMovementBlocker(int mover, int destination,
@@ -15,7 +30,7 @@ public sealed partial class SimulationWorld
             !CanDisplace(_species[mover], _species[blocker]) ||
             IsCaughtInMegaSpiderWeb(mover) || IsCaughtInMegaSpiderWeb(blocker) ||
             reserved?.Contains(_positions[mover]) is true || reserved?.Contains(_positions[blocker]) is true ||
-            !CanCritterLiveOn(mover, destination) || !CanCritterLiveOn(blocker, origin) ||
+            !CanCritterLiveOn(mover, destination) || !CanBeShovedOnto(blocker, origin) ||
             (IsApeMilitary(_species[mover]) && AreWarEnemies(mover, blocker)))
             return false;
 
@@ -27,6 +42,7 @@ public sealed partial class SimulationWorld
         _occupants[origin] = blocker;
         _nextMovementTicks[blocker] = Math.Max(_nextMovementTicks[blocker],
             Tick + GetMovementIntervalTicks(_species[blocker]));
+        DelayShovedApeMovement(blocker);
         TriggerWolfDenNear(from, to, _species[mover]);
         TriggerWolfDenNear(to, from, _species[blocker]);
         return true;

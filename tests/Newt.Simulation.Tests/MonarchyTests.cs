@@ -6,9 +6,32 @@ namespace Newt.Simulation.Tests;
 public sealed class MonarchyTests
 {
     [Theory]
+    [InlineData(false, 5)]
+    [InlineData(true, 4)]
+    public void ChiefsDealOneMoreDamageThanTheirWarriors(bool barbarian, int expected)
+    {
+        var world = new SimulationWorld(40, 20, Terrain.Plains, seed: 17);
+        var village = new GridPosition(10, 10);
+        for (var y = 0; y < world.Height; y++)
+        for (var x = 0; x < world.Width; x++) world.SetBiome(new(x, y), Biome.Grassland);
+        if (barbarian)
+            Assert.True(world.TrySpawnBarbarianApeVillage(village));
+        var chief = world.AddCritter(CritterSpecies.ApeChieftain, new(25, 10));
+        var warrior = world.AddCritter(CritterSpecies.ApeWarrior, new(26, 10));
+        if (barbarian)
+        {
+            var homes = (Dictionary<int, int>)typeof(SimulationWorld)
+                .GetField("_apeVillageHomes", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(world)!;
+            homes[chief.Value] = homes[warrior.Value] = village.Y * world.Width + village.X;
+        }
+        Assert.Equal(expected, world.GetCritterCombatDamage(chief));
+        Assert.Equal(world.GetCritterCombatDamage(warrior) + 1, world.GetCritterCombatDamage(chief));
+    }
+
+    [Theory]
     [InlineData(CritterSpecies.ApeRoyalGuard, 5)]
-    [InlineData(CritterSpecies.ApeKing, 4)]
-    [InlineData(CritterSpecies.ApeQueen, 4)]
+    [InlineData(CritterSpecies.ApeKing, 2)]
+    [InlineData(CritterSpecies.ApeQueen, 2)]
     public void RoyalRolesUseTheirAdjustedBaseDamage(CritterSpecies species, int expected)
     {
         var world = new SimulationWorld(1, 1, Terrain.Plains);
@@ -17,7 +40,7 @@ public sealed class MonarchyTests
         Assert.Equal(expected, world.GetCritterCombatDamage(id));
         Assert.Equal(SimulationWorld.GetCombatDamage(CritterSpecies.ApeWarrior) + 1,
             SimulationWorld.GetCombatDamage(CritterSpecies.ApeRoyalGuard));
-        Assert.Equal(SimulationWorld.GetCombatDamage(CritterSpecies.ApeChieftain) - 1,
+        Assert.Equal(2,
             SimulationWorld.GetCombatDamage(CritterSpecies.ApeKing));
     }
     private static readonly GridPosition Village = new(15, 15);
@@ -32,6 +55,10 @@ public sealed class MonarchyTests
         NaturalEvents.SetEnabled(world, false);
         foreach (var p in Positions(world)) world.SetBiome(p, Biome.Grassland);
         Assert.True(world.TrySpawnTestApeVillage(Village));
+        var homes = (Dictionary<int, int>)typeof(SimulationWorld)
+            .GetField("_apeVillageHomes", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(world)!;
+        foreach (var position in Positions(world).Where(p => !world.IsOccupied(p) && world.GetApeStructure(p) is null).Take(12).ToArray())
+            homes[world.AddCritter(CritterSpecies.Ape, position).Value] = Village.Y * world.Width + Village.X;
         return world;
     }
 
@@ -46,23 +73,29 @@ public sealed class MonarchyTests
     private static bool IsMonarch(CritterSnapshot c) => c.Species is CritterSpecies.ApeKing or CritterSpecies.ApeQueen;
 
     [Fact]
-    public void CastleReplacesChiefAndRecruitsBishopAndFourDedicatedGuards()
+    public void CastleRecruitsHealthyUnemployedApesWithoutSpawningOrPromotingChief()
     {
         var world = World();
         var homes = (Dictionary<int, int>)typeof(SimulationWorld)
             .GetField("_apeVillageHomes", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(world)!;
         var chief = world.AddCritter(CritterSpecies.ApeChieftain, new(20, 15));
         homes[chief.Value] = Village.Y * world.Width + Village.X;
+        var recruits = Residents(world).Where(c => c.Species == CritterSpecies.Ape).Select(c => c.Id).ToHashSet();
+        var population = world.CritterCount;
         Assert.False(world.TryAssignApeCulture(Village, ApeCulture.Monarchy));
         Assert.True(world.TryAssignApeCulture(Village, ApeCulture.Monarchy, true));
         Assert.Equal(ApeCulture.Monarchy, world.GetApeVillageCulture(Village));
         Assert.Single(Positions(world), p => world.GetApeStructure(p) == ApeStructureKind.Castle);
         var monarch = Assert.Single(Residents(world), IsMonarch);
-        Assert.Equal(chief, monarch.Id);
-        Assert.DoesNotContain(Residents(world), c => c.Species == CritterSpecies.ApeChieftain);
+        Assert.Contains(monarch.Id, recruits);
+        Assert.Equal(population, world.CritterCount);
+        Assert.True(world.TryGetCritter(chief, out var unchangedChief));
+        Assert.Equal(CritterSpecies.ApeChieftain, unchangedChief.Species);
         Assert.Single(Residents(world), c => c.Species == CritterSpecies.ApeBishop);
         var guards = Residents(world).Where(c => c.Species == CritterSpecies.ApeRoyalGuard).ToArray();
         Assert.Equal(4, guards.Length);
+        Assert.All(Residents(world).Where(c => IsMonarch(c) || c.Species is CritterSpecies.ApeBishop or CritterSpecies.ApeRoyalGuard),
+            c => Assert.Contains(c.Id, recruits));
         Assert.Equal(guards.Select(c => c.Id).OrderBy(id => id.Value),
             world.GetChieftainEscort(Village).OrderBy(id => id.Value));
         Assert.Contains(Positions(world), p => world.TryPlaceApeBuilding(p, ApeStructureKind.Library));
@@ -88,6 +121,42 @@ public sealed class MonarchyTests
         Assert.True(world.TryGetCritter(guard.Id, out var moved));
         Assert.True(Math.Abs(moved.Position.X - monarch.Position.X) + Math.Abs(moved.Position.Y - monarch.Position.Y)
             < Math.Abs(far.X - monarch.Position.X) + Math.Abs(far.Y - monarch.Position.Y));
+    }
+
+    [Theory]
+    [InlineData(CritterSpecies.UndeadApe, false, false)]
+    [InlineData(CritterSpecies.UndeadWarrior, false, false)]
+    [InlineData(CritterSpecies.Lich, false, false)]
+    [InlineData(CritterSpecies.Ape, true, false)]
+    [InlineData(CritterSpecies.Ape, false, true)]
+    [InlineData(CritterSpecies.ApeWarrior, false, false)]
+    [InlineData(CritterSpecies.ApeChieftain, false, false)]
+    public void CastleLeavesVacanciesWhenOnlyIneligibleResidentsRemain(CritterSpecies species, bool sick, bool employed)
+    {
+        var world = World();
+        foreach (var resident in Residents(world)) world.RemoveCritterAt(resident.Position);
+        var homes = (Dictionary<int, int>)typeof(SimulationWorld)
+            .GetField("_apeVillageHomes", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(world)!;
+        var id = world.AddCritter(species, new(25, 15));
+        homes[id.Value] = Village.Y * world.Width + Village.X;
+        if (sick) Assert.True(world.TryInfectApeAt(new(25, 15), PlagueKind.Plague, (id.Value + 1) % 2));
+        if (employed)
+        {
+            var workplaces = (Dictionary<int, int>)typeof(SimulationWorld)
+                .GetField("_apeWorkplaces", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(world)!;
+            workplaces[id.Value] = Village.Y * world.Width + Village.X;
+        }
+        var population = world.CritterCount;
+        Assert.True(world.TryAssignApeCulture(Village, ApeCulture.Monarchy, true));
+        var villageTile = Village.Y * world.Width + Village.X;
+        typeof(SimulationWorld).GetMethod("RecruitApeCultureUnits", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(world, [villageTile]);
+        Assert.Equal(false, typeof(SimulationWorld).GetMethod("RecruitApeCultureLeader", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(world, [villageTile]));
+        Assert.Equal(population, world.CritterCount);
+        Assert.True(world.TryGetCritter(id, out var unchanged));
+        Assert.Equal(species, unchanged.Species);
+        Assert.DoesNotContain(Residents(world), c => IsMonarch(c) || c.Species is CritterSpecies.ApeBishop or CritterSpecies.ApeRoyalGuard);
     }
 
     [Theory]

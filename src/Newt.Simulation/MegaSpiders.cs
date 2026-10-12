@@ -6,7 +6,7 @@ public sealed partial class SimulationWorld
 
     private bool CanMegaSpiderCannibalize(int spiderIndex)
     {
-        if (_energy[spiderIndex] > CritterNutritions.Get(CritterSpecies.MegaSpider).HungryThreshold ||
+        if (!CritterNutritions.Get(CritterSpecies.MegaSpider).IsHungryAt(_energy[spiderIndex]) ||
             (_megaSpiderWebHomes.TryGetValue(_critterIds[spiderIndex].Value, out var webTile) &&
                 _megaSpiderWebFood.GetValueOrDefault(webTile) > 0))
         {
@@ -189,7 +189,8 @@ public sealed partial class SimulationWorld
 
     private bool IsCaughtInMegaSpiderWeb(int critterIndex)
     {
-        if (IsPredator(_species[critterIndex]) || IsLivingApe(_species[critterIndex]))
+        if (_species[critterIndex] is CritterSpecies.Custodian ||
+            IsPredator(_species[critterIndex]) || IsLivingApe(_species[critterIndex]))
         {
             return false;
         }
@@ -215,6 +216,8 @@ public sealed partial class SimulationWorld
         int spiderIndex,
         IReadOnlySet<GridPosition>? reservedPrey)
     {
+        if (!CritterNutritions.Get(CritterSpecies.MegaSpider).IsHungryAt(_energy[spiderIndex]))
+            return TryMoveHunter(spiderIndex, MegaSpiderPerceptionRadius, reservedPrey);
         var spiderId = _critterIds[spiderIndex].Value;
         if (_megaSpiderWebHomes.TryGetValue(spiderId, out var webTile) &&
             _megaSpiderWebFood.ContainsKey(webTile))

@@ -652,7 +652,7 @@ public sealed class SimulationWorldTests
     [Theory]
     [InlineData(CritterSpecies.Worm, 7)]
     [InlineData(CritterSpecies.Trilobite, 6)]
-    [InlineData(CritterSpecies.Nautilus, 6)]
+    [InlineData(CritterSpecies.Nautilus, 4)]
     public void ShelfOceanIceProvidesForageOnlyToWorms(
         CritterSpecies species,
         int movementSeconds)
@@ -2022,10 +2022,10 @@ public sealed class SimulationWorldTests
     }
 
     [Theory]
-    [InlineData(CritterSpecies.Worm, 7, 7, 3)]
-    [InlineData(CritterSpecies.Trilobite, 7, 7, 3)]
-    [InlineData(CritterSpecies.Fish, 7, 7, 5)]
-    [InlineData(CritterSpecies.Newt, 7, 7, 5)]
+    [InlineData(CritterSpecies.Worm, 7, 7, 4)]
+    [InlineData(CritterSpecies.Trilobite, 7, 7, 4)]
+    [InlineData(CritterSpecies.Fish, 7, 7, 4)]
+    [InlineData(CritterSpecies.Newt, 7, 7, 4)]
     public void SmallPreyUseSmallerReproductionReserves(
         CritterSpecies species,
         int maximumEnergy,
@@ -2136,7 +2136,7 @@ public sealed class SimulationWorldTests
         Assert.True(toad.MaximumEnergy > wolf.MaximumEnergy);
         Assert.Equal(5, toad.InitialEnergy);
         Assert.Equal(16, toad.ReproductionThreshold);
-        Assert.Equal(9, toad.ReproductionCost);
+        Assert.Equal(8, toad.ReproductionCost);
     }
 
     [Theory]
@@ -2787,20 +2787,18 @@ public sealed class SimulationWorldTests
     }
 
     [Fact]
-    public void TherapsidHuntsFishAndAdjacentFeederCrabs()
+    public void TherapsidDoesNotHuntAnySpecies()
     {
         foreach (var prey in Enum.GetValues<CritterSpecies>())
         {
-            Assert.Equal(
-                prey is CritterSpecies.Fish or CritterSpecies.Crab,
-                SimulationWorld.CanEat(CritterSpecies.Therapsid, prey));
+            Assert.False(SimulationWorld.CanEat(CritterSpecies.Therapsid, prey));
         }
     }
 
     [Fact]
-    public void TherapsidHuntsFishInRivers()
+    public void TherapsidLeavesFishInRiversAlone()
     {
-        Assert.True(SimulationWorld.CanEat(CritterSpecies.Therapsid, CritterSpecies.Fish));
+        Assert.False(SimulationWorld.CanEat(CritterSpecies.Therapsid, CritterSpecies.Fish));
 
         var world = new SimulationWorld(1, 2, Terrain.Plains, seed: 85);
         world.SeasonsEnabled = false;
@@ -2814,17 +2812,14 @@ public sealed class SimulationWorldTests
             world.AdvanceOneTick();
         }
 
-        // The meal reaches the reproduction threshold, allowing a birth in the vacated river tile.
-        Assert.Equal(2, world.GetCritterCount(CritterSpecies.Therapsid));
-        Assert.Equal(0, world.GetCritterCount(CritterSpecies.Fish));
+        Assert.Equal(1, world.GetCritterCount(CritterSpecies.Therapsid));
+        Assert.Equal(1, world.GetCritterCount(CritterSpecies.Fish));
         var nutrition = CritterNutritions.Get(CritterSpecies.Therapsid);
-        Assert.Equal(Math.Min(nutrition.MaximumEnergy,
-            nutrition.InitialEnergy + CritterNutritions.Get(CritterSpecies.Fish).FoodEnergy) -
-            nutrition.ReproductionCost, world.GetCritter(0).Energy);
+        Assert.Equal(nutrition.InitialEnergy, world.GetCritter(0).Energy);
     }
 
     [Fact]
-    public void TherapsidStrikesAdjacentFishInLakes()
+    public void TherapsidLeavesAdjacentLakeFishAlone()
     {
         var world = new SimulationWorld(1, 2, Terrain.Plains, seed: 85);
         world.SeasonsEnabled = false;
@@ -2840,11 +2835,10 @@ public sealed class SimulationWorldTests
         }
 
         Assert.Equal(1, world.GetCritterCount(CritterSpecies.Therapsid));
-        Assert.Equal(0, world.GetCritterCount(CritterSpecies.Fish));
+        Assert.Equal(1, world.GetCritterCount(CritterSpecies.Fish));
         Assert.Equal(shore, world.GetCritter(0).Position);
         var nutrition = CritterNutritions.Get(CritterSpecies.Therapsid);
-        Assert.Equal(Math.Min(nutrition.MaximumEnergy, nutrition.InitialEnergy +
-            CritterNutritions.Get(CritterSpecies.Fish).FoodEnergy), world.GetCritter(0).Energy);
+        Assert.Equal(nutrition.InitialEnergy, world.GetCritter(0).Energy);
     }
 
     [Fact]
@@ -2884,12 +2878,12 @@ public sealed class SimulationWorldTests
     }
 
     [Theory]
-    [InlineData(Biome.Swamp, 8)]
+    [InlineData(Biome.Swamp, 6)]
     [InlineData(Biome.Jungle, 8)]
-    [InlineData(Biome.Forest, 4)]
-    [InlineData(Biome.Arid, 4)]
+    [InlineData(Biome.Forest, 1)]
+    [InlineData(Biome.Arid, 3)]
     [InlineData(Biome.Bog, 4)]
-    [InlineData(Biome.None, 4)]
+    [InlineData(Biome.None, 1)]
     public void HungryTherapsidForagesOnlyInSupportedBiomes(
         Biome biome,
         int expectedEnergy)
@@ -2910,6 +2904,8 @@ public sealed class SimulationWorldTests
     [Theory]
     [InlineData(Biome.Swamp)]
     [InlineData(Biome.Jungle)]
+    [InlineData(Biome.Bog)]
+    [InlineData(Biome.Arid)]
     public void TherapsidPrefersNearbyFoliageOverVisiblePrey(Biome biome)
     {
         var world = new SimulationWorld(3, 2, Terrain.Plains, seed: 188);
@@ -3042,7 +3038,6 @@ public sealed class SimulationWorldTests
 
     [Theory]
     [InlineData(CritterSpecies.Newt)]
-    [InlineData(CritterSpecies.Crab)]
     [InlineData(CritterSpecies.Fish)]
     public void MonkeyLeavesAnimalPreyForPredators(CritterSpecies prey)
     {
@@ -3062,11 +3057,11 @@ public sealed class SimulationWorldTests
     }
 
     [Fact]
-    public void MonkeyIsNotAPredator()
+    public void MonkeyHuntsOnlySnailsAndCrabs()
     {
         foreach (var prey in Enum.GetValues<CritterSpecies>())
         {
-            Assert.False(SimulationWorld.CanEat(CritterSpecies.Monkey, prey));
+            Assert.Equal(prey is CritterSpecies.Snail or CritterSpecies.Crab, SimulationWorld.CanEat(CritterSpecies.Monkey, prey));
         }
     }
 
@@ -3099,10 +3094,11 @@ public sealed class SimulationWorldTests
     }
 
     [Theory]
-    [InlineData(Biome.Swamp)]
-    [InlineData(Biome.Jungle)]
-    [InlineData(Biome.Forest)]
-    public void MonkeyFeedsFromSupportedFoliage(Biome biome)
+    [InlineData(Biome.Swamp, 6)]
+    [InlineData(Biome.Jungle, 6)]
+    [InlineData(Biome.Forest, 6)]
+    [InlineData(Biome.Bog, 5)]
+    public void MonkeyFeedsFromSupportedFoliage(Biome biome, int expectedEnergy)
     {
         var world = new SimulationWorld(1, 1, Terrain.Plains, seed: 89);
         world.SeasonsEnabled = false;
@@ -3114,7 +3110,7 @@ public sealed class SimulationWorldTests
             world.AdvanceOneTick();
         }
 
-        Assert.Equal(8, world.GetCritter(0).Energy);
+        Assert.Equal(expectedEnergy, world.GetCritter(0).Energy);
     }
 
     [Theory]
@@ -3288,18 +3284,18 @@ public sealed class SimulationWorldTests
     }
 
     [Theory]
-    [InlineData(CritterSpecies.Deer, Biome.Grassland, 18, 7)]
-    [InlineData(CritterSpecies.Deer, Biome.Forest, 18, 8)]
-    [InlineData(CritterSpecies.Deer, Biome.Tundra, 18, 4)]
-    [InlineData(CritterSpecies.Deer, Biome.Taiga, 18, 4)]
-    [InlineData(CritterSpecies.Elk, Biome.Grassland, 20, 8)]
-    [InlineData(CritterSpecies.Elk, Biome.Tundra, 20, 6)]
-    [InlineData(CritterSpecies.Elk, Biome.Taiga, 20, 8)]
-    [InlineData(CritterSpecies.Elk, Biome.Forest, 20, 5)]
-    [InlineData(CritterSpecies.Gazelle, Biome.Grassland, 18, 7)]
-    [InlineData(CritterSpecies.Gazelle, Biome.Arid, 18, 6)]
-    [InlineData(CritterSpecies.Gazelle, Biome.Forest, 18, 4)]
-    [InlineData(CritterSpecies.Gazelle, Biome.Desert, 18, 4)]
+    [InlineData(CritterSpecies.Deer, Biome.Grassland, 18, 5)]
+    [InlineData(CritterSpecies.Deer, Biome.Forest, 18, 6)]
+    [InlineData(CritterSpecies.Deer, Biome.Tundra, 18, 2)]
+    [InlineData(CritterSpecies.Deer, Biome.Taiga, 18, 2)]
+    [InlineData(CritterSpecies.Elk, Biome.Grassland, 20, 6)]
+    [InlineData(CritterSpecies.Elk, Biome.Tundra, 20, 4)]
+    [InlineData(CritterSpecies.Elk, Biome.Taiga, 20, 6)]
+    [InlineData(CritterSpecies.Elk, Biome.Forest, 20, 3)]
+    [InlineData(CritterSpecies.Gazelle, Biome.Grassland, 18, 5)]
+    [InlineData(CritterSpecies.Gazelle, Biome.Arid, 18, 4)]
+    [InlineData(CritterSpecies.Gazelle, Biome.Forest, 18, 2)]
+    [InlineData(CritterSpecies.Gazelle, Biome.Desert, 18, 3)]
     public void GrazersFeedOnlyFromTheirSupportedBiomes(
         CritterSpecies species,
         Biome biome,

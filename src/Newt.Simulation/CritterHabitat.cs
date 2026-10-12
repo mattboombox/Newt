@@ -16,6 +16,7 @@ public static class CritterHabitats
 {
     public static CritterHabitat GetHabitat(CritterSpecies species) => species switch
     {
+        CritterSpecies.Custodian => CritterHabitat.Flier,
         CritterSpecies.ApeLudditePriest or CritterSpecies.ApeBishop or CritterSpecies.ApeBomber => CritterHabitat.LandDweller,
         CritterSpecies.Lich or CritterSpecies.UndeadWarrior => CritterHabitat.LandAndWaterDweller,
         CritterSpecies.Plankton or CritterSpecies.Jellyfish or CritterSpecies.Worm or
@@ -25,7 +26,7 @@ public static class CritterHabitats
             CritterHabitat.OceanDweller,
         CritterSpecies.SeaScorpion => CritterHabitat.ShorelineHunter,
         CritterSpecies.ApeSailor or CritterSpecies.ApeTraderSailor => CritterHabitat.ShorelineHunter,
-        CritterSpecies.Newt or CritterSpecies.Snail or CritterSpecies.MegaToad or CritterSpecies.MegaSpider or CritterSpecies.Therapsid or
+        CritterSpecies.Newt or CritterSpecies.Snail or CritterSpecies.MegaSlug or CritterSpecies.MegaToad or CritterSpecies.MegaSpider or CritterSpecies.Therapsid or
             CritterSpecies.ApeTrader or CritterSpecies.Monkey or CritterSpecies.Ape or CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack or CritterSpecies.ApeWarrior or CritterSpecies.ApeRoyalGuard or CritterSpecies.ApeScholar or CritterSpecies.ApeChieftain or CritterSpecies.ApeKing or CritterSpecies.ApeQueen or CritterSpecies.UndeadApe or CritterSpecies.Deer or CritterSpecies.Elk or
             CritterSpecies.Gazelle or
             CritterSpecies.Wolf or CritterSpecies.Dog or CritterSpecies.Crab or CritterSpecies.Vampire =>
@@ -42,7 +43,7 @@ public static class CritterHabitats
     {
         if (habitat is CritterHabitat.Flier)
         {
-            return terrain is not Terrain.Mountain || biome is not Biome.Arctic;
+            return true;
         }
 
         if (surfaceCover is not SurfaceCover.None)

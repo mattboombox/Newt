@@ -314,7 +314,8 @@ public sealed class CombatProtectionTests
 
             Assert.True(world.TryGetCritter(warrior, out var survivingWarrior));
             Assert.True(world.TryGetCritter(therapsid, out var survivingTherapsid));
-            Assert.Contains(initial - survivingWarrior.Energy - survivingTherapsid.Energy, new[] { 1, 3 });
+            Assert.Contains(initial - survivingWarrior.Energy - survivingTherapsid.Energy,
+                new[] { 1, species is CritterSpecies.ApeChieftain ? 4 : 3 });
         }
     }
 }

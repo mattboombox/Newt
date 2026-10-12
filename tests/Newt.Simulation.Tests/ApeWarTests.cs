@@ -5,6 +5,53 @@ namespace Newt.Simulation.Tests;
 
 public sealed class ApeWarTests
 {
+    [Fact]
+    public void BarbarianExpeditionCapsAllAttackersAtFourTimesCampPopulationIncludingDogs()
+    {
+        var world = CreateCampWarWorld(false);
+        var homes = (Dictionary<int, int>)typeof(SimulationWorld)
+            .GetField("_apeVillageHomes", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(world)!;
+        var campDog = world.AddCritter(CritterSpecies.Dog, new(40, 26));
+        homes[campDog.Value] = Second.Y * world.Width + Second.X;
+        var attackingDog = world.AddCritter(CritterSpecies.Dog, new(41, 26));
+        homes[attackingDog.Value] = First.Y * world.Width + First.X;
+        for (var i = 0; i < 150; i++)
+        {
+            var id = world.AddCritter(CritterSpecies.Ape, new(1 + i % 45, 20 + i / 45));
+            homes[id.Value] = First.Y * world.Width + First.X;
+        }
+        var limit = Residents(world, Second).Length * 4;
+        Assert.True(world.TryStartApeWar(First, Second));
+        var expedition = Residents(world, First).Where(c => world.TryGetApeWarSide(c.Id, out var attacking) && attacking).ToArray();
+        Assert.Equal(limit, expedition.Length);
+        Assert.Contains(expedition, c => c.Id == attackingDog);
+        Assert.All(expedition, c => Assert.Equal($"B Attacking village #{world.GetApeVillageId(Second)}", world.GetApeWarBehavior(c.Id)));
+        Assert.Contains(Residents(world, First), c => c.Species is CritterSpecies.Ape && world.GetApeWarBehavior(c.Id) is null);
+        Assert.Equal($"B Defending village #{world.GetApeVillageId(Second)}", world.GetApeWarBehavior(campDog));
+    }
+
+    [Theory]
+    [InlineData(false, false, "W")]
+    [InlineData(false, true, "B")]
+    [InlineData(true, false, "C")]
+    public void WarBehaviorShowsKindRoleAndVillage(bool civil, bool blood, string kind)
+    {
+        var world = CreateWorld();
+        Assert.True(civil ? world.TryStartApeCivilWar(First) : world.TryStartApeWar(First, Second, blood));
+        var targetVillage = world.GetApeVillageId(civil ? First : Second);
+        var sides = new HashSet<bool>();
+        for (var i = 0; i < world.CritterCount; i++)
+        {
+            var critter = world.GetCritter(i);
+            if (!world.TryGetApeWarSide(critter.Id, out var attacking))
+                continue;
+            sides.Add(attacking);
+            Assert.Equal($"{kind} {(attacking ? "Attacking" : "Defending")} village #{targetVillage}",
+                world.GetApeWarBehavior(critter.Id));
+        }
+        Assert.Equal(2, sides.Count);
+    }
+
     private static readonly GridPosition First = new(10, 10), Second = new(30, 10);
 
     private static SimulationWorld CreateCampWarWorld(bool coastal)
