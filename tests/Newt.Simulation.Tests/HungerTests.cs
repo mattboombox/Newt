@@ -12,6 +12,8 @@ public sealed class HungerTests
     [InlineData(CritterSpecies.ToothedWhale, 20, false)]
     [InlineData(CritterSpecies.MegaSpider, 7, true)]
     [InlineData(CritterSpecies.MegaSpider, 8, false)]
+    [InlineData(CritterSpecies.MegaToad, 7, true)]
+    [InlineData(CritterSpecies.MegaToad, 8, false)]
     [InlineData(CritterSpecies.Therapsid, 5, true)]
     [InlineData(CritterSpecies.Therapsid, 6, false)]
     public void HungerUsesStrictTwoThirdsBoundary(CritterSpecies species, int energy, bool hungry)
@@ -40,6 +42,22 @@ public sealed class HungerTests
         energies[0] = threshold;
         Assert.True(world.GetCritter(0).IsHunting);
         Assert.Equal(food, world.FindHunterPrey(0, species, 4, null));
+    }
+
+    [Fact]
+    public void HungryMegaToadCanReachBreedingEnergyFromFish()
+    {
+        var world = new SimulationWorld(10, 1, Terrain.Shallows, seed: 17);
+        world.AddCritter(CritterSpecies.MegaToad, new(0, 0));
+        var food = new GridPosition(1, 0);
+        world.AddCritter(CritterSpecies.Fish, food);
+        var energies = (int[])typeof(SimulationWorld).GetField("_energy", Private)!.GetValue(world)!;
+        energies[0] = 7;
+        Assert.True(world.GetCritter(0).IsHunting);
+        Assert.Equal(food, world.FindHunterPrey(0, CritterSpecies.MegaToad, 4, null));
+        world.CommitEncounter(new(0, 0), food);
+        Assert.Equal(11, world.GetCritter(0).Energy);
+        Assert.True(world.GetCritter(0).CanReproduce);
     }
 
     [Theory]

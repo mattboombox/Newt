@@ -1480,7 +1480,7 @@ public sealed class ApeTests
         var wormPosition = GetCardinalNeighbors(world, ape.Position)
             .First(position => !world.IsOccupied(position) &&
                 world.GetApeStructure(position) is null);
-        world.SetTerrain(wormPosition, Terrain.Beach);
+        world.SetTerrain(wormPosition, Terrain.Shallows);
         world.AddCritter(CritterSpecies.Worm, wormPosition);
 
         Assert.Equal(0, world.GetApeVillageFood(village));

@@ -199,6 +199,8 @@ public sealed partial class SimulationWorld
 
     private bool TryFeedMegaSpiderFromWeb(int spiderIndex, CritterNutrition nutrition)
     {
+        if (_energy[spiderIndex] >= nutrition.MaximumEnergy)
+            return false;
         var spiderId = _critterIds[spiderIndex].Value;
         if (!_megaSpiderWebHomes.TryGetValue(spiderId, out var webTile) ||
             !_megaSpiderWebFood.TryGetValue(webTile, out var storedFood) || storedFood <= 0)
@@ -206,7 +208,8 @@ public sealed partial class SimulationWorld
             return false;
         }
 
-        var consumed = Math.Min(nutrition.MetabolismCost, storedFood);
+        var consumed = Math.Min(Math.Min(nutrition.MetabolismCost, storedFood),
+            nutrition.MaximumEnergy - _energy[spiderIndex]);
         _megaSpiderWebFood[webTile] = storedFood - consumed;
         _energy[spiderIndex] = Math.Min(nutrition.MaximumEnergy, _energy[spiderIndex] + consumed);
         return true;
@@ -216,6 +219,8 @@ public sealed partial class SimulationWorld
         int spiderIndex,
         IReadOnlySet<GridPosition>? reservedPrey)
     {
+        if (TryFeedMegaSpiderFromWeb(spiderIndex, CritterNutritions.Get(CritterSpecies.MegaSpider)))
+            return null;
         if (!CritterNutritions.Get(CritterSpecies.MegaSpider).IsHungryAt(_energy[spiderIndex]))
             return TryMoveHunter(spiderIndex, MegaSpiderPerceptionRadius, reservedPrey);
         var spiderId = _critterIds[spiderIndex].Value;

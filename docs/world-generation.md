@@ -92,9 +92,10 @@ lake with OceanSeed to convert it by the same rule; this measurement excludes ri
 
 Its climate varies along the ring instead of by latitude. Repeating engineered
 hot, cold, wet, and dry longitudinal sections create distinct conservatory
-regions. Each climate set spans 640 tiles: Standard repeats twice and Mega four
-times, with the same zone lengths on both sizes. Planetary seasons are permanently
-disabled for this preset.
+regions. Both Standard and Mega repeat the climate set twice. Each set spans 640
+tiles on Standard and 1280 tiles on Mega, doubling Mega's zone lengths. Planetary seasons are permanently
+disabled for this preset. Cold climate troughs drop below the sea-ice threshold,
+allowing submerged tiles in both repeating climate sets to form Ice Sheets.
 
 Continuous steel-colored Ring World Wall tiles run along its top and bottom
 edges. Their structural elevation is `2.15`, slightly above the normal `2.0`
@@ -155,7 +156,7 @@ The game starts in Critter Tools with Plankton selected.
   Ambient feeding draws from finite tile nutrition. Land capacity is Jungle 6,
   Swamp 5, Forest 4, Grassland/Taiga/Bog 3, Arid 2, Tundra 1, and
   Desert 1, Arctic 0. Ice Sheets over shelf Ocean hold 1, while deep-ocean Ice Sheets
-  hold 0. Beaches are 0 freezing and 1 otherwise; Shallows are
+  hold 0. Beaches are 1 freezing and 2 otherwise; Shallows are
   6 freezing, 5 cold, 4 temperate, and 3 hot; Deep Ocean is 0; Ocean is 3 cold and
   2 otherwise. Rivers and Lakes both replace the underlying tile with a flat
   capacity of 3, independent of biome and temperature. Only Worms, Fish,
@@ -346,10 +347,9 @@ The game starts in Critter Tools with Plankton selected.
   gain meal energy from that death.
   A lethal displacement counts as a meal only when the mover can legally eat the blocker.
   Newts flee nearby Toads. Reproduction has no species-specific terrain gate.
-  Mega Toad reproduction requires fourteen energy and costs nine. Both a new
-  offspring and its threshold-level parent have five energy, while cannibalism
-  is limited to adjacent encounters. A cannibalistic meal restores eight, leaving
-  the survivor one energy short of another birth.
+  Mega Toad reproduction requires eleven energy and costs six. A new offspring
+  starts at three energy and its threshold-level parent retains five. Cannibalism
+  is limited to adjacent encounters and restores eight energy, capped at eleven.
   Newts live on land and feed in swamps, jungles, rivers, and freshwater lakes.
   They seek only nearby tiles with nutrition remaining and do not make a map-wide
   freshwater migration after birth or evolution. Mega

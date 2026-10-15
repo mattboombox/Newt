@@ -314,20 +314,23 @@ public static class ClimateSystem
     private static float DistanceInfluence(int distance, float strength, float reach) =>
         distance == Unreachable ? 0 : strength * MathF.Exp(-distance / reach);
 
-    private static float GetRingClimatePhase(int x) =>
-        (x + 0.5f) / (WorldPreset.Ring.Width / 2) * MathF.Tau;
+    private static float GetRingClimatePhase(SimulationWorld world, int x) =>
+        (x + 0.5f) / (world.Width / 2f) * MathF.Tau;
 
     internal static float GetRingTemperatureNormal(SimulationWorld world, int x)
     {
-        var phase = GetRingClimatePhase(x);
+        var phase = GetRingClimatePhase(world, x);
         var seedPhase = (world.Seed % 10_000) / 10_000f * MathF.Tau;
+        // Extend the cold trough below the sea-ice threshold even after seeded
+        // variation, without changing the warm half of each climate cycle.
+        var coldZone = Math.Max(0f, -MathF.Sin(phase + seedPhase));
         return 0.49f + MathF.Sin(phase + seedPhase) * 0.30f +
-            MathF.Sin(phase * 2 - seedPhase * 0.5f) * 0.08f;
+            MathF.Sin(phase * 2 - seedPhase * 0.5f) * 0.08f - coldZone * coldZone * 0.25f;
     }
 
     internal static float GetRingMoistureNormal(SimulationWorld world, int x)
     {
-        var phase = GetRingClimatePhase(x);
+        var phase = GetRingClimatePhase(world, x);
         var seedPhase = (world.Seed % 8_192) / 8_192f * MathF.Tau;
         return MathF.Sin(phase + seedPhase) * 0.24f +
             MathF.Sin(phase * 2 - seedPhase) * 0.07f;

@@ -65,7 +65,7 @@ public static class CritterNutritions
     private static readonly CritterNutrition Nautilus = new(CritterBodySize.Big, CritterFeedingStrategy.TerrainFirst, 7);
     private static readonly CritterNutrition Fish = new(CritterBodySize.Big, CritterFeedingStrategy.TerrainFirst, 7);
     private static readonly CritterNutrition Newt = new(CritterBodySize.Medium, CritterFeedingStrategy.TerrainOnly, 7);
-    private static readonly CritterNutrition MegaToad = new(CritterBodySize.Huge, CritterFeedingStrategy.Hunter, 16);
+    private static readonly CritterNutrition MegaToad = new(CritterBodySize.Huge, CritterFeedingStrategy.Hunter, 11);
     private static readonly CritterNutrition Crab = new(CritterBodySize.Big, CritterFeedingStrategy.TerrainOnly, 6);
     private static readonly CritterNutrition Squid = new(CritterBodySize.Large, CritterFeedingStrategy.Hunter, 10);
     private static readonly CritterNutrition SquidEgg = new(CritterBodySize.Tiny, CritterFeedingStrategy.Hunter, 1,

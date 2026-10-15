@@ -33,7 +33,7 @@ public sealed class OpportunisticFeedingTests
     public void MonkeysEatSnailsAndDoNotHuntNewts()
     {
         Assert.True(SimulationWorld.CanPursuePreyAtDistance(CritterSpecies.Monkey, CritterSpecies.Snail, 1));
-        Assert.True(SimulationWorld.CanPursuePreyAtDistance(CritterSpecies.Monkey, CritterSpecies.Snail, 2));
+        Assert.False(SimulationWorld.CanPursuePreyAtDistance(CritterSpecies.Monkey, CritterSpecies.Snail, 2));
         Assert.False(SimulationWorld.CanEat(CritterSpecies.Monkey, CritterSpecies.Newt));
         var world = new SimulationWorld(10, 1, Terrain.Plains, seed: 17);
         var monkey = world.AddCritter(CritterSpecies.Monkey, new(0, 0));
@@ -52,7 +52,7 @@ public sealed class OpportunisticFeedingTests
     [InlineData(CritterSpecies.Crab, 5, true)]
     [InlineData(CritterSpecies.Snail, 6, false)]
     [InlineData(CritterSpecies.Crab, 6, false)]
-    public void MonkeysPursueVisiblePreyOnlyBelowTwoThirds(CritterSpecies prey, int energy, bool hunts)
+    public void MonkeysNeverTrackDistantSnailsOrCrabs(CritterSpecies prey, int energy, bool hunts)
     {
         var world = new SimulationWorld(20, 1, Terrain.Plains, seed: 17);
         world.AddCritter(CritterSpecies.Monkey, new(0, 0));
@@ -61,13 +61,8 @@ public sealed class OpportunisticFeedingTests
         var energies = (int[])typeof(SimulationWorld).GetField("_energy", Private)!.GetValue(world)!;
         energies[0] = energy;
         Assert.Equal(hunts, world.GetCritter(0).IsHunting);
-        Assert.Equal(hunts ? target : (GridPosition?)null,
-            world.FindHunterPrey(0, CritterSpecies.Monkey, 4, null));
-        if (hunts)
-        {
-            typeof(SimulationWorld).GetMethod("TryMoveMonkey", Private)!.Invoke(world, [0, null]);
-            Assert.Equal(new GridPosition(1, 0), world.GetCritter(0).Position);
-            Assert.Equal(2, world.CritterCount);
-        }
+        Assert.Null(world.FindHunterPrey(0, CritterSpecies.Monkey, 4, null));
+        world.CommitEncounter(new(0, 0), target);
+        Assert.Equal(2, world.CritterCount);
     }
 }

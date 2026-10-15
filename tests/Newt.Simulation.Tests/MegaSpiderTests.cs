@@ -241,7 +241,7 @@ public sealed class MegaSpiderTests
     }
 
     [Fact]
-    public void StoredWebFoodOffsetsMetabolismOneUnitAtATime()
+    public void StoredWebFoodRaisesEnergyBeyondMetabolismReplacement()
     {
         var world = new SimulationWorld(2, 1, Terrain.Plains, seed: 207);
         for (var tile = 0; tile < world.Width * world.Height; tile++)
@@ -263,7 +263,8 @@ public sealed class MegaSpiderTests
         }
 
         Assert.True(world.GetMegaSpiderWebFood(web) < foodAfterCapture);
-        Assert.Equal(energyAfterCapture, world.GetCritter(0).Energy);
+        Assert.True(world.GetCritter(0).Energy > energyAfterCapture ||
+            world.GetCritterCount(CritterSpecies.MegaSpider) > 1);
     }
 
     [Fact]

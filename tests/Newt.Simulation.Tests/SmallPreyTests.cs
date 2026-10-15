@@ -7,6 +7,7 @@ public sealed class SmallPreyTests
     [Theory]
     [InlineData(CritterSpecies.Nautilus)]
     [InlineData(CritterSpecies.Newt)]
+    [InlineData(CritterSpecies.Snail)]
     [InlineData(CritterSpecies.Crab)]
     [InlineData(CritterSpecies.Monkey)]
     [InlineData(CritterSpecies.Trilobite)]

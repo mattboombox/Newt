@@ -126,6 +126,7 @@ public sealed partial class SimulationWorld
     private readonly long[] _surfaceCoverUntilTicks;
     private readonly byte[] _tileNutrition;
     private readonly byte[] _depositedTileNutrition;
+    private readonly byte[] _whaleFallNutrition;
     private readonly byte[] _tileNutritionCapacities;
     private readonly long[] _tileNutritionLastTicks;
     private readonly HashSet<GridPosition> _activeSurfaceCovers = [];
@@ -220,6 +221,7 @@ public sealed partial class SimulationWorld
         _surfaceCoverUntilTicks = new long[_terrain.Length];
         _tileNutrition = new byte[_terrain.Length];
         _depositedTileNutrition = new byte[_terrain.Length];
+        _whaleFallNutrition = new byte[_terrain.Length];
         _tileNutritionCapacities = new byte[_terrain.Length];
         _tileNutritionLastTicks = new long[_terrain.Length];
         Array.Fill(_tileNutritionLastTicks, -1);
@@ -511,7 +513,7 @@ public sealed partial class SimulationWorld
     {
         var tileIndex = GetIndex(position);
         RefreshTileNutrition(tileIndex);
-        return _tileNutrition[tileIndex] + _depositedTileNutrition[tileIndex];
+        return _tileNutrition[tileIndex] + _depositedTileNutrition[tileIndex] + _whaleFallNutrition[tileIndex];
     }
 
     public int GetTileNutritionCapacity(GridPosition position) =>
@@ -1614,7 +1616,10 @@ public sealed partial class SimulationWorld
                 {
                     continue;
                 }
-                DepositTileNutrition(GetIndex(_positions[index]));
+                // Whale carcasses are deposited when removal is committed so
+                // all death paths receive the same amount, exactly once.
+                if (species is not (CritterSpecies.ToothedWhale or CritterSpecies.BaleenWhale))
+                    DepositTileNutrition(GetIndex(_positions[index]));
                 (deaths ??= []).Add(_critterIds[index]);
                 continue;
             }
@@ -5999,7 +6004,8 @@ public sealed partial class SimulationWorld
         species switch
         {
             CritterSpecies.Custodian => 10,
-            CritterSpecies.Deer or CritterSpecies.Elk or CritterSpecies.Gazelle or CritterSpecies.MegaSlug => 1,
+            CritterSpecies.Elk => 2,
+            CritterSpecies.Deer or CritterSpecies.Gazelle or CritterSpecies.MegaSlug => 1,
             CritterSpecies.ApeTrader or CritterSpecies.ApeTraderSailor => 1,
             CritterSpecies.ApeChieftain => 5,
             CritterSpecies.ApeKing or CritterSpecies.ApeQueen => 2,
@@ -6073,7 +6079,6 @@ public sealed partial class SimulationWorld
         CritterSpecies predator,
         CritterSpecies prey,
         int distance) =>
-        (predator is CritterSpecies.Monkey && prey is CritterSpecies.Snail or CritterSpecies.Crab) ||
         !(distance > 1 &&
             (IsSmallAdjacentOnlyPrey(prey) ||
                 predator is CritterSpecies.Wolf && prey is CritterSpecies.Fish ||
@@ -6167,9 +6172,7 @@ public sealed partial class SimulationWorld
         }
 
         if (IsSmallAdjacentOnlyPrey(_species[preyIndex]) &&
-            GetPreyPursuitDistance(predatorIndex, preyIndex) > 1 &&
-            !(_species[predatorIndex] is CritterSpecies.Monkey &&
-                _species[preyIndex] is CritterSpecies.Snail or CritterSpecies.Crab))
+            GetPreyPursuitDistance(predatorIndex, preyIndex) > 1)
         {
             return false;
         }
@@ -6236,6 +6239,9 @@ public sealed partial class SimulationWorld
 
     private bool TryFeedFromTerrain(int critterIndex)
     {
+        if (_terrain[GetIndex(_positions[critterIndex])] is Terrain.Beach &&
+            _species[critterIndex] is not CritterSpecies.Crab)
+            return false;
         var nutrition = CritterNutritions.Get(_species[critterIndex]);
         if (!nutrition.FeedsFromEnvironment || _energy[critterIndex] >= nutrition.MaximumEnergy)
         {
@@ -6268,6 +6274,12 @@ public sealed partial class SimulationWorld
             return true;
         }
 
+        if (CanEatWhaleFall(species) && _whaleFallNutrition[foodTile] > 0)
+        {
+            _whaleFallNutrition[foodTile]--;
+            return true;
+        }
+
         return TryConsumeNaturalTileNutrition(foodTile);
     }
 
@@ -6288,7 +6300,9 @@ public sealed partial class SimulationWorld
 
     private int FindEnvironmentalFoodTile(CritterSpecies species, int tileIndex)
     {
-        if (species is CritterSpecies.Snail && _terrain[tileIndex] is Terrain.Beach)
+        if (_terrain[tileIndex] is Terrain.Beach && species is not CritterSpecies.Crab)
+            return -1;
+        if (species is CritterSpecies.Nautilus && !IsNautilusFeedingTile(tileIndex))
             return -1;
         if (species is (CritterSpecies.Nautilus or CritterSpecies.Trilobite) &&
             IsIceOverOcean(tileIndex))
@@ -6305,7 +6319,7 @@ public sealed partial class SimulationWorld
             return -1;
         }
 
-        if (HasDepositedTileNutrition(tileIndex) ||
+        if (HasDepositedTileNutrition(species, tileIndex) ||
             (IsEnvironmentalFoodSourceForSpecies(species, tileIndex) &&
                 HasNaturalTileNutrition(tileIndex)))
         {
@@ -6326,9 +6340,10 @@ public sealed partial class SimulationWorld
                 continue;
             }
             var candidateTile = y * Width + Mod(position.X + direction.X, Width);
-            if (IsNewtFeedingTile(candidateTile) &&
+            if (_terrain[candidateTile] is not Terrain.Beach &&
+                IsNewtFeedingTile(candidateTile) &&
                 (!IsFreshwaterTile(candidateTile) || CanFeedInFreshwater(species)) &&
-                (HasDepositedTileNutrition(candidateTile) ||
+                (HasDepositedTileNutrition(species, candidateTile) ||
                     HasNaturalTileNutrition(candidateTile)))
             {
                 return candidateTile;
@@ -6337,8 +6352,12 @@ public sealed partial class SimulationWorld
         return -1;
     }
 
-    private bool HasDepositedTileNutrition(int tileIndex) =>
-        _depositedTileNutrition[tileIndex] > 0;
+    private static bool CanEatWhaleFall(CritterSpecies species) =>
+        species is CritterSpecies.Worm or CritterSpecies.Trilobite or CritterSpecies.Nautilus;
+
+    private bool HasDepositedTileNutrition(CritterSpecies species, int tileIndex) =>
+        _depositedTileNutrition[tileIndex] > 0 ||
+        (CanEatWhaleFall(species) && _whaleFallNutrition[tileIndex] > 0);
 
     private bool HasNaturalTileNutrition(int tileIndex)
     {
@@ -6346,13 +6365,11 @@ public sealed partial class SimulationWorld
         return _tileNutrition[tileIndex] > 0;
     }
 
-    private void DepositTileNutrition(int tileIndex)
-    {
-        if (_depositedTileNutrition[tileIndex] < byte.MaxValue)
-        {
-            _depositedTileNutrition[tileIndex]++;
-        }
-    }
+    private void DepositTileNutrition(int tileIndex) => AddTileNutrition(tileIndex, 1);
+
+    private void AddTileNutrition(int tileIndex, int amount) =>
+        _depositedTileNutrition[tileIndex] =
+            (byte)Math.Min(byte.MaxValue, _depositedTileNutrition[tileIndex] + amount);
 
     private bool IsEnvironmentalFoodSourceForSpecies(CritterSpecies species, int tileIndex) =>
         species switch
@@ -6363,7 +6380,10 @@ public sealed partial class SimulationWorld
         CritterSpecies.Crab => IsCrabFeedingTile(tileIndex),
         CritterSpecies.Fish => IsFishForagingTile(tileIndex),
         CritterSpecies.Therapsid => IsTherapsidFoliageTile(tileIndex),
-        CritterSpecies.Snail or CritterSpecies.Newt =>
+        CritterSpecies.Snail =>
+            IsNewtFeedingTile(tileIndex) || IsNewtFoliageTile(tileIndex) ||
+            (IsNewtOrdinaryTile(tileIndex) && _biomes[tileIndex] is Biome.Bog),
+        CritterSpecies.Newt =>
             IsNewtFeedingTile(tileIndex) || IsNewtFoliageTile(tileIndex),
         CritterSpecies.Monkey => IsMonkeyFoliageTile(tileIndex),
         CritterSpecies.Deer => IsGrazerFoliageTile(CritterSpecies.Deer, tileIndex),
@@ -6401,7 +6421,7 @@ public sealed partial class SimulationWorld
         TemperatureBand temperatureBand) =>
         _terrain[tileIndex] switch
         {
-            Terrain.Beach => temperatureBand is TemperatureBand.Freezing ? 0 : 1,
+            Terrain.Beach => temperatureBand is TemperatureBand.Freezing ? 1 : 2,
             Terrain.Shallows => temperatureBand switch
             {
                 TemperatureBand.Freezing => 6,
@@ -6475,7 +6495,7 @@ public sealed partial class SimulationWorld
         IsTrilobiteFeedingTile(tileIndex) || IsIceOverOcean(tileIndex);
 
     private static bool IsTrilobiteFeedingTerrain(Terrain terrain) =>
-        terrain is Terrain.Ocean or Terrain.Shallows or Terrain.Beach;
+        terrain is Terrain.Ocean or Terrain.Shallows;
 
     private bool IsIceOverOcean(int tileIndex) =>
         _terrain[tileIndex] is Terrain.Ice &&
@@ -6502,16 +6522,19 @@ public sealed partial class SimulationWorld
         CanLiveOn(CritterSpecies.Monkey, tileIndex);
 
     private bool IsApeFoliageTile(int tileIndex) =>
+        _terrain[tileIndex] is not Terrain.Beach &&
         !IsFreshwaterTile(tileIndex) &&
         _biomes[tileIndex] is Biome.Swamp or Biome.Jungle &&
         CanLiveOn(CritterSpecies.Ape, tileIndex);
 
     private bool IsTherapsidFoliageTile(int tileIndex) =>
+        _terrain[tileIndex] is not Terrain.Beach &&
         !IsFreshwaterTile(tileIndex) &&
         _biomes[tileIndex] is Biome.Swamp or Biome.Jungle or Biome.Bog or Biome.Arid &&
         CanLiveOn(CritterSpecies.Therapsid, tileIndex);
 
     private bool IsGrazerFoliageTile(CritterSpecies species, int tileIndex) =>
+        _terrain[tileIndex] is not Terrain.Beach &&
         !IsFreshwaterTile(tileIndex) && CanLiveOn(species, tileIndex) && species switch
         {
             CritterSpecies.Deer =>
@@ -7192,6 +7215,9 @@ public sealed partial class SimulationWorld
         _warriorCombatKills.Remove(removedId.Value);
         _toothedWhaleHunts.Remove(removedId.Value);
         var removedSpecies = _species[critterIndex];
+        if (removedSpecies is CritterSpecies.ToothedWhale or CritterSpecies.BaleenWhale)
+            _whaleFallNutrition[tileIndex] =
+                (byte)Math.Min(byte.MaxValue, _whaleFallNutrition[tileIndex] + 10);
         _critterIndicesById.Remove(removedId.Value);
         _plagues.Remove(removedId.Value);
         _plagueImmunityRemainders.Remove(removedId.Value);
@@ -7333,7 +7359,7 @@ public sealed partial class SimulationWorld
     private bool IsTrilobiteTile(int tileIndex) =>
         _surfaceCovers[tileIndex] is SurfaceCover.None &&
         _terrain[tileIndex] is
-            Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows or Terrain.Beach;
+            Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows;
 
     private bool IsApeSailorTile(int tileIndex) =>
         _surfaceCovers[tileIndex] is SurfaceCover.None &&
@@ -7385,6 +7411,7 @@ public sealed partial class SimulationWorld
             _biomes[tileIndex] is not Biome.Arctic);
 
     private bool IsNewtFoliageTile(int tileIndex) =>
+        _terrain[tileIndex] is not Terrain.Beach &&
         IsNewtOrdinaryTile(tileIndex) &&
         _biomes[tileIndex] is Biome.Swamp or Biome.Jungle;
 

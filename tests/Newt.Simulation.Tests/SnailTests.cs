@@ -46,14 +46,16 @@ public sealed class SnailTests
                 Assert.Equal(SimulationWorld.CanEat(predator, CritterSpecies.Newt), SimulationWorld.CanEat(predator, CritterSpecies.Snail));
             if (!SimulationWorld.CanEat(predator, CritterSpecies.Snail)) continue;
             Assert.True(SimulationWorld.CanPursuePreyAtDistance(predator, CritterSpecies.Snail, 1));
-            Assert.Equal(predator is CritterSpecies.Monkey,
-                SimulationWorld.CanPursuePreyAtDistance(predator, CritterSpecies.Snail, 2));
+            Assert.False(SimulationWorld.CanPursuePreyAtDistance(predator, CritterSpecies.Snail, 2));
         }
     }
 
     [Theory]
     [InlineData(Biome.Swamp, SurfaceWaterKind.None, true)]
     [InlineData(Biome.Jungle, SurfaceWaterKind.None, true)]
+    [InlineData(Biome.Bog, SurfaceWaterKind.None, true)]
+    [InlineData(Biome.Bog, SurfaceWaterKind.River, false)]
+    [InlineData(Biome.Bog, SurfaceWaterKind.FreshwaterLake, false)]
     [InlineData(Biome.Forest, SurfaceWaterKind.None, false)]
     [InlineData(Biome.Grassland, SurfaceWaterKind.River, false)]
     [InlineData(Biome.Grassland, SurfaceWaterKind.FreshwaterLake, false)]

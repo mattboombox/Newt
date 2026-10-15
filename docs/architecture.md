@@ -103,7 +103,7 @@ otherwise movement remains blocked. Deliberate hunting always consumes legal pre
 Ambient food is finite per tile. Terrestrial capacity is Jungle 6, Swamp 5,
 Forest 4, Grassland, Taiga, and Bog 3, Arid 2, Tundra and Desert 1, and Arctic
 0. Ice Sheets over shelf Ocean hold 1; deep-ocean Ice Sheets hold 0. Beaches hold
-0 when freezing and 1 otherwise. Shallows hold
+1 when freezing and 2 otherwise. Shallows hold
 6 freezing, 5 cold, 4 temperate, and 3 hot. Deep Ocean is always 0. Ordinary
 Ocean holds 3 when cold and 2 otherwise.
 
@@ -321,8 +321,8 @@ apes or recent sickness history exist, and its history resets with a new world.
 Monkeys, Deer, Elk, and Gazelles scan five tiles for any species whose diet includes them
 and prioritize a step that increases their distance from the nearest threat.
 Predation transfers food energy equal to the prey species' body-size value; the
-predator's own maximum still caps the result. Mega Toads cap at 16 energy, giving well-fed adults a larger reserve
-for repeated predator combat than Therapsids or Wolves.
+predator's own maximum still caps the result. Mega Toads cap at 11 energy, matching
+Wolves and Mega Spiders so ordinary prey meals can reach breeding energy.
 
 Newts scan within a Manhattan radius of four for Mega Toads before waiting at a
 feeding site, seeking nearby available food, or wandering.
@@ -389,11 +389,9 @@ same-species births and mutants while leaving unrelated predators unaffected.
 Mega Toad cannibalism remains enabled after that truce, but only on adjacent
 encounters rather than through active pursuit. They also hunt Fish
 where their habitats overlap, including Rivers and unfrozen Freshwater Lakes.
-Reproduction requires fourteen energy and costs nine, leaving a threshold-level
-parent at five energy. A newborn also starts at five, while eating another Mega
-Toad restores eight. Either survivor therefore reaches only thirteen energy—one
-short of another birth—so a closed population cannot sustain itself without
-outside prey.
+Reproduction requires eleven energy and costs six, leaving a threshold-level
+parent at five energy. A newborn starts at three, while eating another Mega
+Toad restores eight energy, capped at eleven.
 
 Monkeys eat available Swamp, Jungle, Forest, or Bog foliage on their normal
 five-second action. Their reproduction threshold is

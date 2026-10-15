@@ -7,7 +7,7 @@ public sealed class TileNutritionTests
     [Theory]
     [InlineData(Terrain.Ocean, Biome.None, SurfaceWaterKind.None, 2)]
     [InlineData(Terrain.Shallows, Biome.None, SurfaceWaterKind.None, 4)]
-    [InlineData(Terrain.Beach, Biome.None, SurfaceWaterKind.None, 1)]
+    [InlineData(Terrain.Beach, Biome.None, SurfaceWaterKind.None, 2)]
     [InlineData(Terrain.Plains, Biome.Tundra, SurfaceWaterKind.None, 1)]
     [InlineData(Terrain.Plains, Biome.Grassland, SurfaceWaterKind.None, 3)]
     [InlineData(Terrain.Plains, Biome.Taiga, SurfaceWaterKind.None, 3)]
@@ -56,10 +56,10 @@ public sealed class TileNutritionTests
     }
 
     [Theory]
-    [InlineData(Terrain.Beach, 0.10f, 0)]
-    [InlineData(Terrain.Beach, 0.25f, 1)]
-    [InlineData(Terrain.Beach, 0.50f, 1)]
-    [InlineData(Terrain.Beach, 0.80f, 1)]
+    [InlineData(Terrain.Beach, 0.10f, 1)]
+    [InlineData(Terrain.Beach, 0.25f, 2)]
+    [InlineData(Terrain.Beach, 0.50f, 2)]
+    [InlineData(Terrain.Beach, 0.80f, 2)]
     [InlineData(Terrain.Shallows, 0.10f, 6)]
     [InlineData(Terrain.Shallows, 0.25f, 5)]
     [InlineData(Terrain.Shallows, 0.50f, 4)]

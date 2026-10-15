@@ -9,7 +9,7 @@ way to inhabit the simulation. Read the full [product vision](docs/vision.md).
 
 ## Prerequisites
 
-- A compatible .NET 10 SDK (the solution accepts newer .NET 10 feature bands)
+- .NET SDK 10.0.300 or newer (including newer major versions and prerelease SDKs)
 - MonoGame 3.8.5 project templates
 
 ```powershell
