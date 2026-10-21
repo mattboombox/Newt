@@ -2,7 +2,7 @@ namespace Newt.Simulation;
 
 public sealed partial class SimulationWorld
 {
-    private const int ApeVillageReachabilityIntervalTicks = 30 * TicksPerSecond;
+    private const int ApeVillageReachabilityIntervalTicks = 5 * 60 * TicksPerSecond;
     private readonly Dictionary<int, long> _apeVillageReachabilityTicks = [];
     private long _lastApeVillageReachabilityTick = -1;
     private readonly Queue<int> _apeReachabilityFrontier = new();
@@ -25,8 +25,11 @@ public sealed partial class SimulationWorld
 
         if (!_apeVillageReachabilityTicks.TryGetValue(id, out var nextTick))
         {
-            // Spread initial checks across the interval, even for a newly loaded population.
-            _apeVillageReachabilityTicks[id] = Tick + id % ApeVillageReachabilityIntervalTicks;
+            // Delay initial checks by 2.5–5 minutes and spread consecutive IDs across
+            // that window so newly loaded populations do not cause a burst of searches.
+            var halfInterval = ApeVillageReachabilityIntervalTicks / 2;
+            var stagger = unchecked((uint)id * 2654435761u) % (uint)halfInterval;
+            _apeVillageReachabilityTicks[id] = Tick + halfInterval + stagger;
             return;
         }
         if (Tick < nextTick)

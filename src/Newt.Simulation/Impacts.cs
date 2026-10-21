@@ -9,20 +9,36 @@ public static class Impacts
     public static MeteorImpactResult CreateMeteorImpact(
         SimulationWorld world,
         GridPosition center,
-        float magnitude)
+        float magnitude) => CreateMeteorImpact(world, center, magnitude, MaximumMagnitude);
+
+    /// <summary>Player tool impacts can reach twice the normal maximum crater radius.</summary>
+    public static MeteorImpactResult CreateToolMeteorImpact(
+        SimulationWorld world,
+        GridPosition center,
+        float magnitude) => CreateMeteorImpact(world, center, magnitude, 2f);
+
+    private static MeteorImpactResult CreateMeteorImpact(
+        SimulationWorld world,
+        GridPosition center,
+        float magnitude,
+        float maximumMagnitude)
     {
         ArgumentNullException.ThrowIfNull(world);
         if (!world.Contains(center))
         {
             throw new ArgumentOutOfRangeException(nameof(center));
         }
-        if (!float.IsFinite(magnitude) || magnitude is < MinimumMagnitude or > MaximumMagnitude)
+        if (!float.IsFinite(magnitude) || magnitude < MinimumMagnitude || magnitude > maximumMagnitude)
         {
             throw new ArgumentOutOfRangeException(nameof(magnitude));
         }
 
+        var requestedMagnitude = magnitude;
+        var sizeMultiplier = Math.Max(1f, magnitude);
+        magnitude = Math.Min(magnitude, MaximumMagnitude);
         var minimumDimension = Math.Min(world.Width, world.Height);
         var craterRadius = 2 + (int)MathF.Round(minimumDimension * 0.18f * MathF.Pow(magnitude, 1.7f));
+        craterRadius = (int)MathF.Round(craterRadius * sizeMultiplier);
         var shockRadius = craterRadius * 3;
         ApplyCrater(world, center, craterRadius, magnitude);
 
@@ -36,6 +52,8 @@ public static class Impacts
         if (magnitude >= 0.12f)
         {
             var meltFlows = Math.Clamp(1 + (int)MathF.Floor(magnitude * 4), 1, 5);
+            // Extended tool impacts spread melt across a larger basin as well as farther outward.
+            meltFlows = (int)MathF.Round(meltFlows * sizeMultiplier);
             Volcanism.StartImpactMelt(
                 world,
                 center,
@@ -50,7 +68,7 @@ public static class Impacts
             shockRadius,
             0.65f + magnitude * 1.35f,
             magnitude));
-        return new MeteorImpactResult(center, magnitude, craterRadius, shockRadius, fragmentCount);
+        return new MeteorImpactResult(center, requestedMagnitude, craterRadius, shockRadius, fragmentCount);
     }
 
     internal static void Advance(SimulationWorld world)

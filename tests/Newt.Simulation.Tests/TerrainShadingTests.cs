@@ -44,7 +44,7 @@ public sealed class TerrainShadingTests
 
     [Theory]
     [InlineData(Terrain.Mountain)]
-    [InlineData(Terrain.RingWorldWall)]
+    [InlineData(Terrain.MegaWall)]
     public void ExistingStrongShadingAndArtificialWallsAreUnchanged(Terrain terrain)
     {
         Assert.Equal(1f, TerrainShading.GetBrightness(terrain, -1f, 0f));

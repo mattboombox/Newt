@@ -101,7 +101,7 @@ public sealed partial class SimulationWorld
 
         foreach (var tile in _apeAuxiliaryVillages.Where(pair => pair.Value == source).Select(pair => pair.Key).ToArray())
             _apeAuxiliaryVillages[tile] = destination;
-        // Housing preserves the old center's five resident slots wherever its terrain permits.
+        // Convert the old center to a three-resident district wherever its terrain permits.
         ConvertMergedBuildingToHousing(source, destination);
         var libraries = _apeAuxiliaryVillages.Where(pair => pair.Value == destination &&
                 _apeStructures.GetValueOrDefault(pair.Key) is ApeStructureKind.Library)
@@ -156,8 +156,6 @@ public sealed partial class SimulationWorld
         _apeVillageIds.Remove(source);
         _apeVillageFood.Remove(source);
         _apeVillageWood.Remove(source);
-        _apeVillageGrowthFeedTargets.Remove(source);
-        _apeVillageGrowthFeedTargets.Remove(destination);
         _loneApeSailorSinceTicks.Remove(source);
         _loneApeSailorSinceTicks.Remove(destination);
         _apeVillageFood[destination] = Math.Min(food, GetApeVillageFoodCapacityByTile(destination));

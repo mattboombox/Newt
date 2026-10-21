@@ -5,6 +5,22 @@ namespace Newt.Simulation.Tests;
 
 public sealed class VampireTests
 {
+    [Theory]
+    [InlineData(8, true)]
+    [InlineData(9, false)]
+    [InlineData(12, false)]
+    public void VampiresHuntUntilThreeQuartersEnergy(int energy, bool hungry)
+    {
+        var world = CreateWorld();
+        var vampire = world.AddCritter(CritterSpecies.Vampire, new(10, 10));
+        world.AddCritter(CritterSpecies.Ape, new(11, 10));
+        SetEnergy(world, vampire, energy);
+        var nutrition = CritterNutritions.Get(CritterSpecies.Vampire);
+        Assert.Equal(hungry, nutrition.IsHungryAt(energy));
+        Assert.Equal(hungry, world.FindHunterPrey(0, CritterSpecies.Vampire, 8, null) is not null);
+        Assert.Equal(4, SimulationWorld.GetCombatDamage(CritterSpecies.Vampire));
+    }
+
     [Fact]
     public void VampiresCannotHuntFightOrFeedOnEachOther()
     {
@@ -105,7 +121,7 @@ public sealed class VampireTests
             {
                 successfulHits++;
                 Assert.Equal(Math.Min(4, victimEnergy), damage);
-                Assert.Equal(6 + damage, after.Energy);
+                Assert.Equal(CritterNutritions.Get(CritterSpecies.Vampire).InitialEnergy + damage, after.Energy);
             }
             if (alive)
                 Assert.Equal(PlagueKind.None, victim.Plague);

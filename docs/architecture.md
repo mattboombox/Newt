@@ -179,7 +179,8 @@ habitat. Worms retain their own evolution branches and predator relationships.
 Both species can shove a chain of up to four Plankton through a dense bloom.
 Trilobites occupy this broad saltwater range and graze terrain nutrition in
 Ocean, Shallows, and Beaches. Deep Ocean remains transit-only because it has no
-terrain nutrition. Worms also graze shelf-ocean Ice Sheets. Their simple eyes detect predators
+terrain nutrition. Worms, Trilobites, Nautiluses, Crabs, and Fish can also feed on
+the existing nutrition beneath shelf-ocean Ice Sheets. Their simple eyes detect predators
 within three Manhattan tiles, prompting the trilobite to take the open eight-way
 step that maximizes its distance from the nearest threat.
 Sea Scorpions are active aquatic hunters descended from Trilobites. Every four
@@ -242,7 +243,7 @@ Other predator-prey encounters remain immediate.
 
 Newts are land dwellers that gain terrain food while standing in rivers or
 unfrozen freshwater lakes, from a cardinally adjacent shore tile, or by modestly
-grazing foliage while standing in swamps and jungles. Newts feed on their normal
+grazing foliage while standing in swamps, jungles, and bogs. Newts feed on their normal
 five-second action and wait within feeding range while nutrition remains.
 Outside feeding range they scan only an eight-tile Manhattan neighborhood and
 take one greedy step toward a tile that still has nutrition available.
@@ -356,8 +357,8 @@ Scorpions and Squid hunt Therapsids where their habitats overlap. Ordinary Apes
 remain at one damage; Dogs remain at three.
 Toothed Whales are the marine Therapsid branch. They inhabit Deep Ocean, Ocean,
 and Shallows, move every four seconds, and scan seven Manhattan tiles for
-animal-eating marine prey: Sea Scorpions, Fish, Squid, and Ape Sailors.
-Nautiluses are eligible only on adjacent encounters, never for pursuit at range.
+animal-eating marine prey: Sea Scorpions, Squid, and Ape Sailors.
+Fish and Nautiluses are never prey, including adjacent encounters.
 They also consume feeder Crabs only when adjacent, following the universal Crab rule.
 Large land animals are eligible only while standing in Shallows; the whale will not
 pursue them on land or in deeper water. Toothed Whales ignore Jellyfish, Plankton,
@@ -440,11 +441,11 @@ Forest Orchard, or Shallows or Freshwater Lake
 Aquaculture when possible, otherwise a Harbor
 on a saltwater Shallows tile. Harbor sites may connect diagonally to
 the village or its districts. Other districts retain cardinal construction links.
-Grassland Farms, Rice Paddies, and Orchards add one stored food every fourteen seconds;
-Arid Farms operate at half that rate, producing every twenty-eight seconds. Aquaculture
-is slightly less productive than an Arid Farm even in ideal conditions: it produces every
-thirty seconds in Hot Shallows, thirty-four in Temperate, thirty-eight in Cold, and
-forty-four in Freezing water, with the same temperature rates in Freshwater Lakes.
+Grassland Farms, Rice Paddies, and Orchards produce four food per minute (one every fifteen seconds);
+Arid Farms produce two per minute (one every thirty seconds). Aquaculture scales with
+its tile's natural nutrition capacity: capacities three, four, five, and six produce
+two, three, four, and five food per minute respectively. Freshwater Lakes produce two
+per minute. Rates use nutrition capacity rather than the remaining edible nutrition.
 Hovering a production district reports its current food or wood output per simulated minute.
 An assigned Ape's kill is
 conserved rather than counted twice: meal energy first raises the hunter toward its
@@ -464,7 +465,7 @@ At its population cap, a village alternates connected Residential Districts with
 additional biome-appropriate food districts. Construction strongly favors sites within
 four tiles of the Village, keeping settlements compact while allowing occasional outward
 growth. A Residential District costs five food
-and adds five capacity; Farms, Rice Paddies, Orchards, and Aquaculture remain free to establish but
+and adds three capacity; Farms, Rice Paddies, Orchards, and Aquaculture remain free to establish but
 require open connected Grassland or Arid, Swamp, Forest, and Shallows or Freshwater Lake tiles respectively. If no planned
 food district has a valid site, the village may fall back to housing. Expansion choice,
 construction cost, and placement remain separate so future building kinds can join the
@@ -495,13 +496,22 @@ all non-Mountain land and water terrain, including sea ice and Stone, without us
 village food stores. Their route search detours around Mountain barriers while keeping
 Mountains impassable. They can push through blocking Plankton chains and displace Newts
 into nearby valid habitat, while Mountains,
-Lava, and Ring World walls remain impassable. Colonists are labeled separately
+Lava, and Mega Walls remain impassable. Colonists are labeled separately
 and use a lighter Ape color until they found and join their new village. Founding
 resets the traveler's energy to ordinary Ape starting energy and creates exactly one
 companion Ape on a neighboring habitable tile; later population growth uses normal reproduction.
 The Colonist tool in Events manually sends one from a clicked Village, charging up to one
 hundred food and reducing a poorer village's food to zero. Clicking a valid non-Village
 tile instead dispatches from the nearest Village to found at that exact destination.
+Occupied destination tiles remain valid for both automatic colonies and the tool;
+the colonist can found from beside the tile without removing its occupant.
+Colonists use trader displacement rules, including swapping past eligible blockers
+when no sidestep is free, on both land and water routes. Tool-launched colonists keep
+their assigned destination: low energy does not trigger early settlement, and an
+invalid or blocked destination is retried instead of replaced. Automatic colonists
+retain emergency settlement and site replacement behavior.
+Colonies from regular villages become regular villages 75% of the time and barbarian
+camps 25% of the time. Colonies from barbarian camps have a 50/50 split.
 Inspection shows the destination X and Y coordinates while the Ape remains a colonist.
 Climate coastline rebuilding validates Harbors only after coastline classification finishes,
 so the temporary landform stage cannot demolish them.
@@ -681,9 +691,13 @@ Traders and sailor traders are never recruited for Blood War and do not keep a
 defeated village or its Blood War alive. They also do not prevent the existing
 lone-sailor colonist departure and abandonment behavior.
 
-Balance rules: Vampire lairs hold four vampires; vampires deal four damage per hit.
+Balance rules: Vampire lairs hold four vampires; vampires deal four damage per hit
+and hunt while strictly below three-quarters of maximum energy.
 Feasts spend at most 80% of the food present when started (rounded down), with a
-fixed budget that does not grow when new food arrives. All living ape roles,
+fixed budget that does not grow when new food arrives. When a village's food stores
+fill, natural events give it one 10% chance to start a feast. Deliveries to already-full
+stores do not reroll. The former near-full surplus growth feeding is removed.
+All living ape roles,
 including traders and village-less apes, have a 25% dog recruitment chance after
 a wolf kill; village dog caps still apply to assigned apes. Roads first seek an
 entirely land route, then permit expensive straight bridges across one Shallows

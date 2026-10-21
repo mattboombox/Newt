@@ -7,7 +7,7 @@ internal static class TerrainShading
 {
     internal static float GetBrightness(Terrain terrain, float elevation, float seaLevel)
     {
-        if (terrain is Terrain.Mountain or Terrain.RingWorldWall)
+        if (terrain is Terrain.Mountain or Terrain.MegaWall)
         {
             return 1f;
         }

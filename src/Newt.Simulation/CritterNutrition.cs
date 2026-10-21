@@ -27,7 +27,9 @@ public readonly record struct CritterNutrition(
     bool CanReproduce = true,
     bool HasMetabolism = true,
     bool HuntsUntilFull = false,
-    bool HuntsWhenFull = false)
+    bool HuntsWhenFull = false,
+    int HungerNumerator = 2,
+    int HungerDenominator = 3)
 {
     public const int MetabolismIntervalSeconds = 75;
 
@@ -38,10 +40,11 @@ public readonly record struct CritterNutrition(
     public int MetabolismCost => 1;
     public int MetabolismIntervalTicks => HasMetabolism
         ? MetabolismIntervalSeconds * SimulationWorld.TicksPerSecond : 0;
-    public int HungryThreshold => (int)((2L * MaximumEnergy - 1) / 3);
+    public int HungryThreshold => (int)(((long)HungerNumerator * MaximumEnergy - 1) / HungerDenominator);
 
-    /// <summary>Strictly below two-thirds of maximum energy, without rounding.</summary>
-    public bool IsHungryAt(int energy) => HasMetabolism && 3L * energy < 2L * MaximumEnergy;
+    /// <summary>Strictly below the species' hunger fraction of maximum energy, without rounding.</summary>
+    public bool IsHungryAt(int energy) => HasMetabolism &&
+        (long)HungerDenominator * energy < (long)HungerNumerator * MaximumEnergy;
 
     public bool WantsToHuntAt(int energy) => HuntsWhenFull || (HuntsUntilFull
         ? energy < MaximumEnergy : IsHungryAt(energy));
@@ -111,7 +114,7 @@ public static class CritterNutritions
         CritterSpecies.ApeChieftain or CritterSpecies.ApeKing or CritterSpecies.ApeQueen => Ape,
         CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack => Ape,
         CritterSpecies.ApeScholar or CritterSpecies.UndeadApe => Ape with { CanReproduce = false },
-        CritterSpecies.Vampire => Ape,
+        CritterSpecies.Vampire => Ape with { HungerNumerator = 3, HungerDenominator = 4 },
         CritterSpecies.Deer or CritterSpecies.Gazelle => Deer,
         CritterSpecies.MegaSlug => Deer with { MaximumEnergy = 10 },
         CritterSpecies.Elk => Elk,

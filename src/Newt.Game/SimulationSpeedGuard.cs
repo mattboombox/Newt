@@ -5,7 +5,7 @@ internal sealed class SimulationSpeedGuard
 {
     internal const double FallbackRate = 1;
     internal const double MaximumRate = 32;
-    internal const int MinimumCritterCount = 15_000;
+    internal const int MinimumCritterCount = 20_000;
     internal const int MinimumNonBarbarianApeCount = 250;
 
     internal bool Enabled { get; set; } = true;

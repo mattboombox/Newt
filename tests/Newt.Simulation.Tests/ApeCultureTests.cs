@@ -36,7 +36,7 @@ public sealed class ApeCultureTests
         Add(w, First, CritterSpecies.ApeChieftain, 1);
         var chief = Residents(w, First).Single(c => c.Species == CritterSpecies.ApeChieftain).Id;
         Assert.Contains(Positions(w), p => w.TryPlaceApeBuilding(p, ApeStructureKind.Library));
-        Assert.True(w.TryResearchApeTechnology(Tile(w, First), ApeTechnology.Aquaculture));
+        LegacyApeResearch.Seed(w, Tile(w, First));
         Assert.False(w.TryAssignApeCulture(First, ApeCulture.Luddite));
         var before = w.CritterCount;
         var recruits = Residents(w, First).Where(c => c.Species == CritterSpecies.Ape).Select(c => c.Id).ToHashSet();
@@ -181,7 +181,7 @@ public sealed class ApeCultureTests
         Assert.Equal(blueWins ? ApeCulture.Luddite : (ApeCulture?)null, w.GetApeVillageCulture(First));
         Assert.Equal(blueWins ? 3 : 0, Residents(w, First).Count(c => c.Species == CritterSpecies.ApeLudditePriest));
         Assert.Equal(blueWins ? 1 : 0, Positions(w).Count(p => w.GetApeStructure(p) == ApeStructureKind.LudditeTemple));
-        if (!blueWins) Assert.True(w.TryResearchApeTechnology(Tile(w, First), ApeTechnology.Aquaculture));
+        if (!blueWins) Assert.False(w.TryResearchApeTechnology(Tile(w, First), ApeTechnology.Aquaculture));
     }
 
     [Theory]
@@ -294,7 +294,7 @@ public sealed class ApeCultureTests
     {
         var w = World(); Assert.True(w.TrySpawnTestApeVillage(Second));
         Add(w, First, CritterSpecies.ApeScholar, 2);
-        Assert.True(w.TryResearchApeTechnology(Tile(w, First), ApeTechnology.Aquaculture));
+        LegacyApeResearch.Seed(w, Tile(w, First));
         Convert(w, Second);
         for (var i = 0; i < 1500 && w.ApeVillageCount > 1; i++)
         {

@@ -47,7 +47,7 @@ public sealed partial class SimulationWorld
 
     private bool IsRoadLandTerrain(int tile) =>
         _terrain[tile] is not (Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows or
-            Terrain.Ice or Terrain.Mountain or Terrain.RingWorldWall) &&
+            Terrain.Ice or Terrain.Mountain or Terrain.MegaWall) &&
         _surfaceWater[tile] is not SurfaceWaterKind.FreshwaterLake &&
         _surfaceCovers[tile] is SurfaceCover.None;
 

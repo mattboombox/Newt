@@ -36,7 +36,9 @@ public static class ClimateSystem
                 var baseline = world.Body is WorldBody.RingWorld
                     ? GetRingTemperatureNormal(world, x)
                     : 0.06f + latitudeWarmth * 0.98f + SeasonSystem.GetTemperatureOffset(world, y);
-                var temperature = baseline - elevationCooling + variation + world.GlobalTemperatureOffset;
+                var temperature = world.Body is WorldBody.Nexus
+                    ? NexusLayout.Climate(world, position).Temperature + variation * 0.15f + world.GlobalTemperatureOffset
+                    : baseline - elevationCooling + variation + world.GlobalTemperatureOffset;
                 world.SetTemperature(position, temperature);
             }
         }
@@ -70,9 +72,12 @@ public static class ClimateSystem
                     LakeMoistureReach);
                 var elevationPenalty = Math.Max(0, world.GetElevation(position)) * 0.18f;
                 var variation = (FractalNoise(world, x, y, world.Seed ^ 0xE7037ED1A0B428DBUL) - 0.5f) * 0.28f;
-                var engineeredZone = world.Body is WorldBody.RingWorld
-                    ? GetRingMoistureNormal(world, x)
-                    : 0f;
+                var engineeredZone = world.Body switch
+                {
+                    WorldBody.RingWorld => GetRingMoistureNormal(world, x),
+                    WorldBody.Nexus => (NexusLayout.Climate(world, position).Moisture - 0.5f) * 0.6f,
+                    _ => 0f,
+                };
                 var moisture = 0.08f + oceanInfluence + riverInfluence + lakeInfluence + variation - elevationPenalty +
                     engineeredZone + world.GlobalMoistureOffset;
                 world.SetMoisture(position, moisture);

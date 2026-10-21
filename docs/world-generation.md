@@ -57,6 +57,18 @@ Ring World, and Earth. Earth supports every regular size by resampling the embed
 1280 × 642 NOAA relief grid; Standard (320 × 192) is the default while
 Huge retains the full source detail. Ring World offers Standard (1280 × 44) and
 Mega (2560 × 44), doubling the length while keeping the same width across the ring.
+Moon and Mars are also available as map shapes at every Earth size: Micro,
+Small, Standard, Large, and Huge. Their embedded 2560 × 1280 elevation
+grids are derived from NASA LOLA and MOLA 5760 × 2880 products and resampled
+using the same cell-centered sampling as Earth. Both use
+ordinary terrain colors and climates. Earth, Moon, and Mars start with seasons
+enabled at the neutral equinox position and use the ordinary seasonal cycle.
+Normal ocean seeding fills the
+largest below-sea-level basin and other large disconnected basins; natural
+springs use the usual rules.
+Source URLs, units, conversion details, and checksums are recorded in
+[planetary relief data](planetary-relief.md). The assets can be rebuilt with
+`tools/build_planetary_relief.py` (NumPy and Pillow required).
 Standard has four teleporters and one Custodian fabricator supporting five drones.
 Mega has eight evenly spaced teleporters and two fabricators supporting ten drones;
 each fabricator replaces one lost drone per minute, and damaged drones repair at
@@ -82,6 +94,10 @@ keeps every tile submerged while retaining varied bathymetry and polar sea ice.
 | 7 | Earth | 1280 × 642 |
 
 Ring World is an artificial megastructure conservatory rather than a planet.
+Its terrain is a narrow central strip cut from a landscape at least 192 tiles
+tall, preserving ordinary terrain proportions instead of compressing features
+into the ring's 44-tile height. Land coverage and ocean depth are calibrated
+after cropping, using the playable strip.
 Every large disconnected below-sea-level basin receives a saltwater source, while
 small enclosed depressions remain available for freshwater lakes. The primary
 source remains movable with OceanSeed; the other ocean sources remain fixed.
@@ -97,9 +113,36 @@ tiles on Standard and 1280 tiles on Mega, doubling Mega's zone lengths. Planetar
 disabled for this preset. Cold climate troughs drop below the sea-ice threshold,
 allowing submerged tiles in both repeating climate sets to form Ice Sheets.
 
-Continuous steel-colored Ring World Wall tiles run along its top and bottom
+Continuous steel-colored Mega Wall tiles run along its top and bottom
 edges. Their structural elevation is `2.15`, slightly above the normal `2.0`
 terrain ceiling, and terrain-changing events cannot permanently erode them.
+
+### Nexus
+
+Nexus is a rounded ten-petal megastructure available under Map Shape, with
+Standard (384 × 384) and Mega (768 × 768) sizes. Clockwise from the north arm,
+the temperature zones are one freezing, three cold, three temperate, and three hot.
+Each group of three has dry, neutral, and wet moisture tendencies. These are
+additive biases, not fixed biomes: rivers, lakes, coasts, elevation, and natural
+variation use the ordinary moisture calculation at full strength. Seasons remain
+disabled, as on Ring World; global temperature and moisture tools still work.
+Each petal independently generates continental masses, volcanic mountain chains,
+and layered terrain noise using its own seed and local feature scale, so terrain
+does not continue across the gaps. Land coverage is measured inside the petals,
+allowing their own oceans, coasts, hills, mountains, natural volcanoes, and springs
+without changing the flower boundary or engineered temperature/moisture sectors.
+Temperature gently blends across petal boundaries and toward the center; petal
+interiors retain their engineered temperatures.
+
+The center has its own seeded terrain, blended smoothly into the petal roots, with a teleporter at its center
+and one in each arm (eleven total). There is no forced circular ocean or elevation ring.
+A continuous Mega Wall follows the entire
+flower perimeter and is restored by terrain rebuilds. Space outside the structure
+is inaccessible and is not rendered as playable terrain.
+
+Standard has one Custodian fabricator at the north arm's wall tip and five drones.
+Mega has two fabricators at the north and opposite south tips and ten drones.
+Custodians can repair destroyed Nexus teleporters as on Ring World.
 
 ## Prototype controls
 
@@ -250,14 +293,14 @@ The game starts in Critter Tools with Plankton selected.
   capped villages alternate five-food Residential Districts with additional
   biome-appropriate food districts, falling back to housing when no connected
   Grassland, Arid, Swamp, Forest, or Shallows site remains. Grassland Farms, Rice Paddies, and
-  Orchards produce one food every fourteen seconds; Arid Farms produce every twenty-eight
-  seconds and use a drier ochre palette. Aquaculture works in Shallows and Freshwater
-  Lakes, producing every thirty seconds in Hot water, thirty-four in Temperate, thirty-eight
-  in Cold, and forty-four in Freezing water, and is rendered as a teal water pen. Hovering
+  Orchards produce four food per minute; Arid Farms produce two per minute
+  and use a drier ochre palette. Aquaculture works in Shallows and Freshwater
+  Lakes, producing two to five food per minute as natural tile nutrition capacity rises
+  from three to six (two per minute in Freshwater Lakes), and is rendered as a teal water pen. Hovering
   a production district reports its food or wood output per simulated minute.
   Construction strongly favors sites within
   four tiles of the Village. A Residential District increases capacity
-  by five. Housing beyond the amount needed by the current population becomes a ruin
+  by three. Housing beyond the amount needed by the current population becomes a ruin
   after two simulated minutes of continuous underuse. Each village may add a Harbor later if its connected building network
   reaches an open Beach, River, or Freshwater Lake tile; freshwater Harbors must
   border dry land, including diagonally. Harbor construction can also connect
@@ -324,7 +367,8 @@ The game starts in Critter Tools with Plankton selected.
   dens and their stored charges immediately.
   Toothed Whales form the fourth Therapsid branch. They inhabit Deep Ocean, Ocean,
   and Shallows, move every four seconds, and scan seven tiles for animal-eating
-  marine prey: Sea Scorpions, Nautiluses, Fish, Squid, and Ape Sailors. They also
+  marine prey: Sea Scorpions, Squid, and Ape Sailors. Fish and Nautiluses are
+  never prey, including adjacent encounters. They also
   consume adjacent feeder Crabs. Large land animals become prey only while standing
   in Shallows; whales ignore them on land or in deeper water. They do not eat
   Jellyfish, Plankton, Worms, Squid Eggs, or smaller land animals.
@@ -390,8 +434,11 @@ display scaling so both mountain ranges and ocean basins remain readable at tile
 
 - Volcano tool: left click spawns a new active volcano on an unoccupied tile.
 - Meteor tool: left click strikes the pointed tile. Press `-` or `=` to adjust its
-  magnitude from `0.0` through `1.0` in `0.1` steps. The active magnitude appears
-  in the HUD.
+  magnitude from `0.0` through `2.0` in `0.1` steps. The active magnitude appears
+  in the HUD. Above `1.0`, the crater and shockwave radii scale linearly, reaching
+  twice their `1.0` size at `2.0`. Natural/random meteors cannot use this extended scale.
+  Extended impacts retain the `1.0` crater shape and increase impact-melt flow count
+  from five at `1.0` to ten at `2.0`, with flow reach also scaling with crater size.
 - Evolve event: left click a critter to move it one step down the evolution tree;
   right click moves it one step back toward its ancestor.
 - Watershed Shift event: left click dries one naturally generated river system

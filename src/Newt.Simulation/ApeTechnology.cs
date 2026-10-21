@@ -13,8 +13,5 @@ public sealed record ApeTechnologyDefinition(
 public static class ApeTechnologies
 {
     public static IReadOnlyList<ApeTechnologyDefinition> All { get; } =
-        Array.AsReadOnly(new[]
-        {
-            new ApeTechnologyDefinition(ApeTechnology.Aquaculture, "Aquaculture", Array.Empty<ApeTechnology>()),
-        });
+        Array.Empty<ApeTechnologyDefinition>();
 }

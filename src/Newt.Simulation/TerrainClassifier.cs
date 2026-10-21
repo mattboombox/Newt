@@ -46,13 +46,18 @@ public static class TerrainClassifier
             }
         }
 
-        ApplyRingWorldWalls(world);
+        ApplyMegaWalls(world);
         AddCoasts(world);
         world.RevalidateApeStructures();
     }
 
-    internal static void ApplyRingWorldWalls(SimulationWorld world)
+    internal static void ApplyMegaWalls(SimulationWorld world)
     {
+        if (world.Body is WorldBody.Nexus)
+        {
+            NexusLayout.ApplyWalls(world);
+            return;
+        }
         if (world.Body is not WorldBody.RingWorld)
         {
             return;
@@ -62,12 +67,12 @@ public static class TerrainClassifier
         {
             world.SetStructuralTerrain(
                 new GridPosition(x, 0),
-                Terrain.RingWorldWall,
-                SimulationWorld.RingWorldWallElevation);
+                Terrain.MegaWall,
+                SimulationWorld.MegaWallElevation);
             world.SetStructuralTerrain(
                 new GridPosition(x, world.Height - 1),
-                Terrain.RingWorldWall,
-                SimulationWorld.RingWorldWallElevation);
+                Terrain.MegaWall,
+                SimulationWorld.MegaWallElevation);
         }
     }
 

@@ -13,7 +13,7 @@ public sealed class CustodianTests
         var groundAnimal = world.AddCritter(CritterSpecies.Deer, new(4, 0));
         for (var rebuild = 0; rebuild < 3; rebuild++)
         {
-            TerrainClassifier.ApplyRingWorldWalls(world);
+            TerrainClassifier.ApplyMegaWalls(world);
             Assert.True(world.TryGetCritter(north, out var northDrone));
             Assert.True(world.TryGetCritter(south, out var southDrone));
             Assert.Equal(new GridPosition(2, 0), northDrone.Position);
@@ -27,10 +27,10 @@ public sealed class CustodianTests
     [Fact]
     public void WallRebuildPreservesFabricatorRecruitsAndTheirAppearance()
     {
-        var world = new SimulationWorld(24, 8, Terrain.RingWorldWall) { Body = WorldBody.RingWorld };
+        var world = new SimulationWorld(24, 8, Terrain.MegaWall) { Body = WorldBody.RingWorld };
         world.SeedRingWorldCustodians();
         var recruits = Enumerable.Range(0, world.CritterCount).Select(world.GetCritter).ToArray();
-        TerrainClassifier.ApplyRingWorldWalls(world);
+        TerrainClassifier.ApplyMegaWalls(world);
         Assert.Equal(5, world.GetCritterCount(CritterSpecies.Custodian));
         foreach (var recruit in recruits)
         {
@@ -45,7 +45,7 @@ public sealed class CustodianTests
     [InlineData(8, 8)]
     public void FabricatorRepairsOnlyAtOrBelowQuarterEnergy(int energy, int expected)
     {
-        var world = new SimulationWorld(8, 3, Terrain.RingWorldWall)
+        var world = new SimulationWorld(8, 3, Terrain.MegaWall)
         {
             Body = WorldBody.RingWorld,
             SeasonsEnabled = false,
@@ -165,7 +165,7 @@ public sealed class CustodianTests
         if (expected > 0)
         {
             Assert.True(world.CustodianFabricator is not null);
-            Assert.Equal(Terrain.RingWorldWall, world.GetTerrain(world.CustodianFabricator!.Value));
+            Assert.Equal(Terrain.MegaWall, world.GetTerrain(world.CustodianFabricator!.Value));
             for (var index = 0; index < world.CritterCount; index++)
             {
                 var drone = world.GetCritter(index);
@@ -188,7 +188,7 @@ public sealed class CustodianTests
     [Fact]
     public void PatrolCrossesEveryTerrainWithoutEnergyLossAndFabricatorReplacesLosses()
     {
-        var world = new SimulationWorld(24, 12, Terrain.RingWorldWall, seed: 9)
+        var world = new SimulationWorld(24, 12, Terrain.MegaWall, seed: 9)
         {
             Body = WorldBody.RingWorld,
             SeasonsEnabled = false,
@@ -218,7 +218,7 @@ public sealed class CustodianTests
     [Fact]
     public void ReplacementsStartModernAndBecomeAncientAfterLongService()
     {
-        var world = new SimulationWorld(24, 12, Terrain.RingWorldWall) { Body = WorldBody.RingWorld };
+        var world = new SimulationWorld(24, 12, Terrain.MegaWall) { Body = WorldBody.RingWorld };
         world.SeedRingWorldCustodians();
         var original = world.GetCritter(0);
         Assert.True(original.IsAncientCustodian);
@@ -296,7 +296,7 @@ public sealed class CustodianTests
     [Fact]
     public void PatrolEventuallyVisitsATeleporter()
     {
-        var world = new SimulationWorld(24, 1, Terrain.RingWorldWall, seed: 42);
+        var world = new SimulationWorld(24, 1, Terrain.MegaWall, seed: 42);
         var portal = new GridPosition(12, 0);
         world.SetTerrain(portal, Terrain.Plains);
         Assert.True(world.TryPlaceTeleporter(portal));
@@ -319,7 +319,7 @@ public sealed class CustodianTests
     [Fact]
     public void WideRingPatrolMakesRepeatedTripsToNearestPortal()
     {
-        var world = new SimulationWorld(1280, 8, Terrain.RingWorldWall, seed: 42)
+        var world = new SimulationWorld(1280, 8, Terrain.MegaWall, seed: 42)
         {
             SeasonsEnabled = false,
         };

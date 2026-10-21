@@ -91,8 +91,8 @@ public sealed class GeologyTests
         Geology.ApplyRadialSmoothing(world, center, 2, 1f);
 
         Assert.Equal(0.15f, world.GetElevation(center), precision: 5);
-        Assert.Equal(SimulationWorld.RingWorldWallElevation, world.GetElevation(new GridPosition(4, 0)));
-        Assert.Equal(Terrain.RingWorldWall, world.GetTerrain(new GridPosition(4, 0)));
+        Assert.Equal(SimulationWorld.MegaWallElevation, world.GetElevation(new GridPosition(4, 0)));
+        Assert.Equal(Terrain.MegaWall, world.GetTerrain(new GridPosition(4, 0)));
     }
 
     [Fact]

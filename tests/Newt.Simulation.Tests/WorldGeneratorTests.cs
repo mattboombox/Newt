@@ -264,9 +264,39 @@ public sealed class WorldGeneratorTests
             Assert.True(world.HasTeleporter(new(world.Width * (portal * 2 + 1) / 16, world.Height / 2)));
         for (var x = 0; x < world.Width; x++)
         {
-            Assert.Equal(Terrain.RingWorldWall, world.GetTerrain(new(x, 0)));
-            Assert.Equal(Terrain.RingWorldWall, world.GetTerrain(new(x, world.Height - 1)));
+            Assert.Equal(Terrain.MegaWall, world.GetTerrain(new(x, 0)));
+            Assert.Equal(Terrain.MegaWall, world.GetTerrain(new(x, world.Height - 1)));
         }
+    }
+
+    [Theory]
+    [InlineData(9UL)]
+    [InlineData(42UL)]
+    public void RingHeightChangesCropTheSameLandscapeInsteadOfSquashingIt(ulong seed)
+    {
+        var narrow = WorldGenerator.Generate(new(new("Narrow ring", 320, 44), seed,
+            MapType: WorldMapType.RingWorld));
+        var wide = WorldGenerator.Generate(new(new("Wide ring", 320, 64), seed,
+            MapType: WorldMapType.RingWorld));
+        var compared = 0;
+        var matching = 0;
+        for (var y = 2; y < narrow.Height - 2; y++)
+        for (var x = 0; x < narrow.Width - 1; x++)
+        {
+            var a = narrow.GetElevation(new(x, y));
+            var b = narrow.GetElevation(new(x + 1, y));
+            var c = wide.GetElevation(new(x, y + 10));
+            var d = wide.GetElevation(new(x + 1, y + 10));
+            // Sea-level calibration shifts land uniformly. Ocean depth scaling
+            // and the small number of spring/volcano edits are handled separately.
+            if (Math.Min(Math.Min(a, b), Math.Min(c, d)) <= 0 ||
+                Math.Max(Math.Max(a, b), Math.Max(c, d)) >= 1.9f)
+                continue;
+            compared++;
+            if (Math.Abs((b - a) - (d - c)) < 0.00001f) matching++;
+        }
+        Assert.True(compared > 100);
+        Assert.True(matching >= compared * 0.98, $"Matching relief: {matching}/{compared}");
     }
 
     [Fact]
@@ -289,10 +319,10 @@ public sealed class WorldGeneratorTests
         {
             var top = new GridPosition(x, 0);
             var bottom = new GridPosition(x, world.Height - 1);
-            Assert.Equal(Terrain.RingWorldWall, world.GetTerrain(top));
-            Assert.Equal(Terrain.RingWorldWall, world.GetTerrain(bottom));
-            Assert.Equal(SimulationWorld.RingWorldWallElevation, world.GetElevation(top));
-            Assert.Equal(SimulationWorld.RingWorldWallElevation, world.GetElevation(bottom));
+            Assert.Equal(Terrain.MegaWall, world.GetTerrain(top));
+            Assert.Equal(Terrain.MegaWall, world.GetTerrain(bottom));
+            Assert.Equal(SimulationWorld.MegaWallElevation, world.GetElevation(top));
+            Assert.Equal(SimulationWorld.MegaWallElevation, world.GetElevation(bottom));
         }
         Assert.Equal(4, world.TeleporterCount);
         for (var index = 0; index < 4; index++)
@@ -300,11 +330,11 @@ public sealed class WorldGeneratorTests
             var x = world.Width * (index * 2 + 1) / 8;
             Assert.True(world.HasTeleporter(new GridPosition(x, world.Height / 2)));
         }
-        Assert.True(SimulationWorld.RingWorldWallElevation > SimulationWorld.MaximumGroundElevation);
+        Assert.True(SimulationWorld.MegaWallElevation > SimulationWorld.MaximumGroundElevation);
     }
 
     [Fact]
-    public void RingWorldWallsDoNotCreateShallowsAlongTheirEdges()
+    public void MegaWallsDoNotCreateShallowsAlongTheirEdges()
     {
         var world = new SimulationWorld(8, 5, Terrain.DeepOcean, seed: 9)
         {

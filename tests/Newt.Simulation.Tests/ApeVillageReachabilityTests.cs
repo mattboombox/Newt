@@ -43,6 +43,10 @@ public sealed class ApeVillageReachabilityTests
         var tickProperty = typeof(SimulationWorld).GetProperty(nameof(SimulationWorld.Tick))!;
         tickProperty.SetValue(world, (long)(30 * SimulationWorld.TicksPerSecond));
         world.CheckApeVillageReachability(0);
+        Assert.Equal(village, world.GetApeHomeVillage(id));
+
+        tickProperty.SetValue(world, (long)(5 * 60 * SimulationWorld.TicksPerSecond));
+        world.CheckApeVillageReachability(0);
         Assert.Equal(retainsMembership ? (GridPosition?)village : null, world.GetApeHomeVillage(id));
     }
 }

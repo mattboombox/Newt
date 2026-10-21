@@ -44,11 +44,7 @@ public sealed partial class SimulationWorld
     }
 
     private bool IsApeBuildingTechnologyUnlocked(int villageTile, ApeStructureKind kind) =>
-        !(kind is ApeStructureKind.Library && ApeCultureBlocksTechnology(villageTile)) && kind switch
-    {
-        ApeStructureKind.Aquaculture => HasApeTechnology(villageTile, ApeTechnology.Aquaculture),
-        _ => true,
-    };
+        !(kind is ApeStructureKind.Library && ApeCultureBlocksTechnology(villageTile));
 
     public int GetApeVillageScholarCount(GridPosition position) => GetApeScholarCount(GetIndex(position));
 

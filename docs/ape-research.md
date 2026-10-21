@@ -1,6 +1,6 @@
 # Ape research
 
-Villages can build one library at 300 residents for six wood and five food. The library uses
+Villages can build one library at 200 residents for six wood and five food. The library uses
 the military district silhouette with a purple banner. Hovering over it shows
 its village's scholars and researched technologies in the Building panel.
 
@@ -15,10 +15,7 @@ prerequisites are met. No scholars means no research. Discoveries belong to the
 village and survive losing its library; colonists carry a copy of their origin's
 knowledge when dispatched and give it to their new village.
 
-Sailing is innate: all Apes can build harbors, recruit sailors, and send colonists
-through ocean and freshwater tiles. The independent research technology is:
-
-- **Aquaculture:** permits aquaculture food districts.
+Sailing and Aquaculture are innate: all Apes can build harbors and aquaculture food districts, recruit sailors, and send colonists through ocean and freshwater tiles. Libraries currently have no researchable technologies; they continue recruiting scholars.
 
 Definitions live in `ApeTechnology.cs` as a flat list with prerequisite lists.
 Research timing and probability live in `ApeResearch.cs`.

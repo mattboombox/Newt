@@ -19,7 +19,7 @@ public sealed class TeleporterTests
         Assert.False(world.TryPlaceTeleporter(occupied));
 
         var wall = new GridPosition(0, 0);
-        world.SetTerrain(wall, Terrain.RingWorldWall);
+        world.SetTerrain(wall, Terrain.MegaWall);
         Assert.False(world.TryPlaceTeleporter(wall));
         Assert.Equal(1, world.TeleporterCount);
     }
@@ -77,7 +77,8 @@ public sealed class TeleporterTests
 
         foreach (var neighbor in GetNeighbors(world, destination))
         {
-            world.SetTerrain(neighbor, Terrain.Mountain);
+            if (neighbor != openArrival && neighbor != occupiedArrival)
+                world.AddCritter(CritterSpecies.Deer, neighbor);
         }
         world.SetTerrain(occupiedArrival, Terrain.Plains);
         world.SetTerrain(openArrival, Terrain.Plains);
@@ -114,7 +115,7 @@ public sealed class TeleporterTests
     [Fact]
     public void BlockedTeleporterNetworkFallsBackToRandomValidTile()
     {
-        var world = new SimulationWorld(8, 3, Terrain.Mountain, seed: 505);
+        var world = new SimulationWorld(8, 3, Terrain.Plains, seed: 505);
         var source = new GridPosition(1, 1);
         var destination = new GridPosition(6, 1);
         var distantArrival = new GridPosition(3, 1);
@@ -122,6 +123,13 @@ public sealed class TeleporterTests
         world.SetTerrain(distantArrival, Terrain.Plains);
         Assert.True(world.TryPlaceTeleporter(source));
         Assert.True(world.TryPlaceTeleporter(destination));
+        for (var y = 0; y < world.Height; y++)
+        for (var x = 0; x < world.Width; x++)
+        {
+            var tile = new GridPosition(x, y);
+            if (tile != source && tile != destination && tile != distantArrival)
+                world.AddCritter(CritterSpecies.Deer, tile);
+        }
         var travelerId = world.AddCritter(CritterSpecies.Deer, source);
 
         Assert.True(world.TryActivateTeleporterAt(source));
@@ -135,12 +143,19 @@ public sealed class TeleporterTests
     [Fact]
     public void TeleporterLeavesCritterInPlaceWhenNoValidTileExistsAnywhere()
     {
-        var world = new SimulationWorld(8, 3, Terrain.Mountain, seed: 507);
+        var world = new SimulationWorld(8, 3, Terrain.Plains, seed: 507);
         var source = new GridPosition(1, 1);
         var destination = new GridPosition(6, 1);
         world.SetTerrain(source, Terrain.Plains);
         Assert.True(world.TryPlaceTeleporter(source));
         Assert.True(world.TryPlaceTeleporter(destination));
+        for (var y = 0; y < world.Height; y++)
+        for (var x = 0; x < world.Width; x++)
+        {
+            var tile = new GridPosition(x, y);
+            if (tile != source && tile != destination)
+                world.AddCritter(CritterSpecies.Deer, tile);
+        }
         var travelerId = world.AddCritter(CritterSpecies.Deer, source);
 
         Assert.False(world.TryActivateTeleporterAt(source));
@@ -148,6 +163,31 @@ public sealed class TeleporterTests
         Assert.True(world.TryGetCritter(travelerId, out var traveler));
         Assert.Equal(source, traveler.Position);
         Assert.True(world.IsOccupied(source));
+    }
+
+    [Theory]
+    [InlineData(CritterSpecies.Deer, Terrain.Plains, Terrain.Ocean, false)]
+    [InlineData(CritterSpecies.Deer, Terrain.Plains, Terrain.Mountain, false)]
+    [InlineData(CritterSpecies.Fish, Terrain.Ocean, Terrain.Plains, false)]
+    [InlineData(CritterSpecies.Deer, Terrain.Plains, Terrain.Ocean, true)]
+    [InlineData(CritterSpecies.Deer, Terrain.Plains, Terrain.Mountain, true)]
+    [InlineData(CritterSpecies.Fish, Terrain.Ocean, Terrain.Plains, true)]
+    public void TeleporterArrivalIgnoresCritterHabitat(
+        CritterSpecies species, Terrain sourceTerrain, Terrain arrivalTerrain, bool linked)
+    {
+        var world = new SimulationWorld(linked ? 4 : 2, 1, arrivalTerrain, seed: 508);
+        var source = new GridPosition(0, 0);
+        world.SetTerrain(source, sourceTerrain);
+        Assert.True(world.TryPlaceTeleporter(source));
+        if (linked)
+            Assert.True(world.TryPlaceTeleporter(new(2, 0)));
+        var id = world.AddCritter(species, source);
+
+        Assert.True(world.TryActivateTeleporterAt(source));
+        Assert.True(world.TryGetCritter(id, out var traveler));
+        Assert.Equal(arrivalTerrain, world.GetTerrain(traveler.Position));
+        Assert.False(world.HasTeleporter(traveler.Position));
+        Assert.False(world.IsOccupied(source));
     }
 
     private static IEnumerable<GridPosition> GetNeighbors(

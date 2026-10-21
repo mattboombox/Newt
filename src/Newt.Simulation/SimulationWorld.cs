@@ -43,7 +43,7 @@ public sealed partial class SimulationWorld
     internal const int ApeReproductionStallTicks = 30 * TicksPerSecond;
     private const int ApeVillageBasePopulationCapacity = 5;
     private const int BarbarianVillagePopulationCapacity = 10;
-    private const int ApeResidentialPopulationCapacity = 5;
+    private const int ApeResidentialPopulationCapacity = 3;
     internal const int ApeResidentialUnderuseTicks = 2 * 60 * TicksPerSecond;
     internal const long ApeRuinDecayTicks = 2L * SeasonSystem.TicksPerYear;
     private const int ApeFoodDistrictPopulationThreshold = 5;
@@ -64,13 +64,12 @@ public sealed partial class SimulationWorld
     private const int ApeMilitaryDistrictWoodCost = 6;
     private const int ApeSailorWoodCost = 2;
     private const int ApeWarriorWoodCost = 2;
-    private const int ApeFarmFoodIntervalTicks = 14 * TicksPerSecond;
+    private const int ApeFarmFoodIntervalTicks = 15 * TicksPerSecond;
     private const int ApeSailorRecruitmentIntervalTicks = 30 * TicksPerSecond;
     private const int ApeWarriorRecruitmentIntervalTicks = 30 * TicksPerSecond;
     private const int ApeChieftainRecruitmentIntervalTicks = 30 * TicksPerSecond;
     private const int ApeSailorsPerHarbor = 4;
     private const int ApeWarriorsPerMilitaryDistrict = 4;
-    private const int ApeSurplusFeedingPopulationLimit = 100;
     private const int ApeMilitaryDistrictPopulationInterval = 50;
     private const int ApeInfrastructurePopulationInterval = 150;
     private const int ApeLumberCampPopulationInterval = 100;
@@ -94,7 +93,7 @@ public sealed partial class SimulationWorld
     public const int TileNutritionRegenerationSeconds = 480;
     public const float MinimumGroundElevation = -1f;
     public const float MaximumGroundElevation = 2f;
-    public const float RingWorldWallElevation = 2.15f;
+    public const float MegaWallElevation = 2.15f;
     public const float MinimumSeaLevel = -1f;
     public const float MaximumSeaLevel = 1f;
     public const float MinimumGlobalClimateOffset = -1f;
@@ -156,6 +155,7 @@ public sealed partial class SimulationWorld
     private readonly Dictionary<int, int> _apeVillageHomes = [];
     private readonly Dictionary<int, int> _apeVillageTargets = [];
     private readonly Dictionary<int, (int OriginVillageTile, int TargetVillageTile)> _apeSettlerTargets = [];
+    private readonly HashSet<int> _apeFixedSettlerDestinations = [];
     private readonly Dictionary<int, (int TargetVillageTile, Queue<int> Tiles)> _apeSettlerPaths = [];
     private readonly Dictionary<int, (int VillageTile, Queue<int> Tiles)> _apeSailorReturnPaths = [];
     private readonly Dictionary<int, (int VillageTile, GridPosition Position, long SinceTick)> _apeReproductionStalls = [];
@@ -170,7 +170,6 @@ public sealed partial class SimulationWorld
     private readonly PriorityQueue<(int Tile, int Steps), (int Estimate, int Order)> _apePathFrontier = new();
     private readonly Stack<int> _apePathReverse = new();
     private readonly Dictionary<int, int> _apeVillageFood = [];
-    private readonly Dictionary<int, int> _apeVillageGrowthFeedTargets = [];
     private readonly Dictionary<int, int> _apeVillageWood = [];
     private readonly Dictionary<int, int> _apeVillageIds = [];
     // Barbarian camps reuse the Village structure and placement rules, but not
@@ -556,7 +555,7 @@ public sealed partial class SimulationWorld
 
         var tileIndex = GetIndex(position);
         if (_teleporters.Contains(tileIndex) || _occupants[tileIndex] >= 0 ||
-            _terrain[tileIndex] is Terrain.RingWorldWall ||
+            _terrain[tileIndex] is Terrain.MegaWall ||
             _surfaceCovers[tileIndex] is not SurfaceCover.None ||
             _wolfDenCharges.ContainsKey(tileIndex) || _megaSpiderWebFood.ContainsKey(tileIndex) ||
             _apeStructures.ContainsKey(tileIndex) ||
@@ -573,7 +572,7 @@ public sealed partial class SimulationWorld
     {
         if (!Contains(position) || !_teleporters.Remove(GetIndex(position)))
             return false;
-        if (Body is WorldBody.RingWorld)
+        if (Body is WorldBody.RingWorld or WorldBody.Nexus)
             _destroyedTeleporterTiles.Add(GetIndex(position));
         return true;
     }
@@ -718,7 +717,7 @@ public sealed partial class SimulationWorld
         if (_terrain[index] != terrain)
         {
             _terrain[index] = terrain;
-            if (terrain is Terrain.RingWorldWall)
+            if (terrain is Terrain.MegaWall)
             {
                 RemoveTeleporterAt(position);
             }
@@ -753,8 +752,10 @@ public sealed partial class SimulationWorld
         RemoveApeStructureAt(position);
         var occupant = _occupants[index];
         // Wall rebuilds must preserve flying drones stationed at the fabricator.
-        if (terrain is not Terrain.RingWorldWall || occupant < 0 ||
-            _species[occupant] is not CritterSpecies.Custodian)
+        // Empty structural tiles must not run the defensive population scan in
+        // RemoveCritterAt: Nexus has hundreds of thousands of exterior wall tiles.
+        if (occupant >= 0 &&
+            (terrain is not Terrain.MegaWall || _species[occupant] is not CritterSpecies.Custodian))
             RemoveCritterAt(position);
     }
 
@@ -1081,7 +1082,6 @@ public sealed partial class SimulationWorld
         RemoveRoadsForVillage(tileIndex);
         _villageFeasts.Remove(tileIndex);
         _apeFoodExpansionTicks.Remove(tileIndex);
-        _apeVillageGrowthFeedTargets.Remove(tileIndex);
         _apeVillageWood.Remove(tileIndex);
         _apeVillageTechnologies.Remove(tileIndex);
         _apeVillageIds.Remove(tileIndex);
@@ -1132,6 +1132,7 @@ public sealed partial class SimulationWorld
         DetachApeWorker(apeId);
         _apeVillageHomes.Remove(apeId);
         _apeVillageTargets.Remove(apeId);
+        _apeFixedSettlerDestinations.Remove(apeId);
         _apeSettlerTargets.Remove(apeId);
         _apeSettlerPaths.Remove(apeId);
         _apeSailorReturnPaths.Remove(apeId);
@@ -1222,6 +1223,8 @@ public sealed partial class SimulationWorld
         _speciesCounts[(int)species]++;
         if (species is CritterSpecies.Custodian)
             _custodianCreatedTicks[id.Value] = Tick;
+        if (species is CritterSpecies.Lich)
+            SpawnLichWarriors(id, position);
         return id;
     }
 
@@ -1249,7 +1252,7 @@ public sealed partial class SimulationWorld
     /// </summary>
     public bool TrySpawnCritter(CritterSpecies species, GridPosition position)
     {
-        if (!LifeEnabled || !Contains(position))
+        if (!LifeEnabled || !Contains(position) || Body is WorldBody.Nexus && !NexusLayout.Contains(this, position))
         {
             return false;
         }
@@ -1964,56 +1967,6 @@ public sealed partial class SimulationWorld
         return true;
     }
 
-    internal void FeedApeFromVillageSurplus(int villageTile)
-    {
-        var population = GetApeVillageResidentCountByTile(villageTile);
-        var canGrowApes = population < ApeSurplusFeedingPopulationLimit &&
-            population < GetApeVillagePopulationCapacityByTile(villageTile);
-        var canGrowDogs = GetVillageDogCount(villageTile) < GetVillageDogLimit(villageTile);
-
-        bool IsEligible(int id) =>
-            _critterIndicesById.TryGetValue(id, out var index) &&
-            !IsApeFeedingBlocked(index) &&
-            _species[index] is (CritterSpecies.Ape or CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack or CritterSpecies.Dog) &&
-            (_species[index] is CritterSpecies.Dog ? canGrowDogs : canGrowApes) &&
-            _apeVillageHomes.TryGetValue(id, out var home) && home == villageTile &&
-            !_apeSettlerTargets.ContainsKey(id) &&
-            !_plagues.ContainsKey(id) &&
-            _energy[index] < CritterNutritions.Get(_species[index]).ReproductionThreshold;
-
-        if (_apeVillageGrowthFeedTargets.TryGetValue(villageTile, out var target) &&
-            !IsEligible(target))
-        {
-            _apeVillageGrowthFeedTargets.Remove(villageTile);
-        }
-
-        if (!_apeVillageFood.TryGetValue(villageTile, out var food) || food <= 0 ||
-            food * 10 < GetApeVillageFoodCapacityByTile(villageTile) * 9)
-        {
-            return;
-        }
-
-        if (!_apeVillageGrowthFeedTargets.TryGetValue(villageTile, out target))
-        {
-            var candidates = _apeVillageHomes.Keys.Where(IsEligible).Order().ToArray();
-            if (candidates.Length == 0)
-            {
-                return;
-            }
-            target = candidates[NextInt(candidates.Length)];
-            _apeVillageGrowthFeedTargets[villageTile] = target;
-        }
-
-        _apeVillageFood[villageTile] = food - 1;
-        var targetIndex = _critterIndicesById[target];
-        var nutrition = CritterNutritions.Get(_species[targetIndex]);
-        _energy[targetIndex] = Math.Min(nutrition.MaximumEnergy, _energy[targetIndex] + 1);
-        if (_energy[targetIndex] >= nutrition.ReproductionThreshold)
-        {
-            _apeVillageGrowthFeedTargets.Remove(villageTile);
-        }
-    }
-
     private int FindClaimableApeVillage(int apeIndex)
     {
         var current = _positions[apeIndex];
@@ -2089,7 +2042,7 @@ public sealed partial class SimulationWorld
         int villageTile,
         out int auxiliaryTile,
         out ApeStructureKind auxiliaryKind,
-        int knowledgeVillageTile = -1)
+        int knowledgeVillageTile = -1, bool allowOccupiedCenter = false)
     {
         auxiliaryTile = -1;
         auxiliaryKind = default;
@@ -2097,7 +2050,7 @@ public sealed partial class SimulationWorld
             HasBlockingApeStructure(villageTile) || _wolfDenCharges.ContainsKey(villageTile) ||
             _megaSpiderWebFood.ContainsKey(villageTile) ||
             _teleporters.Contains(villageTile) ||
-            (_occupants[villageTile] >= 0 && _occupants[villageTile] != apeIndex) ||
+            (!allowOccupiedCenter && _occupants[villageTile] >= 0 && _occupants[villageTile] != apeIndex) ||
             !CanBuildApeStructureOn(villageTile, ApeStructureKind.Village) ||
             !CanLiveOn(CritterSpecies.Ape, villageTile) || !IsFarEnoughFromApeVillages(villageTile))
         {
@@ -2305,9 +2258,12 @@ public sealed partial class SimulationWorld
     private void AddApeVillageFood(int villageTile, int amount)
     {
         _apeVillageFood.TryGetValue(villageTile, out var food);
+        var capacity = GetApeVillageFoodCapacityByTile(villageTile);
         _apeVillageFood[villageTile] = Math.Min(
-            GetApeVillageFoodCapacityByTile(villageTile),
+            capacity,
             food + amount);
+        if (food < capacity && _apeVillageFood[villageTile] == capacity)
+            TryStartNaturalVillageFeast(villageTile);
     }
 
     private void ClampApeVillageFood(int villageTile)
@@ -2463,10 +2419,6 @@ public sealed partial class SimulationWorld
 
             population = GetApeVillageResidentCountByTile(villageTile);
             UpdateUnderusedApeResidentialDistricts(villageTile, population);
-            if (Tick % TicksPerSecond == 0)
-            {
-                FeedApeFromVillageSurplus(villageTile);
-            }
             if (population >= GetApeVillagePopulationCapacityByTile(villageTile))
             {
                 TryBuildNextApeVillageExpansion(villageTile);
@@ -2520,12 +2472,12 @@ public sealed partial class SimulationWorld
             return TryCreateApeSettler(
                 clickedTile,
                 villageFood,
-                allowInsufficientFood: true);
+                allowInsufficientFood: true, keepDestination: true);
         }
 
         var villageTile = FindNearestApeVillage(clickedTile);
         if (villageTile < 0 ||
-            !TryGetApeVillageAuxiliarySite(-1, clickedTile, out _, out _))
+            !TryGetApeVillageAuxiliarySite(-1, clickedTile, out _, out _, allowOccupiedCenter: true))
         {
             return false;
         }
@@ -2534,7 +2486,7 @@ public sealed partial class SimulationWorld
             villageTile,
             food,
             allowInsufficientFood: true,
-            requestedTargetVillageTile: clickedTile);
+            requestedTargetVillageTile: clickedTile, keepDestination: true);
     }
 
     /// <summary>Seeds a normal two-ape village for manual testing.</summary>
@@ -2593,9 +2545,9 @@ public sealed partial class SimulationWorld
         return true;
     }
 
-    private bool TryFoundBarbarianCamp(int villageTile)
+    private bool TryFoundBarbarianCamp(int villageTile, int chancePercent = NaturalBarbarianVillageChancePercent)
     {
-        if (_terrain[villageTile] is Terrain.Shallows || !ShouldFoundBarbarianCamp(villageTile))
+        if (_terrain[villageTile] is Terrain.Shallows || !ShouldFoundBarbarianCamp(villageTile, chancePercent))
         {
             return false;
         }
@@ -2605,9 +2557,9 @@ public sealed partial class SimulationWorld
         return true;
     }
 
-    private bool ShouldFoundBarbarianCamp(int villageTile) =>
+    private bool ShouldFoundBarbarianCamp(int villageTile, int chancePercent = NaturalBarbarianVillageChancePercent) =>
         (Seed ^ ((ulong)(uint)villageTile * 2_654_435_761UL)) % 100 <
-        NaturalBarbarianVillageChancePercent;
+        (ulong)chancePercent;
 
     private void TryRecruitBarbarianPirate(int villageTile)
     {
@@ -2698,7 +2650,7 @@ public sealed partial class SimulationWorld
         int villageTile,
         int food,
         bool allowInsufficientFood = false,
-        int requestedTargetVillageTile = -1)
+        int requestedTargetVillageTile = -1, bool keepDestination = false)
     {
         var foodCost = _barbarianVillageTiles.Contains(villageTile) ? BarbarianVillageFoodCapacity : ApeSettlerFoodCost;
         if (!allowInsufficientFood && food < foodCost)
@@ -2720,6 +2672,8 @@ public sealed partial class SimulationWorld
         _energy[settlerIndex] = ApeSettlerInitialEnergy;
         RememberApeColonistTechnologies(settler.Value, villageTile);
         _apeSettlerTargets[settler.Value] = (villageTile, targetVillageTile);
+        if (keepDestination)
+            _apeFixedSettlerDestinations.Add(settler.Value);
         _apeVillageFood[villageTile] = Math.Max(0, food - foodCost);
         return true;
     }
@@ -2735,7 +2689,7 @@ public sealed partial class SimulationWorld
         for (var tileIndex = 0; tileIndex < _terrain.Length; tileIndex++)
         {
             if (WrappedManhattanDistance(GetPosition(tileIndex), origin) < minimumDistance ||
-                !TryGetApeVillageAuxiliarySite(-1, tileIndex, out _, out _))
+                !TryGetApeVillageAuxiliarySite(-1, tileIndex, out _, out _, allowOccupiedCenter: true))
             {
                 continue;
             }
@@ -3167,18 +3121,12 @@ public sealed partial class SimulationWorld
             ApeStructureKind.Farm when _biomes[structureTile] is Biome.Arid =>
                 2 * ApeFarmFoodIntervalTicks,
             ApeStructureKind.Aquaculture => GetApeAquacultureProductionIntervalTicks(
-                ClimateSystem.ClassifyTemperature(_temperature[structureTile])),
+                CalculateTileNutritionCapacity(structureTile)),
             _ => ApeFarmFoodIntervalTicks,
         };
 
-    internal static int GetApeAquacultureProductionIntervalTicks(TemperatureBand band) => band switch
-    {
-        TemperatureBand.Hot => 30 * TicksPerSecond,
-        TemperatureBand.Temperate => 34 * TicksPerSecond,
-        TemperatureBand.Cold => 38 * TicksPerSecond,
-        TemperatureBand.Freezing => 44 * TicksPerSecond,
-        _ => throw new ArgumentOutOfRangeException(nameof(band), band, null),
-    };
+    internal static int GetApeAquacultureProductionIntervalTicks(int nutritionCapacity) =>
+        60 * TicksPerSecond / Math.Clamp(nutritionCapacity - 1, 2, 5);
 
     private void AdvanceApeLumberCamp(int villageTile, int lumberCampTile)
     {
@@ -3805,7 +3753,7 @@ public sealed partial class SimulationWorld
                 current.Y + direction.Y);
             if (candidate.Y < 0 || candidate.Y >= Height ||
                 _occupants[GetIndex(candidate)] >= 0 ||
-                IsLivingApe(species) && _terrain[GetIndex(candidate)] is Terrain.RingWorldWall)
+                IsLivingApe(species) && _terrain[GetIndex(candidate)] is Terrain.MegaWall)
             {
                 continue;
             }
@@ -4459,15 +4407,22 @@ public sealed partial class SimulationWorld
         }
 
         var currentTile = GetIndex(_positions[apeIndex]);
-        var emergencySettlement =
+        var fixedDestination = _apeFixedSettlerDestinations.Contains(apeId);
+        var emergencySettlement = !fixedDestination &&
             _energy[apeIndex] * 10 < CritterNutritions.Get(CritterSpecies.Ape).MaximumEnergy &&
             IsApeSettlerDestinationValid(apeIndex, currentTile, requireVillageSpacing: false);
         var targetVillageTile = emergencySettlement ? currentTile : settler.TargetVillageTile;
         if (!emergencySettlement && !IsApeSettlerDestinationValid(apeIndex, targetVillageTile))
         {
+            if (fixedDestination)
+            {
+                MoveApeSettlerToward(apeIndex, targetVillageTile);
+                return true;
+            }
             targetVillageTile = FindDistantApeVillageSite(settler.OriginVillageTile);
             if (targetVillageTile < 0)
             {
+                _apeFixedSettlerDestinations.Remove(apeId);
                 _apeSettlerTargets.Remove(apeId);
                 _apeSettlerPaths.Remove(apeId);
                 return false;
@@ -4475,14 +4430,19 @@ public sealed partial class SimulationWorld
             _apeSettlerTargets[apeId] = (settler.OriginVillageTile, targetVillageTile);
         }
 
-        if (GetIndex(_positions[apeIndex]) == targetVillageTile)
+        if (GetIndex(_positions[apeIndex]) == targetVillageTile ||
+            (_occupants[targetVillageTile] >= 0 &&
+                GetApeSettlerPathEstimate(currentTile, targetVillageTile) == 1))
         {
             if (!emergencySettlement &&
-                !TryGetApeVillageAuxiliarySite(apeIndex, targetVillageTile, out _, out _))
+                !TryGetApeVillageAuxiliarySite(apeIndex, targetVillageTile, out _, out _, allowOccupiedCenter: true))
             {
+                if (fixedDestination)
+                    return true;
                 targetVillageTile = FindDistantApeVillageSite(settler.OriginVillageTile);
                 if (targetVillageTile < 0)
                 {
+                    _apeFixedSettlerDestinations.Remove(apeId);
                     _apeSettlerTargets.Remove(apeId);
                     _apeSettlerPaths.Remove(apeId);
                     return false;
@@ -4496,12 +4456,13 @@ public sealed partial class SimulationWorld
             _apeVillageWood[targetVillageTile] = ApeInitialWood;
             _apeVillageIds[targetVillageTile] = _nextApeVillageId++;
             _apeVillageHomes[apeId] = targetVillageTile;
+            _apeFixedSettlerDestinations.Remove(apeId);
             _apeSettlerTargets.Remove(apeId);
             _apeSettlerPaths.Remove(apeId);
             var apeNutrition = CritterNutritions.Get(CritterSpecies.Ape);
             _energy[apeIndex] = apeNutrition.InitialEnergy;
             _nextMetabolismTicks[apeIndex] = GetFirstMetabolismTick(apeNutrition, _critterIds[apeIndex]);
-            if (TryFoundBarbarianCamp(targetVillageTile))
+            if (TryFoundBarbarianCamp(targetVillageTile, _barbarianVillageTiles.Contains(settler.OriginVillageTile) ? 50 : 25))
             {
                 _apeColonistTechnologies.Remove(apeId);
             }
@@ -4667,7 +4628,6 @@ public sealed partial class SimulationWorld
         !_wolfDenCharges.ContainsKey(villageTile) &&
         !_megaSpiderWebFood.ContainsKey(villageTile) &&
         !_teleporters.Contains(villageTile) &&
-        (_occupants[villageTile] < 0 || _occupants[villageTile] == apeIndex) &&
         CanBuildApeStructureOn(villageTile, ApeStructureKind.Village) &&
         CanLiveOn(CritterSpecies.Ape, villageTile) &&
         (!requireVillageSpacing || IsFarEnoughFromApeVillages(villageTile));
@@ -4681,7 +4641,15 @@ public sealed partial class SimulationWorld
             GetApeSettlerPathEstimate(currentTile, route.Tiles.Peek()) != 1 ||
             !IsApeSettlerTransitTile(apeIndex, route.Tiles.Peek()))
         {
-            var path = FindApeSettlerPath(apeIndex, currentTile, targetVillageTile);
+            // An occupied center can be founded from a neighboring tile.
+            var path = _occupants[targetVillageTile] < 0
+                ? FindApeSettlerPath(apeIndex, currentTile, targetVillageTile)
+                : RoadNeighbors(targetVillageTile)
+                    .Where(tile => IsApeSettlerTransitTile(apeIndex, tile))
+                    .Select(tile => FindApeSettlerPath(apeIndex, currentTile, tile))
+                    .Where(candidate => candidate is not null)
+                    .OrderBy(candidate => candidate!.Count)
+                    .FirstOrDefault();
             if (path is null || path.Count == 0)
             {
                 _apeSettlerPaths.Remove(apeId);
@@ -4693,13 +4661,15 @@ public sealed partial class SimulationWorld
 
         var destinationIndex = route.Tiles.Peek();
         if (_occupants[destinationIndex] >= 0 &&
-            !TryShoveMovementBlocker(apeIndex, destinationIndex, reservedPrey: null))
+            !TryShoveMovementBlocker(apeIndex, destinationIndex, reservedPrey: null) &&
+            !TrySwapPastMovementBlocker(apeIndex, destinationIndex, null))
         {
             _apeSettlerPaths.Remove(apeId);
             return;
         }
         route.Tiles.Dequeue();
-        MoveCritter(apeIndex, destinationIndex, GetPosition(destinationIndex));
+        if (GetIndex(_positions[apeIndex]) != destinationIndex)
+            MoveCritter(apeIndex, destinationIndex, GetPosition(destinationIndex));
     }
 
     private Queue<int>? FindApeSettlerPath(int apeIndex, int startTile, int targetTile,
@@ -4751,7 +4721,8 @@ public sealed partial class SimulationWorld
                         CanLiveOn(CritterSpecies.ApeSailor, neighborTile)) ||
                     reservedPrey?.Contains(GetPosition(neighborTile)) is true ||
                     (_occupants[neighborTile] >= 0 && _occupants[neighborTile] != apeIndex &&
-                        !CanShoveMovementBlocker(apeIndex, neighborTile, reservedPrey)) ||
+                        !CanShoveMovementBlocker(apeIndex, neighborTile, reservedPrey) &&
+                        !CanSwapPastMovementBlocker(apeIndex, neighborTile, reservedPrey, node.Tile)) ||
                     (visits[neighborTile] == generation && nextSteps >= stepsFromStart[neighborTile]))
                 {
                     continue;
@@ -5892,7 +5863,7 @@ public sealed partial class SimulationWorld
             IsLargeLandPredatorPrey(prey),
         CritterSpecies.ToothedWhale => prey is
             CritterSpecies.SeaScorpion or
-            CritterSpecies.Nautilus or CritterSpecies.Fish or CritterSpecies.Squid or
+            CritterSpecies.Squid or
             CritterSpecies.ApeSailor or CritterSpecies.ApeTraderSailor || IsToothedWhaleShallowsPrey(prey),
         CritterSpecies.BaleenWhale => prey is CritterSpecies.Plankton,
         _ => false,
@@ -5900,6 +5871,8 @@ public sealed partial class SimulationWorld
 
     private bool CanEatInCurrentContext(int predatorIndex, int preyIndex)
     {
+        if (IsLichUndead(_species[predatorIndex]) && IsLichUndead(_species[preyIndex]))
+            return false;
         if (_species[predatorIndex] is CritterSpecies.Therapsid)
             return false;
         if (_species[predatorIndex] is CritterSpecies.Wolf && _species[preyIndex] is CritterSpecies.Fish &&
@@ -6304,11 +6277,6 @@ public sealed partial class SimulationWorld
             return -1;
         if (species is CritterSpecies.Nautilus && !IsNautilusFeedingTile(tileIndex))
             return -1;
-        if (species is (CritterSpecies.Nautilus or CritterSpecies.Trilobite) &&
-            IsIceOverOcean(tileIndex))
-        {
-            return -1;
-        }
         if (IsFreshwaterTile(tileIndex) && !CanFeedInFreshwater(species))
         {
             return -1;
@@ -6436,7 +6404,7 @@ public sealed partial class SimulationWorld
                 _ => 2,
             },
             Terrain.Ice => IsIceOverOcean(tileIndex) ? 1 : 0,
-            Terrain.Mountain or Terrain.RingWorldWall => 0,
+            Terrain.Mountain or Terrain.MegaWall => 0,
             _ => _biomes[tileIndex] switch
             {
                 Biome.Jungle => 6,
@@ -6489,10 +6457,10 @@ public sealed partial class SimulationWorld
     }
 
     private bool IsTrilobiteFeedingTile(int tileIndex) =>
-        IsTrilobiteFeedingTerrain(_terrain[tileIndex]);
+        IsTrilobiteFeedingTerrain(_terrain[tileIndex]) || IsIceOverOcean(tileIndex);
 
     private bool IsWormFeedingTile(int tileIndex) =>
-        IsTrilobiteFeedingTile(tileIndex) || IsIceOverOcean(tileIndex);
+        IsTrilobiteFeedingTile(tileIndex);
 
     private static bool IsTrilobiteFeedingTerrain(Terrain terrain) =>
         terrain is Terrain.Ocean or Terrain.Shallows;
@@ -6506,15 +6474,16 @@ public sealed partial class SimulationWorld
         terrain is Terrain.Ocean or Terrain.Shallows;
 
     private bool IsNautilusFeedingTile(int tileIndex) =>
-        IsNautilusFeedingTerrain(_terrain[tileIndex]);
+        IsNautilusFeedingTerrain(_terrain[tileIndex]) || IsIceOverOcean(tileIndex);
 
     private bool IsCrabFeedingTile(int tileIndex) =>
         _terrain[tileIndex] is Terrain.Beach or Terrain.Shallows ||
+        IsIceOverOcean(tileIndex) ||
         _biomes[tileIndex] is Biome.Swamp or Biome.Jungle;
 
     private bool IsFishForagingTile(int tileIndex) =>
         _surfaceWater[tileIndex] is SurfaceWaterKind.River or SurfaceWaterKind.FreshwaterLake ||
-        _terrain[tileIndex] is Terrain.Shallows;
+        _terrain[tileIndex] is Terrain.Shallows || IsIceOverOcean(tileIndex);
 
     private bool IsMonkeyFoliageTile(int tileIndex) =>
         !IsFreshwaterTile(tileIndex) &&
@@ -6600,8 +6569,8 @@ public sealed partial class SimulationWorld
         var blockerIndex = _occupants[destinationIndex];
         return blockerIndex >= 0 &&
             _species[blockerIndex] is not CritterSpecies.Plankton &&
-            CanDisplace(_species[moverIndex], _species[blockerIndex]) &&
-            CanCritterLiveOn(moverIndex, destinationIndex) &&
+            CanMoverDisplace(moverIndex, blockerIndex) &&
+            CanCritterRemainOnTile(moverIndex, destinationIndex) &&
             reservedPrey?.Contains(_positions[blockerIndex]) is not true &&
             FindCritterShoveDestination(moverIndex, blockerIndex, reservedPrey) is not null;
     }
@@ -6993,9 +6962,9 @@ public sealed partial class SimulationWorld
         }
 
         var arrival = _teleporters.Count == 1
-            ? FindRandomUnoccupiedTeleporterArrival(critterIndex)
-            : FindLinkedTeleporterArrival(critterIndex, sourceTile) ??
-                FindRandomUnoccupiedTeleporterArrival(critterIndex);
+            ? FindRandomUnoccupiedTeleporterArrival()
+            : FindLinkedTeleporterArrival(sourceTile) ??
+                FindRandomUnoccupiedTeleporterArrival();
         if (arrival is null)
         {
             return false;
@@ -7009,13 +6978,13 @@ public sealed partial class SimulationWorld
         return true;
     }
 
-    private GridPosition? FindRandomUnoccupiedTeleporterArrival(int critterIndex)
+    private GridPosition? FindRandomUnoccupiedTeleporterArrival()
     {
         var candidates = new List<int>();
         for (var tileIndex = 0; tileIndex < _terrain.Length; tileIndex++)
         {
             if (_occupants[tileIndex] < 0 && !_teleporters.Contains(tileIndex) &&
-                CanCritterLiveOn(critterIndex, tileIndex))
+                _terrain[tileIndex] is not Terrain.MegaWall)
             {
                 candidates.Add(tileIndex);
             }
@@ -7026,7 +6995,7 @@ public sealed partial class SimulationWorld
             : GetPosition(candidates[NextInt(candidates.Count)]);
     }
 
-    private GridPosition? FindLinkedTeleporterArrival(int critterIndex, int sourceTile)
+    private GridPosition? FindLinkedTeleporterArrival(int sourceTile)
     {
         var destinations = new List<(int PortalTile, List<int> ArrivalTiles)>();
         foreach (var portalTile in _teleporters)
@@ -7049,7 +7018,7 @@ public sealed partial class SimulationWorld
                 var candidate = new GridPosition(Mod(portal.X + direction.X, Width), y);
                 var candidateTile = GetIndex(candidate);
                 if (_occupants[candidateTile] < 0 && !_teleporters.Contains(candidateTile) &&
-                    CanCritterLiveOn(critterIndex, candidateTile) &&
+                    _terrain[candidateTile] is not Terrain.MegaWall &&
                     !arrivals.Contains(candidateTile))
                 {
                     arrivals.Add(candidateTile);
@@ -7307,7 +7276,8 @@ public sealed partial class SimulationWorld
         new(tileIndex % Width, tileIndex / Width);
 
     private bool CanLiveOn(CritterSpecies species, int tileIndex) =>
-        species is CritterSpecies.Custodian ||
+        (Body is not WorldBody.Nexus || NexusLayout.Contains(this, GetPosition(tileIndex))) &&
+        (species is CritterSpecies.Custodian ||
         _terrain[tileIndex] is Terrain.Ice &&
             _surfaceCovers[tileIndex] is SurfaceCover.None ||
         (species is CritterSpecies.Fish
@@ -7331,7 +7301,7 @@ public sealed partial class SimulationWorld
                     _terrain[tileIndex],
                     _surfaceWater[tileIndex],
                     _biomes[tileIndex],
-                    _surfaceCovers[tileIndex]));
+                    _surfaceCovers[tileIndex])));
 
     private bool CanCritterLiveOn(int critterIndex, int tileIndex) =>
         (IsLivingApe(_species[critterIndex]) && IsBarbarianApe(critterIndex)) ||
@@ -7353,7 +7323,7 @@ public sealed partial class SimulationWorld
                 : CanCritterLiveOn(critterIndex, tileIndex);
 
     private bool IsApeSettlerTransitTile(int critterIndex, int tileIndex) =>
-        _terrain[tileIndex] is not (Terrain.Mountain or Terrain.RingWorldWall) &&
+        _terrain[tileIndex] is not (Terrain.Mountain or Terrain.MegaWall) &&
         _surfaceCovers[tileIndex] is not SurfaceCover.Lava;
 
     private bool IsTrilobiteTile(int tileIndex) =>
@@ -7413,7 +7383,7 @@ public sealed partial class SimulationWorld
     private bool IsNewtFoliageTile(int tileIndex) =>
         _terrain[tileIndex] is not Terrain.Beach &&
         IsNewtOrdinaryTile(tileIndex) &&
-        _biomes[tileIndex] is Biome.Swamp or Biome.Jungle;
+        _biomes[tileIndex] is Biome.Swamp or Biome.Jungle or Biome.Bog;
 
     private bool IsAtOrAdjacentToNewtFood(int tileIndex)
     {

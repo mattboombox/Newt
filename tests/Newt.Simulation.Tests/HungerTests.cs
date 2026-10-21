@@ -61,7 +61,7 @@ public sealed class HungerTests
     }
 
     [Theory]
-    [InlineData(CritterSpecies.ToothedWhale, CritterSpecies.Fish)]
+    [InlineData(CritterSpecies.ToothedWhale, CritterSpecies.Crab)]
     [InlineData(CritterSpecies.BaleenWhale, CritterSpecies.Plankton)]
     public void WhalesHuntUntilFullAndCanReachBreedingEnergy(CritterSpecies species, CritterSpecies prey)
     {
@@ -85,6 +85,7 @@ public sealed class HungerTests
     }
 
     [Theory]
+    [InlineData(CritterSpecies.Newt, Biome.Bog)]
     [InlineData(CritterSpecies.Therapsid, Biome.Bog)]
     [InlineData(CritterSpecies.Monkey, Biome.Bog)]
     [InlineData(CritterSpecies.Deer, Biome.Forest)]

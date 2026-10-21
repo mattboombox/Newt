@@ -121,7 +121,7 @@ public static class Geology
                     continue;
                 }
                 var position = new GridPosition(Mod(center.X + dx, world.Width), center.Y + dy);
-                if (world.GetTerrain(position) is Terrain.RingWorldWall)
+                if (world.GetTerrain(position) is Terrain.MegaWall)
                 {
                     continue;
                 }
@@ -133,7 +133,7 @@ public static class Geology
                     for (var nx = -Math.Min(1, world.Width / 2); nx <= Math.Min(1, (world.Width - 1) / 2); nx++)
                     {
                         var neighbor = new GridPosition(Mod(position.X + nx, world.Width), ny);
-                        if (world.GetTerrain(neighbor) is Terrain.RingWorldWall)
+                        if (world.GetTerrain(neighbor) is Terrain.MegaWall)
                         {
                             continue;
                         }

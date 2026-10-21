@@ -2,9 +2,13 @@ namespace Newt.Simulation;
 
 public sealed partial class SimulationWorld
 {
+    private bool CanMoverDisplace(int mover, int blocker) =>
+        CanDisplace(_apeSettlerTargets.ContainsKey(_critterIds[mover].Value)
+            ? CritterSpecies.ApeTrader : _species[mover], _species[blocker]);
+
     private bool CanBeShovedOnto(int blocker, int tile) =>
         IsLivingApe(_species[blocker])
-            ? _terrain[tile] is not Terrain.RingWorldWall
+            ? _terrain[tile] is not Terrain.MegaWall
             : CanCritterLiveOn(blocker, tile);
 
     private void DelayShovedApeMovement(int index)
@@ -22,17 +26,10 @@ public sealed partial class SimulationWorld
     private bool TrySwapPastMovementBlocker(int mover, int destination,
         IReadOnlySet<GridPosition>? reserved)
     {
+        if (!CanSwapPastMovementBlocker(mover, destination, reserved))
+            return false;
         var blocker = _occupants[destination];
         var origin = GetIndex(_positions[mover]);
-        if (_species[mover] is not (CritterSpecies.ApeWarrior or CritterSpecies.ApeRoyalGuard or CritterSpecies.ApeBomber or CritterSpecies.ApeTrader or CritterSpecies.ApeTraderSailor) ||
-            blocker < 0 || blocker == mover ||
-            _species[blocker] is CritterSpecies.ApeTrader or CritterSpecies.ApeTraderSailor ||
-            !CanDisplace(_species[mover], _species[blocker]) ||
-            IsCaughtInMegaSpiderWeb(mover) || IsCaughtInMegaSpiderWeb(blocker) ||
-            reserved?.Contains(_positions[mover]) is true || reserved?.Contains(_positions[blocker]) is true ||
-            !CanCritterLiveOn(mover, destination) || !CanBeShovedOnto(blocker, origin) ||
-            (IsApeMilitary(_species[mover]) && AreWarEnemies(mover, blocker)))
-            return false;
 
         var from = _positions[mover];
         var to = _positions[blocker];
@@ -45,6 +42,25 @@ public sealed partial class SimulationWorld
         DelayShovedApeMovement(blocker);
         TriggerWolfDenNear(from, to, _species[mover]);
         TriggerWolfDenNear(to, from, _species[blocker]);
+        return true;
+    }
+
+    private bool CanSwapPastMovementBlocker(int mover, int destination,
+        IReadOnlySet<GridPosition>? reserved, int? fromTile = null)
+    {
+        var blocker = _occupants[destination];
+        var origin = fromTile ?? GetIndex(_positions[mover]);
+        if ((!_apeSettlerTargets.ContainsKey(_critterIds[mover].Value) &&
+                _species[mover] is not (CritterSpecies.ApeWarrior or CritterSpecies.ApeRoyalGuard or CritterSpecies.ApeBomber or CritterSpecies.ApeTrader or CritterSpecies.ApeTraderSailor)) ||
+            blocker < 0 || blocker == mover ||
+            _species[blocker] is CritterSpecies.ApeTrader or CritterSpecies.ApeTraderSailor ||
+            !CanMoverDisplace(mover, blocker) ||
+            IsCaughtInMegaSpiderWeb(mover) || IsCaughtInMegaSpiderWeb(blocker) ||
+            reserved?.Contains(_positions[mover]) is true || reserved?.Contains(_positions[blocker]) is true ||
+            !CanCritterRemainOnTile(mover, destination) || !CanBeShovedOnto(blocker, origin) ||
+            (IsApeMilitary(_species[mover]) && AreWarEnemies(mover, blocker)))
+            return false;
+
         return true;
     }
 }

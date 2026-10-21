@@ -21,6 +21,9 @@ The 1280 × 642 Huge preset is an intentionally demanding stress-test world.
 - Volcanic deposits batch global landform refreshes, and reroute freshwater only
   when lava actually touches a river or lake.
 - Cleanup uses dense collections or deferred batches, not repeated linear removal.
+- Structural terrain rebuilds check occupancy before removing critters. Empty Mega
+  Wall tiles must not trigger the defensive population scan in `RemoveCritterAt`;
+  Nexus includes hundreds of thousands of exterior wall tiles.
 - Diagnostics expose tick duration, population by species, births, deaths,
   movements, blocked movements, and pathfinding work.
 

@@ -8,6 +8,8 @@
 
   <ItemGroup>
     <EmbeddedResource Include="earth-elevation-1280x642.bin" LogicalName="Newt.Simulation.EarthElevation" />
+    <EmbeddedResource Include="moon-elevation-2560x1280.bin" LogicalName="Newt.Simulation.MoonElevation" />
+    <EmbeddedResource Include="mars-elevation-2560x1280.bin" LogicalName="Newt.Simulation.MarsElevation" />
   </ItemGroup>
 
 </Project>

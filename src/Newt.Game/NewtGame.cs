@@ -27,9 +27,10 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private static readonly WorldPreset[] MenuSizes =
         [WorldPreset.Micro, WorldPreset.Small, WorldPreset.Standard, WorldPreset.Large, WorldPreset.Huge];
     private static readonly WorldPreset[] RingMenuSizes = [WorldPreset.Ring, WorldPreset.RingMega];
+    private static readonly WorldPreset[] NexusMenuSizes = [WorldPreset.Nexus, WorldPreset.NexusMega];
     private static readonly WorldMapType[] MenuMapTypes =
         [WorldMapType.Continents, WorldMapType.Pangaea, WorldMapType.Archipelago, WorldMapType.AllOcean,
-            WorldMapType.RingWorld, WorldMapType.Earth];
+            WorldMapType.RingWorld, WorldMapType.Nexus, WorldMapType.Earth, WorldMapType.Moon, WorldMapType.Mars];
     private static readonly double[] SimulationRates = [0.25, 0.5, 1, 2, 4, 8, 16, 32];
     private static readonly ToolCategory[] ToolCategoryOrder =
         [ToolCategory.WorldTools, ToolCategory.TerrainTools, ToolCategory.CritterTools,
@@ -132,6 +133,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private TimeSpan _accumulator;
     private KeyboardState _previousKeyboard;
     private MouseState _previousMouse;
+    private bool _waitingForInputRelease = true;
     private int _cameraX;
     private int _cameraY;
     private int _zoomIndex = 3;
@@ -142,6 +144,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private double _toolHoldSeconds;
     private double _nextToolRepeatSeconds;
     private int _eventMagnitudeIndex = 3;
+    private int _meteorMagnitudeIndex = 3;
     private int _terrainMagnitudeIndex = 3;
     private int TerrainBrushRadius => 1 + 2 * _terrainMagnitudeIndex;
     private float ElevationBrushStrength => 0.12f + 0.08f * _terrainMagnitudeIndex;
@@ -174,6 +177,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     {
         if (_mapType is WorldMapType.RingWorld)
             _preset = WorldPreset.Ring;
+        else if (_mapType is WorldMapType.Nexus)
+            _preset = WorldPreset.Nexus;
         _seedText = _seed.ToString(CultureInfo.InvariantCulture);
         _graphics = new GraphicsDeviceManager(this)
         {
@@ -251,28 +256,53 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         SetWindowIconFromNewtSprite();
     }
 
+    protected override void OnDeactivated(object sender, EventArgs args)
+    {
+        _waitingForInputRelease = true;
+        ResetToolRepeat();
+        base.OnDeactivated(sender, args);
+    }
+
     protected override void Update(GameTime gameTime)
     {
         var keyboard = Keyboard.GetState();
         var mouse = Mouse.GetState();
+        var gamePad = GamePad.GetState(PlayerIndex.One);
+        var acceptInput = IsActive && !_waitingForInputRelease;
+        if (!acceptInput)
+        {
+            ResetToolRepeat();
+            // Discard background input, wheel changes, and the click used to regain focus.
+            _previousKeyboard = keyboard;
+            _previousMouse = mouse;
+            _waitingForInputRelease = !IsActive || keyboard.GetPressedKeyCount() != 0 ||
+                mouse.LeftButton == ButtonState.Pressed || mouse.RightButton == ButtonState.Pressed ||
+                mouse.MiddleButton == ButtonState.Pressed || mouse.XButton1 == ButtonState.Pressed ||
+                mouse.XButton2 == ButtonState.Pressed || gamePad.Buttons.Back == ButtonState.Pressed;
+        }
+
         if (_setupMenuOpen)
         {
-            HandleSetupMenu(keyboard);
+            if (acceptInput)
+                HandleSetupMenu(keyboard);
             _previousKeyboard = keyboard;
             _previousMouse = mouse;
             base.Update(gameTime);
             return;
         }
 
-        if (GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed || keyboard.IsKeyDown(Keys.Escape))
+        if (acceptInput && (gamePad.Buttons.Back == ButtonState.Pressed || keyboard.IsKeyDown(Keys.Escape)))
         {
             Exit();
             return;
         }
 
-        HandleWorldShortcuts(keyboard, mouse);
-        HandleActiveTool(mouse, gameTime.ElapsedGameTime.TotalSeconds);
-        HandleCamera(keyboard, mouse);
+        if (acceptInput)
+        {
+            HandleWorldShortcuts(keyboard, mouse);
+            HandleActiveTool(mouse, gameTime.ElapsedGameTime.TotalSeconds);
+            HandleCamera(keyboard, mouse);
+        }
 
         if (!_paused && IsActive)
         {
@@ -333,8 +363,13 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
 
             for (var screenX = 0; screenX < visibleColumns; screenX++)
             {
-                var worldX = (_cameraX + screenX) % _world.Width;
+                var worldX = _cameraX + screenX;
+                if (_world.Body is WorldBody.Nexus && worldX >= _world.Width)
+                    break;
+                worldX %= _world.Width;
                 var position = new GridPosition(worldX, worldY);
+                if (_world.Body is WorldBody.Nexus && !NexusLayout.Contains(_world, position))
+                    continue;
                 var terrain = _world.GetTerrain(position);
                 var biome = _world.GetBiome(position);
                 var temperatureBand = _world.GetTemperatureBand(position);
@@ -820,7 +855,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 _menuMapTypeIndex = 0;
             }
             var currentSize = _preset == WorldPreset.Earth ? WorldPreset.Huge : _preset;
-            var ringSizeIndex = Array.IndexOf(RingMenuSizes, _preset);
+            var ringSizeIndex = Array.IndexOf(_mapType is WorldMapType.Nexus ? NexusMenuSizes : RingMenuSizes, _preset);
             if (ringSizeIndex >= 0)
                 _menuRingSizeIndex = ringSizeIndex;
             var sizeIndex = Array.IndexOf(MenuSizes, currentSize);
@@ -889,7 +924,10 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             case WorldTool.Elevation or WorldTool.Smoothing:
                 _terrainMagnitudeIndex = Math.Clamp(_terrainMagnitudeIndex + change, 0, 10);
                 break;
-            case WorldTool.Meteor or WorldTool.Tsunami:
+            case WorldTool.Meteor:
+                _meteorMagnitudeIndex = Math.Clamp(_meteorMagnitudeIndex + change, 0, 20);
+                break;
+            case WorldTool.Tsunami:
                 _eventMagnitudeIndex = Math.Clamp(_eventMagnitudeIndex + change, 0, 10);
                 break;
         }
@@ -1045,7 +1083,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 Volcanism.SpawnVolcano(_world, position.Value);
                 break;
             case WorldTool.Meteor when primaryActivated:
-                Impacts.CreateMeteorImpact(_world, position.Value, _eventMagnitudeIndex / 10f);
+                Impacts.CreateToolMeteorImpact(_world, position.Value, _meteorMagnitudeIndex / 10f);
                 break;
             case WorldTool.Tsunami when primaryActivated:
                 Tsunamis.Create(_world, position.Value, _eventMagnitudeIndex / 10f);
@@ -1070,7 +1108,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             case WorldTool.River when primaryActivated:
                 var riverSourceTerrain = _world.GetTerrain(position.Value);
                 if (riverSourceTerrain is not (Terrain.Mountain or Terrain.Hills or
-                    Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows or Terrain.RingWorldWall))
+                    Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows or Terrain.MegaWall))
                 {
                     _world.SetTerrain(position.Value, Terrain.Hills);
                 }
@@ -1328,7 +1366,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             _cameraY = anchor.Value.Y - (mouse.Y - MapOffsetY) / TileSize;
         }
 
-        _cameraX = Mod(_cameraX, _world.Width);
+        _cameraX = ConstrainCameraX(_cameraX);
         var visibleRows = Math.Max(1, MapViewportHeight / TileSize);
         _cameraY = Math.Clamp(_cameraY, 0, Math.Max(0, _world.Height - visibleRows));
     }
@@ -1347,7 +1385,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
 
         var visibleColumns = Math.Max(1, GraphicsDevice.Viewport.Width / TileSize);
         var visibleRows = Math.Max(1, MapViewportHeight / TileSize);
-        _cameraX = Mod(critter.Position.X - visibleColumns / 2, _world.Width);
+        _cameraX = ConstrainCameraX(critter.Position.X - visibleColumns / 2);
         _cameraY = Math.Clamp(
             critter.Position.Y - visibleRows / 2,
             0,
@@ -1357,6 +1395,10 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private int MapViewportHeight => _hudHidden
         ? GraphicsDevice.Viewport.Height
         : Math.Max(1, GraphicsDevice.Viewport.Height - HudHeight);
+
+    private int ConstrainCameraX(int x) => _world.Body is WorldBody.Nexus
+        ? Math.Clamp(x, 0, Math.Max(0, _world.Width - Math.Max(1, GraphicsDevice.Viewport.Width / TileSize)))
+        : Mod(x, _world.Width);
 
     private void DrawHud()
     {
@@ -1704,7 +1746,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         }
     }
 
-    private string GetWorldSeasonLine() => _world.Body is WorldBody.RingWorld
+    private string GetWorldSeasonLine() => _world.Body is WorldBody.RingWorld or WorldBody.Nexus
         ? "Engineered climate zones"
         : _world.SeasonsEnabled
         ? $"Seasons N {SeasonSystem.GetSeason(_world, new GridPosition(0, 0))} / S {SeasonSystem.GetSeason(_world, new GridPosition(0, _world.Height - 1))}"
@@ -1783,7 +1825,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         return terrain switch
         {
             Terrain.Ice => "Ice Sheet",
-            Terrain.RingWorldWall => "Ring World Wall",
+            Terrain.MegaWall => "Mega Wall",
             Terrain.Mountain => biome is Biome.Arctic ? "Snowy Mountain" : "Mountain",
             Terrain.DeepOcean => $"{temperature} Deep Ocean",
             Terrain.Ocean => $"{temperature} Ocean",
@@ -1937,9 +1979,10 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             var technologies = _world.GetApeVillageTechnologies(village);
             return [
                 $"Scholars {_world.GetApeVillageScholarCount(village)} / 2",
+                "No researchable technologies",
                 "Researched technologies:",
                 .. technologies.Count == 0 ? new[] { "None yet" } : technologies.Select(technology =>
-                    ApeTechnologies.All.Single(definition => definition.Technology == technology).Name),
+                    ApeTechnologies.All.SingleOrDefault(definition => definition.Technology == technology)?.Name ?? technology.ToString()),
             ];
         }
         if (_world.GetApeStructureProductionPerMinute(position) is not { } rate)
@@ -2173,7 +2216,11 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             return null;
         }
 
-        return new GridPosition(Mod(_cameraX + FloorDiv(mapX, TileSize), _world.Width), y);
+        var x = _cameraX + FloorDiv(mapX, TileSize);
+        if (_world.Body is WorldBody.Nexus && (x < 0 || x >= _world.Width))
+            return null;
+        var position = new GridPosition(Mod(x, _world.Width), y);
+        return _world.Body is WorldBody.Nexus && !NexusLayout.Contains(_world, position) ? null : position;
     }
 
     private void GenerateWorld()
@@ -2227,7 +2274,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             }
             else if (_setupRow == 1)
             {
-                if (MenuMapTypes[_menuMapTypeIndex] is WorldMapType.RingWorld)
+                if (MenuMapTypes[_menuMapTypeIndex] is WorldMapType.RingWorld or WorldMapType.Nexus)
                     _menuRingSizeIndex = Mod(_menuRingSizeIndex + direction, RingMenuSizes.Length);
                 else
                     _menuSizeIndex = Mod(_menuSizeIndex + direction, MenuSizes.Length);
@@ -2248,7 +2295,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         {
             _mapType = MenuMapTypes[_menuMapTypeIndex];
             _preset = _mapType is WorldMapType.RingWorld
-                ? RingMenuSizes[_menuRingSizeIndex] : MenuSizes[_menuSizeIndex];
+                ? RingMenuSizes[_menuRingSizeIndex]
+                : _mapType is WorldMapType.Nexus ? NexusMenuSizes[_menuRingSizeIndex] : MenuSizes[_menuSizeIndex];
             GenerateWorld();
             _setupMenuOpen = false;
         }
@@ -2271,8 +2319,9 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
 
         var type = MenuMapTypes[_menuMapTypeIndex];
         var selectedSize = type is WorldMapType.RingWorld
-            ? RingMenuSizes[_menuRingSizeIndex] : MenuSizes[_menuSizeIndex];
-        var sizeName = selectedSize == WorldPreset.Ring ? "Standard" : selectedSize.Name;
+            ? RingMenuSizes[_menuRingSizeIndex]
+            : type is WorldMapType.Nexus ? NexusMenuSizes[_menuRingSizeIndex] : MenuSizes[_menuSizeIndex];
+        var sizeName = selectedSize == WorldPreset.Ring || selectedSize == WorldPreset.Nexus ? "Standard" : selectedSize.Name;
         var sizeText = $"{sizeName}  {selectedSize.Width} x {selectedSize.Height}";
         string[] rows =
         [
@@ -2362,6 +2411,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private static string GetMapTypeName(WorldMapType type) => type switch
     {
         WorldMapType.RingWorld => "Ring World",
+        WorldMapType.Nexus => "Nexus",
         WorldMapType.AllOcean => "Water World",
         _ => type.ToString(),
     };
@@ -2370,7 +2420,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
 
     private int WrappedScreenX(int worldX)
     {
-        var difference = Mod(worldX - _cameraX, _world.Width);
+        var difference = _world.Body is WorldBody.Nexus
+            ? worldX - _cameraX : Mod(worldX - _cameraX, _world.Width);
         return difference;
     }
 
@@ -2803,7 +2854,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         Biome biome,
         TemperatureBand temperatureBand)
     {
-        if (terrain is Terrain.RingWorldWall)
+        if (terrain is Terrain.MegaWall)
         {
             return new Color(112, 126, 136);
         }
@@ -2836,7 +2887,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         Terrain.Hills => ScaleColor(GetBiomeLandColor(biome), 0.92f),
         Terrain.Mountain => GetMountainColor(elevation, biome is Biome.Arctic),
         Terrain.Ice => new Color(165, 220, 235),
-        Terrain.RingWorldWall => new Color(112, 126, 136),
+        Terrain.MegaWall => new Color(112, 126, 136),
         _ => Color.Magenta,
     };
 
@@ -3008,14 +3059,14 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         WorldTool.EvolutionChance =>
             $"L +0.5%; R -0.5%   {_world.EvolutionChancePercent:0.0}%",
         WorldTool.Sentience => $"L on; R off   {(_world.SentienceEnabled ? "On" : "Off")}",
-        WorldTool.Seasons => _world.Body is WorldBody.RingWorld
+        WorldTool.Seasons => _world.Body is WorldBody.RingWorld or WorldBody.Nexus
             ? "Fixed climate"
             : "L on; R off",
         WorldTool.Life => _world.LifeEnabled
             ? "L on; R barren"
             : "L restore; R off",
         WorldTool.Volcano => "L spawn vent",
-        WorldTool.Meteor => $"L strike; -/= {_eventMagnitudeIndex / 10f:0.0}",
+        WorldTool.Meteor => $"L strike; -/= {_meteorMagnitudeIndex / 10f:0.0}",
         WorldTool.Tsunami => $"L ocean; -/= {_eventMagnitudeIndex / 10f:0.0}",
         WorldTool.WatershedShift => "L reroute river",
         WorldTool.Evolve => "L evolve; R devolve",

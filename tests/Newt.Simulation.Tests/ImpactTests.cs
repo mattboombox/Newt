@@ -5,6 +5,51 @@ namespace Newt.Simulation.Tests;
 public sealed class ImpactTests
 {
     [Fact]
+    public void ToolMeteorAtTwoDoublesMaximumNormalCraterAndShockRadius()
+    {
+        var center = new GridPosition(30, 30);
+        var normal = Impacts.CreateMeteorImpact(CreateLandWorld(), center, 1f);
+        var extended = Impacts.CreateToolMeteorImpact(CreateLandWorld(), center, 2f);
+        Assert.Equal(2f, extended.Magnitude);
+        Assert.Equal(normal.CraterRadius * 2, extended.CraterRadius);
+        Assert.Equal(normal.ShockRadius * 2, extended.ShockRadius);
+    }
+
+    [Fact]
+    public void ExtendedToolMeteorAddsMoreImpactMeltFlows()
+    {
+        var normal = CreateLandWorld();
+        var extended = CreateLandWorld();
+        var center = new GridPosition(30, 30);
+        Impacts.CreateMeteorImpact(normal, center, 1f);
+        Impacts.CreateToolMeteorImpact(extended, center, 2f);
+        Assert.Equal(5, normal.ActiveLavaFlowCount);
+        Assert.Equal(10, extended.ActiveLavaFlowCount);
+    }
+
+    [Theory]
+    [InlineData(0f)]
+    [InlineData(0.5f)]
+    [InlineData(1f)]
+    public void ToolMeteorPreservesNormalScale(float magnitude)
+    {
+        var center = new GridPosition(30, 30);
+        Assert.Equal(Impacts.CreateMeteorImpact(CreateLandWorld(), center, magnitude),
+            Impacts.CreateToolMeteorImpact(CreateLandWorld(), center, magnitude));
+    }
+
+    [Theory]
+    [InlineData(-0.1f)]
+    [InlineData(2.1f)]
+    [InlineData(float.NaN)]
+    [InlineData(float.PositiveInfinity)]
+    public void ToolMeteorRejectsMagnitudesOutsideExtendedScale(float magnitude)
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            Impacts.CreateToolMeteorImpact(CreateLandWorld(), new(30, 30), magnitude));
+    }
+
+    [Fact]
     public void MeteorExcavatesBowlAndRaisesStoneRim()
     {
         var world = CreateLandWorld();
@@ -121,6 +166,7 @@ public sealed class ImpactTests
     [Theory]
     [InlineData(-0.1f)]
     [InlineData(1.1f)]
+    [InlineData(2f)]
     public void MagnitudeMustStayBetweenZeroAndOne(float magnitude)
     {
         Assert.Throws<ArgumentOutOfRangeException>(() =>

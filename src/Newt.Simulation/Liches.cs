@@ -4,6 +4,39 @@ public sealed partial class SimulationWorld
 {
     private readonly Dictionary<int, int> _lichArmy = [];
     internal const int LichEscortSize = 20;
+    private void SpawnLichWarriors(CritterId lich, GridPosition origin)
+    {
+        var remaining = 4;
+        // Prefer free space; only replace living Apes when the nearby tiles are full.
+        foreach (var replaceApes in new[] { false, true })
+        for (var radius = 1; radius <= 3; radius++)
+        for (var dy = -radius; dy <= radius; dy++)
+        for (var dx = -radius; dx <= radius; dx++)
+        {
+            if (Math.Max(Math.Abs(dx), Math.Abs(dy)) != radius ||
+                origin.Y + dy < 0 || origin.Y + dy >= Height)
+                continue;
+            var position = new GridPosition(Mod(origin.X + dx, Width), origin.Y + dy);
+            var tile = GetIndex(position);
+            if (!CanLiveOn(CritterSpecies.UndeadWarrior, tile))
+                continue;
+            var occupant = _occupants[tile];
+            CritterId warrior;
+            if (occupant < 0)
+                warrior = AddCritter(CritterSpecies.UndeadWarrior, position);
+            else if (replaceApes && IsLichPrey(_species[occupant]))
+            {
+                warrior = _critterIds[occupant];
+                ChangeCritterSpecies(occupant, CritterSpecies.UndeadWarrior, preserveEnergy: false);
+                _reproductionTruces.Remove(warrior.Value);
+            }
+            else
+                continue;
+            _lichArmy[warrior.Value] = lich.Value;
+            if (--remaining == 0)
+                return;
+        }
+    }
     private void CollapseLichArmy(int lich)
     {
         var army = _lichArmy.Where(pair => pair.Value == lich).Select(pair => pair.Key).ToArray();
@@ -24,6 +57,9 @@ public sealed partial class SimulationWorld
         return GetMovementIntervalTicks(_species[index]) *
             (_species[index] is CritterSpecies.Lich or CritterSpecies.UndeadWarrior && inWater ? 3 : 1);
     }
+    private static bool IsLichUndead(CritterSpecies species) =>
+        species is CritterSpecies.Lich or CritterSpecies.UndeadApe or CritterSpecies.UndeadWarrior;
+
     private static bool IsLichPrey(CritterSpecies species) => IsLivingApe(species) ||
         species is CritterSpecies.ApeTrader or CritterSpecies.ApeTraderSailor;
 

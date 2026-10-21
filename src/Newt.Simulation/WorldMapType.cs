@@ -9,4 +9,7 @@ public enum WorldMapType
     AllOcean,
     RingWorld,
     Earth,
+    Nexus,
+    Moon,
+    Mars,
 }

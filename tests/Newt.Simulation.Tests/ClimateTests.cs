@@ -5,10 +5,10 @@ namespace Newt.Simulation.Tests;
 public sealed class ClimateTests
 {
     [Fact]
-    public void OneYearTakesTwelveMinutesAtNormalSpeed()
+    public void OneYearTakesTwentyFourMinutesAtNormalSpeed()
     {
-        Assert.Equal(720, SeasonSystem.CycleSeconds);
-        Assert.Equal(14_400, SeasonSystem.TicksPerYear);
+        Assert.Equal(1440, SeasonSystem.CycleSeconds);
+        Assert.Equal(28_800, SeasonSystem.TicksPerYear);
     }
 
     [Fact]
@@ -206,7 +206,7 @@ public sealed class ClimateTests
     }
 
     [Fact]
-    public void SeasonalClimateRefreshRunsEveryThirtySecondsAcrossSpacedStages()
+    public void SeasonalClimateRefreshRunsEverySixtySecondsAcrossSpacedStages()
     {
         var world = new SimulationWorld(3, 3, Terrain.Plains, seed: 12);
         NaturalEvents.SetEnabled(world, false);
@@ -216,11 +216,15 @@ public sealed class ClimateTests
         }
         var target = new GridPosition(1, 1);
         world.SetBiome(target, Biome.Jungle);
+        world.SetTemperature(target, 0.99f);
+        world.SeasonTick = SeasonSystem.ClimateRefreshTicks / 2 - 1;
+        world.AdvanceOneTick();
+        Assert.Equal(0.99f, world.GetTemperature(target));
         world.SeasonTick = SeasonSystem.ClimateRefreshTicks - 1;
 
         world.AdvanceOneTick();
 
-        Assert.Equal(30, SeasonSystem.ClimateRefreshSeconds);
+        Assert.Equal(60, SeasonSystem.ClimateRefreshSeconds);
         Assert.Equal(Terrain.Plains, world.GetTerrain(target));
         Assert.Equal(Biome.Jungle, world.GetBiome(target));
 

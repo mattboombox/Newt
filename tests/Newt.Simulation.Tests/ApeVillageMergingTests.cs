@@ -31,7 +31,7 @@ public sealed class ApeVillageMergingTests
             Assert.Equal(1, world.GetApeVillageDogCount(village));
             world.StoreApeVillageFood(village, 1);
         }
-        Assert.True(world.TryResearchApeTechnology(Tile(world, newer), ApeTechnology.Aquaculture));
+        LegacyApeResearch.Seed(world, Tile(world, newer));
         GrowUntilTouching(world, older, newer);
         var residents = world.CritterCount;
         var buildings = Positions(world).Where(position => world.GetApeStructure(position) is not null).ToArray();
@@ -55,7 +55,7 @@ public sealed class ApeVillageMergingTests
         Assert.Equal(2, world.GetApeVillageDogCount(older));
         Assert.True(world.HasApeTechnology(Tile(world, older), ApeTechnology.Aquaculture));
         Assert.Empty(world.GetApeVillageTechnologies(newer));
-        Assert.Equal(housing + 5, world.GetApeVillagePopulationCapacity(older));
+        Assert.Equal(housing + 1, world.GetApeVillagePopulationCapacity(older));
         Assert.Equal(Math.Min(food, world.GetApeVillageFoodCapacity(older)), world.GetApeVillageFood(older));
         Assert.Equal(Math.Min(wood, world.GetApeVillageWoodCapacity(older)), world.GetApeVillageWood(older));
         Assert.False(world.TryBuildApeStructure(Tile(world, older), ApeStructureKind.Library));

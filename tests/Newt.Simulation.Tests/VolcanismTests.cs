@@ -181,7 +181,7 @@ public sealed class VolcanismTests
     }
 
     [Fact]
-    public void VolcanoToolOperationRefusesRingWorldWall()
+    public void VolcanoToolOperationRefusesMegaWall()
     {
         var world = new SimulationWorld(8, 5, Terrain.Plains, seed: 38)
         {
@@ -191,7 +191,7 @@ public sealed class VolcanismTests
         var wall = new GridPosition(4, 0);
         var elevation = world.GetElevation(wall);
 
-        Assert.Equal(Terrain.RingWorldWall, world.GetTerrain(wall));
+        Assert.Equal(Terrain.MegaWall, world.GetTerrain(wall));
         Assert.False(Volcanism.SpawnVolcano(world, wall));
         Assert.Equal(0, world.VolcanoCount);
         Assert.Equal(elevation, world.GetElevation(wall));

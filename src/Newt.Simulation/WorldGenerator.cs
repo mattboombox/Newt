@@ -1,7 +1,7 @@
 namespace Newt.Simulation;
 
 /// <summary>Creates deterministic, horizontally wrapping terrarium worlds.</summary>
-public static class WorldGenerator
+public static partial class WorldGenerator
 {
     private const int EarthSourceWidth = 1280;
     private const int EarthSourceHeight = 642;
@@ -17,11 +17,16 @@ public static class WorldGenerator
         {
             throw new ArgumentOutOfRangeException(nameof(options), "Land fraction must be between 0.15 and 0.75.");
         }
+        if (options.MapType is WorldMapType.Nexus || options.Preset == WorldPreset.Nexus || options.Preset == WorldPreset.NexusMega)
+            return GenerateNexus(options);
 
         if (options.MapType is WorldMapType.Earth || options.Preset == WorldPreset.Earth)
         {
             return GenerateEarth(options);
         }
+
+        if (options.MapType is WorldMapType.Moon or WorldMapType.Mars)
+            return GeneratePlanetaryRelief(options);
 
         var preset = options.Preset;
         var isRingWorld = options.MapType is WorldMapType.RingWorld ||
@@ -31,7 +36,10 @@ public static class WorldGenerator
             Body = isRingWorld ? WorldBody.RingWorld : WorldBody.Terrarium,
             SeasonsEnabled = !isRingWorld,
         };
-        var elevation = new double[checked(preset.Width * preset.Height)];
+        // Generate the ring as a crop of a full-height landscape. Its narrow
+        // playable band must not compress continents, ranges, or noise vertically.
+        var generationHeight = isRingWorld ? Math.Max(preset.Height, WorldPreset.Standard.Height) : preset.Height;
+        var elevation = new double[checked(preset.Width * generationHeight)];
         var random = new GeneratorRandom(options.Seed);
         if (options.MapType is WorldMapType.AllOcean)
         {
@@ -55,7 +63,7 @@ public static class WorldGenerator
             return world;
         }
 
-        var area = preset.Width * preset.Height;
+        var area = preset.Width * generationHeight;
         // Extra map area buys more local features instead of scaling up a small
         // fixed set of continents and ranges.
         var defaultMasses = Math.Clamp(area / 10_000 + 2, 2, 24);
@@ -79,12 +87,12 @@ public static class WorldGenerator
 
         if (options.MapType is WorldMapType.Pangaea)
         {
-            AddPangaea(elevation, preset.Width, preset.Height, ref random);
+            AddPangaea(elevation, preset.Width, generationHeight, ref random);
         }
 
         for (var continent = 0; continent < continentalMasses; continent++)
         {
-            AddContinentalMass(elevation, preset.Width, preset.Height, ref random, continentScale);
+            AddContinentalMass(elevation, preset.Width, generationHeight, ref random, continentScale);
         }
 
         var continentalFoundation = (double[])elevation.Clone();
@@ -94,11 +102,19 @@ public static class WorldGenerator
                 elevation,
                 continentalFoundation,
                 preset.Width,
-                preset.Height,
+                generationHeight,
                 ref random);
         }
 
-        AddElevationNoise(elevation, preset.Width, preset.Height, options.Seed);
+        AddElevationNoise(elevation, preset.Width, generationHeight, options.Seed);
+
+        if (generationHeight != preset.Height)
+        {
+            var strip = new double[checked(preset.Width * preset.Height)];
+            var firstRow = (generationHeight - preset.Height) / 2;
+            Array.Copy(elevation, firstRow * preset.Width, strip, 0, strip.Length);
+            elevation = strip;
+        }
 
         var landFraction = options.MapType switch
         {
@@ -123,7 +139,7 @@ public static class WorldGenerator
             }
         }
 
-        TerrainClassifier.ApplyRingWorldWalls(world);
+        TerrainClassifier.ApplyMegaWalls(world);
         SelectOceanSeeds(world, includeLargeSecondaryBasins: true);
 
         TerrainClassifier.RebuildAll(world);
@@ -307,7 +323,7 @@ public static class WorldGenerator
 
     private static bool IsNaturalSpringCandidate(SimulationWorld world, GridPosition position) =>
         world.GetTerrain(position) is not
-            (Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows or Terrain.RingWorldWall) &&
+            (Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows or Terrain.MegaWall) &&
         world.GetSurfaceWater(position) is SurfaceWaterKind.None &&
         world.GetSurfaceCover(position) is not SurfaceCover.Lava;
 

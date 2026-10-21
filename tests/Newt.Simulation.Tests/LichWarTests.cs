@@ -30,13 +30,42 @@ public sealed class LichWarTests
     }
 
     [Theory]
+    [InlineData(CritterSpecies.UndeadApe)]
+    [InlineData(CritterSpecies.UndeadWarrior)]
+    [InlineData(CritterSpecies.Lich)]
+    public void UndeadWithEnemyVillageHomeNeverAttackLich(CritterSpecies species)
+    {
+        var world = CreateWorld(false);
+        Assert.True(world.TryGetCritterAt(LichTile, out var lich));
+        var position = new GridPosition(LichTile.X + 1, LichTile.Y);
+        var undead = world.AddCritter(species, position);
+        var homes = (Dictionary<int, int>)typeof(SimulationWorld).GetField("_apeVillageHomes", Private)!.GetValue(world)!;
+        homes[undead.Value] = Village.Y * world.Width + Village.X;
+        Assert.True(world.TryStartApeWar(LichTile, Village));
+        var enemies = typeof(SimulationWorld).GetMethod("AreLichWarEnemies", Private)!;
+        Assert.Equal(false, enemies.Invoke(world, [Index(world, lich.Id), Index(world, undead)]));
+        Assert.Equal(false, enemies.Invoke(world, [Index(world, undead), Index(world, lich.Id)]));
+        var lichEnergy = world.GetCritter(Index(world, lich.Id)).Energy;
+        var undeadEnergy = world.GetCritter(Index(world, undead)).Energy;
+        for (var attempt = 0; attempt < 100; attempt++)
+        {
+            world.CommitEncounter(LichTile, position);
+            world.CommitEncounter(position, LichTile);
+        }
+        Assert.True(world.TryGetCritter(lich.Id, out var survivingLich));
+        Assert.True(world.TryGetCritter(undead, out var survivingUndead));
+        Assert.Equal(lichEnergy, survivingLich.Energy);
+        Assert.Equal(undeadEnergy, survivingUndead.Energy);
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public void AttackedVillageCanDeclareWarOnLichWithoutPeriodicChecks(bool barbarian)
     {
         var world = CreateWorld(barbarian);
         Assert.True(world.TryGetCritterAt(LichTile, out var lich));
-        var victimPosition = new GridPosition(LichTile.X - 1, LichTile.Y);
+        var victimPosition = new GridPosition(LichTile.X + 1, LichTile.Y);
         var victim = world.AddCritter(CritterSpecies.Ape, victimPosition);
         var homes = (Dictionary<int, int>)typeof(SimulationWorld).GetField("_apeVillageHomes", Private)!.GetValue(world)!;
         homes[victim.Value] = Village.Y * world.Width + Village.X;
@@ -62,7 +91,7 @@ public sealed class LichWarTests
     {
         var world = CreateWorld(false);
         Assert.True(world.TryGetCritterAt(LichTile, out var lich));
-        var wild = world.AddCritter(CritterSpecies.Ape, new(34, 10));
+        var wild = world.AddCritter(CritterSpecies.Ape, new(LichTile.X + 1, LichTile.Y));
         var declare = typeof(SimulationWorld).GetMethod("TryDeclareWarOnAttackingLich", Private)!;
         for (var attempt = 0; attempt < 100; attempt++)
             Assert.Equal(false, declare.Invoke(world, [Index(world, lich.Id), Index(world, wild)]));

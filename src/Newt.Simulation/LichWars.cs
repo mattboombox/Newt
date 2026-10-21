@@ -53,7 +53,10 @@ public sealed partial class SimulationWorld
             _apeWars.TryGetValue(village, out war!) && war.LichId is not null;
     }
 
-    private bool AreLichWarEnemies(int first, int second) => TryGetLichWar(first, out var war) &&
+    private bool AreLichWarEnemies(int first, int second) =>
+        // Raised villagers can retain their old home; undead never fight each other.
+        !(IsLichUndead(_species[first]) && IsLichUndead(_species[second])) &&
+        TryGetLichWar(first, out var war) &&
         (IsLichArmyMember(first, war.LichId!.Value)
             ? _apeVillageHomes.TryGetValue(_critterIds[second].Value, out var village) && village == war.Attacker
             : IsLichArmyMember(second, war.LichId!.Value));

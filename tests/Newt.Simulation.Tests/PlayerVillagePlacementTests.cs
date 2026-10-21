@@ -37,11 +37,30 @@ public sealed class PlayerVillagePlacementTests
         Assert.Empty(world.GetApeVillageTechnologies(Village));
         Assert.True(world.TryPlaceApeBuilding(target, ApeStructureKind.Farm));
         Assert.Equal(expected, world.GetApeStructure(target));
+        if (expected is not ApeStructureKind.Aquaculture)
+            Assert.Equal(biome is Biome.Arid ? 2d : 4d, world.GetApeStructureProductionPerMinute(target));
         Assert.Equal(Village, world.GetApeStructureVillage(target));
         Assert.Equal(Math.Max(0, wood - SimulationWorld.GetApeStructureWoodCost(expected)),
             world.GetApeVillageWood(Village));
         Assert.Equal(1, world.GetApeVillageFarmCount(Village));
         Assert.Equal(0, world.GetApeVillageFoodPerMinute(Village));
+    }
+
+    [Theory]
+    [InlineData(0.9f, 3, 2d)]
+    [InlineData(0.5f, 4, 3d)]
+    [InlineData(0.2f, 5, 4d)]
+    [InlineData(0.0f, 6, 5d)]
+    public void AquacultureUsesItsTilesNaturalNutritionCapacity(float temperature, int capacity, double rate)
+    {
+        var world = CreateWorld();
+        var target = new GridPosition(11, 10);
+        world.SetTerrain(target, Terrain.Shallows);
+        world.SetTemperature(target, temperature);
+        Assert.True(world.TryPlaceApeBuilding(target, ApeStructureKind.Farm));
+        Assert.Equal(ApeStructureKind.Aquaculture, world.GetApeStructure(target));
+        Assert.Equal(capacity, world.GetTileNutritionCapacity(target));
+        Assert.Equal(rate, world.GetApeStructureProductionPerMinute(target));
     }
 
     [Theory]

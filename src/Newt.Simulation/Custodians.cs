@@ -29,15 +29,39 @@ public sealed partial class SimulationWorld
         for (var offset = 0; offset < Width; offset++)
         {
             var position = new GridPosition(Mod(Width * (fabricator * 2 + 1) / (fabricatorCount * 2) + offset, Width), 0);
-            if (_terrain[GetIndex(position)] is Terrain.RingWorldWall && !IsCustodianFabricator(position))
+            if (_terrain[GetIndex(position)] is Terrain.MegaWall && !IsCustodianFabricator(position))
             {
                 _custodianFabricators.Add(position);
                 break;
             }
         }
+        SeedInitialCustodians();
+    }
+
+    internal void SeedNexusCustodians(bool mega)
+    {
+        if (Body is not WorldBody.Nexus || CustodianFabricator is not null) return;
+        foreach (var arm in mega ? new[] { 0, NexusLayout.ArmCount / 2 } : new[] { 0 })
+        {
+            // Place the fabricator on the Mega Wall at this arm's rounded tip.
+            for (var step = 0; step < 20; step++)
+            {
+                var position = NexusLayout.ArmPosition(this, arm, 1f - step / NexusLayout.Radius(this));
+                if (NexusLayout.Contains(this, position) && _terrain[GetIndex(position)] is Terrain.MegaWall)
+                {
+                    _custodianFabricators.Add(position);
+                    break;
+                }
+            }
+        }
+        SeedInitialCustodians();
+    }
+
+    private void SeedInitialCustodians()
+    {
         if (CustodianFabricator is null)
             return;
-        fabricatorCount = _custodianFabricators.Count;
+        var fabricatorCount = _custodianFabricators.Count;
         // Three old drones are already patrolling the ring before the fabricator starts.
         for (var drone = 0; drone < 3 * fabricatorCount; drone++)
         {
@@ -80,7 +104,8 @@ public sealed partial class SimulationWorld
                 if (Math.Max(Math.Abs(dx), Math.Abs(dy)) != radius)
                     continue;
                 var position = new GridPosition(Mod(fabricator.X + dx, Width), fabricator.Y + dy);
-                if (!Contains(position) || IsCustodianFabricator(position))
+                if (!Contains(position) || IsCustodianFabricator(position) ||
+                    Body is WorldBody.Nexus && !NexusLayout.Contains(this, position))
                     continue;
                 var tile = GetIndex(position);
                 if (_occupants[tile] < 0 && !_teleporters.Contains(tile))
@@ -122,7 +147,7 @@ public sealed partial class SimulationWorld
             foreach (var direction in MovementDirections)
             {
                 var candidate = new GridPosition(Mod(damagedPosition.X + direction.X, Width), damagedPosition.Y + direction.Y);
-                if (!Contains(candidate) || _occupants[GetIndex(candidate)] >= 0 ||
+                if (!Contains(candidate) || !CanLiveOn(CritterSpecies.Custodian, GetIndex(candidate)) || _occupants[GetIndex(candidate)] >= 0 ||
                     reservedPrey?.Contains(candidate) is true)
                     continue;
                 var distance = WrappedManhattanDistance(candidate, fabricator);
@@ -155,7 +180,7 @@ public sealed partial class SimulationWorld
         {
             // Keep damaged locations queued while disaster cover or buildings block repairs.
             if (_occupants[tile] >= 0 || _surfaceCovers[tile] is not SurfaceCover.None ||
-                _terrain[tile] is Terrain.RingWorldWall || _apeStructures.ContainsKey(tile) ||
+                _terrain[tile] is Terrain.MegaWall || _apeStructures.ContainsKey(tile) ||
                 _wolfDenCharges.ContainsKey(tile) || _megaSpiderWebFood.ContainsKey(tile) ||
                 _volcanoes.Any(volcano => volcano.Position == GetPosition(tile)))
                 continue;
@@ -209,6 +234,7 @@ public sealed partial class SimulationWorld
         {
             var candidate = new GridPosition(Mod(current.X + direction.X, Width), current.Y + direction.Y);
             if (candidate.Y < 0 || candidate.Y >= Height ||
+                !CanLiveOn(CritterSpecies.Custodian, GetIndex(candidate)) ||
                 candidate == repairSite ||
                 _occupants[GetIndex(candidate)] >= 0 || reservedPrey?.Contains(candidate) is true)
                 continue;

@@ -8,7 +8,7 @@ public sealed class ApeTrafficTests
     [Theory]
     [InlineData(Terrain.Ocean, true)]
     [InlineData(Terrain.Mountain, true)]
-    [InlineData(Terrain.RingWorldWall, false)]
+    [InlineData(Terrain.MegaWall, false)]
     public void ShoveCanUseUnsuitableTerrainExceptRingWalls(Terrain surrounding, bool expected)
     {
         var world = new SimulationWorld(10, 10, surrounding);
@@ -86,7 +86,7 @@ public sealed class ApeTrafficTests
     public void SwapNeverPushesApeOntoRingWall()
     {
         var world = new SimulationWorld(10, 10, Terrain.Plains);
-        world.SetTerrain(new(4, 5), Terrain.RingWorldWall);
+        world.SetTerrain(new(4, 5), Terrain.MegaWall);
         Assert.True(world.TrySpawnCritter(CritterSpecies.ApeTrader, new(4, 5)));
         world.AddCritter(CritterSpecies.Ape, new(5, 5));
         Assert.False(Swap(world));

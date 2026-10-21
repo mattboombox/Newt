@@ -12,7 +12,7 @@ public sealed class ToothedWhaleTests
             var world = new SimulationWorld(5, 3, Terrain.Ocean, (ulong)seed);
             world.AddCritter(CritterSpecies.ToothedWhale, new(2, 1));
             var prey = new GridPosition(2, 0);
-            world.AddCritter(CritterSpecies.Fish, prey);
+            world.AddCritter(CritterSpecies.Squid, prey);
             foreach (var position in new[] { new GridPosition(1, 1), new GridPosition(3, 1), new GridPosition(2, 2) })
                 world.AddCritter(CritterSpecies.Plankton, position);
             var destination = (GridPosition?)typeof(SimulationWorld).GetMethod("TryMoveToothedWhale",
@@ -20,9 +20,6 @@ public sealed class ToothedWhaleTests
                 .Invoke(world, [0, null]);
             Assert.Equal(prey, destination);
             Assert.Equal(new GridPosition(2, 1), world.GetCritter(0).Position);
-            world.CommitEncounter(new(2, 1), destination!.Value);
-            Assert.Equal(14, world.GetCritter(0).Energy);
-            Assert.Equal(0, world.GetCritterCount(CritterSpecies.Fish));
         }
     }
 
@@ -33,7 +30,7 @@ public sealed class ToothedWhaleTests
         {
             var world = new SimulationWorld(10, 3, Terrain.Ocean, (ulong)seed);
             world.AddCritter(CritterSpecies.ToothedWhale, new(2, 1));
-            world.AddCritter(CritterSpecies.Fish, new(5, 1));
+            world.AddCritter(CritterSpecies.Squid, new(5, 1));
             foreach (var position in new[] { new GridPosition(1, 1), new GridPosition(3, 1),
                 new GridPosition(2, 0), new GridPosition(2, 2) })
                 world.AddCritter(CritterSpecies.Plankton, position);
@@ -150,7 +147,7 @@ public sealed class ToothedWhaleTests
     [InlineData(20, false)]
     [InlineData(21, false)]
     [InlineData(30, false)]
-    public void HungryWhaleSwitchesFromCombatTargetToSafeFood(int energy, bool hungry)
+    public void WhaleIgnoresFishWhenContinuingCombatHunt(int energy, bool hungry)
     {
         var world = new SimulationWorld(40, 1, Terrain.Ocean, seed: 51);
         world.AddCritter(CritterSpecies.ToothedWhale, new(0, 0));
@@ -164,7 +161,7 @@ public sealed class ToothedWhaleTests
         world.AddCritter(CritterSpecies.Fish, fish);
         energies[0] = energy;
         Assert.Equal(hungry, world.GetCritter(0).IsHungry);
-        Assert.Equal(hungry ? fish : energy < 30 ? squid : (GridPosition?)null,
+        Assert.Equal(energy < 30 ? squid : (GridPosition?)null,
             world.FindToothedWhalePrey(0, null));
     }
 
@@ -215,13 +212,11 @@ public sealed class ToothedWhaleTests
     }
 
     [Fact]
-    public void ToothedWhaleHuntsOceanPredatorsAndAdjacentNautilusesAndCrabs()
+    public void ToothedWhaleHuntsOceanPredatorsButNotFishOrNautiluses()
     {
         var expectedPrey = new HashSet<CritterSpecies>
         {
             CritterSpecies.SeaScorpion,
-            CritterSpecies.Nautilus,
-            CritterSpecies.Fish,
             CritterSpecies.Squid,
             CritterSpecies.ApeSailor,
             CritterSpecies.ApeTraderSailor,
@@ -316,11 +311,11 @@ public sealed class ToothedWhaleTests
     }
 
     [Theory]
-    [InlineData(1, true)]
+    [InlineData(1, false)]
     [InlineData(2, false)]
     [InlineData(7, false)]
-    [InlineData(19, true)]
-    public void ToothedWhaleTargetsNautilusOnlyWhenAdjacentIncludingWorldSeam(
+    [InlineData(19, false)]
+    public void ToothedWhaleNeverTargetsNautilusIncludingWorldSeam(
         int preyX, bool shouldTarget)
     {
         var world = new SimulationWorld(20, 1, Terrain.Ocean, seed: 5103);
@@ -337,7 +332,7 @@ public sealed class ToothedWhaleTests
     [Theory]
     [InlineData(CritterSpecies.Nautilus)]
     [InlineData(CritterSpecies.Fish)]
-    public void ToothedWhaleCanConsumeAdjacentMarinePrey(CritterSpecies prey)
+    public void ToothedWhaleCannotConsumeFishOrNautilusEvenWhenAdjacent(CritterSpecies prey)
     {
         var world = new SimulationWorld(1, 2, Terrain.Ocean, seed: 42);
         world.SeasonsEnabled = false;
@@ -345,12 +340,12 @@ public sealed class ToothedWhaleTests
         world.AddCritter(CritterSpecies.ToothedWhale, new GridPosition(0, 0));
         world.AddCritter(prey, new GridPosition(0, 1));
 
-        for (var tick = 0; tick < 4 * SimulationWorld.TicksPerSecond; tick++)
-        {
-            world.AdvanceOneTick();
-        }
-
-        Assert.Equal(0, world.GetCritterCount(prey));
+        Assert.False(SimulationWorld.CanEat(CritterSpecies.ToothedWhale, prey));
+        Assert.Null(world.FindToothedWhalePrey(0, null));
+        var before = world.GetCritter(1).Energy;
+        world.CommitEncounter(new(0, 0), new(0, 1));
+        Assert.Equal(before, world.GetCritter(1).Energy);
+        Assert.Equal(1, world.GetCritterCount(prey));
         Assert.Equal(1, world.GetCritterCount(CritterSpecies.ToothedWhale));
     }
 

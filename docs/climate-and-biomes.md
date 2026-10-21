@@ -61,13 +61,15 @@ temperature = latitude warmth - elevation lapse + broad seeded variation
 - Higher elevation is colder than nearby lowlands.
 - Smooth seeded variation prevents perfectly uniform climate bands.
 
-Temperature is clamped to `0.0–1.0`. A twelve-minute seasonal cycle adds a gentle, smooth
+Temperature is clamped to `0.0–1.0`. A twenty-four-minute seasonal cycle adds a gentle, smooth
 temperature offset in opposite directions in the northern and southern hemispheres.
 The offset tapers to zero through the equatorial band, whose tiles display
 `PermanentSummer`. Seasons currently change temperature, but not moisture. The
 Seasons tool can disable the cycle and immediately restore baseline temperatures.
 One complete seasonal cycle advances the displayed year by one. Disabling seasons
 also pauses this seasonal calendar while ordinary simulation ticks continue.
+Seasonal climate updates run once per sixty simulation seconds, with temperature,
+landforms, and biomes staggered across separate stages to reduce frame spikes.
 
 The Life world tool is a separate global ecology switch. With life disabled,
 plankton recovery and critter creation stop, existing critters are removed, and
@@ -114,8 +116,9 @@ tile is already water-covered.
 
 Ice Sheets are valid habitat for every critter. Aquatic species are interpreted
 as remaining beneath the ice, while terrestrial species travel across its surface.
-Ice above water deeper than `0.20` retains one unit of deep-ocean nutrition for
-Worms, Trilobites, and Nautiluses; shallower Ice Sheets have no natural nutrition.
+Ice above shelf water with depth up to `0.20` retains one unit of natural nutrition for
+Worms, Trilobites, Nautiluses, Crabs, and Fish. Land ice and deep-ocean ice have no
+natural nutrition.
 
 Cold ocean tiles render five percent darker than temperate water, freezing water
 ten percent darker, and warm water six percent lighter. These restrained changes

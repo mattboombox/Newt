@@ -3,13 +3,13 @@ namespace Newt.Simulation;
 /// <summary>Advances a simple axial season cycle and applies it to temperature.</summary>
 public static class SeasonSystem
 {
-    public const int CycleSeconds = 720;
-    public const int ClimateRefreshSeconds = 30;
+    public const int CycleSeconds = 1440;
+    public const int ClimateRefreshSeconds = 60;
     public const float EquatorialBand = 0.20f;
     public const float PolarTemperatureAmplitude = 0.10f;
     public const int TicksPerYear = CycleSeconds * SimulationWorld.TicksPerSecond;
     // Seasonal temperature changes are gradual; refreshing the whole climate
-    // every thirty seconds avoids repeated map-wide work without visible stepping.
+    // every sixty seconds avoids repeated map-wide work without visible stepping.
     internal const int ClimateRefreshTicks =
         ClimateRefreshSeconds * SimulationWorld.TicksPerSecond;
     internal const int ClimateRefreshStageSpacingTicks = SimulationWorld.TicksPerSecond;
@@ -17,7 +17,7 @@ public static class SeasonSystem
     public static void SetEnabled(SimulationWorld world, bool enabled)
     {
         ArgumentNullException.ThrowIfNull(world);
-        if (world.Body is WorldBody.RingWorld)
+        if (world.Body is WorldBody.RingWorld or WorldBody.Nexus)
         {
             enabled = false;
         }

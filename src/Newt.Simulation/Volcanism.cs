@@ -26,7 +26,7 @@ public static class Volcanism
     {
         ArgumentNullException.ThrowIfNull(world);
         if (!world.Contains(position) || world.IsOccupied(position) ||
-            world.GetTerrain(position) is Terrain.RingWorldWall)
+            world.GetTerrain(position) is Terrain.MegaWall)
         {
             return false;
         }
@@ -39,7 +39,7 @@ public static class Volcanism
     public static bool PlaceLava(SimulationWorld world, GridPosition position)
     {
         ArgumentNullException.ThrowIfNull(world);
-        if (!world.Contains(position) || world.GetTerrain(position) is Terrain.RingWorldWall ||
+        if (!world.Contains(position) || world.GetTerrain(position) is Terrain.MegaWall ||
             !DepositLava(world, position, 0.03f))
         {
             return false;
@@ -71,7 +71,7 @@ public static class Volcanism
         {
             throw new ArgumentOutOfRangeException(nameof(position));
         }
-        if (world.GetTerrain(position) is Terrain.RingWorldWall || world.HasTeleporter(position) ||
+        if (world.GetTerrain(position) is Terrain.MegaWall || world.HasTeleporter(position) ||
             world.IsOccupied(position) ||
             world.Volcanoes.Any(volcano => volcano.Position == position))
         {

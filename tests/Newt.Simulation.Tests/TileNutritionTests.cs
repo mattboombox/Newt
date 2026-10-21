@@ -161,6 +161,39 @@ public sealed class TileNutritionTests
         Assert.Equal(1, world.GetTileNutrition(position));
     }
 
+    [Theory]
+    [InlineData(CritterSpecies.Worm)]
+    [InlineData(CritterSpecies.Trilobite)]
+    [InlineData(CritterSpecies.Nautilus)]
+    [InlineData(CritterSpecies.Crab)]
+    [InlineData(CritterSpecies.Fish)]
+    public void ShallowsFeedersConsumeNutritionUnderShelfIce(CritterSpecies species)
+    {
+        var world = new SimulationWorld(1, 1, Terrain.Ice);
+        var position = new GridPosition(0, 0);
+        world.SetElevation(position, -0.1f);
+        world.AddCritter(species, position);
+        var energy = (int[])typeof(SimulationWorld).GetField("_energy",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(world)!;
+        energy[0] = 1;
+        var feed = typeof(SimulationWorld).GetMethod("TryFeedFromTerrain",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+
+        Assert.True((bool)feed.Invoke(world, [0])!);
+        Assert.Equal(2, world.GetCritter(0).Energy);
+        Assert.Equal(0, world.GetTileNutrition(position));
+        Assert.False((bool)feed.Invoke(world, [0])!);
+        Assert.Equal(2, world.GetCritter(0).Energy);
+
+        // Land ice and deep-ocean ice do not acquire natural food from this rule.
+        world.SetElevation(position, 0.1f);
+        Assert.Equal(0, world.GetTileNutritionCapacity(position));
+        Assert.False((bool)feed.Invoke(world, [0])!);
+        world.SetElevation(position, -0.8f);
+        Assert.Equal(0, world.GetTileNutritionCapacity(position));
+        Assert.False((bool)feed.Invoke(world, [0])!);
+    }
+
     [Fact]
     public void FeedingDepletesAndLazilyRegeneratesTileNutrition()
     {

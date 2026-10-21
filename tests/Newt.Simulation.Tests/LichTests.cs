@@ -19,6 +19,44 @@ public sealed class LichTests
         (int[])typeof(SimulationWorld).GetField("_energy", Private)!.GetValue(world)!;
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void LichSpawnsWithFourWarriorsLinkedToItsArmy(bool playerSpawn)
+    {
+        var world = CreateWorld();
+        var origin = new GridPosition(10, 10);
+        if (playerSpawn)
+            Assert.True(world.TrySpawnCritter(CritterSpecies.Lich, origin));
+        else
+            world.AddCritter(CritterSpecies.Lich, origin);
+        var lich = world.GetCritter(0).Id;
+        var escort = world.GetLichEscort(lich);
+        Assert.Equal(4, escort.Length);
+        Assert.Equal(4, world.GetCritterCount(CritterSpecies.UndeadWarrior));
+        Assert.All(escort, id => Assert.Equal(CritterSpecies.UndeadWarrior, world.GetCritter(Index(world, id)).Species));
+        Assert.True(world.RemoveCritterAt(origin));
+        Assert.Equal(0, world.GetCritterCount(CritterSpecies.UndeadWarrior));
+    }
+
+    [Fact]
+    public void LichReplacesBlockingApesButLeavesOtherAnimalsAlone()
+    {
+        var world = new SimulationWorld(3, 3, Terrain.Plains);
+        var origin = new GridPosition(1, 1);
+        var deer = world.AddCritter(CritterSpecies.Deer, new(0, 0));
+        for (var y = 0; y < 3; y++)
+        for (var x = 0; x < 3; x++)
+            if (new GridPosition(x, y) != origin && !world.IsOccupied(new(x, y)))
+                world.AddCritter(CritterSpecies.Ape, new(x, y));
+        var lich = world.AddCritter(CritterSpecies.Lich, origin);
+        Assert.Equal(4, world.GetLichEscort(lich).Length);
+        Assert.Equal(3, world.GetCritterCount(CritterSpecies.Ape));
+        Assert.True(world.TryGetCritter(deer, out var survivor));
+        Assert.Equal(CritterSpecies.Deer, survivor.Species);
+        Assert.Equal(9, world.CritterCount);
+    }
+
+    [Theory]
     [InlineData(CritterSpecies.Ape)]
     [InlineData(CritterSpecies.ApeSailor)]
     [InlineData(CritterSpecies.ApeWarrior)]
@@ -68,6 +106,7 @@ public sealed class LichTests
     {
         var world = CreateWorld();
         var lich = world.AddCritter(CritterSpecies.Lich, new(25, 15));
+        var initialEscort = world.GetLichEscort(lich);
         var soldiers = new List<CritterId>();
         for (var n = 0; n < 22; n++)
         {
@@ -81,7 +120,7 @@ public sealed class LichTests
         }
         world.AdvanceOneTick();
         Assert.All(soldiers, id => Assert.Equal(CritterSpecies.UndeadWarrior, world.GetCritter(Index(world, id)).Species));
-        Assert.Equal(soldiers.Take(20), world.GetLichEscort(lich));
+        Assert.Equal(initialEscort.Concat(soldiers).Take(20), world.GetLichEscort(lich));
         var follower = soldiers[0];
         for (var step = 0; step < 60; step++)
             typeof(SimulationWorld).GetMethod("TryMoveUndeadWarrior", Private)!.Invoke(world, [Index(world, follower), null]);
@@ -215,7 +254,7 @@ public sealed class LichTests
         Energy(world)[Index(world, infected)] = 0;
         world.AdvanceOneTick();
         Assert.False(world.TryGetCritter(infected, out _));
-        Assert.Equal(1, world.GetCritterCount(CritterSpecies.UndeadWarrior));
+        Assert.Equal(5, world.GetCritterCount(CritterSpecies.UndeadWarrior));
     }
 
     [Fact]

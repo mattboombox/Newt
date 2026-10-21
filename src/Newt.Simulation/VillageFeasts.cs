@@ -2,7 +2,6 @@ namespace Newt.Simulation;
 
 public sealed partial class SimulationWorld
 {
-    public const int VillageFeastCheckIntervalTicks = 60 * TicksPerSecond;
     public const int VillageFeastChancePercent = 10;
     private readonly Dictionary<int, int> _villageFeasts = [];
 
@@ -27,17 +26,13 @@ public sealed partial class SimulationWorld
 
     internal bool TryStartNaturalVillageFeast(int tile) =>
         NaturalEventsEnabled && CanHoldVillageFeast(tile) && !_villageFeasts.ContainsKey(tile) &&
+        _apeVillageFood.GetValueOrDefault(tile) == GetApeVillageFoodCapacityByTile(tile) &&
         NextInt(100) < VillageFeastChancePercent && TryStartVillageFeast(GetPosition(tile));
 
     private void AdvanceVillageFeasts()
     {
         foreach (var tile in _villageFeasts.Keys.ToArray())
             FeedVillageFeast(tile);
-        if (!NaturalEventsEnabled || Tick == 0 || Tick % VillageFeastCheckIntervalTicks != 0)
-            return;
-        foreach (var (tile, kind) in _apeStructures)
-            if (kind is ApeStructureKind.Village)
-                TryStartNaturalVillageFeast(tile);
     }
 
     private void FeedVillageFeast(int tile)

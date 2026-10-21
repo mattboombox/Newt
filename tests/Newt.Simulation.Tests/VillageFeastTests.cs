@@ -22,6 +22,44 @@ public sealed class VillageFeastTests
 
     private static readonly GridPosition Village = new(10, 10);
 
+    [Fact]
+    public void FillingFoodStoresRollsOnceAndNeverRerollsWhileAlreadyFull()
+    {
+        var triggered = 0;
+        for (ulong seed = 1; seed <= 100; seed++)
+        {
+            var world = CreateWorld(seed);
+            SetResidentEnergy(world, CritterNutritions.Get(CritterSpecies.Ape).ReproductionThreshold);
+            NaturalEvents.SetEnabled(world, true);
+            var capacity = world.GetApeVillageFoodCapacity(Village);
+            world.StoreApeVillageFood(Village, capacity - 1);
+            Assert.False(world.IsVillageFeasting(Village));
+            world.StoreApeVillageFood(Village, 1);
+            if (world.IsVillageFeasting(Village))
+                triggered++;
+            else
+            {
+                for (var delivery = 0; delivery < 100; delivery++)
+                    world.StoreApeVillageFood(Village, 1);
+                Assert.False(world.IsVillageFeasting(Village));
+            }
+            Assert.Equal(capacity, world.GetApeVillageFood(Village));
+        }
+        Assert.Equal(10, SimulationWorld.VillageFeastChancePercent);
+        Assert.InRange(triggered, 1, 30);
+    }
+
+    [Fact]
+    public void NearlyFullFoodNeverStartsANaturalFeast()
+    {
+        var world = CreateWorld();
+        Assert.True(world.TryPlaceApeBuilding(new(11, 10), ApeStructureKind.Farm));
+        world.StoreApeVillageFood(Village, world.GetApeVillageFoodCapacity(Village) - 1);
+        NaturalEvents.SetEnabled(world, true);
+        for (var attempt = 0; attempt < 100; attempt++)
+            Assert.False(world.TryStartNaturalVillageFeast(Village.Y * world.Width + Village.X));
+    }
+
     private static SimulationWorld CreateWorld(ulong seed = 17)
     {
         var world = new SimulationWorld(40, 30, Terrain.Plains, seed);
@@ -105,7 +143,7 @@ public sealed class VillageFeastTests
         Assert.True(world.TryGetCritter(sick.Id, out var unchanged));
         Assert.Equal(11, unchanged.Energy);
         Assert.True(world.TryGetCritter(outsider, out var remote));
-        Assert.Equal(6, remote.Energy);
+        Assert.Equal(CritterNutritions.Get(CritterSpecies.Ape).InitialEnergy, remote.Energy);
         Assert.Equal(12, world.GetCritter(1).Energy);
     }
 

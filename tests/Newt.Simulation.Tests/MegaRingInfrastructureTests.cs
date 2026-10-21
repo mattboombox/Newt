@@ -8,7 +8,7 @@ public sealed class MegaRingInfrastructureTests
     [Fact]
     public void BothMegaFabricatorsRecruitAndRepairNearbyCustodians()
     {
-        var world = new SimulationWorld(WorldPreset.RingMega.Width, 4, Terrain.RingWorldWall)
+        var world = new SimulationWorld(WorldPreset.RingMega.Width, 4, Terrain.MegaWall)
             { Body = WorldBody.RingWorld };
         world.SeedRingWorldCustodians();
         Assert.Equal(2, world.CustodianFabricators.Count);
