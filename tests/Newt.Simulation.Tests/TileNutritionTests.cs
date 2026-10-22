@@ -83,7 +83,7 @@ public sealed class TileNutritionTests
     [InlineData(Biome.Grassland, 3)]
     [InlineData(Biome.Taiga, 3)]
     [InlineData(Biome.Bog, 3)]
-    [InlineData(Biome.Arid, 2)]
+    [InlineData(Biome.Arid, 1)]
     [InlineData(Biome.Tundra, 1)]
     [InlineData(Biome.Desert, 1)]
     [InlineData(Biome.Arctic, 0)]

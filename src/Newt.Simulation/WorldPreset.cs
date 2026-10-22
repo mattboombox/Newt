@@ -14,7 +14,9 @@ public readonly record struct WorldPreset(string Name, int Width, int Height)
 
     public static WorldPreset Ring => new("Ring World", 1280, 44);
 
-    public static WorldPreset RingMega => new("Mega", Ring.Width * 2, Ring.Height);
+    public static WorldPreset RingLarge => new("Large", Ring.Width * 2, Ring.Height);
+
+    public static WorldPreset RingMega => new("Mega", Ring.Width * 4, Ring.Height);
 
     public static WorldPreset Nexus => new("Nexus", 384, 384);
 

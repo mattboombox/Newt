@@ -9,7 +9,7 @@ using System.Security.Cryptography;
 namespace Newt.Game;
 
 /// <summary>MonoGame host responsible only for input, timing, and presentation.</summary>
-public sealed class NewtGame : Microsoft.Xna.Framework.Game
+public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
 {
     private GridPosition? _warAttacker;
     private CritterId? _warAttackerLich;
@@ -26,7 +26,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
     private static readonly int[] ZoomLevels = [1, 2, 4, 8, 16, 24, 32, 48, 64, 96, 128];
     private static readonly WorldPreset[] MenuSizes =
         [WorldPreset.Micro, WorldPreset.Small, WorldPreset.Standard, WorldPreset.Large, WorldPreset.Huge];
-    private static readonly WorldPreset[] RingMenuSizes = [WorldPreset.Ring, WorldPreset.RingMega];
+    private static readonly WorldPreset[] RingMenuSizes = [WorldPreset.Ring, WorldPreset.RingLarge, WorldPreset.RingMega];
     private static readonly WorldPreset[] NexusMenuSizes = [WorldPreset.Nexus, WorldPreset.NexusMega];
     private static readonly WorldMapType[] MenuMapTypes =
         [WorldMapType.Continents, WorldMapType.Pangaea, WorldMapType.Archipelago, WorldMapType.AllOcean,
@@ -37,7 +37,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             ToolCategory.BuildingTools, ToolCategory.Culture, ToolCategory.Plagues, ToolCategory.Events, ToolCategory.Other];
     private static readonly WorldTool[] WorldToolOrder =
         [WorldTool.SeaLevel, WorldTool.OceanSeed, WorldTool.Temperature,
-            WorldTool.Moisture, WorldTool.EvolutionChance, WorldTool.Sentience, WorldTool.Seasons, WorldTool.Life];
+            WorldTool.Moisture, WorldTool.EvolutionChance, WorldTool.Sentience, WorldTool.Seasons,
+            WorldTool.DayNightCycle, WorldTool.Life];
     private static readonly WorldTool[] EventToolOrder =
         [WorldTool.Meteor, WorldTool.Tsunami, WorldTool.WatershedShift,
             WorldTool.Evolve, WorldTool.NaturalEvents, WorldTool.Colonist,
@@ -72,7 +73,11 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         "- / =  decrease / increase magnitude",
         "P  pause or resume",
         "G  toggle auto speed",
-        "WASD / arrows  pan camera",
+        "V  cycle 2D / 3D / first person",
+        "First person: WASD walk; mouse look; Shift faster",
+        "First person: arrows and wheel ignored; V returns 2D",
+        "WASD  pan; arrows pan in 2D / rotate in 3D",
+        "3D: middle mouse drag to rotate; wheel zoom",
         "Shift + pan  move faster",
         "Mouse wheel  zoom toward pointer",
         "F  create spring on hovered land",
@@ -184,6 +189,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         {
             PreferredBackBufferWidth = 960,
             PreferredBackBufferHeight = 640,
+            PreferredDepthStencilFormat = DepthFormat.Depth24,
         };
         Content.RootDirectory = "Content";
         IsMouseVisible = true;
@@ -192,12 +198,12 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         GenerateWorld();
     }
 
-    private int TileSize => ZoomLevels[_zoomIndex];
+    private int TileSize => _drawing3DAtlas ? 32 : ZoomLevels[_zoomIndex];
 
-    private int MapOffsetX => Math.Max(0,
+    private int MapOffsetX => _drawing3DAtlas ? 0 : Math.Max(0,
         (GraphicsDevice.Viewport.Width - _world.Width * TileSize) / 2);
 
-    private int MapOffsetY => Math.Max(0,
+    private int MapOffsetY => _drawing3DAtlas ? 0 : Math.Max(0,
         (MapViewportHeight - _world.Height * TileSize) / 2);
 
     protected override void LoadContent()
@@ -258,6 +264,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
 
     protected override void OnDeactivated(object sender, EventArgs args)
     {
+        _firstPersonMouseReady = false;
+        IsMouseVisible = true;
         _waitingForInputRelease = true;
         ResetToolRepeat();
         base.OnDeactivated(sender, args);
@@ -271,6 +279,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         var acceptInput = IsActive && !_waitingForInputRelease;
         if (!acceptInput)
         {
+            _firstPersonMouseReady = false;
             ResetToolRepeat();
             // Discard background input, wheel changes, and the click used to regain focus.
             _previousKeyboard = keyboard;
@@ -300,8 +309,10 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         if (acceptInput)
         {
             HandleWorldShortcuts(keyboard, mouse);
+            if (WasPressed(keyboard, Keys.V)) Toggle3D();
+            if (_view3D) HandleCamera3D(keyboard, mouse, (float)gameTime.ElapsedGameTime.TotalSeconds);
+            else HandleCamera(keyboard, mouse);
             HandleActiveTool(mouse, gameTime.ElapsedGameTime.TotalSeconds);
-            HandleCamera(keyboard, mouse);
         }
 
         if (!_paused && IsActive)
@@ -346,6 +357,16 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             return;
         }
 
+        if (_view3D)
+        {
+            DrawWorld3D();
+            _spriteBatch.Begin(samplerState: SamplerState.PointClamp);
+            DrawInterface();
+            _spriteBatch.End();
+            base.Draw(gameTime);
+            return;
+        }
+
         var visibleColumns = MapOffsetX > 0
             ? _world.Width
             : GraphicsDevice.Viewport.Width / TileSize + 2;
@@ -380,26 +401,60 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                         MapOffsetY + screenY * TileSize,
                         TileSize,
                         TileSize),
-                    GetTileColor(position, terrain, biome, temperatureBand));
+                    GetTileColor(position, UnfrozenBedTerrain(position), biome, temperatureBand));
                 var water = _world.GetSurfaceWater(position);
-                if (water is not SurfaceWaterKind.None)
+                if (water is not SurfaceWaterKind.None && !IsIce3D(position))
                 {
                     DrawSurfaceWater(screenX, screenY, position, water);
                 }
-                DrawVillageRoad(screenX, screenY, position);
-                DrawApeStructure(screenX, screenY, position);
-                DrawWolfDen(screenX, screenY, position);
-                DrawMegaSpiderWeb(screenX, screenY, position);
-                DrawTeleporter(screenX, screenY, position);
-                DrawCustodianFabricator(screenX, screenY, position);
-                DrawVolcanoVent(screenX, screenY, position);
-                DrawImpactWave(screenX, screenY, position);
+                if (!IsIce3D(position)) DrawTileObjects2D(screenX, screenY, position);
             }
         }
 
+        DrawVisibleCritters2D(visibleColumns, visibleRows, aboveIce: false);
+        // Ice lies above aquatic critters, with terrestrial critters and buildings on top.
+        for (var screenY = 0; screenY < visibleRows && _cameraY + screenY < _world.Height; screenY++)
+        for (var screenX = 0; screenX < visibleColumns; screenX++)
+        {
+            var x = _cameraX + screenX;
+            if (_world.Body == WorldBody.Nexus && x >= _world.Width) break;
+            var position = new GridPosition(Mod(x, _world.Width), _cameraY + screenY);
+            if (_world.Body == WorldBody.Nexus && !NexusLayout.Contains(_world, position)) continue;
+            if (!IsIce3D(position)) continue;
+            var ice = GetTerrainColor(Terrain.Ice, _world.GetBiome(position),
+                _world.GetTemperatureBand(position), _world.GetElevation(position));
+            _spriteBatch.Draw(_pixel, new Rectangle(MapOffsetX + screenX * TileSize,
+                MapOffsetY + screenY * TileSize, TileSize, TileSize), ice * (210f / 255));
+            DrawTileObjects2D(screenX, screenY, position);
+        }
+        DrawVisibleCritters2D(visibleColumns, visibleRows, aboveIce: true);
+
+        DrawInterface();
+        _spriteBatch.End();
+        base.Draw(gameTime);
+    }
+
+    private void DrawTileObjects2D(int screenX, int screenY, GridPosition position)
+    {
+        DrawVillageRoad(screenX, screenY, position);
+        DrawApeStructure(screenX, screenY, position);
+        DrawWolfDen(screenX, screenY, position);
+        DrawMegaSpiderWeb(screenX, screenY, position);
+        DrawTeleporter(screenX, screenY, position);
+        DrawCustodianFabricator(screenX, screenY, position);
+        DrawVolcanoVent(screenX, screenY, position);
+        DrawImpactWave(screenX, screenY, position);
+    }
+
+    private void DrawVisibleCritters2D(int visibleColumns, int visibleRows, bool aboveIce)
+    {
         for (var index = 0; index < _world.CritterCount; index++)
         {
             var critter = _world.GetCritter(index);
+            var standsOnIce = IsIce3D(critter.Position) &&
+                ThreeDGeometry.StandsOnIce(CritterHabitats.GetHabitat(critter.Species));
+            if (standsOnIce != aboveIce) continue;
+            if (_world.Body == WorldBody.Nexus && !NexusLayout.Contains(_world, critter.Position)) continue;
             var screenX = WrappedScreenX(critter.Position.X);
             var screenY = critter.Position.Y - _cameraY;
             if (screenX < 0 || screenX >= visibleColumns || screenY < 0 || screenY >= visibleRows)
@@ -410,6 +465,11 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             DrawCritter(critter, screenX, screenY);
         }
 
+    }
+
+    private void DrawInterface()
+    {
+        DrawFirstPersonCrosshair();
         if (!_hudHidden)
         {
             DrawHud();
@@ -427,8 +487,6 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             DrawSetupMenu();
         }
 
-        _spriteBatch.End();
-        base.Draw(gameTime);
     }
 
     private void LoadCritterSprite(CritterSpecies species, string fileName)
@@ -903,7 +961,15 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         }
         else if (WasPressed(keyboard, Keys.OemComma))
         {
-            _simulationRateIndex = Math.Max(0, _simulationRateIndex - 1);
+            if (_simulationSpeedGuard.Enabled)
+            {
+                _simulationSpeedGuard.Enabled = false;
+                _simulationRateIndex = Array.IndexOf(SimulationRates, 1d);
+            }
+            else
+            {
+                _simulationRateIndex = Math.Max(0, _simulationRateIndex - 1);
+            }
             ResetSpeedGuard();
         }
         else if (WasPressed(keyboard, Keys.OemPeriod))
@@ -1070,6 +1136,9 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
                 break;
             case WorldTool.Seasons:
                 SeasonSystem.SetEnabled(_world, false);
+                break;
+            case WorldTool.DayNightCycle:
+                _dayNightCycleEnabled = primaryActivated;
                 break;
             case WorldTool.Life when primaryActivated:
                 _lifeEnabled = true;
@@ -1373,6 +1442,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
 
     private void UpdateInspectedCritterFollow()
     {
+        if (_firstPerson) return;
         if (!_inspectedCritterId.IsValid)
         {
             return;
@@ -1383,6 +1453,11 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             return;
         }
 
+        if (_view3D)
+        {
+            _focus3D = new Vector2(critter.Position.X + 0.5f, critter.Position.Y + 0.5f);
+            return;
+        }
         var visibleColumns = Math.Max(1, GraphicsDevice.Viewport.Width / TileSize);
         var visibleRows = Math.Max(1, MapViewportHeight / TileSize);
         _cameraX = ConstrainCameraX(critter.Position.X - visibleColumns / 2);
@@ -2076,11 +2151,11 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         CritterSpecies.SquidEgg => "hatches when squid prey approaches",
         CritterSpecies.Jellyfish => "plankton only",
         CritterSpecies.Fish => "shallow/freshwater forage and plankton",
-        CritterSpecies.Newt => "freshwater food; feeds and breeds in swamps and jungles",
+        CritterSpecies.Newt => "adjacent crabs, freshwater food, swamp and jungle forage",
         CritterSpecies.Snail => "swamp / jungle foliage",
         CritterSpecies.MegaSlug => "swamp, jungle, bog, and forest foliage",
         CritterSpecies.MegaToad => "broad prey; adjacent worms/cannibalism; fights sea scorpions and squid",
-        CritterSpecies.Therapsid => "swamp, jungle, bog, and arid forage",
+        CritterSpecies.Therapsid => "adjacent crabs; swamp, jungle, bog, and arid forage",
         CritterSpecies.Monkey => "swamp, jungle, forest, and bog foliage; snails and crabs",
         CritterSpecies.Ape or CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack => "prey except plankton, worms, whales, and its civilization; plus wetland foliage",
         CritterSpecies.ApeTrader or CritterSpecies.ApeTraderSailor => "stocks up on food at each village visited",
@@ -2202,6 +2277,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             return null;
         }
 
+        if (_view3D) return PickTile3D(screenX, screenY);
+
         var mapX = screenX - MapOffsetX;
         var mapY = screenY - MapOffsetY;
         if (mapY < 0 || mapY >= _world.Height * TileSize ||
@@ -2229,6 +2306,8 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         _warAttacker = null; _warAttackerLich = null;
         _warToolStatus = "L select attacker / village at war: stop";
         _world = WorldGenerator.Generate(new WorldGenerationOptions(_preset, _seed, MapType: _mapType));
+        _focus3D = new Vector2(_world.Width / 2f, _world.Height / 2f);
+        if (_firstPerson) _firstPersonEyeHeight = WalkingSurfaceHeight(_focus3D) + FirstPersonEyeOffset;
         _cameraX = 0;
         _cameraY = 0;
         _inspectedCritterId = default;
@@ -2271,10 +2350,14 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
             if (_setupRow == 0)
             {
                 _menuMapTypeIndex = Mod(_menuMapTypeIndex + direction, MenuMapTypes.Length);
+                if (MenuMapTypes[_menuMapTypeIndex] == WorldMapType.Nexus)
+                    _menuRingSizeIndex = Math.Min(_menuRingSizeIndex, NexusMenuSizes.Length - 1);
             }
             else if (_setupRow == 1)
             {
-                if (MenuMapTypes[_menuMapTypeIndex] is WorldMapType.RingWorld or WorldMapType.Nexus)
+                if (MenuMapTypes[_menuMapTypeIndex] == WorldMapType.Nexus)
+                    _menuRingSizeIndex = Mod(_menuRingSizeIndex + direction, NexusMenuSizes.Length);
+                else if (MenuMapTypes[_menuMapTypeIndex] == WorldMapType.RingWorld)
                     _menuRingSizeIndex = Mod(_menuRingSizeIndex + direction, RingMenuSizes.Length);
                 else
                     _menuSizeIndex = Mod(_menuSizeIndex + direction, MenuSizes.Length);
@@ -3059,6 +3142,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         WorldTool.EvolutionChance =>
             $"L +0.5%; R -0.5%   {_world.EvolutionChancePercent:0.0}%",
         WorldTool.Sentience => $"L on; R off   {(_world.SentienceEnabled ? "On" : "Off")}",
+        WorldTool.DayNightCycle => $"L on; R off   {(_dayNightCycleEnabled ? "On" : "Off")} (3D, 2 years)",
         WorldTool.Seasons => _world.Body is WorldBody.RingWorld or WorldBody.Nexus
             ? "Fixed climate"
             : "L on; R off",
@@ -3128,6 +3212,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
 
     private static string GetToolName(WorldTool tool) => tool switch
     {
+        WorldTool.DayNightCycle => "Day/night cycle",
         WorldTool.War => "War",
         WorldTool.BloodWar => "Blood War",
         WorldTool.CivilWar => "Civil War",
@@ -3180,6 +3265,7 @@ public sealed class NewtGame : Microsoft.Xna.Framework.Game
         EvolutionChance,
         Sentience,
         Seasons,
+        DayNightCycle,
         Life,
         Volcano,
         Meteor,

@@ -30,7 +30,7 @@ public static partial class WorldGenerator
 
         var preset = options.Preset;
         var isRingWorld = options.MapType is WorldMapType.RingWorld ||
-            preset == WorldPreset.Ring || preset == WorldPreset.RingMega;
+            preset == WorldPreset.Ring || preset == WorldPreset.RingLarge || preset == WorldPreset.RingMega;
         var world = new SimulationWorld(preset.Width, preset.Height, Terrain.DeepOcean, options.Seed)
         {
             Body = isRingWorld ? WorldBody.RingWorld : WorldBody.Terrarium,
@@ -263,7 +263,7 @@ public static partial class WorldGenerator
             return;
         }
 
-        var teleporterCount = world.Width >= WorldPreset.RingMega.Width ? 8 : 4;
+        var teleporterCount = world.Width >= WorldPreset.RingLarge.Width ? 8 : 4;
         var y = world.Height / 2;
         for (var index = 0; index < teleporterCount; index++)
         {

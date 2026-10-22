@@ -245,20 +245,26 @@ public sealed class WorldGeneratorTests
         Assert.Equal(0, world.ActiveSpringCount);
     }
 
-    [Fact]
-    public void MegaRingWorldDoublesLengthAndRetainsRingFeatures()
+    [Theory]
+    [InlineData(false, 2560)]
+    [InlineData(true, 5120)]
+    public void LargeAndMegaRingWorldsRetainRingFeatures(bool mega, int expectedWidth)
     {
-        Assert.Equal(WorldPreset.Ring.Width * 2, WorldPreset.RingMega.Width);
+        Assert.Equal(WorldPreset.Ring.Width * 2, WorldPreset.RingLarge.Width);
+        Assert.Equal(WorldPreset.Ring.Width * 4, WorldPreset.RingMega.Width);
+        Assert.Equal("Large", WorldPreset.RingLarge.Name);
+        Assert.Equal("Mega", WorldPreset.RingMega.Name);
+        Assert.Equal(WorldPreset.Ring.Height, WorldPreset.RingLarge.Height);
         Assert.Equal(WorldPreset.Ring.Height, WorldPreset.RingMega.Height);
-        var world = WorldGenerator.Generate(new WorldGenerationOptions(WorldPreset.RingMega, Seed: 9));
-        Assert.Equal(2560, world.Width);
+        var world = WorldGenerator.Generate(new WorldGenerationOptions(mega ? WorldPreset.RingMega : WorldPreset.RingLarge, Seed: 9));
+        Assert.Equal(expectedWidth, world.Width);
         Assert.Equal(44, world.Height);
         Assert.Equal(WorldBody.RingWorld, world.Body);
         Assert.False(world.SeasonsEnabled);
         Assert.Equal(8, world.TeleporterCount);
         Assert.Equal(2, world.CustodianFabricators.Count);
-        Assert.Equal(new GridPosition(640, 0), world.CustodianFabricators[0]);
-        Assert.Equal(new GridPosition(1920, 0), world.CustodianFabricators[1]);
+        Assert.Equal(new GridPosition(world.Width / 4, 0), world.CustodianFabricators[0]);
+        Assert.Equal(new GridPosition(world.Width * 3 / 4, 0), world.CustodianFabricators[1]);
         Assert.Equal(10, world.GetCritterCount(CritterSpecies.Custodian));
         for (var portal = 0; portal < 8; portal++)
             Assert.True(world.HasTeleporter(new(world.Width * (portal * 2 + 1) / 16, world.Height / 2)));

@@ -55,8 +55,8 @@ Press `M` to open the new-world menu. World size and map shape are selected
 independently. The current shapes are Continents, Pangaea, Archipelago, Water World,
 Ring World, and Earth. Earth supports every regular size by resampling the embedded
 1280 × 642 NOAA relief grid; Standard (320 × 192) is the default while
-Huge retains the full source detail. Ring World offers Standard (1280 × 44) and
-Mega (2560 × 44), doubling the length while keeping the same width across the ring.
+Huge retains the full source detail. Ring World offers Standard (1280 × 44),
+Large (2560 × 44), and Mega (5120 × 44), at 1×, 2×, and 4× the length with the same width.
 Moon and Mars are also available as map shapes at every Earth size: Micro,
 Small, Standard, Large, and Huge. Their embedded 2560 × 1280 elevation
 grids are derived from NASA LOLA and MOLA 5760 × 2880 products and resampled
@@ -90,7 +90,8 @@ keeps every tile submerged while retaining varied bathymetry and polar sea ice.
 | 4 | Large | 640 × 311 |
 | 5 | Huge (stress test) | 1280 × 642 |
 | 6 | Ring World | 1280 × 44 |
-| | Ring World Mega | 2560 × 44 |
+| | Ring World Large | 2560 × 44 |
+| | Ring World Mega | 5120 × 44 |
 | 7 | Earth | 1280 × 642 |
 
 Ring World is an artificial megastructure conservatory rather than a planet.
@@ -455,7 +456,7 @@ OceanSeed, Volcano, Meteor, Watershed Shift, Evolve, and River remain single-cli
 - Arrow keys or `WASD`: move the camera.
 - Hold Shift while moving: pan four times faster.
 - Mouse wheel: zoom toward or away from the tile beneath the pointer.
-  The minimum zoom is one pixel per tile, fitting the full 2560-tile Mega Ring
+  The minimum zoom is one pixel per tile, fitting the full 2560-tile Large Ring
   World across a 2560-pixel-wide display. The starting zoom remains eight pixels per tile.
 - `H`: toggle the bottom HUD. When hidden, the map fills the full window.
 - Maps smaller than the available viewport are centered horizontally and

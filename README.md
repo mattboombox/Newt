@@ -25,7 +25,41 @@ dotnet test Newt.sln --no-build
 dotnet run --project src/Newt.Game/Newt.Game.csproj
 ```
 
-Press Escape to exit.
+Press Escape to exit. Press **V** to cycle **2D → 3D → first person → 2D**.
+First person walks at surface height with smooth **WASD** movement and **Shift**
+to move faster. Move the **mouse** to look freely; no button needs to be held.
+Arrow keys and the zoom wheel are ignored in first person. The cursor releases
+when menus open or the game loses focus. Press **V** to return to 2D at your
+walking position. First-person movement follows curved ring worlds too.
+In 3D, terrain forms columns whose heights follow elevation, while buildings
+and critters face the camera in both yaw and pitch, remaining visible overhead.
+Ocean and lake surfaces share a subtle, nearly neutral translucent sheet.
+Lakebeds use the same depth-shaded blue as unfrozen 2D lake tiles.
+Frozen oceans and lakes have slightly translucent ice sheets in both views,
+with land critters on top and
+aquatic critters at the bed beneath them. Frozen ocean beds retain ocean colors;
+frozen lakebeds retain lake blue.
+Use **WASD** to move relative to the camera, **Shift** to move faster,
+**middle mouse drag** or the **arrow keys** to rotate and tilt, and the
+**mouse wheel** to zoom. All 3D maps can tilt up to 60 degrees above the horizon
+while the camera stays above the terrain. Hover and click terrain to inspect or use the selected
+tool, including on column sides. Repeated map copies provide seamless camera
+wrapping east–west; north–south edges remain finite. Picking any copy selects
+the original tile. Wide 3D views show each longitude once, shifting the visible
+map seam as the camera pans instead of repeating the world many times.
+Nexus worlds remain finite in both views and never wrap.
+The 3D zoom-out limit adapts to the viewport so it accommodates the widest 2D
+view without zooming in when switching. Entering 3D starts directly
+overhead, north up, with a view scale based on the current 2D zoom.
+Returning to 2D centers on the terrain under the 3D screen center and selects
+the nearest supported zoom based on projected tile size, including tilted views.
+The simulation retains its world's original topology when changing views.
+
+Ring worlds form a closed, inward-facing ring in 3D. The camera follows the
+circumference on a rail, with movement and rotation relative to the local surface.
+Terrain, water, ice, roads, buildings, critters, and tile picking follow the curve.
+Standard (1,280 × 44), Large (2,560 × 44), and Mega (5,120 × 44) all close at the seam.
+Zoom is limited to the ring interior; 2D remains the unrolled map.
 
 For an animal-only run, select **Sentience** under World Tools and right-click
 the world to disable monkey-to-ape evolution, then generate a fresh world.

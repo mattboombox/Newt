@@ -1526,7 +1526,7 @@ public sealed partial class SimulationWorld
                     TryMoveHunter(index, BaleenWhalePerceptionRadius, reservedPrey),
                 CritterSpecies.Deer or CritterSpecies.Elk or CritterSpecies.Gazelle or CritterSpecies.MegaSlug =>
                     TryMoveGrazer(index),
-                CritterSpecies.Newt or CritterSpecies.Snail => TryMoveNewt(index),
+                CritterSpecies.Newt or CritterSpecies.Snail => TryMoveNewt(index, reservedPrey),
                 CritterSpecies.Worm or CritterSpecies.Trilobite => TryMoveTrilobiteLike(index),
                 CritterSpecies.Crab => TryMoveCrab(index),
                 CritterSpecies.SquidEgg => TryMoveSquidEgg(index),
@@ -4094,6 +4094,8 @@ public sealed partial class SimulationWorld
         int critterIndex,
         IReadOnlySet<GridPosition>? reservedPrey)
     {
+        if (FindAdjacentFeederCrab(critterIndex, reservedPrey) is { } crab)
+            return crab;
         if (TryFeedFromTerrain(critterIndex))
         {
             return null;
@@ -5257,12 +5259,16 @@ public sealed partial class SimulationWorld
         return true;
     }
 
-    private GridPosition? TryMoveNewt(int critterIndex)
+    private GridPosition? TryMoveNewt(int critterIndex, IReadOnlySet<GridPosition>? reservedPrey)
     {
         if (TryFleeMegaToads(critterIndex))
         {
             return null;
         }
+
+        if (_species[critterIndex] is CritterSpecies.Newt &&
+            FindAdjacentFeederCrab(critterIndex, reservedPrey) is { } crab)
+            return crab;
 
         if (TryFeedFromTerrain(critterIndex))
         {
@@ -5799,7 +5805,7 @@ public sealed partial class SimulationWorld
 
     internal static bool CanEat(CritterSpecies predator, CritterSpecies prey) =>
         predator is CritterSpecies.Monkey ? prey is CritterSpecies.Snail or CritterSpecies.Crab :
-        predator is CritterSpecies.Therapsid ? false :
+        predator is CritterSpecies.Therapsid ? prey is CritterSpecies.Crab :
         prey is CritterSpecies.Custodian ? false :
         predator is CritterSpecies.MegaSpider && prey is (CritterSpecies.Lich or CritterSpecies.UndeadWarrior) ? false :
         predator is CritterSpecies.Lich or CritterSpecies.UndeadWarrior ? IsLichPrey(prey) :
@@ -5874,7 +5880,7 @@ public sealed partial class SimulationWorld
         if (IsLichUndead(_species[predatorIndex]) && IsLichUndead(_species[preyIndex]))
             return false;
         if (_species[predatorIndex] is CritterSpecies.Therapsid)
-            return false;
+            return _species[preyIndex] is CritterSpecies.Crab;
         if (_species[predatorIndex] is CritterSpecies.Wolf && _species[preyIndex] is CritterSpecies.Fish &&
             GetPreyPursuitDistance(predatorIndex, preyIndex) > 1)
             return false;
@@ -5957,7 +5963,7 @@ public sealed partial class SimulationWorld
         IsBarbarianApe(firstIndex) != IsBarbarianApe(secondIndex);
 
     private static bool IsCrabFeederPredator(CritterSpecies species) => species is
-        CritterSpecies.Jellyfish or CritterSpecies.SeaScorpion or
+        CritterSpecies.Newt or CritterSpecies.Jellyfish or CritterSpecies.SeaScorpion or
         CritterSpecies.Nautilus or CritterSpecies.Squid or CritterSpecies.MegaToad or CritterSpecies.MegaSpider or
         CritterSpecies.Therapsid or CritterSpecies.Ape or CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack or CritterSpecies.ApeSailor or
         CritterSpecies.ApeChieftain or CritterSpecies.ApeKing or CritterSpecies.ApeQueen or CritterSpecies.Wolf or CritterSpecies.ToothedWhale;
@@ -6207,6 +6213,24 @@ public sealed partial class SimulationWorld
         IsCrabFeederPredator(_species[predatorIndex]) &&
         WrappedManhattanDistance(_positions[predatorIndex], _positions[preyIndex]) == 1;
 
+    private GridPosition? FindAdjacentFeederCrab(int critterIndex, IReadOnlySet<GridPosition>? reservedPrey)
+    {
+        if (_energy[critterIndex] >= CritterNutritions.Get(_species[critterIndex]).MaximumEnergy)
+            return null;
+        var current = _positions[critterIndex];
+        foreach (var direction in CardinalDirections)
+        {
+            var candidate = new GridPosition(Mod(current.X + direction.X, Width), current.Y + direction.Y);
+            if (candidate.Y < 0 || candidate.Y >= Height || reservedPrey?.Contains(candidate) is true)
+                continue;
+            var occupant = _occupants[GetIndex(candidate)];
+            if (occupant >= 0 && CanStrikeAdjacentFeederCrab(critterIndex, occupant) &&
+                CanPursuePrey(critterIndex, occupant))
+                return candidate;
+        }
+        return null;
+    }
+
     private bool CanFeedFromEnvironment(CritterSpecies species, int tileIndex)
         => FindEnvironmentalFoodTile(species, tileIndex) >= 0;
 
@@ -6411,7 +6435,7 @@ public sealed partial class SimulationWorld
                 Biome.Swamp => 5,
                 Biome.Forest => 4,
                 Biome.Grassland or Biome.Taiga or Biome.Bog => 3,
-                Biome.Arid => 2,
+                Biome.Arid => 1,
                 Biome.Tundra or Biome.Desert => 1,
                 _ => 0,
             },

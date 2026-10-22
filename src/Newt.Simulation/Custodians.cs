@@ -23,7 +23,7 @@ public sealed partial class SimulationWorld
     {
         if (Body is not WorldBody.RingWorld || CustodianFabricator is not null)
             return;
-        var fabricatorCount = Width >= WorldPreset.RingMega.Width ? 2 : 1;
+        var fabricatorCount = Width >= WorldPreset.RingLarge.Width ? 2 : 1;
         // Spread stationary fabricators along the engineered north wall.
         for (var fabricator = 0; fabricator < fabricatorCount; fabricator++)
         for (var offset = 0; offset < Width; offset++)

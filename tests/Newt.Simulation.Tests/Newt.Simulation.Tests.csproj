@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -20,6 +20,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Newt.Simulation\Newt.Simulation.csproj" />
+    <Compile Include="..\..\src\Newt.Game\ThreeDGeometry.cs" Link="ThreeDGeometry.cs" />
+    <Compile Include="..\..\src\Newt.Game\RingGeometry.cs" Link="RingGeometry.cs" />
     <!-- Test host timing policy without loading MonoGame or a graphics device. -->
     <Compile Include="..\..\src\Newt.Game\SimulationSpeedGuard.cs" Link="SimulationSpeedGuard.cs" />
     <Compile Include="..\..\src\Newt.Game\TerrainShading.cs" Link="TerrainShading.cs" />

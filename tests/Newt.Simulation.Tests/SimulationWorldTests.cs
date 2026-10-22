@@ -2761,11 +2761,11 @@ public sealed class SimulationWorldTests
     }
 
     [Fact]
-    public void TherapsidDoesNotHuntAnySpecies()
+    public void TherapsidOnlyEatsCrabs()
     {
         foreach (var prey in Enum.GetValues<CritterSpecies>())
         {
-            Assert.False(SimulationWorld.CanEat(CritterSpecies.Therapsid, prey));
+            Assert.Equal(prey is CritterSpecies.Crab, SimulationWorld.CanEat(CritterSpecies.Therapsid, prey));
         }
     }
 
