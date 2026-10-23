@@ -25,12 +25,13 @@ dotnet test Newt.sln --no-build
 dotnet run --project src/Newt.Game/Newt.Game.csproj
 ```
 
-Press Escape to exit. Press **V** to cycle **2D → 3D → first person → 2D**.
+Press Escape to exit. Press **V** to toggle **2D / 3D free camera**.
+Press **F** to enter first person or return to the 3D free camera.
 First person walks at surface height with smooth **WASD** movement and **Shift**
 to move faster. Move the **mouse** to look freely; no button needs to be held.
 Arrow keys and the zoom wheel are ignored in first person. The cursor releases
-when menus open or the game loses focus. Press **V** to return to 2D at your
-walking position. First-person movement follows curved ring worlds too.
+when menus open or the game loses focus. Press **V** or **F** to return to the
+3D free camera at your walking position. First-person movement follows curved ring worlds too.
 In 3D, terrain forms columns whose heights follow elevation, while buildings
 and critters face the camera in both yaw and pitch, remaining visible overhead.
 Ocean and lake surfaces share a subtle, nearly neutral translucent sheet.

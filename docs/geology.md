@@ -205,8 +205,8 @@ shallow depressions to become unbounded lakes.
 
 ## First spring prototype
 
-The initial downhill tracer is now available. Hover an above-sea-level land tile
-and press `F`. The spring marks its source as river water and then extends by one
+The initial downhill tracer is now available. Select River in Terrain Tools and
+click an above-sea-level land tile. The spring marks its source as river water and then extends by one
 tile per fixed simulation tick. Each step chooses the lowest strictly lower
 neighbor and stops when it:
 

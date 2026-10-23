@@ -5,6 +5,34 @@ namespace Newt.Simulation.Tests;
 
 public sealed class ThreeDGeometryTests
 {
+    [Theory]
+    [InlineData(0.88f, 1f, 0f)]
+    [InlineData(0.14f, 0f, 1f)]
+    [InlineData(0.40f, -1f, 0f)]
+    public void SunTravelsFromEastThroughNoonToWest(float phase, float east, float up)
+    {
+        var direction = ThreeDGeometry.SunDirection(phase);
+        Assert.InRange(Math.Abs(direction.X - east), 0, 0.0001f);
+        Assert.InRange(Math.Abs(direction.Y - up), 0, 0.0001f);
+    }
+
+    [Theory]
+    [InlineData(0.48f)]
+    [InlineData(0.55f)]
+    [InlineData(0.72f)]
+    [InlineData(0.80f)]
+    public void SunIsBelowHorizonDuringNight(float phase) =>
+        Assert.True(ThreeDGeometry.SunDirection(phase).Y < 0);
+
+    [Fact]
+    public void SunOrbitWrapsContinuouslyAtCycleBoundary()
+    {
+        Assert.InRange(System.Numerics.Vector2.Distance(
+            ThreeDGeometry.SunDirection(0), ThreeDGeometry.SunDirection(1)), 0, 0.00001f);
+        Assert.InRange(System.Numerics.Vector2.Distance(
+            ThreeDGeometry.SunDirection(0.99999f), ThreeDGeometry.SunDirection(0)), 0, 0.001f);
+    }
+
     [Fact]
     public void WalkingIsSmoothAndIndependentOfFrameRate()
     {

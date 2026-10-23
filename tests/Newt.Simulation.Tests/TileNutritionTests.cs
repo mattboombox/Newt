@@ -165,7 +165,6 @@ public sealed class TileNutritionTests
     [InlineData(CritterSpecies.Worm)]
     [InlineData(CritterSpecies.Trilobite)]
     [InlineData(CritterSpecies.Nautilus)]
-    [InlineData(CritterSpecies.Crab)]
     [InlineData(CritterSpecies.Fish)]
     public void ShallowsFeedersConsumeNutritionUnderShelfIce(CritterSpecies species)
     {
@@ -241,23 +240,22 @@ public sealed class TileNutritionTests
     }
 
     [Theory]
-    [InlineData(SurfaceWaterKind.None, 4)]
-    [InlineData(SurfaceWaterKind.River, 3)]
-    [InlineData(SurfaceWaterKind.FreshwaterLake, 3)]
-    public void CrabConsumesDepositedNutritionOnlyOutsideFreshwater(
-        SurfaceWaterKind water,
-        int expectedEnergy)
+    [InlineData(Terrain.Ocean, SurfaceWaterKind.None)]
+    [InlineData(Terrain.Ocean, SurfaceWaterKind.River)]
+    [InlineData(Terrain.Ocean, SurfaceWaterKind.FreshwaterLake)]
+    [InlineData(Terrain.Plains, SurfaceWaterKind.None)]
+    [InlineData(Terrain.Ice, SurfaceWaterKind.None)]
+    public void CrabCannotConsumeDepositedNutritionOutsideBeachAndShallows(
+        Terrain terrain,
+        SurfaceWaterKind water)
     {
         var world = new SimulationWorld(1, 1, Terrain.Ocean, seed: 2003);
         world.SeasonsEnabled = false;
         var position = new GridPosition(0, 0);
-        world.AddCritter(CritterSpecies.Fish, position);
-        for (var tick = 0; tick < 3 * 45 * SimulationWorld.TicksPerSecond; tick++)
-        {
-            world.AdvanceOneTick();
-        }
-
+        world.SetTerrain(position, terrain);
         world.SetSurfaceWater(position, water);
+        typeof(SimulationWorld).GetMethod("DepositTileNutrition",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(world, [0]);
         var nutritionBeforeFeeding = world.GetTileNutrition(position);
         world.AddCritter(CritterSpecies.Crab, position);
         for (var tick = 0; tick < 4 * SimulationWorld.TicksPerSecond; tick++)
@@ -265,9 +263,9 @@ public sealed class TileNutritionTests
             world.AdvanceOneTick();
         }
 
-        Assert.Equal(expectedEnergy, world.GetCritter(0).Energy);
+        Assert.Equal(CritterNutritions.Get(CritterSpecies.Crab).InitialEnergy, world.GetCritter(0).Energy);
         Assert.Equal(
-            nutritionBeforeFeeding - (water is SurfaceWaterKind.None ? 1 : 0),
+            nutritionBeforeFeeding,
             world.GetTileNutrition(position));
     }
 

@@ -7,6 +7,16 @@ internal static class ThreeDGeometry
 {
     internal static float ColumnHeight(float elevation) => 0.25f + (elevation + 1) * 4;
 
+    internal static System.Numerics.Vector2 SunDirection(float skyPhase)
+    {
+        // Dawn at .88, noon at .14, sunset at .40, matching the sky palette.
+        var daylight = (skyPhase + 0.12f) % 1f;
+        var angle = daylight <= 0.52f
+            ? daylight / 0.52f * MathF.PI
+            : MathF.PI + (daylight - 0.52f) / 0.48f * MathF.PI;
+        return new System.Numerics.Vector2(MathF.Cos(angle), MathF.Sin(angle));
+    }
+
     // Match the vertical world span of the 2D view with the 45-degree 3D lens.
     internal static float OverheadDistance(int viewportHeight, int pixelsPerTile) =>
         viewportHeight / (2 * MathF.Tan(MathF.PI / 8) * pixelsPerTile);

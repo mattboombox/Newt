@@ -229,10 +229,10 @@ The game starts in Critter Tools with Plankton selected.
   can shove blocking Newts into adjacent valid empty habitat.
   Fish flee nearby Sea Scorpions, Squid, and Mega Toads before hunting. Crabs may
   travel through ordinary Ocean, Shallows, Beaches, and non-Arctic land, but not
-  Deep Ocean. They feed during normal actions on Beaches, Shallows, Rivers, Freshwater
-  Lakes, Swamps, and Jungles, detect feeding terrain within five Manhattan tiles,
+  Deep Ocean. They feed during normal actions only on Beaches and Shallows without
+  freshwater, detect feeding terrain within five Manhattan tiles,
   move back toward it when hungry, and reproduce throughout valid habitat,
-  creating a rapidly renewing feeder population. Every active predator except Fish consumes
+  creating a rapidly renewing feeder population. Newts cannot eat Crabs. Every active predator except Fish consumes
   Crabs only on adjacent encounters and does not pursue them at range, including
   strikes across habitat boundaries. Cold and freezing Beaches and Ice Sheets remain valid crab habitat,
   while other Arctic terrain does not. Trilobites graze terrain nutrition in Deep Ocean
@@ -452,7 +452,7 @@ display scaling so both mountain ranges and ocean basins remain readable at tile
 Elevation, SeaLevel, Temperature, Moisture, and Evolution Chance repeat while their mouse button is
 held. The first repeat begins after 0.25 seconds and continues every 0.075 seconds.
 OceanSeed, Volcano, Meteor, Watershed Shift, Evolve, and River remain single-click tools.
-- `F`: create a spring on the hovered land tile and trace it downhill.
+- River in Terrain Tools: click a land tile to create a spring and trace it downhill.
 - Arrow keys or `WASD`: move the camera.
 - Hold Shift while moving: pan four times faster.
 - Mouse wheel: zoom toward or away from the tile beneath the pointer.

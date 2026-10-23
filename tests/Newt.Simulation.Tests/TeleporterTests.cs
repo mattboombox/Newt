@@ -5,6 +5,37 @@ namespace Newt.Simulation.Tests;
 public sealed class TeleporterTests
 {
     [Fact]
+    public void PlayerCanUseEmptyPortalAndArrivesBesideAnotherWithoutMovingCritters()
+    {
+        var world = new SimulationWorld(10, 3, Terrain.Plains, seed: 510);
+        var source = new GridPosition(1, 1);
+        var destination = new GridPosition(7, 1);
+        Assert.True(world.TryPlaceTeleporter(source));
+        Assert.True(world.TryPlaceTeleporter(destination));
+        for (var attempt = 0; attempt < 30; attempt++)
+        {
+            var arrival = world.FindTeleporterArrival(source);
+            Assert.NotNull(arrival);
+            Assert.Contains(arrival.Value, GetNeighbors(world, destination));
+            Assert.False(world.HasTeleporter(arrival.Value));
+            Assert.False(world.IsOccupied(arrival.Value));
+        }
+        Assert.Equal(0, world.CritterCount);
+        Assert.Null(world.FindTeleporterArrival(new GridPosition(4, 1)));
+    }
+
+    [Fact]
+    public void PlayerUsingSinglePortalNeverArrivesOnPortal()
+    {
+        var world = new SimulationWorld(4, 3, Terrain.Plains, seed: 511);
+        var source = new GridPosition(1, 1);
+        Assert.True(world.TryPlaceTeleporter(source));
+        var arrival = world.FindTeleporterArrival(source);
+        Assert.NotNull(arrival);
+        Assert.False(world.HasTeleporter(arrival.Value));
+    }
+
+    [Fact]
     public void TeleporterPlacementRequiresAnOpenNonWallTile()
     {
         var world = new SimulationWorld(4, 3, Terrain.Plains, seed: 501);

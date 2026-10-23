@@ -1,6 +1,7 @@
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
+using Newt.Simulation;
 
 namespace Newt.Game;
 
@@ -77,6 +78,12 @@ public sealed partial class NewtGame
         WrapCamera3D();
         if (!ContainsTile3D((int)MathF.Floor(_focus3D.X), (int)MathF.Floor(_focus3D.Y)))
             _focus3D = previous;
+        var playerTile = new GridPosition((int)MathF.Floor(_focus3D.X), (int)MathF.Floor(_focus3D.Y));
+        if (_world.FindTeleporterArrival(playerTile) is { } arrival && ContainsTile3D(arrival.X, arrival.Y))
+        {
+            _focus3D = new Vector2(arrival.X + 0.5f, arrival.Y + 0.5f);
+            _firstPersonEyeHeight = WalkingSurfaceHeight(_focus3D) + FirstPersonEyeOffset;
+        }
         var ground = WalkingSurfaceHeight(_focus3D);
         var desired = ground + FirstPersonEyeOffset;
         _firstPersonEyeHeight += (desired - _firstPersonEyeHeight) * (1 - MathF.Exp(-12 * seconds));

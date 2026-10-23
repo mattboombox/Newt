@@ -57,7 +57,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             WorldTool.Farm, WorldTool.LumberCamp, WorldTool.Harbor, WorldTool.ResidentialDistrict,
             WorldTool.MilitaryDistrict, WorldTool.Library, WorldTool.Market, WorldTool.Road];
     private static readonly WorldTool[] OtherToolOrder =
-        [WorldTool.JumpStart, WorldTool.Inspect];
+        [WorldTool.JumpStart, WorldTool.Inspect, WorldTool.Teleport];
     private static readonly WorldTool[] CultureToolOrder = [WorldTool.LudditeCulture, WorldTool.MonarchyCulture];
     private static readonly string[] ControlLines =
     [
@@ -73,14 +73,14 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         "- / =  decrease / increase magnitude",
         "P  pause or resume",
         "G  toggle auto speed",
-        "V  cycle 2D / 3D / first person",
+        "V  toggle 2D / 3D free camera",
+        "F  toggle first person / 3D free camera",
         "First person: WASD walk; mouse look; Shift faster",
-        "First person: arrows and wheel ignored; V returns 2D",
+        "First person: arrows and wheel ignored; V returns free camera",
         "WASD  pan; arrows pan in 2D / rotate in 3D",
         "3D: middle mouse drag to rotate; wheel zoom",
         "Shift + pan  move faster",
         "Mouse wheel  zoom toward pointer",
-        "F  create spring on hovered land",
         "Left click  use selected tool",
         "Right click  alternate tool action",
         "World menu: arrows / WASD navigate",
@@ -310,6 +310,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         {
             HandleWorldShortcuts(keyboard, mouse);
             if (WasPressed(keyboard, Keys.V)) Toggle3D();
+            if (WasPressed(keyboard, Keys.F)) ToggleFirstPerson();
             if (_view3D) HandleCamera3D(keyboard, mouse, (float)gameTime.ElapsedGameTime.TotalSeconds);
             else HandleCamera(keyboard, mouse);
             HandleActiveTool(mouse, gameTime.ElapsedGameTime.TotalSeconds);
@@ -946,14 +947,6 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             _seedText = _seed.ToString(CultureInfo.InvariantCulture);
             GenerateWorld();
         }
-        else if (WasPressed(keyboard, Keys.F))
-        {
-            var position = ScreenToWorld(mouse.X, mouse.Y);
-            if (position is not null)
-            {
-                Hydrology.StartSnowmeltSpring(_world, position.Value, SpringOrigin.Player);
-            }
-        }
         else if (WasPressed(keyboard, Keys.G))
         {
             _simulationSpeedGuard.Enabled = !_simulationSpeedGuard.Enabled;
@@ -1061,7 +1054,9 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             return;
         }
 
-        var position = ScreenToWorld(mouse.X, mouse.Y);
+        var position = _firstPerson && CurrentTool is WorldTool.Teleport
+            ? ScreenToWorld(GraphicsDevice.Viewport.Width / 2, MapViewportHeight / 2)
+            : ScreenToWorld(mouse.X, mouse.Y);
         if (position is null)
         {
             return;
@@ -1069,6 +1064,9 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
 
         switch (CurrentTool)
         {
+            case WorldTool.Teleport when primaryActivated:
+                TeleportCameraToTile(position.Value);
+                break;
             case WorldTool.Plague when primaryActivated:
                 _world.TryInfectApeAt(position.Value, PlagueKind.Plague);
                 break;
@@ -1438,6 +1436,25 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         _cameraX = ConstrainCameraX(_cameraX);
         var visibleRows = Math.Max(1, MapViewportHeight / TileSize);
         _cameraY = Math.Clamp(_cameraY, 0, Math.Max(0, _world.Height - visibleRows));
+    }
+
+    private void TeleportCameraToTile(GridPosition tile)
+    {
+        _inspectedCritterId = default;
+        _focus3D = new Vector2(tile.X + 0.5f, tile.Y + 0.5f);
+        if (_view3D)
+        {
+            WrapCamera3D();
+            if (_firstPerson)
+                _firstPersonEyeHeight = WalkingSurfaceHeight(_focus3D) + FirstPersonEyeOffset;
+            return;
+        }
+
+        _cameraX = ConstrainCameraX((int)MathF.Round(_focus3D.X -
+            (GraphicsDevice.Viewport.Width / 2f - MapOffsetX) / TileSize));
+        _cameraY = Math.Clamp((int)MathF.Round(_focus3D.Y -
+            (MapViewportHeight / 2f - MapOffsetY) / TileSize),
+            0, Math.Max(0, _world.Height - MapViewportHeight / TileSize));
     }
 
     private void UpdateInspectedCritterFollow()
@@ -2151,7 +2168,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         CritterSpecies.SquidEgg => "hatches when squid prey approaches",
         CritterSpecies.Jellyfish => "plankton only",
         CritterSpecies.Fish => "shallow/freshwater forage and plankton",
-        CritterSpecies.Newt => "adjacent crabs, freshwater food, swamp and jungle forage",
+        CritterSpecies.Newt => "freshwater food, swamp and jungle forage",
         CritterSpecies.Snail => "swamp / jungle foliage",
         CritterSpecies.MegaSlug => "swamp, jungle, bog, and forest foliage",
         CritterSpecies.MegaToad => "broad prey; adjacent worms/cannibalism; fights sea scorpions and squid",
@@ -3192,6 +3209,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         WorldTool.Stone => "L place; R clear",
         WorldTool.Lava => "L add; R clear",
         WorldTool.JumpStart => "L seed plankton",
+        WorldTool.Teleport => _firstPerson ? "L teleport to crosshair tile" : "L teleport to tile",
         WorldTool.Colonist => _colonistToolStatus,
         WorldTool.LudditeCulture => _cultureToolStatus,
         WorldTool.MonarchyCulture => _monarchyToolStatus,
@@ -3318,6 +3336,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         Library,
         Road,
         Inspect,
+        Teleport,
         Plague,
         ZombiePlague,
         VampirePlague,

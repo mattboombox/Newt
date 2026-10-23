@@ -5266,10 +5266,6 @@ public sealed partial class SimulationWorld
             return null;
         }
 
-        if (_species[critterIndex] is CritterSpecies.Newt &&
-            FindAdjacentFeederCrab(critterIndex, reservedPrey) is { } crab)
-            return crab;
-
         if (TryFeedFromTerrain(critterIndex))
         {
             return null;
@@ -5963,7 +5959,7 @@ public sealed partial class SimulationWorld
         IsBarbarianApe(firstIndex) != IsBarbarianApe(secondIndex);
 
     private static bool IsCrabFeederPredator(CritterSpecies species) => species is
-        CritterSpecies.Newt or CritterSpecies.Jellyfish or CritterSpecies.SeaScorpion or
+        CritterSpecies.Jellyfish or CritterSpecies.SeaScorpion or
         CritterSpecies.Nautilus or CritterSpecies.Squid or CritterSpecies.MegaToad or CritterSpecies.MegaSpider or
         CritterSpecies.Therapsid or CritterSpecies.Ape or CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack or CritterSpecies.ApeSailor or
         CritterSpecies.ApeChieftain or CritterSpecies.ApeKing or CritterSpecies.ApeQueen or CritterSpecies.Wolf or CritterSpecies.ToothedWhale;
@@ -6301,6 +6297,8 @@ public sealed partial class SimulationWorld
             return -1;
         if (species is CritterSpecies.Nautilus && !IsNautilusFeedingTile(tileIndex))
             return -1;
+        if (species is CritterSpecies.Crab && !IsCrabFeedingTile(tileIndex))
+            return -1;
         if (IsFreshwaterTile(tileIndex) && !CanFeedInFreshwater(species))
         {
             return -1;
@@ -6501,9 +6499,7 @@ public sealed partial class SimulationWorld
         IsNautilusFeedingTerrain(_terrain[tileIndex]) || IsIceOverOcean(tileIndex);
 
     private bool IsCrabFeedingTile(int tileIndex) =>
-        _terrain[tileIndex] is Terrain.Beach or Terrain.Shallows ||
-        IsIceOverOcean(tileIndex) ||
-        _biomes[tileIndex] is Biome.Swamp or Biome.Jungle;
+        _terrain[tileIndex] is Terrain.Beach or Terrain.Shallows;
 
     private bool IsFishForagingTile(int tileIndex) =>
         _surfaceWater[tileIndex] is SurfaceWaterKind.River or SurfaceWaterKind.FreshwaterLake ||
@@ -6985,10 +6981,7 @@ public sealed partial class SimulationWorld
             return false;
         }
 
-        var arrival = _teleporters.Count == 1
-            ? FindRandomUnoccupiedTeleporterArrival()
-            : FindLinkedTeleporterArrival(sourceTile) ??
-                FindRandomUnoccupiedTeleporterArrival();
+        var arrival = FindTeleporterArrival(position);
         if (arrival is null)
         {
             return false;
@@ -7000,6 +6993,15 @@ public sealed partial class SimulationWorld
         _positions[critterIndex] = arrival.Value;
         _preyTargets[critterIndex] = -1;
         return true;
+    }
+
+    /// <summary>Chooses an empty, non-portal arrival for a traveler, including the first-person player.</summary>
+    public GridPosition? FindTeleporterArrival(GridPosition source)
+    {
+        if (!HasTeleporter(source)) return null;
+        return _teleporters.Count == 1
+            ? FindRandomUnoccupiedTeleporterArrival()
+            : FindLinkedTeleporterArrival(GetIndex(source)) ?? FindRandomUnoccupiedTeleporterArrival();
     }
 
     private GridPosition? FindRandomUnoccupiedTeleporterArrival()

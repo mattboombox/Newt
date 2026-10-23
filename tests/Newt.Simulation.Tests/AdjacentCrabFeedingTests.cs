@@ -6,8 +6,8 @@ namespace Newt.Simulation.Tests;
 public sealed class AdjacentCrabFeedingTests
 {
     [Theory]
-    [InlineData(CritterSpecies.Newt, 1, true)]
-    [InlineData(CritterSpecies.Newt, 7, true)]
+    [InlineData(CritterSpecies.Newt, 1, false)]
+    [InlineData(CritterSpecies.Newt, 7, false)]
     [InlineData(CritterSpecies.Newt, 2, false)]
     [InlineData(CritterSpecies.Therapsid, 1, true)]
     [InlineData(CritterSpecies.Therapsid, 7, true)]
@@ -24,7 +24,10 @@ public sealed class AdjacentCrabFeedingTests
         var method = species is CritterSpecies.Newt ? "TryMoveNewt" : "TryMoveTherapsid";
         var target = (GridPosition?)typeof(SimulationWorld).GetMethod(method,
             BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(world, [0, null]);
-        Assert.Equal(adjacent ? (GridPosition?)crabTile : null, target);
+        if (species is CritterSpecies.Newt)
+            Assert.False(SimulationWorld.CanEat(species, CritterSpecies.Crab));
+        else
+            Assert.Equal(adjacent ? (GridPosition?)crabTile : null, target);
         if (target is { } prey) world.CommitEncounter(predatorTile, prey);
         Assert.Equal(!adjacent, world.TryGetCritter(crab, out _));
         if (adjacent) Assert.True(world.GetCritter(0).Energy > energy);

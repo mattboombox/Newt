@@ -30,8 +30,7 @@ public sealed partial class NewtGame
     {
         if (!_dayNightCycleEnabled) return Color.SkyBlue;
         // Use simulation ticks so the sky follows pause/speed and works without seasons.
-        const long cycleTicks = 2L * SeasonSystem.TicksPerYear;
-        var phase = (_world.Tick % cycleTicks) / (float)cycleTicks;
+        var phase = SkyPhase3D();
         for (var i = 1; i < SkyCycle3D.Length; i++)
         {
             var (end, to) = SkyCycle3D[i];
@@ -41,6 +40,40 @@ public sealed partial class NewtGame
             return Color.Lerp(from, to, blend);
         }
         return Color.SkyBlue;
+    }
+
+    private float SkyPhase3D()
+    {
+        const long cycleTicks = 2L * SeasonSystem.TicksPerYear;
+        return (_world.Tick % cycleTicks) / (float)cycleTicks;
+    }
+
+    private void DrawSun3D(Matrix view, Matrix projection)
+    {
+        var sun = ThreeDGeometry.SunDirection(_dayNightCycleEnabled ? SkyPhase3D() : 0.14f);
+        // Cross the ring's width from north to south rather than following its circumference.
+        var sunriseDirection = IsRing3D ? -Vector3.UnitZ : Vector3.UnitX;
+        var direction = sunriseDirection * sun.X + SurfaceUp3D(_focus3D.X) * sun.Y;
+        // A direction (w = 0) keeps the sun infinitely distant as the camera moves.
+        var clip = Vector4.Transform(new Vector4(direction, 0), view * projection);
+        if (clip.W <= 0) return;
+        var viewport = GraphicsDevice.Viewport;
+        var x = (clip.X / clip.W + 1) * viewport.Width * 0.5f;
+        var y = (1 - clip.Y / clip.W) * viewport.Height * 0.5f;
+        var pixelSize = Math.Max(2, viewport.Height / 300);
+        const int radius = 7;
+        var extent = (radius + 1) * pixelSize;
+        if (x < -extent || x > viewport.Width + extent || y < -extent || y > viewport.Height + extent) return;
+        _spriteBatch!.Begin(samplerState: SamplerState.PointClamp, depthStencilState: DepthStencilState.None);
+        for (var row = -radius; row <= radius; row++)
+        {
+            var halfWidth = (int)MathF.Floor(MathF.Sqrt(radius * radius - row * row));
+            _spriteBatch.Draw(_pixel, new Rectangle(
+                (int)x - halfWidth * pixelSize - pixelSize / 2,
+                (int)y + row * pixelSize - pixelSize / 2,
+                (halfWidth * 2 + 1) * pixelSize, pixelSize), Color.White);
+        }
+        _spriteBatch.End();
     }
     private Vector2 _focus3D;
     private float _yaw3D = MathHelper.PiOver4, _pitch3D = 0.85f, _distance3D = 28;
@@ -57,23 +90,12 @@ public sealed partial class NewtGame
 
     private void Toggle3D()
     {
-        if (_view3D && !_firstPerson)
-        {
-            EnterFirstPerson();
-            return;
-        }
         if (_firstPerson)
         {
-            // Return to the walker's location rather than a distant point on its horizon.
-            _zoomIndex = ZoomLevels.Length - 1;
-            _cameraX = ConstrainCameraX((int)MathF.Round(_focus3D.X -
-                (GraphicsDevice.Viewport.Width / 2f - MapOffsetX) / TileSize));
-            _cameraY = Math.Clamp((int)MathF.Round(_focus3D.Y -
-                (MapViewportHeight / 2f - MapOffsetY) / TileSize),
-                0, Math.Max(0, _world.Height - MapViewportHeight / TileSize));
             _firstPerson = false;
             _firstPersonMouseReady = false;
-            _view3D = false;
+            _distance3D = Math.Clamp(28, 6, MaximumDistance3D);
+            _pitch3D = 0.85f;
             IsMouseVisible = true;
             ResetToolRepeat();
             return;
@@ -95,6 +117,13 @@ public sealed partial class NewtGame
         {
             Match2DCameraTo3D();
         }
+    }
+
+    private void ToggleFirstPerson()
+    {
+        if (_firstPerson) { Toggle3D(); return; }
+        if (!_view3D) Toggle3D();
+        EnterFirstPerson();
     }
 
     private void Match2DCameraTo3D()
@@ -229,6 +258,13 @@ public sealed partial class NewtGame
 
     private bool IsSurfaceSailor3D(CritterSnapshot critter) => ThreeDGeometry.IsSurfaceSailor(
         critter.Species, critter.IsColonist, _world.IsApePirate(critter.Id), critter.IsVeteranWarrior);
+
+    private bool ShouldFlattenUnderIce3D(CritterSnapshot critter) =>
+        IsIce3D(critter.Position) && WaterElevation3D(critter.Position) is { } iceSurface &&
+        !IsSurfaceSailor3D(critter) &&
+        !ThreeDGeometry.StandsOnIce(CritterHabitats.GetHabitat(critter.Species)) &&
+        // Match the clearance threshold that previously reduced the sprite's scale.
+        ThreeDGeometry.ColumnHeight(iceSurface) - (TileHeight3D(critter.Position) + 0.025f) - 0.02f < 1f;
 
     private Terrain UnfrozenBedTerrain(GridPosition tile) =>
         IsIce3D(tile) && WaterElevation3D(tile) is { } water
@@ -369,6 +405,14 @@ public sealed partial class NewtGame
                 IsSurfaceSailor3D(critter))
                 height = Math.Max(height, ThreeDGeometry.ColumnHeight(waterSurface) + 0.035f);
             var spriteHeight = height + 0.025f;
+            if (!IsIce3D(tile) && IsSurfaceSailor3D(critter) &&
+                CritterHabitats.GetHabitat(critter.Species) is not CritterHabitat.Flier &&
+                WaterElevation3D(tile) is { } waterline)
+            {
+                // Sink the bottom of surface vessels into open water to give them a waterline.
+                spriteHeight = Math.Max(TileHeight3D(tile) + 0.025f,
+                    ThreeDGeometry.ColumnHeight(waterline) - 0.12f);
+            }
             if (critter.Species is CritterSpecies.Plankton && WaterElevation3D(tile) is { } planktonSurface)
             {
                 // Open water sits at +0.005; ice spans +0.005 to +0.035.
@@ -376,6 +420,8 @@ public sealed partial class NewtGame
                 spriteHeight = Math.Max(TileHeight3D(tile) + 0.001f,
                     ThreeDGeometry.ColumnHeight(planktonSurface) + (IsIce3D(tile) ? 0f : 0.015f));
             }
+            if (ShouldFlattenUnderIce3D(critter))
+                spriteHeight = ThreeDGeometry.ColumnHeight(WaterElevation3D(tile)!.Value);
             var firstX = _world.Body == WorldBody.Nexus ? tile.X
                 : ThreeDGeometry.FirstVisibleCopy(tile.X, bounds.Left, _world.Width);
             for (var x = firstX; x < bounds.Right; x += _world.Width)
@@ -435,6 +481,7 @@ public sealed partial class NewtGame
         var originalViewport = GraphicsDevice.Viewport;
         GraphicsDevice.Viewport = Viewport3D();
         GraphicsDevice.Clear(GetSkyColor3D());
+        DrawSun3D(view, projection);
         GraphicsDevice.BlendState = BlendState.Opaque;
         GraphicsDevice.DepthStencilState = DepthStencilState.Default;
         GraphicsDevice.RasterizerState = RasterizerState.CullNone;
@@ -469,11 +516,8 @@ public sealed partial class NewtGame
                 var step = 1f / AtlasColumns3D;
                 var p = _cutouts3D[i].Position;
                 // Screen-aligned sprites stay flat and upright even directly overhead.
-                var scale = 1f;
-                if (item.Critter >= 0 && IsIce3D(item.Tile) && WaterElevation3D(item.Tile) is { } iceSurface &&
-                    !IsSurfaceSailor3D(_world.GetCritter(item.Critter)) &&
-                    !ThreeDGeometry.StandsOnIce(CritterHabitats.GetHabitat(_world.GetCritter(item.Critter).Species)))
-                    scale = Math.Clamp(ThreeDGeometry.ColumnHeight(iceSurface) - p.Y - 0.02f, 0.01f, 1);
+                var scale = _firstPerson ? 0.8f : 1f;
+                var underIce = item.Critter >= 0 && ShouldFlattenUnderIce3D(_world.GetCritter(item.Critter));
                 var center = WorldPoint3D(p) + SurfaceUp3D(p.X) * (0.5f * scale);
                 var spriteRight = right * scale;
                 var spriteUp = up * scale;
@@ -481,18 +525,19 @@ public sealed partial class NewtGame
                 var b = new VertexPositionColorTexture(center + spriteRight + spriteUp, Color.White, new Vector2(u + step, v));
                 var c = new VertexPositionColorTexture(center + spriteRight - spriteUp, Color.White, new Vector2(u + step, v + step));
                 var d = new VertexPositionColorTexture(center - spriteRight - spriteUp, Color.White, new Vector2(u, v + step));
-                // Fields, volcano vents, and plankton follow the tile surface, including the ring's curve.
-                var flat = item.Ground || (item.Critter >= 0
+                // Aquatic critters with insufficient clearance lie just beneath ice.
+                var flat = underIce || item.Ground || (item.Critter >= 0
                     ? _world.GetCritter(item.Critter).Species is CritterSpecies.Plankton
                     : _world.GetApeStructure(item.Tile) is ApeStructureKind.Farm or
                         ApeStructureKind.RicePaddy or ApeStructureKind.Orchard or ApeStructureKind.Aquaculture ||
                         _world.GetVolcanoState(item.Tile) is { } volcanoState && volcanoState != VolcanoState.Extinct);
                 if (flat)
                 {
-                    a.Position = WorldPoint3D(p + new Vector3(-0.5f, 0, -0.5f));
-                    b.Position = WorldPoint3D(p + new Vector3(0.5f, 0, -0.5f));
-                    c.Position = WorldPoint3D(p + new Vector3(0.5f, 0, 0.5f));
-                    d.Position = WorldPoint3D(p + new Vector3(-0.5f, 0, 0.5f));
+                    var halfSize = _firstPerson && item.Critter >= 0 ? 0.4f : 0.5f;
+                    a.Position = WorldPoint3D(p + new Vector3(-halfSize, 0, -halfSize));
+                    b.Position = WorldPoint3D(p + new Vector3(halfSize, 0, -halfSize));
+                    c.Position = WorldPoint3D(p + new Vector3(halfSize, 0, halfSize));
+                    d.Position = WorldPoint3D(p + new Vector3(-halfSize, 0, halfSize));
                 }
                 quads.AddRange([a, b, c, a, c, d]);
             }
