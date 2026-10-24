@@ -17,4 +17,5 @@ public enum ApeStructureKind : byte
     Market,
     LudditeTemple,
     Castle,
+    BlightedFarm,
 }

@@ -7,9 +7,11 @@ namespace Newt.Game;
 
 public sealed partial class NewtGame
 {
-    private bool _view3D, _drawing3DAtlas;
+    private bool _view3D = true;
+    private bool _drawing3DAtlas;
     // Tint submerged objects while blending unchanged water tiles back to their 2D palette.
     private const int WaterSurfaceTintAlpha3D = 64;
+    private const int WhaleFallCutout3D = -2;
     private bool _dayNightCycleEnabled = true;
     private static readonly (float Phase, Color Color)[] SkyCycle3D =
     [
@@ -259,12 +261,14 @@ public sealed partial class NewtGame
     private bool IsSurfaceSailor3D(CritterSnapshot critter) => ThreeDGeometry.IsSurfaceSailor(
         critter.Species, critter.IsColonist, _world.IsApePirate(critter.Id), critter.IsVeteranWarrior);
 
-    private bool ShouldFlattenUnderIce3D(CritterSnapshot critter) =>
-        IsIce3D(critter.Position) && WaterElevation3D(critter.Position) is { } iceSurface &&
-        !IsSurfaceSailor3D(critter) &&
-        !ThreeDGeometry.StandsOnIce(CritterHabitats.GetHabitat(critter.Species)) &&
-        // Match the clearance threshold that previously reduced the sprite's scale.
-        ThreeDGeometry.ColumnHeight(iceSurface) - (TileHeight3D(critter.Position) + 0.025f) - 0.02f < 1f;
+    private bool IsShallowsBridge3D(GridPosition tile) =>
+        _world.GetTerrain(tile) is Terrain.Shallows && _world.GetRoadConnections(tile) != RiverConnection.None;
+
+    private bool ShouldFlattenUnderWaterCover3D(CritterSnapshot critter) =>
+        WaterElevation3D(critter.Position) is { } waterSurface &&
+        ThreeDGeometry.FlattensUnderWaterCover(CritterHabitats.GetHabitat(critter.Species),
+            IsSurfaceSailor3D(critter), IsIce3D(critter.Position), IsShallowsBridge3D(critter.Position),
+            ThreeDGeometry.ColumnHeight(waterSurface) - (TileHeight3D(critter.Position) + 0.025f) - 0.02f);
 
     private Terrain UnfrozenBedTerrain(GridPosition tile) =>
         IsIce3D(tile) && WaterElevation3D(tile) is { } water
@@ -383,9 +387,22 @@ public sealed partial class NewtGame
 
             if (hovered == tile) color = Color.Lerp(color, Color.White, 0.45f);
             AddColumn3D(new GridPosition(x, y), height, color);
+            if (_world.GetWhaleFallNutrition(tile) > 0)
+                // Carcasses stay on the bed, including beneath ice and bridge decks.
+                _cutouts3D.Add((new Vector3(x + 0.5f, height + 0.012f, y + 0.5f), tile, WhaleFallCutout3D, true));
+            if (water is not (SurfaceWaterKind.None or SurfaceWaterKind.FreshwaterLake))
+                AddConnectionSides3D(x, y, height + 0.01f, _world.GetRiverConnections(tile), GetSurfaceWaterColor(water));
+            var roadConnections = _world.GetRoadConnections(tile);
+            if (roadConnections != RiverConnection.None)
+                AddConnectionSides3D(x, y,
+                    ThreeDGeometry.RoadHeight(height, WaterElevation3D(tile), IsShallowsBridge3D(tile)),
+                    roadConnections, GetRoadColor(tile), road: true);
             if (water is not (SurfaceWaterKind.None or SurfaceWaterKind.FreshwaterLake) || _world.GetRoadConnections(tile) != RiverConnection.None ||
                 _world.ActiveImpactWaveCount > 0)
-                _cutouts3D.Add((new Vector3(x + 0.5f, height + 0.01f, y + 0.5f), tile, -1, true));
+                _cutouts3D.Add((new Vector3(x + 0.5f,
+                    ThreeDGeometry.RoadHeight(height, WaterElevation3D(tile),
+                        IsShallowsBridge3D(tile)),
+                    y + 0.5f), tile, -1, true));
             if (_world.GetApeStructure(tile) is not null || _world.HasVampireLair(tile) ||
                 _world.GetWolfDenCharges(tile) is not null || _world.GetMegaSpiderWebFood(tile) is not null ||
                 _world.HasTeleporter(tile) || _world.IsCustodianFabricator(tile) ||
@@ -398,6 +415,9 @@ public sealed partial class NewtGame
             var tile = critter.Position;
             if (!ContainsTile3D(tile.X, tile.Y) || tile.Y < bounds.Top || tile.Y >= bounds.Bottom) continue;
             var height = TileHeight3D(tile);
+            if (IsShallowsBridge3D(tile) &&
+                ThreeDGeometry.StandsOnIce(CritterHabitats.GetHabitat(critter.Species)))
+                height = ThreeDGeometry.RoadHeight(height, WaterElevation3D(tile), shallowsBridge: true);
             if (IsIce3D(tile) && WaterElevation3D(tile) is { } surface &&
                 ThreeDGeometry.StandsOnIce(CritterHabitats.GetHabitat(critter.Species)))
                 height = Math.Max(height, ThreeDGeometry.ColumnHeight(surface) + 0.035f);
@@ -405,7 +425,7 @@ public sealed partial class NewtGame
                 IsSurfaceSailor3D(critter))
                 height = Math.Max(height, ThreeDGeometry.ColumnHeight(waterSurface) + 0.035f);
             var spriteHeight = height + 0.025f;
-            if (!IsIce3D(tile) && IsSurfaceSailor3D(critter) &&
+            if (!IsIce3D(tile) && !IsShallowsBridge3D(tile) && IsSurfaceSailor3D(critter) &&
                 CritterHabitats.GetHabitat(critter.Species) is not CritterHabitat.Flier &&
                 WaterElevation3D(tile) is { } waterline)
             {
@@ -420,7 +440,7 @@ public sealed partial class NewtGame
                 spriteHeight = Math.Max(TileHeight3D(tile) + 0.001f,
                     ThreeDGeometry.ColumnHeight(planktonSurface) + (IsIce3D(tile) ? 0f : 0.015f));
             }
-            if (ShouldFlattenUnderIce3D(critter))
+            if (ShouldFlattenUnderWaterCover3D(critter))
                 spriteHeight = ThreeDGeometry.ColumnHeight(WaterElevation3D(tile)!.Value);
             var firstX = _world.Body == WorldBody.Nexus ? tile.X
                 : ThreeDGeometry.FirstVisibleCopy(tile.X, bounds.Left, _world.Width);
@@ -456,6 +476,7 @@ public sealed partial class NewtGame
                     var sx = slot % AtlasColumns3D;
                     var sy = slot / AtlasColumns3D;
                     if (item.Critter >= 0) DrawCritter(_world.GetCritter(item.Critter), sx, sy);
+                    else if (item.Critter == WhaleFallCutout3D) DrawWhaleFall(sx, sy, item.Tile);
                     else if (item.Ground)
                     {
                         var water = _world.GetSurfaceWater(item.Tile);
@@ -517,7 +538,7 @@ public sealed partial class NewtGame
                 var p = _cutouts3D[i].Position;
                 // Screen-aligned sprites stay flat and upright even directly overhead.
                 var scale = _firstPerson ? 0.8f : 1f;
-                var underIce = item.Critter >= 0 && ShouldFlattenUnderIce3D(_world.GetCritter(item.Critter));
+                var underWaterCover = item.Critter >= 0 && ShouldFlattenUnderWaterCover3D(_world.GetCritter(item.Critter));
                 var center = WorldPoint3D(p) + SurfaceUp3D(p.X) * (0.5f * scale);
                 var spriteRight = right * scale;
                 var spriteUp = up * scale;
@@ -525,11 +546,11 @@ public sealed partial class NewtGame
                 var b = new VertexPositionColorTexture(center + spriteRight + spriteUp, Color.White, new Vector2(u + step, v));
                 var c = new VertexPositionColorTexture(center + spriteRight - spriteUp, Color.White, new Vector2(u + step, v + step));
                 var d = new VertexPositionColorTexture(center - spriteRight - spriteUp, Color.White, new Vector2(u, v + step));
-                // Aquatic critters with insufficient clearance lie just beneath ice.
-                var flat = underIce || item.Ground || (item.Critter >= 0
-                    ? _world.GetCritter(item.Critter).Species is CritterSpecies.Plankton
-                    : _world.GetApeStructure(item.Tile) is ApeStructureKind.Farm or
-                        ApeStructureKind.RicePaddy or ApeStructureKind.Orchard or ApeStructureKind.Aquaculture ||
+                // Aquatic critters lie beneath bridge decks and low ice sheets.
+                var flat = underWaterCover || item.Ground || (item.Critter >= 0
+                    ? _world.GetCritter(item.Critter).Species is CritterSpecies.Plankton or CritterSpecies.Trilobite
+                    : _world.GetApeStructure(item.Tile) is ApeStructureKind.Farm or ApeStructureKind.BlightedFarm or
+                        ApeStructureKind.RicePaddy or ApeStructureKind.Aquaculture ||
                         _world.GetVolcanoState(item.Tile) is { } volcanoState && volcanoState != VolcanoState.Extinct);
                 if (flat)
                 {
@@ -634,6 +655,46 @@ public sealed partial class NewtGame
         GraphicsDevice.DepthStencilState = DepthStencilState.Default;
     }
 
+    private void AddConnectionSides3D(int x, int y, float topHeight, RiverConnection connections, Color color,
+        bool road = false)
+    {
+        var offset = road ? 0.003f : 0.002f;
+        foreach (var segment in ThreeDGeometry.ConnectionSideSegments(connections))
+        {
+            if (!ContainsTile3D(x + segment.TargetX, y + segment.TargetY) ||
+                !ContainsTile3D(x + segment.FaceX, y + segment.FaceY)) continue;
+            var target = MapTile3D(x + segment.TargetX, y + segment.TargetY);
+            var adjacent = MapTile3D(x + segment.FaceX, y + segment.FaceY);
+            // Stop at the receiving surface and clip against the adjacent column.
+            var bottom = road
+                ? ThreeDGeometry.RoadSideBottom(TileHeight3D(target), TileHeight3D(adjacent),
+                    WaterElevation3D(target), IsShallowsBridge3D(target))
+                : ThreeDGeometry.RiverSideBottom(TileHeight3D(target), TileHeight3D(adjacent), WaterElevation3D(target));
+            if (bottom >= topHeight - (road ? offset : 0.012f)) continue;
+            Vector3 a, b;
+            if (segment.FaceX != 0)
+            {
+                var edge = x + (segment.FaceX > 0 ? 1 + offset : -offset);
+                a = new(edge, bottom, y + segment.Start);
+                b = new(edge, bottom, y + segment.End);
+            }
+            else
+            {
+                var edge = y + (segment.FaceY > 0 ? 1 + offset : -offset);
+                a = new(x + segment.Start, bottom, edge);
+                b = new(x + segment.End, bottom, edge);
+            }
+            var c = b with { Y = topHeight };
+            var d = a with { Y = topHeight };
+            a = WorldPoint3D(a);
+            b = WorldPoint3D(b);
+            c = WorldPoint3D(c);
+            d = WorldPoint3D(d);
+            _terrainVertices3D.AddRange([new(a, color), new(b, color), new(c, color),
+                new(a, color), new(c, color), new(d, color)]);
+        }
+    }
+
     private void AddColumn3D(GridPosition tile, float height, Color color)
     {
         float x = tile.X, z = tile.Y;
@@ -663,6 +724,7 @@ public sealed partial class NewtGame
 
     protected override void UnloadContent()
     {
+        _whaleFallSprite?.Dispose();
         foreach (var page in _atlasPages3D) page.Dispose();
         _terrainEffect3D?.Dispose();
         _cutoutEffect3D?.Dispose();

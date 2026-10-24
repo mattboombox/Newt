@@ -5,6 +5,68 @@ namespace Newt.Simulation.Tests;
 public sealed class VolcanismTests
 {
     [Fact]
+    public void FlowBuildsMoreElevationAwayFromTheVent()
+    {
+        var world = CreateLandWorld();
+        NaturalEvents.SetEnabled(world, false);
+        world.SeasonsEnabled = false;
+        var vent = new GridPosition(7, 7);
+        var before = world.GetElevation(vent);
+        Assert.True(Volcanism.SpawnVolcano(world, vent, VolcanoState.Dormant));
+        var ventGain = world.GetElevation(vent) - before;
+        var flow = new LavaFlowActivity(vent, 0, 2, world.Tick + 5) { Vent = vent };
+        world.LavaFlows.Add(flow);
+        for (var tick = 0; tick < 5; tick++) world.AdvanceOneTick();
+        Assert.NotEqual(vent, flow.Position);
+        var flankGain = world.GetElevation(flow.Position) - before;
+        Assert.InRange(flankGain, 0.024f, 0.094f);
+        Assert.True(flankGain > 2 * ventGain);
+    }
+
+    [Fact]
+    public void LavaReturningToVentDoesNotApplyTheLargerFlankDeposit()
+    {
+        var world = CreateLandWorld();
+        NaturalEvents.SetEnabled(world, false);
+        world.SeasonsEnabled = false;
+        var vent = new GridPosition(7, 7);
+        Assert.True(Volcanism.SpawnVolcano(world, vent, VolcanoState.Dormant));
+        for (var y = 0; y < world.Height; y++)
+            for (var x = 0; x < world.Width; x++)
+                if (new GridPosition(x, y) != vent) world.SetElevation(new(x, y), 0.9f);
+        var before = world.GetElevation(vent);
+        var flow = new LavaFlowActivity(new(6, 7), 0, 2, world.Tick + 5) { Vent = vent };
+        world.LavaFlows.Add(flow);
+        for (var tick = 0; tick < 5; tick++) world.AdvanceOneTick();
+        Assert.Equal(vent, flow.Position);
+        Assert.InRange(world.GetElevation(vent) - before, 0.003f, 0.01f);
+    }
+
+    [Fact]
+    public void VolcanoStaysActiveLongerAndSendsLongerFlowsAcrossItsFlanks()
+    {
+        var world = CreateLandWorld();
+        NaturalEvents.SetEnabled(world, false);
+        world.SeasonsEnabled = false;
+        var vent = new GridPosition(7, 7);
+        Assert.True(Volcanism.SpawnVolcano(world, vent));
+        var volcano = Assert.Single(world.Volcanoes);
+        Assert.InRange(volcano.NextStateTick - world.Tick,
+            40 * SimulationWorld.TicksPerSecond, 70 * SimulationWorld.TicksPerSecond);
+        Assert.True(Volcanism.TriggerEruption(world, vent));
+        Assert.All(world.LavaFlows, flow => Assert.InRange(flow.RemainingSteps, 10, 23));
+        // Isolate one eruption so later eruptions cannot hide concentrated growth.
+        volcano.NextEruptionTick = long.MaxValue;
+        for (var tick = 0; tick < 120; tick++) world.AdvanceOneTick();
+        Assert.Empty(world.LavaFlows);
+        var raised = Enumerable.Range(0, world.Height).SelectMany(y =>
+            Enumerable.Range(0, world.Width).Select(x => new GridPosition(x, y)))
+            .Where(position => position != vent && world.GetElevation(position) > 0.2f).ToArray();
+        Assert.True(raised.Length >= 10);
+        Assert.True(raised.Max(world.GetElevation) > world.GetElevation(vent));
+    }
+
+    [Fact]
     public void LavaCoverRemainsSeparateFromRaisedTerrainAndBiome()
     {
         var world = CreateLandWorld();
@@ -30,7 +92,7 @@ public sealed class VolcanismTests
         var elevations = nearby.ToDictionary(position => position, world.GetElevation);
         Assert.True(Volcanism.SpawnVolcano(world, vent, VolcanoState.Dormant));
         Assert.Equal(1, CountCover(world, SurfaceCover.Lava));
-        Assert.InRange(world.GetElevation(vent) - elevations[vent], 0.012f, 0.047f);
+        Assert.InRange(world.GetElevation(vent) - elevations[vent], 0.003f, 0.01f);
         Assert.All(nearby.Where(position => position != vent), position =>
             Assert.Equal(elevations[position], world.GetElevation(position)));
         Assert.DoesNotContain(nearby, position => world.GetTerrain(position) is Terrain.Mountain);
@@ -46,7 +108,7 @@ public sealed class VolcanismTests
         {
             var before = world.GetElevation(vent);
             Assert.True(Volcanism.TriggerEruption(world, vent));
-            Assert.InRange(world.GetElevation(vent) - before, 0.012f, 0.047f);
+            Assert.InRange(world.GetElevation(vent) - before, 0.003f, 0.01f);
         }
         Assert.True(world.GetElevation(vent) < TerrainClassifier.MountainElevationThreshold);
         Assert.NotEqual(Terrain.Mountain, world.GetTerrain(vent));

@@ -5,6 +5,48 @@ namespace Newt.Simulation.Tests;
 
 public sealed class WhaleCarcassTests
 {
+    [Theory]
+    [InlineData(CritterSpecies.Fish, Terrain.Ocean)]
+    [InlineData(CritterSpecies.Crab, Terrain.Ocean)]
+    [InlineData(CritterSpecies.Nautilus, Terrain.Shallows)]
+    public void WhaleFallFeedsScavengersOutsideTheirNormalForagingTerrain(CritterSpecies species, Terrain terrain)
+    {
+        var world = new SimulationWorld(1, 1, terrain) { SeasonsEnabled = false };
+        NaturalEvents.SetEnabled(world, false);
+        var tile = new GridPosition(0, 0);
+        world.SetTemperature(tile, 0.5f);
+        world.AddCritter(CritterSpecies.BaleenWhale, tile);
+        Assert.True(world.RemoveCritterAt(tile));
+        world.AddCritter(species, tile);
+        var before = world.GetCritter(0).Energy;
+        Assert.True((bool)typeof(SimulationWorld).GetMethod("TryFeedFromTerrain", Flags)!.Invoke(world, [0])!);
+        Assert.Equal(before + 1, world.GetCritter(0).Energy);
+        Assert.Equal(9, world.GetWhaleFallNutrition(tile));
+    }
+
+    [Theory]
+    [InlineData(CritterSpecies.ToothedWhale)]
+    [InlineData(CritterSpecies.BaleenWhale)]
+    public void WhaleFallVisualNutritionEndsWhenCarcassIsConsumed(CritterSpecies species)
+    {
+        var world = new SimulationWorld(1, 1, Terrain.DeepOcean);
+        var tile = new GridPosition(0, 0);
+        Assert.Equal(0, world.GetWhaleFallNutrition(tile));
+        world.AddCritter(species, tile);
+        Assert.True(world.RemoveCritterAt(tile));
+        Assert.Equal(10, world.GetWhaleFallNutrition(tile));
+        var consume = typeof(SimulationWorld).GetMethod("TryConsumeEnvironmentalNutrition", Flags)!;
+        for (var remaining = 9; remaining >= 0; remaining--)
+        {
+            Assert.True((bool)consume.Invoke(world, [CritterSpecies.Worm, 0])!);
+            Assert.Equal(remaining, world.GetWhaleFallNutrition(tile));
+        }
+        // Ordinary tile nutrients must not keep a depleted carcass visible.
+        typeof(SimulationWorld).GetMethod("DepositTileNutrition", Flags)!.Invoke(world, [0]);
+        Assert.True(world.GetTileNutrition(tile) > 0);
+        Assert.Equal(0, world.GetWhaleFallNutrition(tile));
+    }
+
     private const BindingFlags Flags = BindingFlags.Instance | BindingFlags.NonPublic;
 
     [Fact]
@@ -19,7 +61,8 @@ public sealed class WhaleCarcassTests
             var consume = typeof(SimulationWorld).GetMethod("TryConsumeEnvironmentalNutrition", Flags)!;
             consume.Invoke(world, [species, 0]);
             var remaining = (byte[])typeof(SimulationWorld).GetField("_whaleFallNutrition", Flags)!.GetValue(world)!;
-            var canEat = species is CritterSpecies.Worm or CritterSpecies.Trilobite or CritterSpecies.Nautilus;
+            var canEat = species is CritterSpecies.Worm or CritterSpecies.Trilobite or CritterSpecies.Nautilus or
+                CritterSpecies.Fish or CritterSpecies.Crab;
             Assert.Equal(canEat ? 9 : 10, remaining[0]);
         }
     }

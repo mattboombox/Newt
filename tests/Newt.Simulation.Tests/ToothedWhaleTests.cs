@@ -147,7 +147,7 @@ public sealed class ToothedWhaleTests
     [InlineData(20, false)]
     [InlineData(21, false)]
     [InlineData(30, false)]
-    public void WhaleIgnoresFishWhenContinuingCombatHunt(int energy, bool hungry)
+    public void HungryWhaleSwitchesFromCombatToFish(int energy, bool hungry)
     {
         var world = new SimulationWorld(40, 1, Terrain.Ocean, seed: 51);
         world.AddCritter(CritterSpecies.ToothedWhale, new(0, 0));
@@ -161,7 +161,7 @@ public sealed class ToothedWhaleTests
         world.AddCritter(CritterSpecies.Fish, fish);
         energies[0] = energy;
         Assert.Equal(hungry, world.GetCritter(0).IsHungry);
-        Assert.Equal(energy < 30 ? squid : (GridPosition?)null,
+        Assert.Equal(hungry ? fish : energy < 30 ? squid : (GridPosition?)null,
             world.FindToothedWhalePrey(0, null));
     }
 
@@ -212,10 +212,11 @@ public sealed class ToothedWhaleTests
     }
 
     [Fact]
-    public void ToothedWhaleHuntsOceanPredatorsButNotFishOrNautiluses()
+    public void ToothedWhaleHuntsFishApesAndOceanPredatorsButNotNautiluses()
     {
         var expectedPrey = new HashSet<CritterSpecies>
         {
+            CritterSpecies.Fish,
             CritterSpecies.SeaScorpion,
             CritterSpecies.Squid,
             CritterSpecies.ApeSailor,
@@ -331,8 +332,7 @@ public sealed class ToothedWhaleTests
 
     [Theory]
     [InlineData(CritterSpecies.Nautilus)]
-    [InlineData(CritterSpecies.Fish)]
-    public void ToothedWhaleCannotConsumeFishOrNautilusEvenWhenAdjacent(CritterSpecies prey)
+    public void ToothedWhaleCannotConsumeNautilusEvenWhenAdjacent(CritterSpecies prey)
     {
         var world = new SimulationWorld(1, 2, Terrain.Ocean, seed: 42);
         world.SeasonsEnabled = false;
@@ -347,6 +347,35 @@ public sealed class ToothedWhaleTests
         Assert.Equal(before, world.GetCritter(1).Energy);
         Assert.Equal(1, world.GetCritterCount(prey));
         Assert.Equal(1, world.GetCritterCount(CritterSpecies.ToothedWhale));
+    }
+
+    [Fact]
+    public void ToothedWhaleConsumesFishAndGainsEnergyDuringSimulation()
+    {
+        var world = new SimulationWorld(1, 2, Terrain.Ocean, seed: 42);
+        world.SeasonsEnabled = false;
+        NaturalEvents.SetEnabled(world, false);
+        var whale = world.AddCritter(CritterSpecies.ToothedWhale, new(0, 0));
+        world.AddCritter(CritterSpecies.Fish, new(0, 1));
+        for (var tick = 0; tick < SimulationWorld.GetMovementIntervalTicks(CritterSpecies.ToothedWhale); tick++)
+            world.AdvanceOneTick();
+        Assert.Equal(0, world.GetCritterCount(CritterSpecies.Fish));
+        Assert.True(world.TryGetCritter(whale, out var fed));
+        Assert.Equal(CritterNutritions.Get(CritterSpecies.ToothedWhale).InitialEnergy +
+            CritterNutritions.Get(CritterSpecies.Fish).FoodEnergy, fed.Energy);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(7)]
+    [InlineData(19)]
+    public void ToothedWhaleFindsFishIncludingAcrossWorldSeam(int preyX)
+    {
+        var world = new SimulationWorld(20, 1, Terrain.Ocean, seed: 42);
+        world.AddCritter(CritterSpecies.ToothedWhale, new(0, 0));
+        var fish = new GridPosition(preyX, 0);
+        world.AddCritter(CritterSpecies.Fish, fish);
+        Assert.Equal(fish, world.FindToothedWhalePrey(0, null));
     }
 
     [Fact]

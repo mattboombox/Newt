@@ -6,6 +6,103 @@ namespace Newt.Simulation.Tests;
 public sealed class ApeTraderTests
 {
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void StableLandAndSeaNetworksReuseSearchesAndDetectBrokenConnections(bool sea)
+    {
+        var world = CreateWorld(sea);
+        if (!sea)
+            Assert.True(world.TryPlaceVillageRoad(First));
+        Assert.True(world.CanBuildApeMarket(First));
+        var searches = world.TraderPathSearchCount;
+        var builds = world.TraderSettlementBuildCount;
+        for (var query = 0; query < 1000; query++)
+            Assert.True(world.CanBuildApeMarket(First));
+        Assert.Equal(searches, world.TraderPathSearchCount);
+        Assert.Equal(builds, world.TraderSettlementBuildCount);
+
+        if (sea)
+            world.SetTerrain(new(20, 8), Terrain.Plains);
+        else
+            Assert.True(world.RemoveVillageRoadAt(new(20, 10)));
+        Assert.False(world.CanBuildApeMarket(First));
+        Assert.True(world.TraderPathSearchCount > searches);
+        Assert.True(world.TraderSettlementBuildCount > builds);
+
+        if (sea)
+            world.SetTerrain(new(20, 8), Terrain.Ocean);
+        else
+            Assert.True(world.TryPlaceVillageRoad(First));
+        Assert.True(world.CanBuildApeMarket(First));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void StableTraderJourneysSkipWholeRouteValidationUntilMapChanges(bool sea)
+    {
+        var world = CreateWorld(sea);
+        if (!sea)
+            Assert.True(world.TryPlaceVillageRoad(First));
+        var trader = Recruit(world, AddMarket(world, First));
+        world.AdvanceApeTraders();
+        var checks = world.TraderJourneyValidationCount;
+        var builds = world.TraderSettlementBuildCount;
+        for (var tick = 0; tick < 1000; tick++)
+            world.AdvanceApeTraders();
+        Assert.Equal(checks, world.TraderJourneyValidationCount);
+        Assert.Equal(builds, world.TraderSettlementBuildCount);
+        Assert.True(world.TryGetCritter(trader.Id, out _));
+        if (sea)
+            world.SetTerrain(new(20, 8), Terrain.Plains);
+        else
+            Assert.True(world.RemoveVillageRoadAt(new(20, 10)));
+        world.AdvanceApeTraders();
+        Assert.False(world.TryGetCritter(trader.Id, out _));
+        Assert.True(world.TraderJourneyValidationCount > checks);
+    }
+
+    [Theory]
+    [InlineData("cover")]
+    [InlineData("water")]
+    [InlineData("harbor")]
+    [InlineData("village")]
+    public void CachedSeaRoutesReactToSurfaceWaterCoverAndBuildingChanges(string change)
+    {
+        var world = CreateWorld(sea: true);
+        var crossing = new GridPosition(20, 8);
+        if (change == "water")
+        {
+            world.SetTerrain(crossing, Terrain.Mountain);
+            world.SetSurfaceWater(crossing, SurfaceWaterKind.River);
+        }
+        Assert.True(world.CanBuildApeMarket(First));
+        switch (change)
+        {
+            case "cover": world.SetSurfaceCover(crossing, SurfaceCover.Lava, 1000); break;
+            case "water": world.ClearFreshwaterForTerrainRebuild(crossing); break;
+            case "harbor": Assert.True(world.RemoveApeStructureAt(new(Second.X, Second.Y - 1))); break;
+            case "village": Assert.True(world.RemoveApeStructureAt(Second)); break;
+        }
+        Assert.False(world.CanBuildApeMarket(First));
+    }
+
+    [Fact]
+    public void CachedTraderRoutesAreIndependentOfEachJourney()
+    {
+        var world = CreateWorld(sea: true);
+        var find = typeof(SimulationWorld).GetMethod("FindTraderPath", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        var start = First.Y * world.Width + First.X;
+        var first = (List<int>)find.Invoke(world, [start, start, -1, true])!;
+        var expected = first.ToArray();
+        first.Clear();
+        var searches = world.TraderPathSearchCount;
+        var second = (List<int>)find.Invoke(world, [start, start, -1, true])!;
+        Assert.Equal(expected, second);
+        Assert.Equal(searches, world.TraderPathSearchCount);
+    }
+
+    [Theory]
     [InlineData(CritterSpecies.ApeTrader, CritterSpecies.Wolf, 1, 12)]
     [InlineData(CritterSpecies.ApeTraderSailor, CritterSpecies.ToothedWhale, 10, 12)]
     [InlineData(CritterSpecies.ApeTrader, CritterSpecies.Vampire, 1, 12)]

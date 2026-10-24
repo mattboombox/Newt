@@ -9,6 +9,10 @@ public static class Volcanism
     private const int SubmergedLavaLifetimeTicks = 3 * SimulationWorld.TicksPerSecond;
     private const int BaseStoneLifetimeTicks = 45 * SimulationWorld.TicksPerSecond;
 
+    // Most new rock belongs on the flanks, rather than repeatedly piling up at the vent.
+    private static float VentElevationGain(SimulationWorld world) => 0.003f + world.NextUnitFloat() * 0.007f;
+    private static float FlowElevationGain(SimulationWorld world) => 0.024f + world.NextUnitFloat() * 0.07f;
+
     private static readonly GridPosition[] Directions =
     [
         new(1, 0),
@@ -83,10 +87,10 @@ public static class Volcanism
             state,
             world.NextInt(Directions.Length),
             world.Tick + RandomRange(world, 2, 5) * SimulationWorld.TicksPerSecond,
-            world.Tick + RandomRange(world, 25, 46) * SimulationWorld.TicksPerSecond);
+            world.Tick + RandomRange(world, 40, 71) * SimulationWorld.TicksPerSecond);
         world.Volcanoes.Add(volcano);
         // A vent starts as a lava source; its flows build the surrounding land over time.
-        var changed = DepositLava(world, position, 0.012f + world.NextUnitFloat() * 0.035f);
+        var changed = DepositLava(world, position, VentElevationGain(world));
         if (changed)
         {
             RebuildAfterDeposits(world);
@@ -179,7 +183,7 @@ public static class Volcanism
                 {
                     volcano.State = VolcanoState.Active;
                     volcano.NextEruptionTick = world.Tick + RandomRange(world, 1, 4) * SimulationWorld.TicksPerSecond;
-                    volcano.NextStateTick = world.Tick + RandomRange(world, 20, 41) * SimulationWorld.TicksPerSecond;
+                    volcano.NextStateTick = world.Tick + RandomRange(world, 35, 61) * SimulationWorld.TicksPerSecond;
                 }
                 else
                 {
@@ -207,7 +211,7 @@ public static class Volcanism
 
     private static bool BeginEruption(SimulationWorld world, VolcanoActivity volcano)
     {
-        var changed = DepositLava(world, volcano.Position, 0.012f + world.NextUnitFloat() * 0.035f);
+        var changed = DepositLava(world, volcano.Position, VentElevationGain(world));
         var flowCount = RandomRange(world, 1, 4);
         for (var flow = 0; flow < flowCount; flow++)
         {
@@ -215,8 +219,8 @@ public static class Volcanism
             world.LavaFlows.Add(new LavaFlowActivity(
                 volcano.Position,
                 direction,
-                RandomRange(world, 7, 17),
-                world.Tick + FlowStepIntervalTicks));
+                RandomRange(world, 10, 24),
+                world.Tick + FlowStepIntervalTicks) { Vent = volcano.Position });
         }
 
         var chunks = RandomRange(world, 1, 4);
@@ -231,7 +235,7 @@ public static class Volcanism
                 volcano.Position.Y + direction.Y * distance + scatter.Y * world.NextInt(2));
             if (target is not null)
             {
-                changed |= DepositLava(world, target.Value, 0.01f + world.NextUnitFloat() * 0.035f);
+                changed |= DepositLava(world, target.Value, FlowElevationGain(world));
             }
         }
 
@@ -266,7 +270,9 @@ public static class Volcanism
             flow.Direction = next.Value.Direction;
             flow.RemainingSteps--;
             flow.NextStepTick = world.Tick + FlowStepIntervalTicks;
-            changed |= DepositLava(world, flow.Position, 0.012f + world.NextUnitFloat() * 0.035f);
+            changed |= DepositLava(world, flow.Position, flow.Vent is null
+                ? 0.012f + world.NextUnitFloat() * 0.035f
+                : flow.Vent == flow.Position ? VentElevationGain(world) : FlowElevationGain(world));
             if (flow.RemainingSteps <= 0)
             {
                 world.LavaFlows.RemoveAt(index);

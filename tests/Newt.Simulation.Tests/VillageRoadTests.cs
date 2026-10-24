@@ -4,11 +4,167 @@ namespace Newt.Simulation.Tests;
 
 public sealed class VillageRoadTests
 {
+    [Fact]
+    public void ManualRoadConnectsChosenVillagesRatherThanCloserUnselectedVillage()
+    {
+        var world = CreateWorld(2, 2);
+        var closerVillage = new GridPosition(4, 3);
+        Assert.True(world.TrySpawnTestApeVillage(closerVillage));
+        Assert.True(world.TryConnectVillageRoad(First, Second, out _));
+        Assert.NotEqual(RiverConnection.None, world.GetRoadConnections(First));
+        Assert.NotEqual(RiverConnection.None, world.GetRoadConnections(Second));
+        Assert.Equal(RiverConnection.None, world.GetRoadConnections(closerVillage));
+        Assert.Equal(1, world.VillageRoadCount);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ManualRoadReusesNetworkConnectedToEitherSelectedVillage(bool reverse)
+    {
+        var world = CreateWorld(2, 2);
+        var third = new GridPosition(15, 25);
+        world.RemoveCritterAt(third);
+        Assert.True(world.TrySpawnTestApeVillage(third));
+        Assert.True(world.TryConnectVillageRoad(Second, third, out _));
+        var existing = Positions(world).Where(tile => world.GetRoadConnections(tile) != RiverConnection.None)
+            .ToDictionary(tile => tile, world.GetRoadConnections);
+        Assert.True(world.TryConnectVillageRoad(reverse ? Second : First, reverse ? First : Second, out _));
+        var added = Positions(world).Where(tile => world.GetRoadConnections(tile) != RiverConnection.None &&
+            !existing.ContainsKey(tile)).ToArray();
+        // Joining the nearby network is shorter than laying twenty tiles to Second.
+        Assert.InRange(added.Length, 1, 18);
+        Assert.Contains(added, tile => tile.Y > First.Y);
+        Assert.All(existing, pair => Assert.Equal(pair.Value, world.GetRoadConnections(pair.Key) & pair.Value));
+        Assert.Equal(2, world.VillageRoadCount);
+        var tilesBefore = Positions(world).ToDictionary(tile => tile, world.GetRoadConnections);
+        Assert.False(world.TryConnectVillageRoad(First, Second, out var status));
+        Assert.Contains("already", status);
+        Assert.All(tilesBefore, pair => Assert.Equal(pair.Value, world.GetRoadConnections(pair.Key)));
+    }
+
+    [Fact]
+    public void ManualRoadAcceptsDistrictClicksAndRejectsSameVillageWithoutBuilding()
+    {
+        var world = CreateWorld(2, 2);
+        Assert.False(world.TryConnectVillageRoad(First, new(10, 11), out _));
+        Assert.Equal(0, world.VillageRoadCount);
+        Assert.True(world.TryConnectVillageRoad(new(10, 11), new(30, 11), out _));
+        Assert.Equal(1, world.VillageRoadCount);
+        Assert.False(world.TryConnectVillageRoad(new(-1, 10), Second, out _));
+    }
+
+    [Fact]
+    public void ManualRoadJoinsTwoExistingNetworks()
+    {
+        var world = CreateWorld(2, 2);
+        var third = new GridPosition(15, 25);
+        var fourth = new GridPosition(45, 25);
+        Assert.True(world.TrySpawnTestApeVillage(third));
+        Assert.True(world.TrySpawnTestApeVillage(fourth));
+        Assert.True(world.TryConnectVillageRoad(First, Second, out _));
+        Assert.True(world.TryConnectVillageRoad(third, fourth, out _));
+        Assert.Equal(2, world.VillageRoadCount);
+        Assert.True(world.TryConnectVillageRoad(First, fourth, out _));
+        Assert.Equal(3, world.VillageRoadCount);
+        Assert.False(world.TryConnectVillageRoad(Second, third, out var status));
+        Assert.Contains("already", status);
+    }
+
+    [Fact]
+    public void ManualRoadCanBridgeTwoShallowsTilesAndFailureLeavesRoadsUnchanged()
+    {
+        var world = CreateWorld(2, 2);
+        for (var y = 0; y < world.Height; y++)
+        {
+            world.SetTerrain(new(20, y), Terrain.Shallows);
+            world.SetTerrain(new(21, y), Terrain.Shallows);
+            world.SetTerrain(new(60, y), Terrain.Ocean);
+        }
+        Assert.True(world.TryConnectVillageRoad(First, Second, out _));
+        Assert.Equal(2, Positions(world).Count(tile => world.GetTerrain(tile) is Terrain.Shallows &&
+            world.GetRoadConnections(tile) != RiverConnection.None));
+
+        var isolated = CreateWorld(2, 2);
+        for (var y = 0; y < isolated.Height; y++)
+        {
+            isolated.SetTerrain(new(20, y), Terrain.Ocean);
+            isolated.SetTerrain(new(60, y), Terrain.Ocean);
+        }
+        Assert.False(isolated.TryConnectVillageRoad(First, Second, out _));
+        Assert.Equal(0, isolated.VillageRoadCount);
+        Assert.All(Positions(isolated), tile => Assert.Equal(RiverConnection.None, isolated.GetRoadConnections(tile)));
+    }
+
+    [Fact]
+    public void RoadCostsRankBiomesAndAddEarthworksToBiomeDifficulty()
+    {
+        var ordered = new[] { Biome.Grassland, Biome.Arid, Biome.Desert, Biome.Forest,
+            Biome.Tundra, Biome.Taiga, Biome.Arctic, Biome.Jungle, Biome.Bog };
+        for (var index = 1; index < ordered.Length; index++)
+            Assert.True(SimulationWorld.GetRoadConstructionCost(Terrain.Plains, ordered[index]) >
+                SimulationWorld.GetRoadConstructionCost(Terrain.Plains, ordered[index - 1]));
+        Assert.Equal(SimulationWorld.GetRoadConstructionCost(Terrain.Plains, Biome.Bog),
+            SimulationWorld.GetRoadConstructionCost(Terrain.Plains, Biome.Swamp));
+        foreach (var biome in Enum.GetValues<Biome>())
+        {
+            var plains = SimulationWorld.GetRoadConstructionCost(Terrain.Plains, biome);
+            Assert.Equal(plains + 10, SimulationWorld.GetRoadConstructionCost(Terrain.Hills, biome));
+            Assert.Equal(plains + 20, SimulationWorld.GetRoadConstructionCost(Terrain.Canyon, biome));
+            Assert.Equal(plains + 25, SimulationWorld.GetRoadConstructionCost(Terrain.Trench, biome));
+        }
+    }
+
+    [Theory]
+    [InlineData(Terrain.Plains, Biome.Arctic)]
+    [InlineData(Terrain.Plains, Biome.Forest)]
+    [InlineData(Terrain.Plains, Biome.Taiga)]
+    [InlineData(Terrain.Plains, Biome.Swamp)]
+    [InlineData(Terrain.Hills, Biome.Grassland)]
+    [InlineData(Terrain.Canyon, Biome.Grassland)]
+    [InlineData(Terrain.Trench, Biome.Grassland)]
+    public void RoadsPreferShortEasyDetoursOverDifficultGround(Terrain terrain, Biome biome)
+    {
+        var world = CreateWorld();
+        var difficult = Enumerable.Range(15, 11).Select(x => new GridPosition(x, 10)).ToArray();
+        foreach (var tile in difficult)
+        {
+            world.SetTerrain(tile, terrain);
+            world.SetBiome(tile, biome);
+        }
+        Assert.True(world.TryPlaceVillageRoad(First));
+        Assert.All(difficult, tile => Assert.Equal(RiverConnection.None, world.GetRoadConnections(tile)));
+        Assert.Equal(1, world.VillageRoadCount);
+    }
+
+    [Fact]
+    public void UnchangedRoadsSkipValidationAndTerrainEditsStillRepairThem()
+    {
+        var world = CreateWorld();
+        Assert.True(world.TryPlaceVillageRoad(First));
+        var validate = typeof(SimulationWorld).GetMethod("ValidateVillageRoads",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        validate.Invoke(world, null);
+        var checks = world.VillageRoadValidationCount;
+        for (var tick = 0; tick < 1000; tick++)
+            validate.Invoke(world, null);
+        Assert.Equal(checks, world.VillageRoadValidationCount);
+        var blocked = new GridPosition(20, 10);
+        Assert.NotEqual(RiverConnection.None, world.GetRoadConnections(blocked));
+        world.SetSurfaceWater(blocked, SurfaceWaterKind.FreshwaterLake);
+        validate.Invoke(world, null);
+        Assert.True(world.VillageRoadValidationCount > checks);
+        Assert.Equal(RiverConnection.None, world.GetRoadConnections(blocked));
+        Assert.Equal(1, world.VillageRoadCount);
+    }
+
     [Theory]
     [InlineData(1, false, true)]
-    [InlineData(2, false, false)]
+    [InlineData(2, false, true)]
+    [InlineData(3, false, false)]
     [InlineData(1, true, true)]
-    public void ShallowsBridgesSpanOneTileOnlyWhenNoLandRouteExists(int width, bool landRoute, bool connects)
+    [InlineData(2, true, true)]
+    public void CheapShallowsBridgesBeatLongLandDetoursAndSpanUpToTwoTiles(int width, bool landRoute, bool connects)
     {
         var world = CreateWorld();
         for (var y = 0; y < world.Height; y++)
@@ -16,19 +172,21 @@ public sealed class VillageRoadTests
             for (var x = 20; x < 20 + width; x++) world.SetTerrain(new(x, y), Terrain.Shallows);
             world.SetTerrain(new(60, y), Terrain.Ocean);
         }
-        if (landRoute) world.SetTerrain(new(20, 0), Terrain.Plains);
+        if (landRoute)
+            for (var x = 20; x < 20 + width; x++) world.SetTerrain(new(x, 0), Terrain.Plains);
         Assert.Equal(connects, world.TryPlaceVillageRoad(First));
         var bridges = Positions(world).Where(p => world.GetTerrain(p) == Terrain.Shallows &&
             world.GetRoadConnections(p) != RiverConnection.None).ToArray();
-        if (connects && !landRoute)
+        if (connects)
         {
-            var bridge = Assert.Single(bridges);
-            Assert.Equal(RiverConnection.East | RiverConnection.West, world.GetRoadConnections(bridge));
+            Assert.Equal(width, bridges.Length);
+            Assert.All(bridges, bridge =>
+                Assert.Equal(RiverConnection.East | RiverConnection.West, world.GetRoadConnections(bridge)));
             world.AdvanceOneTick();
-            Assert.NotEqual(RiverConnection.None, world.GetRoadConnections(bridge));
-            world.SetTerrain(bridge, Terrain.Ocean);
+            Assert.All(bridges, bridge => Assert.NotEqual(RiverConnection.None, world.GetRoadConnections(bridge)));
+            world.SetTerrain(bridges[0], Terrain.Ocean);
             world.AdvanceOneTick();
-            Assert.Equal(RiverConnection.None, world.GetRoadConnections(bridge));
+            Assert.All(bridges, bridge => Assert.Equal(RiverConnection.None, world.GetRoadConnections(bridge)));
         }
         else Assert.Empty(bridges);
     }

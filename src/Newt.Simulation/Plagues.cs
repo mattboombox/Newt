@@ -29,10 +29,14 @@ public sealed partial class SimulationWorld
 
     internal bool TryInfectCritterAt(GridPosition position, PlagueKind kind, int immuneRemainder, int? lichOrigin = null)
     {
+        if (kind is PlagueKind.Blight)
+            return TryBlightFarmAt(position);
         if (kind is not (PlagueKind.Plague or PlagueKind.Zombie or PlagueKind.Vampire) || !Contains(position))
         {
             return false;
         }
+        if (kind is PlagueKind.Zombie && lichOrigin is { } origin)
+            immuneRemainder = GetOrCreatePlagueImmunityRemainder(origin, immuneRemainder);
         var index = _occupants[GetIndex(position)];
         if (index < 0 || _critterIds[index].Value % 2 == immuneRemainder ||
             (!IsLivingApe(_species[index]) || _species[index] is CritterSpecies.ApeSailor))
@@ -68,7 +72,8 @@ public sealed partial class SimulationWorld
 
     private bool TrySpreadCritterPlague(int source, GridPosition position, PlagueKind kind, int immuneRemainder) =>
         TryInfectCritterAt(position, kind, immuneRemainder,
-            _lichArmy.TryGetValue(_critterIds[source].Value, out var lich) ? lich : null);
+            _species[source] is CritterSpecies.Lich ? _critterIds[source].Value :
+                _lichArmy.TryGetValue(_critterIds[source].Value, out var lich) ? lich : null);
 
     private static bool IsLivingApe(CritterSpecies species) =>
         species is CritterSpecies.Ape or CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack or CritterSpecies.ApeSailor or CritterSpecies.ApeWarrior or CritterSpecies.ApeRoyalGuard or
@@ -86,7 +91,7 @@ public sealed partial class SimulationWorld
             return;
         }
 
-        foreach (var (tile, structure) in _apeStructures)
+        foreach (var (tile, structure) in _apeStructures.ToArray())
         {
             if (structure is ApeStructureKind.Village)
             {
@@ -118,6 +123,14 @@ public sealed partial class SimulationWorld
             return false;
         }
 
+        var outcome = NextInt(4);
+        if (outcome == 3)
+        {
+            if (TryStartVillageBlight(villageTile)) return true;
+            // Villages without crop farms can still suffer an ape outbreak.
+            outcome = NextInt(3);
+        }
+
         var selected = -1;
         var candidates = 0;
         var immuneRemainder = NextInt(2);
@@ -132,7 +145,7 @@ public sealed partial class SimulationWorld
             }
         }
         if (selected < 0) return false;
-        var kind = NextInt(3) switch
+        var kind = outcome switch
         {
             0 => PlagueKind.Plague,
             1 => PlagueKind.Zombie,
@@ -144,8 +157,16 @@ public sealed partial class SimulationWorld
     private int GetPlagueImmunityRemainder(int index)
     {
         var id = _critterIds[index].Value;
+        var origin = _lichArmy.GetValueOrDefault(id, id);
+        var remainder = GetOrCreatePlagueImmunityRemainder(origin);
+        _plagueImmunityRemainders[id] = remainder;
+        return remainder;
+    }
+
+    private int GetOrCreatePlagueImmunityRemainder(int id, int? initial = null)
+    {
         if (!_plagueImmunityRemainders.TryGetValue(id, out var remainder))
-            _plagueImmunityRemainders[id] = remainder = NextInt(2);
+            _plagueImmunityRemainders[id] = remainder = initial ?? NextInt(2);
         return remainder;
     }
 
@@ -193,7 +214,13 @@ public sealed partial class SimulationWorld
         }
         _plagues[id] = (infection.Kind, infection.InfectedTick, Tick + PlagueDrainIntervalTicks);
         _energy[index] = Math.Max(0, _energy[index] - 1);
+        SetDamageFlash(index, sickness: true);
+    }
+
+    private void SetDamageFlash(int index, bool sickness = false)
+    {
         _damageFlashUntilTicks[index] = Tick + CombatDamageFlashTicks;
+        _sicknessDamageFlashes[index] = sickness;
     }
 
     private bool TryReanimateApe(int index)

@@ -6,6 +6,8 @@ internal sealed class LavaFlowActivity(
     int remainingSteps,
     long nextStepTick)
 {
+    public GridPosition? Vent { get; init; }
+
     public GridPosition Position { get; set; } = position;
 
     public int Direction { get; set; } = direction;

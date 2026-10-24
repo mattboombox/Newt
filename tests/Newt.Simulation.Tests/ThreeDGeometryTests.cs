@@ -5,6 +5,199 @@ namespace Newt.Simulation.Tests;
 
 public sealed class ThreeDGeometryTests
 {
+    [Fact]
+    public void RoadSidesMeetLowerRoadsAndBridgeDecksWithoutExtendingIntoWater()
+    {
+        Assert.Equal(2.01f, ThreeDGeometry.RoadSideBottom(2, 1, null, false));
+        Assert.Equal(3, ThreeDGeometry.RoadSideBottom(2, 3, null, false));
+        var deck = ThreeDGeometry.RoadHeight(2, 0, true);
+        Assert.Equal(deck, ThreeDGeometry.RoadSideBottom(2, 1, 0, true));
+        Assert.True(deck > ThreeDGeometry.ColumnHeight(0));
+        // Equal-height bridge tiles need no vertical strip down to the sea bed.
+        Assert.Equal(ThreeDGeometry.RoadHeight(1, 0, true), deck);
+    }
+
+    [Fact]
+    public void UnderwaterCameraTintFadesAcrossWaterlineAndRemainsBounded()
+    {
+        Assert.Equal(0, ThreeDGeometry.UnderwaterTintOpacity(6, 5));
+        Assert.Equal(0, ThreeDGeometry.UnderwaterTintOpacity(5, 5));
+        Assert.Equal(0, ThreeDGeometry.UnderwaterTintOpacity(1, null));
+        Assert.InRange(ThreeDGeometry.UnderwaterTintOpacity(4.925f, 5), 0.1399f, 0.1401f);
+        Assert.Equal(0.28f, ThreeDGeometry.UnderwaterTintOpacity(4, 5));
+        Assert.Equal(0.28f, ThreeDGeometry.UnderwaterTintOpacity(-100, 5));
+    }
+
+    [Fact]
+    public void FastSinkingTriplesDescentWithoutChangingSwimmingUp()
+    {
+        var normal = ThreeDGeometry.FirstPersonSwimmingHeight(5, 0, 5, false, 1);
+        var fast = ThreeDGeometry.FirstPersonSwimmingHeight(5, 0, 5, false, 1, fastSink: true);
+        Assert.InRange(5 - fast, 1.1999f, 1.2001f);
+        Assert.InRange((5 - fast) / (5 - normal), 2.999f, 3.001f);
+        Assert.Equal(ThreeDGeometry.FirstPersonSwimmingHeight(4, 0, 5, true, 1),
+            ThreeDGeometry.FirstPersonSwimmingHeight(4, 0, 5, true, 1, fastSink: true));
+        Assert.Equal(1.2f, ThreeDGeometry.FirstPersonSwimmingHeight(1.3f, 0, 5, false, 1, fastSink: true));
+    }
+
+    [Fact]
+    public void IceEntryPreservesWhichSideOfTheSheetThePlayerApproachesFrom()
+    {
+        Assert.Equal(ThreeDGeometry.IceEntry.Above,
+            ThreeDGeometry.FirstPersonIceEntry(6, 1, 5, false, false));
+        Assert.Equal(ThreeDGeometry.IceEntry.Below,
+            ThreeDGeometry.FirstPersonIceEntry(4, 1, 5, false, false));
+        Assert.Equal(ThreeDGeometry.IceEntry.Blocked,
+            ThreeDGeometry.FirstPersonIceEntry(5, 1, 5, false, false));
+        // A swimmer cannot pop onto a lower adjacent ice sheet.
+        Assert.Equal(ThreeDGeometry.IceEntry.Blocked,
+            ThreeDGeometry.FirstPersonIceEntry(4, 1, 3, false, true));
+        Assert.Equal(ThreeDGeometry.IceEntry.Blocked,
+            ThreeDGeometry.FirstPersonIceEntry(4, 4.9f, 5, false, true));
+        Assert.Equal(ThreeDGeometry.IceEntry.Above,
+            ThreeDGeometry.FirstPersonIceEntry(6, 1, 7, true, false));
+    }
+
+    [Fact]
+    public void SwimmingUnderIceStopsAtUndersideAndReleaseSinksAgain()
+    {
+        const float ceiling = 4.94f;
+        var eye = 3f;
+        for (var frame = 0; frame < 300; frame++)
+        {
+            var next = ThreeDGeometry.FirstPersonSwimmingHeight(eye, 1, 5, true, 1f / 60, ceiling: ceiling);
+            Assert.InRange(next - eye, 0, 0.0134f);
+            Assert.True(next <= ceiling);
+            eye = next;
+        }
+        Assert.Equal(ceiling, eye);
+        var sunk = ThreeDGeometry.FirstPersonSwimmingHeight(eye, 1, 5, false, 1, ceiling: ceiling);
+        Assert.InRange(eye - sunk, 0.3999f, 0.4001f);
+        var emerged = ThreeDGeometry.FirstPersonSwimmingHeight(eye, 1, 5, true, 1);
+        Assert.True(emerged > ceiling);
+    }
+
+    [Fact]
+    public void LowIceCeilingAllowsSwimmingWithoutSnappingToStandingHeight()
+    {
+        var next = ThreeDGeometry.FirstPersonSwimmingHeight(4.5f, 4, 5, true, 0.1f, ceiling: 4.94f);
+        Assert.InRange(next, 4.5799f, 4.5801f);
+        Assert.True(next < 4 + 1.2f);
+    }
+
+    [Fact]
+    public void FirstPersonSinksSlowlyAndSwimsUpToSurfaceLimit()
+    {
+        const float ground = 1, water = 5, eyeOffset = 1.2f;
+        var surfaceEye = water + eyeOffset * 0.75f;
+        var sunk = ThreeDGeometry.FirstPersonSwimmingHeight(surfaceEye, ground, water, false, 1);
+        Assert.InRange(surfaceEye - sunk, 0.3999f, 0.4001f);
+        var risen = ThreeDGeometry.FirstPersonSwimmingHeight(sunk, ground, water, true, 0.1f);
+        Assert.InRange(risen - sunk, 0.0799f, 0.0801f);
+        for (var frame = 0; frame < 100; frame++)
+            risen = ThreeDGeometry.FirstPersonSwimmingHeight(risen, ground, water, true, 0.1f);
+        Assert.Equal(surfaceEye, risen);
+        for (var frame = 0; frame < 1000; frame++)
+            risen = ThreeDGeometry.FirstPersonSwimmingHeight(risen, ground, water, false, 0.1f);
+        Assert.Equal(ground + eyeOffset, risen);
+    }
+
+    [Fact]
+    public void SwimmingIsFrameRateIndependentAndShallowsKeepEyesAboveGround()
+    {
+        foreach (var rising in new[] { false, true })
+        {
+            var whole = ThreeDGeometry.FirstPersonSwimmingHeight(4, 0, 5, rising, 1);
+            var frames = 4f;
+            for (var frame = 0; frame < 60; frame++)
+                frames = ThreeDGeometry.FirstPersonSwimmingHeight(frames, 0, 5, rising, 1f / 60);
+            Assert.InRange(Math.Abs(whole - frames), 0, 0.0001f);
+        }
+        Assert.Equal(5.2f, ThreeDGeometry.FirstPersonSwimmingHeight(4, 4, 4.1f, false, 1));
+    }
+
+    [Fact]
+    public void SpaceDoesNotRaiseCameraOnSolidGroundOrBridgeDecks()
+    {
+        var ground = ThreeDGeometry.RoadHeight(2, 0, shallowsBridge: true);
+        var standing = ground + 1.2f;
+        Assert.Equal(standing, ThreeDGeometry.FirstPersonSwimmingHeight(standing, ground, null, true, 1));
+        Assert.Equal(standing, ThreeDGeometry.FirstPersonSwimmingHeight(standing, ground, null, false, 1));
+    }
+
+    [Theory]
+    [InlineData(RiverConnection.North, 0, -1, 1)]
+    [InlineData(RiverConnection.NorthEast, 1, -1, 2)]
+    [InlineData(RiverConnection.East, 1, 0, 1)]
+    [InlineData(RiverConnection.SouthEast, 1, 1, 2)]
+    [InlineData(RiverConnection.South, 0, 1, 1)]
+    [InlineData(RiverConnection.SouthWest, -1, 1, 2)]
+    [InlineData(RiverConnection.West, -1, 0, 1)]
+    [InlineData(RiverConnection.NorthWest, -1, -1, 2)]
+    public void RiverCascadesFollowCardinalEdgesAndDiagonalCorners(RiverConnection direction, int dx, int dy, int faces)
+    {
+        var segments = ThreeDGeometry.ConnectionSideSegments(direction).ToArray();
+        Assert.Equal(faces, segments.Length);
+        Assert.All(segments, segment =>
+        {
+            Assert.Equal(dx, segment.TargetX);
+            Assert.Equal(dy, segment.TargetY);
+            Assert.Equal(1, Math.Abs(segment.FaceX) + Math.Abs(segment.FaceY));
+            Assert.InRange(segment.Start, 0, 1);
+            Assert.InRange(segment.End, 0, 1);
+            Assert.InRange(segment.End - segment.Start, 0.3333f, 0.3334f);
+            if (faces == 2)
+                Assert.True(segment.Start == 0 || segment.End == 1);
+        });
+        Assert.Empty(ThreeDGeometry.ConnectionSideSegments(RiverConnection.None));
+    }
+
+    [Fact]
+    public void RiverCascadesStopAtReceivingWaterOrInterveningTerrain()
+    {
+        Assert.Equal(2, ThreeDGeometry.RiverSideBottom(2, 1, null));
+        Assert.Equal(3, ThreeDGeometry.RiverSideBottom(2, 3, null));
+        Assert.Equal(ThreeDGeometry.ColumnHeight(0), ThreeDGeometry.RiverSideBottom(2, 1, 0));
+    }
+
+    [Theory]
+    [InlineData(CritterSpecies.Fish, true)]
+    [InlineData(CritterSpecies.ToothedWhale, true)]
+    [InlineData(CritterSpecies.BaleenWhale, true)]
+    [InlineData(CritterSpecies.Squid, true)]
+    [InlineData(CritterSpecies.Plankton, true)]
+    [InlineData(CritterSpecies.SeaScorpion, true)]
+    [InlineData(CritterSpecies.Ape, false)]
+    [InlineData(CritterSpecies.ApeTrader, false)]
+    [InlineData(CritterSpecies.ApeWarrior, false)]
+    [InlineData(CritterSpecies.Deer, false)]
+    public void OceanCrittersLieFlatUnderBridgesWhileLandCrittersStayAbove(CritterSpecies species, bool flat)
+    {
+        var habitat = CritterHabitats.GetHabitat(species);
+        Assert.Equal(flat, ThreeDGeometry.FlattensUnderWaterCover(habitat, false, false, true, 5));
+        Assert.False(ThreeDGeometry.FlattensUnderWaterCover(habitat, false, false, false, 0));
+    }
+
+    [Fact]
+    public void IceKeepsItsClearanceRuleAndSurfaceVesselsStayUpright()
+    {
+        Assert.True(ThreeDGeometry.FlattensUnderWaterCover(CritterHabitat.OceanDweller, false, true, false, 0.5f));
+        Assert.False(ThreeDGeometry.FlattensUnderWaterCover(CritterHabitat.OceanDweller, false, true, false, 2));
+        Assert.False(ThreeDGeometry.FlattensUnderWaterCover(CritterHabitat.ShorelineHunter, true, false, true, 0));
+    }
+
+    [Theory]
+    [InlineData(-0.5f)]
+    [InlineData(-0.1f)]
+    public void ShallowsBridgeDeckSitsAboveWaterRegardlessOfBedDepth(float bedElevation)
+    {
+        var bed = ThreeDGeometry.ColumnHeight(bedElevation);
+        Assert.Equal(ThreeDGeometry.ColumnHeight(0) + 0.015f,
+            ThreeDGeometry.RoadHeight(bed, 0, shallowsBridge: true));
+        Assert.Equal(bed + 0.01f, ThreeDGeometry.RoadHeight(bed, 0, shallowsBridge: false));
+        Assert.Equal(bed + 0.01f, ThreeDGeometry.RoadHeight(bed, null, shallowsBridge: true));
+    }
+
     [Theory]
     [InlineData(0.88f, 1f, 0f)]
     [InlineData(0.14f, 0f, 1f)]

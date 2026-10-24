@@ -14,6 +14,9 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
     private GridPosition? _warAttacker;
     private CritterId? _warAttackerLich;
     private string _warToolStatus = "L select attacker / village at war: stop";
+    private GridPosition? _roadStartVillage;
+    private const string DefaultRoadToolStatus = "L select start village, then destination / R remove";
+    private string _roadToolStatus = DefaultRoadToolStatus;
     private string _colonistToolStatus = "L village/lair: auto; tile: target";
     private string _cultureToolStatus = "L village: assign Luddite culture (any population)";
     private string _monarchyToolStatus = "L village: assign Monarchy culture (any population)";
@@ -44,7 +47,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             WorldTool.Evolve, WorldTool.NaturalEvents, WorldTool.Colonist,
             WorldTool.Feast, WorldTool.War, WorldTool.BloodWar, WorldTool.CivilWar];
     private static readonly WorldTool[] PlagueToolOrder =
-        [WorldTool.Plague, WorldTool.ZombiePlague, WorldTool.VampirePlague];
+        [WorldTool.Plague, WorldTool.ZombiePlague, WorldTool.VampirePlague, WorldTool.Blight];
     private static readonly WorldTool[] CritterToolOrder =
         [WorldTool.Plankton, WorldTool.Jellyfish, WorldTool.Worm, WorldTool.Trilobite,
             WorldTool.SeaScorpion, WorldTool.Nautilus, WorldTool.Squid, WorldTool.SquidEgg,
@@ -76,6 +79,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         "V  toggle 2D / 3D free camera",
         "F  toggle first person / 3D free camera",
         "First person: WASD walk; mouse look; Shift faster",
+        "First person: Space swim up; Left Ctrl sink faster",
         "First person: arrows and wheel ignored; V returns free camera",
         "WASD  pan; arrows pan in 2D / rotate in 3D",
         "3D: middle mouse drag to rotate; wheel zoom",
@@ -98,6 +102,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
     private string _seedText;
     private SpriteBatch? _spriteBatch;
     private Texture2D? _pixel;
+    private Texture2D? _whaleFallSprite;
     private SpriteFont? _hudFont;
     private readonly Dictionary<CritterSpecies, Texture2D> _critterSprites = [];
     private readonly Dictionary<CritterSpecies, Texture2D> _critterFlashSprites = [];
@@ -259,6 +264,12 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         LoadCritterSprite(CritterSpecies.Crab, "crab.png");
         LoadCritterSprite(CritterSpecies.ToothedWhale, "toothed-whale.png");
         LoadCritterSprite(CritterSpecies.BaleenWhale, "baleen-whale.png");
+        var whaleFallPath = Path.Combine(AppContext.BaseDirectory, "Content", "Sprites", "Critters", "whale-fall.png");
+        if (File.Exists(whaleFallPath))
+        {
+            using var whaleFallStream = File.OpenRead(whaleFallPath);
+            _whaleFallSprite = Texture2D.FromStream(GraphicsDevice, whaleFallStream);
+        }
         SetWindowIconFromNewtSprite();
     }
 
@@ -362,6 +373,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         {
             DrawWorld3D();
             _spriteBatch.Begin(samplerState: SamplerState.PointClamp);
+            DrawFirstPersonUnderwaterTint();
             DrawInterface();
             _spriteBatch.End();
             base.Draw(gameTime);
@@ -408,6 +420,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
                 {
                     DrawSurfaceWater(screenX, screenY, position, water);
                 }
+                DrawWhaleFall(screenX, screenY, position);
                 if (!IsIce3D(position)) DrawTileObjects2D(screenX, screenY, position);
             }
         }
@@ -433,6 +446,14 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         DrawInterface();
         _spriteBatch.End();
         base.Draw(gameTime);
+    }
+
+    private void DrawWhaleFall(int screenX, int screenY, GridPosition position)
+    {
+        if (_spriteBatch is null || _whaleFallSprite is null || _world.GetWhaleFallNutrition(position) <= 0)
+            return;
+        _spriteBatch.Draw(_whaleFallSprite, new Rectangle(
+            MapOffsetX + screenX * TileSize, MapOffsetY + screenY * TileSize, TileSize, TileSize), Color.White);
     }
 
     private void DrawTileObjects2D(int screenX, int screenY, GridPosition position)
@@ -1054,6 +1075,12 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             return;
         }
 
+        if (CurrentTool is WorldTool.Road && secondaryActivated && _roadStartVillage is not null)
+        {
+            ResetRoadToolSelection();
+            return;
+        }
+
         var position = _firstPerson && CurrentTool is WorldTool.Teleport
             ? ScreenToWorld(GraphicsDevice.Viewport.Width / 2, MapViewportHeight / 2)
             : ScreenToWorld(mouse.X, mouse.Y);
@@ -1069,6 +1096,9 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
                 break;
             case WorldTool.Plague when primaryActivated:
                 _world.TryInfectApeAt(position.Value, PlagueKind.Plague);
+                break;
+            case WorldTool.Blight when primaryActivated:
+                _world.TryBlightFarmAt(position.Value);
                 break;
             case WorldTool.Feast when primaryActivated:
                 _world.TryStartVillageFeast(position.Value);
@@ -1305,7 +1335,21 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
                 });
                 break;
             case WorldTool.Road when primaryActivated:
-                _world.TryPlaceVillageRoad(position.Value);
+                if (_world.GetApeStructureVillage(position.Value) is not { } roadVillage ||
+                    _world.IsBarbarianVillage(roadVillage))
+                    _roadToolStatus = "Select a non-barbarian village or its district / R cancel";
+                else if (_roadStartVillage is not { } roadStart)
+                {
+                    _roadStartVillage = roadVillage;
+                    _roadToolStatus = "L select destination village; reuses connected roads / R cancel";
+                }
+                else if (_world.TryConnectVillageRoad(roadStart, roadVillage, out var roadStatus))
+                {
+                    _roadStartVillage = null;
+                    _roadToolStatus = roadStatus;
+                }
+                else
+                    _roadToolStatus = roadStatus + " / R cancel";
                 break;
             case WorldTool.Inspect when primaryActivated:
                 if (_world.TryGetCritterAt(position.Value, out var inspected))
@@ -1317,6 +1361,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
                 break;
             case WorldTool.Road:
                 _world.RemoveVillageRoadAt(position.Value);
+                ResetRoadToolSelection();
                 break;
         }
     }
@@ -1357,6 +1402,12 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         _ => throw new ArgumentOutOfRangeException(nameof(tool)),
     };
 
+    private void ResetRoadToolSelection()
+    {
+        _roadStartVillage = null;
+        _roadToolStatus = DefaultRoadToolStatus;
+    }
+
     private void ResetToolRepeat()
     {
         _repeatingTool = null;
@@ -1371,12 +1422,14 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
 
     private void CycleToolCategory(int step)
     {
+        ResetRoadToolSelection();
         _toolCategoryIndex = Mod(_toolCategoryIndex + step, ToolCategoryOrder.Length);
         _toolIndex = 0;
     }
 
     private void CycleTool(int step)
     {
+        ResetRoadToolSelection();
         var tools = GetTools(CurrentToolCategory);
         _toolIndex = Mod(_toolIndex + step, tools.Length);
     }
@@ -1446,7 +1499,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         {
             WrapCamera3D();
             if (_firstPerson)
-                _firstPersonEyeHeight = WalkingSurfaceHeight(_focus3D) + FirstPersonEyeOffset;
+                _firstPersonEyeHeight = InitialFirstPersonEyeHeight(_focus3D);
             return;
         }
 
@@ -1997,6 +2050,10 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
 
         if (_world.GetApeStructure(position) is { } apeStructure)
         {
+            if (apeStructure is ApeStructureKind.BlightedFarm)
+                return ["BUILDING", "Blighted Farm", "No food production or workers",
+                    $"Clears in {Math.Max(0, (_world.GetFarmBlightRecoveryTick(position).GetValueOrDefault() - _world.Tick) / SimulationWorld.TicksPerSecond)} seconds",
+                    "Spreads to adjacent crop farms; blocks construction"];
             var village = _world.GetApeStructureVillage(position);
             var villageId = _world.GetApeVillageId(position);
             if (apeStructure is ApeStructureKind.Village)
@@ -2185,7 +2242,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         CritterSpecies.Gazelle => "arid, desert, and grassland foliage",
         CritterSpecies.Wolf => "broad terrestrial prey; therapsids last; never toads",
         CritterSpecies.Crab => "beach and shallow detritus",
-        CritterSpecies.ToothedWhale => "marine predators; land prey in shallows; adjacent nautiluses/crabs",
+        CritterSpecies.ToothedWhale => "fish and marine predators; apes at sea; land prey in shallows; adjacent crabs",
         CritterSpecies.BaleenWhale => "plankton only",
         _ => "not implemented",
     };
@@ -2242,7 +2299,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
                 CritterSpecies.Gazelle => "Grazing or fleeing predators",
                 CritterSpecies.Wolf => "Hunting broad terrestrial prey",
                 CritterSpecies.Crab => "Seeking coastal detritus",
-                CritterSpecies.ToothedWhale => "Hunting ocean predators",
+                CritterSpecies.ToothedWhale => "Hunting fish and ocean predators",
                 CritterSpecies.BaleenWhale => "Filtering plankton",
                 _ => "Seeking food",
             };
@@ -2281,7 +2338,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             CritterSpecies.Gazelle => "Roaming while watching for predators",
             CritterSpecies.Wolf => "Quickly patrolling its hunting grounds",
             CritterSpecies.Crab => "Foraging along the coast",
-            CritterSpecies.ToothedWhale => "Patrolling for ocean predators",
+            CritterSpecies.ToothedWhale => "Searching for fish and ocean predators",
             CritterSpecies.BaleenWhale => "Searching for plankton",
             _ => "Wandering",
         };
@@ -2319,12 +2376,13 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
 
     private void GenerateWorld()
     {
+        ResetRoadToolSelection();
         ResetSpeedGuard();
         _warAttacker = null; _warAttackerLich = null;
         _warToolStatus = "L select attacker / village at war: stop";
         _world = WorldGenerator.Generate(new WorldGenerationOptions(_preset, _seed, MapType: _mapType));
         _focus3D = new Vector2(_world.Width / 2f, _world.Height / 2f);
-        if (_firstPerson) _firstPersonEyeHeight = WalkingSurfaceHeight(_focus3D) + FirstPersonEyeOffset;
+        if (_firstPerson) _firstPersonEyeHeight = InitialFirstPersonEyeHeight(_focus3D);
         _cameraX = 0;
         _cameraY = 0;
         _inspectedCritterId = default;
@@ -2525,13 +2583,16 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         return difference;
     }
 
+    private Color GetRoadColor(GridPosition position) =>
+        _world.GetSurfaceWater(position) is SurfaceWaterKind.River || _world.GetTerrain(position) is Terrain.Shallows
+            ? new Color(145, 145, 145) : new Color(170, 125, 78);
+
     private void DrawVillageRoad(int screenX, int screenY, GridPosition position)
     {
         var connections = _world.GetRoadConnections(position);
         if (_spriteBatch is null || _pixel is null || connections is RiverConnection.None)
             return;
-        var color = _world.GetSurfaceWater(position) is SurfaceWaterKind.River || _world.GetTerrain(position) is Terrain.Shallows
-            ? new Color(145, 145, 145) : new Color(170, 125, 78);
+        var color = GetRoadColor(position);
         var originX = MapOffsetX + screenX * TileSize;
         var originY = MapOffsetY + screenY * TileSize;
         var centerX = originX + TileSize / 2;
@@ -2733,11 +2794,13 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
                     barbarianCamp ? new Color(132, 58, 48) : new Color(112, 69, 45));
                 break;
             case ApeStructureKind.Farm:
+            case ApeStructureKind.BlightedFarm:
+                var blighted = structure is ApeStructureKind.BlightedFarm;
                 var aridFarm = _world.GetBiome(position) is Biome.Arid;
-                var fieldColor = aridFarm
+                var fieldColor = blighted ? new Color(105, 73, 46) : aridFarm
                     ? new Color(178, 126, 52)
                     : new Color(173, 151, 66);
-                var cropColor = aridFarm
+                var cropColor = blighted ? new Color(66, 46, 30) : aridFarm
                     ? new Color(128, 88, 38)
                     : new Color(71, 112, 48);
                 _spriteBatch.Draw(_pixel, new Rectangle(x, y, size, size), fieldColor);
@@ -2842,6 +2905,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
     {
         ApeStructureKind.Village => "Ape Village",
         ApeStructureKind.Farm => "Farm",
+        ApeStructureKind.BlightedFarm => "Blighted Farm",
         ApeStructureKind.RicePaddy => "Rice Paddy",
         ApeStructureKind.Orchard => "Orchard",
         ApeStructureKind.Aquaculture => "Aquaculture",
@@ -3067,11 +3131,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         Math.Clamp((int)MathF.Round(color.B * brightness), 0, 255));
 
     private static Color GetDamageFlashColor(CritterSnapshot critter) =>
-        critter.Species is CritterSpecies.Ape or CritterSpecies.ApeFarmer or
-            CritterSpecies.ApeLumberjack or CritterSpecies.ApeSailor &&
-        critter.Plague is PlagueKind.Plague or PlagueKind.Zombie or PlagueKind.Vampire
-            ? Color.LightGreen
-            : Color.Red;
+        critter.IsSicknessDamageFlashing ? Color.LightGreen : Color.Red;
 
     private static Color GetCritterColor(CritterSnapshot critter) =>
         critter.IsDamageFlashing ? GetDamageFlashColor(critter) :
@@ -3172,6 +3232,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         WorldTool.WatershedShift => "L reroute river",
         WorldTool.Evolve => "L evolve; R devolve",
         WorldTool.Plague => "L infect ape",
+        WorldTool.Blight => "L blight crop farm (spreads; lasts one year)",
         WorldTool.ZombiePlague => "L infect ape",
         WorldTool.VampirePlague => "L infect ape (non-contagious; vampire on death)",
         WorldTool.Feast => "L village: feast using up to 80% of stored food",
@@ -3216,7 +3277,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         WorldTool.War or WorldTool.BloodWar => _warToolStatus,
         WorldTool.CivilWar => "L village: start civil war / village at war: stop",
         WorldTool.ApeVillage => "L place village with 2 apes",
-        WorldTool.Road => "L village: join road network (any population); R remove",
+        WorldTool.Road => _roadToolStatus,
         WorldTool.Farm => "L place biome farm beside village buildings",
         WorldTool.Market => "L place: one per village; needs road or harbor route",
         WorldTool.LumberCamp or WorldTool.Harbor or WorldTool.ResidentialDistrict or
@@ -3340,6 +3401,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         Plague,
         ZombiePlague,
         VampirePlague,
+        Blight,
         Feast,
         War,
         BloodWar,

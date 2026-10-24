@@ -263,7 +263,7 @@ public static partial class WorldGenerator
             return;
         }
 
-        var teleporterCount = world.Width >= WorldPreset.RingLarge.Width ? 8 : 4;
+        var teleporterCount = 4 * Math.Max(1, world.Width / WorldPreset.Ring.Width);
         var y = world.Height / 2;
         for (var index = 0; index < teleporterCount; index++)
         {

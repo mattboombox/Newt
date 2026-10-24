@@ -7,6 +7,16 @@ public sealed partial class SimulationWorld
     private readonly HashSet<int> _roadVillages = [];
     private readonly Dictionary<int, RiverConnection> _roadConnections = [];
     private readonly Dictionary<int, int> _roadPopulationChecks = [];
+    private bool _villageRoadValidationNeeded = true;
+    private long _transportRevision;
+    internal long VillageRoadValidationCount { get; private set; }
+
+    private void InvalidateTransportNetwork()
+    {
+        _villageRoadValidationNeeded = true;
+        _transportRevision++;
+        _traderPathSearches.Clear();
+    }
 
     /// <summary>Number of village-to-network links across all connected road networks.</summary>
     public int VillageRoadCount { get; private set; }
@@ -31,19 +41,39 @@ public sealed partial class SimulationWorld
 
     private bool IsRoadBridge(int tile)
     {
-        if (_terrain[tile] is not Terrain.Shallows || _surfaceCovers[tile] is not SurfaceCover.None ||
-            _surfaceWater[tile] is SurfaceWaterKind.FreshwaterLake ||
-            !_roadLinks.TryGetValue(tile, out var links) || links.Count != 2 || !links.All(IsRoadLandTerrain))
+        if (!IsBridgeWater(tile))
             return false;
-        var position = GetPosition(tile);
         return CardinalDirections.Any(direction =>
         {
-            var first = new GridPosition(Mod(position.X + direction.X, Width), position.Y + direction.Y);
-            var second = new GridPosition(Mod(position.X - direction.X, Width), position.Y - direction.Y);
-            return Contains(first) && Contains(second) && first != second &&
-                links.Contains(GetIndex(first)) && links.Contains(GetIndex(second));
+            var waterTiles = 1;
+            var first = FindBank(direction.X, direction.Y, ref waterTiles);
+            var second = FindBank(-direction.X, -direction.Y, ref waterTiles);
+            return first >= 0 && second >= 0 && first != second;
         });
+
+        int FindBank(int dx, int dy, ref int waterTiles)
+        {
+            var current = tile;
+            for (var step = 0; step < 2; step++)
+            {
+                var position = GetPosition(current);
+                var next = new GridPosition(Mod(position.X + dx, Width), position.Y + dy);
+                var back = new GridPosition(Mod(position.X - dx, Width), position.Y - dy);
+                if (!Contains(next) || !Contains(back) || next == back ||
+                    !_roadLinks.TryGetValue(current, out var links) || links.Count != 2 ||
+                    !links.Contains(GetIndex(next)) || !links.Contains(GetIndex(back)))
+                    return -1;
+                current = GetIndex(next);
+                if (IsRoadLandTerrain(current)) return current;
+                if (current == tile || !IsBridgeWater(current) || ++waterTiles > 2) return -1;
+            }
+            return -1;
+        }
     }
+
+    private bool IsBridgeWater(int tile) =>
+        _terrain[tile] is Terrain.Shallows && _surfaceCovers[tile] is SurfaceCover.None &&
+        _surfaceWater[tile] is not SurfaceWaterKind.FreshwaterLake;
 
     private bool IsRoadLandTerrain(int tile) =>
         _terrain[tile] is not (Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows or
@@ -52,8 +82,31 @@ public sealed partial class SimulationWorld
         _surfaceCovers[tile] is SurfaceCover.None;
 
     private int RoadTerrainCostMultiplier(int tile) =>
-        _terrain[tile] is Terrain.Hills or Terrain.Canyon or Terrain.Beach or Terrain.Trench ||
-        _biomes[tile] is Biome.Swamp or Biome.Bog or Biome.Jungle ? 3 : 1;
+        GetRoadConstructionCost(_terrain[tile], _biomes[tile]);
+
+    // Tenths of the grassland/plains cost. Vegetation, climate and earthworks
+    // accumulate, so a forested hill costs more than either obstacle alone.
+    internal static int GetRoadConstructionCost(Terrain terrain, Biome biome) =>
+        (biome switch
+        {
+            Biome.None or Biome.Grassland => 10,
+            Biome.Arid => 11,
+            Biome.Desert => 14,
+            Biome.Forest => 18,
+            Biome.Tundra => 20,
+            Biome.Taiga => 23,
+            Biome.Arctic => 26,
+            Biome.Jungle => 30,
+            Biome.Bog or Biome.Swamp => 35,
+            _ => 10,
+        }) + (terrain switch
+        {
+            Terrain.Beach => 5,
+            Terrain.Hills => 10,
+            Terrain.Canyon => 20,
+            Terrain.Trench => 25,
+            _ => 0,
+        });
 
     private IEnumerable<int> RoadNeighbors(int tile)
     {
@@ -103,25 +156,70 @@ public sealed partial class SimulationWorld
         return true;
     }
 
-    private List<int>? FindRoadPath(IEnumerable<int> origins, HashSet<int> targets) =>
-        FindRoadPath(origins, targets, allowBridges: false) ?? FindRoadPath(origins, targets, allowBridges: true);
+    /// <summary>Connects two selected villages, reusing only networks that reach those villages.</summary>
+    public bool TryConnectVillageRoad(GridPosition first, GridPosition second, out string status)
+    {
+        status = "Select two different non-barbarian villages";
+        if (!Contains(first) || !Contains(second) ||
+            GetApeStructureVillage(first) is not { } firstVillage ||
+            GetApeStructureVillage(second) is not { } secondVillage)
+            return false;
+        var start = GetIndex(firstVillage);
+        var destination = GetIndex(secondVillage);
+        if (start == destination || !IsRoadVillage(start) || !IsRoadVillage(destination)) return false;
 
-    private IEnumerable<(int Tile, int Bridge)> RoadPathSteps(int tile, bool allowBridges)
+        ValidateVillageRoads();
+        var origins = _roadLinks.ContainsKey(start) ? GetRoadComponent(start) : [start];
+        if (origins.Contains(destination))
+        {
+            if (_roadVillages.Add(start) | _roadVillages.Add(destination)) RebuildRoadConnections();
+            status = "These villages already share a road network";
+            return false;
+        }
+        var targets = (_roadLinks.ContainsKey(destination) ? GetRoadComponent(destination) : [destination])
+            .Where(IsRoadLandTerrain).ToHashSet();
+        var path = FindRoadPath(origins, targets);
+        if (path is null)
+        {
+            status = "No valid road route between the selected villages";
+            return false;
+        }
+        _roadVillages.Add(start);
+        _roadVillages.Add(destination);
+        AddRoadPath(path);
+        RebuildRoadConnections();
+        status = "Road connected! L select another starting village / R remove";
+        return true;
+    }
+
+    private List<int>? FindRoadPath(IEnumerable<int> origins, HashSet<int> targets) =>
+        FindRoadPath(origins, targets, allowBridges: true);
+
+    private IEnumerable<(int Tile, int Bridge, int SecondBridge)> RoadPathSteps(int tile, bool allowBridges)
     {
         foreach (var next in RoadNeighbors(tile))
-            if (IsRoadLandTerrain(next)) yield return (next, -1);
+            if (IsRoadLandTerrain(next)) yield return (next, -1, -1);
         if (!allowBridges) yield break;
         var position = GetPosition(tile);
         foreach (var direction in CardinalDirections)
         {
-            var middle = new GridPosition(Mod(position.X + direction.X, Width), position.Y + direction.Y);
-            var end = new GridPosition(Mod(position.X + 2 * direction.X, Width), position.Y + 2 * direction.Y);
-            if (!Contains(middle) || !Contains(end) || end == position) continue;
-            var bridge = GetIndex(middle);
-            if (_terrain[bridge] is Terrain.Shallows && _surfaceCovers[bridge] is SurfaceCover.None &&
-                _surfaceWater[bridge] is not SurfaceWaterKind.FreshwaterLake &&
-                !_roadLinks.ContainsKey(bridge) && IsRoadLandTerrain(GetIndex(end)))
-                yield return (GetIndex(end), bridge);
+            var bridge = -1;
+            var secondBridge = -1;
+            for (var distance = 1; distance <= 3; distance++)
+            {
+                var next = new GridPosition(Mod(position.X + distance * direction.X, Width),
+                    position.Y + distance * direction.Y);
+                if (!Contains(next) || next == position) break;
+                var nextTile = GetIndex(next);
+                if (IsRoadLandTerrain(nextTile))
+                {
+                    if (bridge >= 0) yield return (nextTile, bridge, secondBridge);
+                    break;
+                }
+                if (distance == 3 || !IsBridgeWater(nextTile) || _roadLinks.ContainsKey(nextTile)) break;
+                if (distance == 1) bridge = nextTile;
+                else secondBridge = nextTile;
+            }
         }
     }
 
@@ -136,7 +234,7 @@ public sealed partial class SimulationWorld
         var preferred = GetPosition(targets.OrderBy(tile =>
             WrappedManhattanDistance(village, GetPosition(tile))).ThenBy(tile => tile).First());
         var previous = new Dictionary<int, int>();
-        var bridges = new Dictionary<int, int>();
+        var bridges = new Dictionary<int, (int First, int Second)>();
         var costs = new Dictionary<int, long>();
         var pending = new PriorityQueue<int, (long Cost, int Distance, int Tile)>();
         foreach (var start in starts.Order())
@@ -156,7 +254,7 @@ public sealed partial class SimulationWorld
                 break;
             }
             var origin = GetPosition(current);
-            foreach (var (next, bridge) in RoadPathSteps(current, allowBridges))
+            foreach (var (next, bridge, secondBridge) in RoadPathSteps(current, allowBridges))
             {
                 if (!IsRoadTerrain(next) ||
                     (_roadLinks.ContainsKey(next) && !starts.Contains(next) && !targets.Contains(next)) ||
@@ -166,12 +264,14 @@ public sealed partial class SimulationWorld
                 var destination = GetPosition(next);
                 var cost = costs[current] +
                     (origin.X != destination.X && origin.Y != destination.Y ? 14 : 10) * RoadTerrainCostMultiplier(next) +
-                    (bridge >= 0 ? (long)Width * Height * 42 : 0);
+                    // Each bridge tile costs only 1.25 ordinary grassland steps.
+                    // Charge for its length, without any map-size-dependent penalty.
+                    (bridge >= 0 ? 125 * (secondBridge >= 0 ? 2 : 1) : 0);
                 if (costs.TryGetValue(next, out var known) && known <= cost)
                     continue;
                 costs[next] = cost;
                 previous[next] = current;
-                bridges[next] = bridge;
+                bridges[next] = (bridge, secondBridge);
                 pending.Enqueue(next, (cost, WrappedManhattanDistance(destination, preferred), next));
             }
         }
@@ -182,7 +282,11 @@ public sealed partial class SimulationWorld
         for (var tile = end; tile >= 0; tile = previous[tile])
         {
             path.Add(tile);
-            if (bridges.GetValueOrDefault(tile, -1) is var bridge && bridge >= 0) path.Add(bridge);
+            if (bridges.TryGetValue(tile, out var span))
+            {
+                if (span.Second >= 0) path.Add(span.Second);
+                if (span.First >= 0) path.Add(span.First);
+            }
         }
         path.Reverse();
 
@@ -244,6 +348,10 @@ public sealed partial class SimulationWorld
 
     private void ValidateVillageRoads()
     {
+        if (!_villageRoadValidationNeeded)
+            return;
+        _villageRoadValidationNeeded = false;
+        VillageRoadValidationCount++;
         if (_roadVillages.RemoveWhere(tile => !IsRoadVillage(tile)) > 0)
             PruneUnusedRoadBranches();
         var blocked = _roadLinks.Keys.Where(tile => !IsRoadTerrain(tile)).ToHashSet();
@@ -341,6 +449,7 @@ public sealed partial class SimulationWorld
 
     private void RebuildRoadConnections()
     {
+        InvalidateTransportNetwork();
         _roadConnections.Clear();
         foreach (var (tile, neighbors) in _roadLinks)
         foreach (var neighbor in neighbors)

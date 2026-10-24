@@ -16,7 +16,8 @@ public readonly record struct CritterSnapshot(
     bool IsVeteranWarrior = false,
     int CombatKills = 0,
     bool IsAncientCustodian = false,
-    bool IsHunting = false)
+    bool IsHunting = false,
+    bool IsSicknessDamageFlashing = false)
 {
     /// <summary>Species immunity to ape plagues.</summary>
     public bool IsPlagueImmune => Species is CritterSpecies.ApeSailor or CritterSpecies.Vampire;

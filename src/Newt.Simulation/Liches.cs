@@ -74,6 +74,7 @@ public sealed partial class SimulationWorld
         var victimId = _critterIds[victim].Value;
         ChangeCritterSpecies(victim, CritterSpecies.UndeadApe, preserveEnergy: false);
         _lichArmy[victimId] = lichId;
+        _plagueImmunityRemainders[victimId] = GetOrCreatePlagueImmunityRemainder(lichId);
         _reproductionTruces.Remove(victimId);
         RestoreUndeadKillEnergy(killer);
         _preyTargets[killer] = -1;

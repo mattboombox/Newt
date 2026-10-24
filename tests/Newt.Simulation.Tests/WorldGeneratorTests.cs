@@ -261,13 +261,19 @@ public sealed class WorldGeneratorTests
         Assert.Equal(44, world.Height);
         Assert.Equal(WorldBody.RingWorld, world.Body);
         Assert.False(world.SeasonsEnabled);
-        Assert.Equal(8, world.TeleporterCount);
-        Assert.Equal(2, world.CustodianFabricators.Count);
-        Assert.Equal(new GridPosition(world.Width / 4, 0), world.CustodianFabricators[0]);
-        Assert.Equal(new GridPosition(world.Width * 3 / 4, 0), world.CustodianFabricators[1]);
-        Assert.Equal(10, world.GetCritterCount(CritterSpecies.Custodian));
-        for (var portal = 0; portal < 8; portal++)
-            Assert.True(world.HasTeleporter(new(world.Width * (portal * 2 + 1) / 16, world.Height / 2)));
+        var fabricators = mega ? 4 : 2;
+        var portals = 4 * fabricators;
+        Assert.Equal(portals, world.TeleporterCount);
+        Assert.Equal(fabricators, world.CustodianFabricators.Count);
+        for (var index = 0; index < fabricators; index++)
+            Assert.Equal(new GridPosition(world.Width * (index * 2 + 1) / (fabricators * 2), 0),
+                world.CustodianFabricators[index]);
+        Assert.Equal(5 * fabricators, world.GetCritterCount(CritterSpecies.Custodian));
+        Assert.Equal(5 * fabricators, world.CustodianCapacity);
+        Assert.Equal(320, world.Width / world.TeleporterCount);
+        Assert.Equal(1280, world.Width / world.CustodianFabricators.Count);
+        for (var portal = 0; portal < portals; portal++)
+            Assert.True(world.HasTeleporter(new(world.Width * (portal * 2 + 1) / (portals * 2), world.Height / 2)));
         for (var x = 0; x < world.Width; x++)
         {
             Assert.Equal(Terrain.MegaWall, world.GetTerrain(new(x, 0)));

@@ -9,18 +9,18 @@ public sealed class PlagueImmunityTests
     [InlineData(1)]
     public void LichBorneZombiePlagueProtectsHalfEvenAfterRepeatedExposure(int remainder)
     {
-        var world = new SimulationWorld(21, 1, Terrain.Plains, seed: 17);
-        world.AddCritter(CritterSpecies.Lich, new(0, 0));
+        var world = new SimulationWorld(40, 3, Terrain.Plains, seed: 17);
+        world.AddCritter(CritterSpecies.Lich, new(0, 1));
         var spread = typeof(SimulationWorld).GetMethod("TrySpreadCritterPlague",
             System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
-        for (var x = 1; x <= 20; x++) world.AddCritter(CritterSpecies.Ape, new(x, 0));
+        var apes = Enumerable.Range(10, 20).Select(x => world.AddCritter(CritterSpecies.Ape, new(x, 1))).ToArray();
         for (var exposure = 0; exposure < 5; exposure++)
-            for (var x = 1; x <= 20; x++)
-                spread.Invoke(world, [0, new GridPosition(x, 0), PlagueKind.Zombie, remainder]);
+            for (var x = 10; x < 30; x++)
+                spread.Invoke(world, [0, new GridPosition(x, 1), PlagueKind.Zombie, remainder]);
         Assert.Equal(10, world.SickApeCount);
-        for (var index = 1; index < world.CritterCount; index++)
+        foreach (var id in apes)
         {
-            var ape = world.GetCritter(index);
+            Assert.True(world.TryGetCritter(id, out var ape));
             Assert.Equal(ape.Id.Value % 2 == remainder ? PlagueKind.None : PlagueKind.Zombie, ape.Plague);
         }
     }

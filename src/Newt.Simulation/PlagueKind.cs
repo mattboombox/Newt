@@ -6,4 +6,5 @@ public enum PlagueKind : byte
     Plague,
     Zombie,
     Vampire,
+    Blight,
 }

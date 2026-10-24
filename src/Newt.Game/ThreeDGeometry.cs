@@ -7,6 +7,77 @@ internal static class ThreeDGeometry
 {
     internal static float ColumnHeight(float elevation) => 0.25f + (elevation + 1) * 4;
 
+    internal static float UnderwaterTintOpacity(float eyeHeight, float? waterHeight) =>
+        waterHeight is { } surface ? Math.Clamp((surface - eyeHeight) / 0.15f, 0, 1) * 0.28f : 0;
+
+    internal static float FirstPersonSwimmingHeight(float current, float ground, float? waterSurface,
+        bool rising, float seconds, float eyeOffset = 1.2f, float? ceiling = null, bool fastSink = false)
+    {
+        var standing = ground + eyeOffset;
+        if (waterSurface is not { } water)
+            return Math.Max(current + (standing - current) * (1 - MathF.Exp(-12 * seconds)), ground + 0.15f);
+        var target = rising ? Math.Max(standing, water + eyeOffset * 0.75f) : standing;
+        if (ceiling is { } limit) target = Math.Min(target, limit);
+        var speed = rising ? 0.8f : fastSink ? 1.2f : 0.4f;
+        var distance = speed * seconds;
+        var floor = ceiling is null ? standing : ground + 0.15f;
+        var result = Math.Max(floor, current + Math.Clamp(target - current, -distance, distance));
+        return ceiling is { } top ? Math.Min(result, top) : result;
+    }
+
+    internal enum IceEntry { Above, Below, Blocked }
+
+    internal static IceEntry FirstPersonIceEntry(float eye, float bed, float surface,
+        bool walkingOnIce, bool alreadyUnderIce)
+    {
+        if (!alreadyUnderIce && (walkingOnIce || eye >= surface + 0.035f))
+            return IceEntry.Above;
+        // Leave clearance for the camera's near plane below the slab's underside.
+        var ceiling = surface - 0.06f;
+        return eye <= ceiling && bed + 0.15f <= ceiling ? IceEntry.Below : IceEntry.Blocked;
+    }
+
+    internal readonly record struct ConnectionSideSegment(
+        int FaceX, int FaceY, int TargetX, int TargetY, float Start, float End);
+
+    private static readonly (RiverConnection Flag, int X, int Y)[] ConnectionDirections =
+    [
+        (RiverConnection.North, 0, -1), (RiverConnection.NorthEast, 1, -1),
+        (RiverConnection.East, 1, 0), (RiverConnection.SouthEast, 1, 1),
+        (RiverConnection.South, 0, 1), (RiverConnection.SouthWest, -1, 1),
+        (RiverConnection.West, -1, 0), (RiverConnection.NorthWest, -1, -1),
+    ];
+
+    internal static float RiverSideBottom(float targetHeight, float adjacentHeight, float? waterElevation) =>
+        Math.Max(Math.Max(targetHeight, adjacentHeight),
+            waterElevation is { } water ? ColumnHeight(water) : float.MinValue);
+
+    internal static IEnumerable<ConnectionSideSegment> ConnectionSideSegments(RiverConnection connections)
+    {
+        const float width = 1f / 3;
+        foreach (var (flag, dx, dy) in ConnectionDirections)
+        {
+            if ((connections & flag) == 0) continue;
+            if (dx == 0 || dy == 0)
+                yield return new(dx, dy, dx, dy, 0.5f - width / 2, 0.5f + width / 2);
+            else
+            {
+                // Diagonal top artwork reaches a corner along both adjoining faces.
+                yield return new(dx, 0, dx, dy, dy < 0 ? 0 : 1 - width, dy < 0 ? width : 1);
+                yield return new(0, dy, dx, dy, dx < 0 ? 0 : 1 - width, dx < 0 ? width : 1);
+            }
+        }
+    }
+
+    internal static float RoadHeight(float bedHeight, float? waterElevation, bool shallowsBridge) =>
+        shallowsBridge && waterElevation is { } water
+            ? Math.Max(bedHeight + 0.01f, ColumnHeight(water) + 0.015f)
+            : bedHeight + 0.01f;
+
+    internal static float RoadSideBottom(float targetHeight, float adjacentHeight,
+        float? waterElevation, bool targetIsBridge) =>
+        Math.Max(RoadHeight(targetHeight, waterElevation, targetIsBridge), adjacentHeight);
+
     internal static System.Numerics.Vector2 SunDirection(float skyPhase)
     {
         // Dawn at .88, noon at .14, sunset at .40, matching the sky palette.
@@ -73,6 +144,10 @@ internal static class ThreeDGeometry
 
     internal static bool StandsOnIce(CritterHabitat habitat) => habitat is
         CritterHabitat.LandDweller or CritterHabitat.Flier or CritterHabitat.LandAndWaterDweller;
+
+    internal static bool FlattensUnderWaterCover(CritterHabitat habitat, bool surfaceSailor,
+        bool ice, bool bridge, float clearance) =>
+        !surfaceSailor && !StandsOnIce(habitat) && (bridge || ice && clearance < 1f);
 
     internal static bool IsSurfaceSailor(CritterSpecies species, bool colonist, bool pirate, bool veteran) =>
         colonist || pirate || veteran || species is CritterSpecies.Custodian or CritterSpecies.ApeSailor or
