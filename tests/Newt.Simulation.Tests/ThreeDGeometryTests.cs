@@ -5,6 +5,68 @@ namespace Newt.Simulation.Tests;
 
 public sealed class ThreeDGeometryTests
 {
+    [Theory]
+    [InlineData(96, 0)] // Walking camera.
+    [InlineData(396, 28)] // Free camera.
+    [InlineData(1320, 600)] // Zoomed-out free camera.
+    [InlineData(1800, 28)] // Large ring world.
+    public void RenderDistancePresetsReduceRangeWithoutClippingCameraFocus(float maximum, float orbitDistance)
+    {
+        var max = ThreeDGeometry.RenderDistance(maximum, 0, orbitDistance);
+        var medium = ThreeDGeometry.RenderDistance(maximum, 1, orbitDistance);
+        var low = ThreeDGeometry.RenderDistance(maximum, 2, orbitDistance);
+        Assert.Equal(maximum, max);
+        Assert.True(max > medium && medium > low);
+        Assert.True(low > orbitDistance + 14); // Includes terrain's full height range at the focus.
+        Assert.Equal(32, medium - low);
+    }
+
+    [Fact]
+    public void ChaseCameraFollowsPlayerHeightAndRotatesBehindLookDirection()
+    {
+        var target = new System.Numerics.Vector3(10, 5, 10);
+        foreach (var look in new[] { System.Numerics.Vector3.UnitX, -System.Numerics.Vector3.UnitZ,
+                     System.Numerics.Vector3.Normalize(new System.Numerics.Vector3(1, -1, 1)) })
+        {
+            var eye = ThreeDGeometry.ThirdPersonCameraPosition(target, look, 4, _ => false);
+            Assert.InRange(System.Numerics.Vector3.Distance(eye, target - look * 4), 0, 0.00001f);
+            // Sinking/swimming moves the whole rig, without changing follow distance.
+            var submerged = ThreeDGeometry.ThirdPersonCameraPosition(target - System.Numerics.Vector3.UnitY * 3,
+                look, 4, _ => false);
+            Assert.InRange(System.Numerics.Vector3.Distance(submerged, eye - System.Numerics.Vector3.UnitY * 3),
+                0, 0.00001f);
+        }
+    }
+
+    [Fact]
+    public void ChaseCameraStopsBeforeWallsGroundAndThinIce()
+    {
+        var target = new System.Numerics.Vector3(0, 2, 0);
+        var wall = ThreeDGeometry.ThirdPersonCameraPosition(target, -System.Numerics.Vector3.UnitZ, 4,
+            p => p.Z >= 1.5f);
+        Assert.InRange(wall.Z, 1.4f, 1.4999f);
+        var ground = ThreeDGeometry.ThirdPersonCameraPosition(target, System.Numerics.Vector3.UnitY, 4,
+            p => p.Y < 0.15f);
+        Assert.InRange(ground.Y, 0.15f, 0.21f);
+        var ice = ThreeDGeometry.ThirdPersonCameraPosition(target, -System.Numerics.Vector3.UnitY, 4,
+            p => Math.Abs(p.Y - 3) < 0.15f);
+        Assert.InRange(ice.Y, 2.8f, 2.85f);
+    }
+
+    [Fact]
+    public void ChaseCameraFollowsRingSurfaceAcrossSeam()
+    {
+        const int width = 1280, height = 44;
+        var frame = RingGeometry.Frame(width - 0.5f, width);
+        var target = RingGeometry.Position(new System.Numerics.Vector3(width - 0.5f, 5, height / 2f), width, height);
+        var eye = ThreeDGeometry.ThirdPersonCameraPosition(target, -frame.East, 4, p =>
+            RingGeometry.StripPosition(p, width, height).Y < 0.15f);
+        Assert.InRange(System.Numerics.Vector3.Distance(eye, target + frame.East * 4), 0, 0.0001f);
+        var strip = RingGeometry.StripPosition(eye, width, height);
+        Assert.InRange(strip.X, 0, 4);
+        Assert.InRange(strip.Y, 4.9f, 5.1f);
+    }
+
     [Fact]
     public void RoadSidesMeetLowerRoadsAndBridgeDecksWithoutExtendingIntoWater()
     {

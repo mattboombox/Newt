@@ -90,7 +90,8 @@ public sealed partial class NewtGame
             up * MathF.Cos(_pitch3D) - Vector3.UnitZ * (MathF.Cos(_yaw3D) * MathF.Sin(_pitch3D));
         return (Matrix.CreateLookAt(eye, target, cameraUp),
             Matrix.CreatePerspectiveFieldOfView(MathHelper.PiOver4, Viewport3D().AspectRatio, 0.1f,
-                Math.Max(ThreeDGeometry.FarClipDistance(_distance3D), RingGeometry.Radius(_world.Width) * 2.2f)));
+                RenderDistance3D(Math.Max(ThreeDGeometry.FarClipDistance(_distance3D),
+                    RingGeometry.Radius(_world.Width) * 2.2f), Vector3.Distance(eye, target))));
     }
 
     private float? RingColumnHit3D(Ray ray, int x, int y, float height)

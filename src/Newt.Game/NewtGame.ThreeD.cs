@@ -8,10 +8,12 @@ namespace Newt.Game;
 public sealed partial class NewtGame
 {
     private bool _view3D = true;
+    private int _renderDistanceLevel3D; // Max, medium, low; shared by all 3D camera modes.
     private bool _drawing3DAtlas;
     // Tint submerged objects while blending unchanged water tiles back to their 2D palette.
     private const int WaterSurfaceTintAlpha3D = 64;
     private const int WhaleFallCutout3D = -2;
+    private const float WalkingSpriteScale3D = 0.8f;
     private bool _dayNightCycleEnabled = true;
     private static readonly (float Phase, Color Color)[] SkyCycle3D =
     [
@@ -90,17 +92,21 @@ public sealed partial class NewtGame
         ? Math.Max(6, RingGeometry.Radius(_world.Width) - 15)
         : ThreeDGeometry.MaximumZoomDistance(MapViewportHeight, ZoomLevels[0]);
 
-    private void Toggle3D()
+    private void CycleViewMode()
     {
-        if (_firstPerson)
+        if (_view3D && !IsWalkingCamera)
         {
-            _firstPerson = false;
+            EnterFirstPerson();
+            return;
+        }
+        if (IsWalkingCamera)
+        {
+            _playerView = PlayerView.FreeCamera;
             _firstPersonMouseReady = false;
             _distance3D = Math.Clamp(28, 6, MaximumDistance3D);
             _pitch3D = 0.85f;
             IsMouseVisible = true;
             ResetToolRepeat();
-            return;
         }
         _view3D = !_view3D;
         ResetToolRepeat();
@@ -121,11 +127,14 @@ public sealed partial class NewtGame
         }
     }
 
-    private void ToggleFirstPerson()
+    private void TogglePlayerPerspective()
     {
-        if (_firstPerson) { Toggle3D(); return; }
-        if (!_view3D) Toggle3D();
-        EnterFirstPerson();
+        if (!IsWalkingCamera) return;
+        // Perspective changes keep the same walker. Never re-enter or reset its
+        // position, height, ice state, heading, or future character attributes.
+        if (_playerView is PlayerView.FirstPerson) RandomizePlayerGhostSprite();
+        _playerView = _playerView is PlayerView.FirstPerson ? PlayerView.ThirdPerson : PlayerView.FirstPerson;
+        _firstPersonMouseReady = false;
     }
 
     private void Match2DCameraTo3D()
@@ -163,7 +172,7 @@ public sealed partial class NewtGame
 
     private void HandleCamera3D(KeyboardState keyboard, MouseState mouse, float seconds)
     {
-        if (_firstPerson)
+        if (IsWalkingCamera)
         {
             HandleFirstPerson(keyboard, mouse, seconds);
             return;
@@ -222,9 +231,12 @@ public sealed partial class NewtGame
 
     private Viewport Viewport3D() => new(0, 0, GraphicsDevice.Viewport.Width, MapViewportHeight);
 
+    private float RenderDistance3D(float maximum, float cameraDistance = 0) =>
+        ThreeDGeometry.RenderDistance(maximum, _renderDistanceLevel3D, cameraDistance);
+
     private (Matrix View, Matrix Projection) Matrices3D()
     {
-        if (_firstPerson) return FirstPersonMatrices3D();
+        if (IsWalkingCamera) return FirstPersonMatrices3D();
         if (IsRing3D) return RingMatrices3D();
         var tile = MapTile3D((int)_focus3D.X, (int)_focus3D.Y);
         var target = new Vector3(_focus3D.X, Math.Max(4.5f, TileHeight3D(tile)), _focus3D.Y);
@@ -236,7 +248,7 @@ public sealed partial class NewtGame
             MathF.Cos(_pitch3D), -MathF.Cos(_yaw3D) * MathF.Sin(_pitch3D));
         return (Matrix.CreateLookAt(eye, target, cameraUp),
             Matrix.CreatePerspectiveFieldOfView(MathHelper.PiOver4, Viewport3D().AspectRatio, 0.1f,
-                ThreeDGeometry.FarClipDistance(_distance3D)));
+                RenderDistance3D(ThreeDGeometry.FarClipDistance(_distance3D), Vector3.Distance(eye, target))));
     }
 
     private float TileHeight3D(GridPosition tile) =>
@@ -537,7 +549,7 @@ public sealed partial class NewtGame
                 var step = 1f / AtlasColumns3D;
                 var p = _cutouts3D[i].Position;
                 // Screen-aligned sprites stay flat and upright even directly overhead.
-                var scale = _firstPerson ? 0.8f : 1f;
+                var scale = IsWalkingCamera ? WalkingSpriteScale3D : 1f;
                 var underWaterCover = item.Critter >= 0 && ShouldFlattenUnderWaterCover3D(_world.GetCritter(item.Critter));
                 var center = WorldPoint3D(p) + SurfaceUp3D(p.X) * (0.5f * scale);
                 var spriteRight = right * scale;
@@ -554,7 +566,7 @@ public sealed partial class NewtGame
                         _world.GetVolcanoState(item.Tile) is { } volcanoState && volcanoState != VolcanoState.Extinct);
                 if (flat)
                 {
-                    var halfSize = _firstPerson && item.Critter >= 0 ? 0.4f : 0.5f;
+                    var halfSize = IsWalkingCamera && item.Critter >= 0 ? WalkingSpriteScale3D * 0.5f : 0.5f;
                     a.Position = WorldPoint3D(p + new Vector3(-halfSize, 0, -halfSize));
                     b.Position = WorldPoint3D(p + new Vector3(halfSize, 0, -halfSize));
                     c.Position = WorldPoint3D(p + new Vector3(halfSize, 0, halfSize));
@@ -570,6 +582,7 @@ public sealed partial class NewtGame
                 GraphicsDevice.DrawUserPrimitives(PrimitiveType.TriangleList, data, 0, data.Length / 3);
             }
         }
+        DrawPlayerGhost3D(view, projection);
         DrawWaterSurfaces3D(bounds);
         GraphicsDevice.Viewport = originalViewport;
     }
@@ -728,6 +741,7 @@ public sealed partial class NewtGame
         foreach (var page in _atlasPages3D) page.Dispose();
         _terrainEffect3D?.Dispose();
         _cutoutEffect3D?.Dispose();
+        _ghostEffect3D?.Dispose();
         base.UnloadContent();
     }
 }

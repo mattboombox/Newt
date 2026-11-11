@@ -7,7 +7,10 @@ namespace Newt.Game;
 
 public sealed partial class NewtGame
 {
-    private bool _firstPerson, _firstPersonMouseReady;
+    private enum PlayerView { FreeCamera, FirstPerson, ThirdPerson }
+    private PlayerView _playerView;
+    private bool IsWalkingCamera => _playerView is not PlayerView.FreeCamera;
+    private bool _firstPersonMouseReady;
     private float _firstPersonEyeHeight;
     private bool _firstPersonUnderIce;
     private const float FirstPersonEyeOffset = 1.2f;
@@ -43,7 +46,8 @@ public sealed partial class NewtGame
 
     private void EnterFirstPerson()
     {
-        _firstPerson = true;
+        RandomizePlayerGhostSprite();
+        _playerView = PlayerView.FirstPerson;
         // Entering first person explicitly resumes camera control. Population
         // charts remain informational; the help panel releases mouse capture.
         _controlsWindowOpen = false;
@@ -85,10 +89,16 @@ public sealed partial class NewtGame
         var centerY = MapViewportHeight / 2;
         if (_firstPersonMouseReady)
         {
-            _yaw3D = MathHelper.WrapAngle(_yaw3D - (mouse.X - centerX) * 0.003f);
-            _pitch3D = Math.Clamp(_pitch3D + (mouse.Y - centerY) * 0.003f,
-                -MathHelper.PiOver2 + 0.02f, MathHelper.PiOver2 - 0.02f);
+            _yaw3D -= (mouse.X - centerX) * 0.003f;
+            _pitch3D += (mouse.Y - centerY) * 0.003f;
         }
+        var rotation = seconds * 1.5f;
+        if (keyboard.IsKeyDown(Keys.Left)) _yaw3D += rotation;
+        if (keyboard.IsKeyDown(Keys.Right)) _yaw3D -= rotation;
+        if (keyboard.IsKeyDown(Keys.Up)) _pitch3D -= rotation;
+        if (keyboard.IsKeyDown(Keys.Down)) _pitch3D += rotation;
+        _yaw3D = MathHelper.WrapAngle(_yaw3D);
+        _pitch3D = Math.Clamp(_pitch3D, -MathHelper.PiOver2 + 0.02f, MathHelper.PiOver2 - 0.02f);
         Mouse.SetPosition(centerX, centerY);
         _firstPersonMouseReady = true;
         var forward = (keyboard.IsKeyDown(Keys.W) ? 1 : 0) - (keyboard.IsKeyDown(Keys.S) ? 1 : 0);
@@ -133,7 +143,7 @@ public sealed partial class NewtGame
 
     private (Matrix View, Matrix Projection) FirstPersonMatrices3D()
     {
-        var eye = WorldPoint3D(new Vector3(_focus3D.X, _firstPersonEyeHeight, _focus3D.Y));
+        var eye = PlayerCameraPosition3D();
         var up = SurfaceUp3D(_focus3D.X);
         var east = IsRing3D ? Framework(RingGeometry.Frame(_focus3D.X, _world.Width).East) : Vector3.UnitX;
         var forward = CameraLookDirection3D(east, up);
@@ -142,15 +152,17 @@ public sealed partial class NewtGame
         var far = IsRing3D ? Math.Max(396, RingGeometry.Radius(_world.Width) * 2.2f)
             : FirstPersonRenderDistance;
         return (Matrix.CreateLookAt(eye, eye + forward, cameraUp),
-            Matrix.CreatePerspectiveFieldOfView(MathHelper.PiOver4, Viewport3D().AspectRatio, 0.03f, far));
+            Matrix.CreatePerspectiveFieldOfView(MathHelper.PiOver4, Viewport3D().AspectRatio, 0.03f, RenderDistance3D(far)));
     }
 
     private void DrawFirstPersonUnderwaterTint()
     {
-        if (!_firstPerson || _spriteBatch is null || _pixel is null) return;
-        var tile = MapTile3D((int)MathF.Floor(_focus3D.X), (int)MathF.Floor(_focus3D.Y));
+        if (!IsWalkingCamera || _spriteBatch is null || _pixel is null) return;
+        var eye = PlayerCameraPosition3D();
+        var localEye = IsRing3D ? Framework(RingGeometry.StripPosition(Numerics(eye), _world.Width, _world.Height)) : eye;
+        var tile = MapTile3D((int)MathF.Floor(localEye.X), (int)MathF.Floor(localEye.Z));
         var elevation = WaterElevation3D(tile);
-        var opacity = ThreeDGeometry.UnderwaterTintOpacity(_firstPersonEyeHeight,
+        var opacity = ThreeDGeometry.UnderwaterTintOpacity(localEye.Y,
             elevation is { } water ? ThreeDGeometry.ColumnHeight(water) : null);
         if (opacity <= 0) return;
         // Tint the world view, including underwater objects; draw the interface afterward.
@@ -160,7 +172,7 @@ public sealed partial class NewtGame
 
     private void DrawFirstPersonCrosshair()
     {
-        if (!_firstPerson || _setupMenuOpen || _controlsWindowOpen) return;
+        if (!IsWalkingCamera || _setupMenuOpen || _controlsWindowOpen) return;
         var x = GraphicsDevice.Viewport.Width / 2;
         var y = MapViewportHeight / 2;
         _spriteBatch!.Draw(_pixel, new Rectangle(x - 4, y, 9, 1), Color.White * 0.8f);

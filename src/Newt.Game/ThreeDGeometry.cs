@@ -10,6 +10,24 @@ internal static class ThreeDGeometry
     internal static float UnderwaterTintOpacity(float eyeHeight, float? waterHeight) =>
         waterHeight is { } surface ? Math.Clamp((surface - eyeHeight) / 0.15f, 0, 1) * 0.28f : 0;
 
+    // Pull the chase camera toward its target before terrain can obscure the player.
+    // The caller supplies solid-surface checks in either flat or curved world space.
+    internal static System.Numerics.Vector3 ThirdPersonCameraPosition(
+        System.Numerics.Vector3 target, System.Numerics.Vector3 lookDirection, float distance,
+        Func<System.Numerics.Vector3, bool> blocked)
+    {
+        var offset = -System.Numerics.Vector3.Normalize(lookDirection) * distance;
+        var steps = Math.Max(1, (int)MathF.Ceiling(distance / 0.05f));
+        var previous = target;
+        for (var i = 1; i <= steps; i++)
+        {
+            var position = target + offset * (i / (float)steps);
+            if (blocked(position)) return previous;
+            previous = position;
+        }
+        return previous;
+    }
+
     internal static float FirstPersonSwimmingHeight(float current, float ground, float? waterSurface,
         bool rising, float seconds, float eyeOffset = 1.2f, float? ceiling = null, bool fastSink = false)
     {
@@ -96,6 +114,15 @@ internal static class ThreeDGeometry
         Math.Max(180, OverheadDistance(viewportHeight, minimumPixelsPerTile));
 
     internal static float FarClipDistance(float cameraDistance) => Math.Max(180, cameraDistance) * 2.2f;
+
+    internal static float RenderDistance(float maximum, int level, float cameraDistance = 0) => level switch
+    {
+        // Include the orbit distance so an overhead free camera still sees its
+        // focus tile when zoomed out. Walking views measure from the camera.
+        1 => Math.Min(maximum, cameraDistance + 64),
+        2 => Math.Min(maximum, cameraDistance + 32),
+        _ => maximum,
+    };
 
     internal static System.Numerics.Vector3 LookDirection(float yaw, float pitch) => new(
         -MathF.Sin(yaw) * MathF.Cos(pitch), -MathF.Sin(pitch), -MathF.Cos(yaw) * MathF.Cos(pitch));

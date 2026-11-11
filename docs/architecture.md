@@ -311,6 +311,12 @@ last associated or inbound Wolf is gone, the empty den is removed automatically.
 The Other category includes a global Jump Start action that enables life and fills
 every empty Ocean tile with one Plankton without replacing existing critters.
 The `[` key toggles a live population overlay built from the world's per-species counters.
+The condensed Apes total and its history include every ape role, all factions
+(including barbarians and pirates), traders, and undead apes/warriors. Detailed
+ape rows separate barbarian residents from other apes without counting anyone
+twice. Dogs belonging to barbarian camps remain in the Dogs row, including its
+history, and never inflate the Ape Barbarian total. Sick Apes is a subset of
+the ape total rather than an additional population.
 Only nonzero species populations are rendered, with a responsive multi-column layout for
 short windows. Each row includes a colored five-second-sample sparkline retaining
 roughly seven and a half minutes of history; the simulation continues updating beneath it.

@@ -25,13 +25,33 @@ dotnet test Newt.sln --no-build
 dotnet run --project src/Newt.Game/Newt.Game.csproj
 ```
 
-Press Escape to exit. Press **V** to toggle **2D / 3D free camera**.
-Press **F** to enter first person or return to the 3D free camera.
-First person walks at surface height with smooth **WASD** movement and **Shift**
-to move faster. Move the **mouse** to look freely; no button needs to be held.
-Arrow keys and the zoom wheel are ignored in first person. The cursor releases
-when menus open or the game loses focus. Press **V** or **F** to return to the
-3D free camera at your walking position. First-person movement follows curved ring worlds too.
+Press Escape to exit. Press **V** to cycle **2D → 3D free camera → first person → 2D**.
+While in a character view, press **F** to swap **first person ↔ third person**.
+This changes only the camera perspective: position, walking/swimming height,
+under-ice state, and look direction are preserved. **F** has no effect in 2D or
+the 3D free camera; use **V** to enter first person.
+In any 3D view, press **L** to cycle render distance **Max → Medium → Low → Max**.
+Max is the default and keeps the original view distance. Medium and Low draw
+up to 64 and 32 tiles ahead, with extra allowance for free-camera orbit distance
+so zooming out keeps the focused terrain visible. The setting carries across
+3D camera modes and world regeneration for the current session.
+Entering first person with **V** randomly chooses a critter sprite for the player.
+Every **F** press that enters third person chooses a different random critter
+sprite; returning to first person leaves the choice unchanged. Third person
+follows this slightly translucent, blue-tinted ghost at the same sprite scale as
+other critters in the walking views. The ghost is
+only a visual player marker: it does not occupy tiles, shove critters, or take
+part in the simulation. The chase camera pulls closer when terrain, ice, or a
+bridge deck would obstruct it, including on curved ring worlds.
+Both walking views share the same position and height when switching between them.
+They walk at surface height with smooth **WASD** movement and **Shift**
+to move faster. Move the **mouse** or use the **arrow keys** to look around:
+**Left/Right** turn, and **Up/Down** look up/down. Mouse look needs no button held.
+In water, release **Space** to sink, hold **Space** to swim up, or hold **Left Ctrl**
+to sink faster. Ice and bridge decks support walking; swimmers can pass below ice.
+The zoom wheel is ignored in both walking views. The cursor releases
+when menus open or the game loses focus. Press **V** from either walking view to
+return to 2D. Walking follows curved ring worlds too.
 In 3D, terrain forms columns whose heights follow elevation, while buildings
 and critters face the camera in both yaw and pitch, remaining visible overhead.
 Ocean and lake surfaces share a subtle, nearly neutral translucent sheet.

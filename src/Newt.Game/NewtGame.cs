@@ -64,7 +64,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
     private static readonly WorldTool[] CultureToolOrder = [WorldTool.LudditeCulture, WorldTool.MonarchyCulture];
     private static readonly string[] ControlLines =
     [
-        "?  open or close controls",
+        "/ or ?  open or close controls",
         "[  population: condensed / detailed / close",
         "Esc  quit",
         "H  hide or show HUD",
@@ -76,13 +76,17 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         "- / =  decrease / increase magnitude",
         "P  pause or resume",
         "G  toggle auto speed",
-        "V  toggle 2D / 3D free camera",
-        "F  toggle first person / 3D free camera",
-        "First person: WASD walk; mouse look; Shift faster",
-        "First person: Space swim up; Left Ctrl sink faster",
-        "First person: arrows and wheel ignored; V returns free camera",
-        "WASD  pan; arrows pan in 2D / rotate in 3D",
-        "3D: middle mouse drag to rotate; wheel zoom",
+        "V  2D > 3D free > first person > 2D",
+        "F  1st <-> 3rd (random ghost on 3rd)",
+        "L  3D render distance: Max > Medium > Low",
+        "1st/3rd: WASD walk; Shift move faster",
+        "1st/3rd: mouse or arrows look around",
+        "Arrows: Left/Right turn; Up/Down look",
+        "1st/3rd: Space swim up; Left Ctrl sink faster",
+        "1st/3rd: V to 2D; wheel ignored",
+        "2D: WASD / arrows pan; wheel zoom",
+        "Free 3D: WASD move; arrows rotate",
+        "Free 3D: middle mouse rotate; wheel zoom",
         "Shift + pan  move faster",
         "Mouse wheel  zoom toward pointer",
         "Left click  use selected tool",
@@ -320,8 +324,9 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         if (acceptInput)
         {
             HandleWorldShortcuts(keyboard, mouse);
-            if (WasPressed(keyboard, Keys.V)) Toggle3D();
-            if (WasPressed(keyboard, Keys.F)) ToggleFirstPerson();
+            if (WasPressed(keyboard, Keys.V)) CycleViewMode();
+            if (WasPressed(keyboard, Keys.F)) TogglePlayerPerspective();
+            if (_view3D && WasPressed(keyboard, Keys.L)) _renderDistanceLevel3D = (_renderDistanceLevel3D + 1) % 3;
             if (_view3D) HandleCamera3D(keyboard, mouse, (float)gameTime.ElapsedGameTime.TotalSeconds);
             else HandleCamera(keyboard, mouse);
             HandleActiveTool(mouse, gameTime.ElapsedGameTime.TotalSeconds);
@@ -1081,7 +1086,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             return;
         }
 
-        var position = _firstPerson && CurrentTool is WorldTool.Teleport
+        var position = IsWalkingCamera && CurrentTool is WorldTool.Teleport
             ? ScreenToWorld(GraphicsDevice.Viewport.Width / 2, MapViewportHeight / 2)
             : ScreenToWorld(mouse.X, mouse.Y);
         if (position is null)
@@ -1498,7 +1503,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         if (_view3D)
         {
             WrapCamera3D();
-            if (_firstPerson)
+            if (IsWalkingCamera)
                 _firstPersonEyeHeight = InitialFirstPersonEyeHeight(_focus3D);
             return;
         }
@@ -1512,7 +1517,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
 
     private void UpdateInspectedCritterFollow()
     {
-        if (_firstPerson) return;
+        if (IsWalkingCamera) return;
         if (!_inspectedCritterId.IsValid)
         {
             return;
@@ -1612,18 +1617,17 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
 
         var barbarians = _world.GetBarbarianPopulationBySpecies();
         var chiefs = barbarians[(int)CritterSpecies.ApeChieftain];
-        var warriors = barbarians.Sum() - chiefs;
+        var warriors = PopulationCounts.BarbarianApeTotal(barbarians) - chiefs;
         var populations = Enum.GetValues<CritterSpecies>()
-            .Where(species => _populationWindowMode == 2 || !IsPopulationApe(species))
+            .Where(species => _populationWindowMode == 2 || !PopulationCounts.IsApe(species))
             .Select(species => (Name: GetCritterDisplayName(species),
-                Count: _world.GetCritterCount(species) - barbarians[(int)species], Color: GetCritterColor(species),
+                Count: PopulationCounts.DetailedSpeciesTotal(_world, species, barbarians), Color: GetCritterColor(species),
                 History: _populationHistory[species]))
             .Where(entry => entry.Count > 0)
             .ToList();
         if (_populationWindowMode == 1)
         {
-            var apes = Enum.GetValues<CritterSpecies>().Where(IsPopulationApe)
-                .Sum(_world.GetCritterCount);
+            var apes = PopulationCounts.ApeTotal(_world);
             if (apes > 0)
                 populations.Add(("Apes", apes, GetCritterColor(CritterSpecies.Ape), _combinedApeHistory));
         }
@@ -1744,7 +1748,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             new Color(126, 190, 213));
         _spriteBatch.DrawString(
             _hudFont,
-            "Press ? to close",
+            "Press / or ? to close",
             new Vector2(bounds.X + padding, bounds.Y + 29),
             new Color(175, 184, 190));
 
@@ -1766,14 +1770,13 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         var barbarians = _world.GetBarbarianPopulationBySpecies();
         foreach (var species in Enum.GetValues<CritterSpecies>())
         {
-            AppendPopulationSample(_populationHistory[species], _world.GetCritterCount(species) - barbarians[(int)species]);
+            AppendPopulationSample(_populationHistory[species], PopulationCounts.DetailedSpeciesTotal(_world, species, barbarians));
         }
         var chiefs = barbarians[(int)CritterSpecies.ApeChieftain];
-        AppendPopulationSample(_barbarianHistory, barbarians.Sum() - chiefs);
+        AppendPopulationSample(_barbarianHistory, PopulationCounts.BarbarianApeTotal(barbarians) - chiefs);
         AppendPopulationSample(_barbarianChiefHistory, chiefs);
         AppendPopulationSample(_sickApeHistory, _world.SickApeCount);
-        AppendPopulationSample(_combinedApeHistory,
-            Enum.GetValues<CritterSpecies>().Where(IsPopulationApe).Sum(_world.GetCritterCount));
+        AppendPopulationSample(_combinedApeHistory, PopulationCounts.ApeTotal(_world));
         _nextPopulationSampleTick = _world.Tick + PopulationSampleIntervalTicks;
     }
 
@@ -1845,13 +1848,6 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             _spriteBatch.Draw(_pixel, new Rectangle(x, y, 1, 1), color);
         }
     }
-
-    private static bool IsPopulationApe(CritterSpecies species) => species is
-        CritterSpecies.Ape or CritterSpecies.ApeSailor or CritterSpecies.ApeWarrior or
-        CritterSpecies.ApeScholar or CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack or
-        CritterSpecies.ApeChieftain or CritterSpecies.ApeKing or CritterSpecies.ApeQueen or
-        CritterSpecies.ApeBishop or CritterSpecies.ApeRoyalGuard or CritterSpecies.ApeLudditePriest or
-        CritterSpecies.ApeBomber or CritterSpecies.ApeTrader or CritterSpecies.ApeTraderSailor;
 
     private static string GetCritterDisplayName(CritterSpecies species) => species switch
     {
@@ -2382,7 +2378,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         _warToolStatus = "L select attacker / village at war: stop";
         _world = WorldGenerator.Generate(new WorldGenerationOptions(_preset, _seed, MapType: _mapType));
         _focus3D = new Vector2(_world.Width / 2f, _world.Height / 2f);
-        if (_firstPerson) _firstPersonEyeHeight = InitialFirstPersonEyeHeight(_focus3D);
+        if (IsWalkingCamera) _firstPersonEyeHeight = InitialFirstPersonEyeHeight(_focus3D);
         _cameraX = 0;
         _cameraY = 0;
         _inspectedCritterId = default;
@@ -3270,7 +3266,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         WorldTool.Stone => "L place; R clear",
         WorldTool.Lava => "L add; R clear",
         WorldTool.JumpStart => "L seed plankton",
-        WorldTool.Teleport => _firstPerson ? "L teleport to crosshair tile" : "L teleport to tile",
+        WorldTool.Teleport => IsWalkingCamera ? "L teleport to crosshair tile" : "L teleport to tile",
         WorldTool.Colonist => _colonistToolStatus,
         WorldTool.LudditeCulture => _cultureToolStatus,
         WorldTool.MonarchyCulture => _monarchyToolStatus,
