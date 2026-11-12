@@ -24,6 +24,9 @@ public sealed partial class SimulationWorld
     public RiverConnection GetRoadConnections(GridPosition position) =>
         _roadConnections.GetValueOrDefault(GetIndex(position));
 
+    public bool HasRoadBridge(GridPosition position) =>
+        GetRoadConnections(position) != RiverConnection.None && IsBridgeWater(GetIndex(position));
+
     private bool IsRoadVillage(int tile) =>
         _apeStructures.TryGetValue(tile, out var kind) && kind is ApeStructureKind.Village &&
         !_barbarianVillageTiles.Contains(tile);
@@ -72,8 +75,9 @@ public sealed partial class SimulationWorld
     }
 
     private bool IsBridgeWater(int tile) =>
-        _terrain[tile] is Terrain.Shallows && _surfaceCovers[tile] is SurfaceCover.None &&
-        _surfaceWater[tile] is not SurfaceWaterKind.FreshwaterLake;
+        _surfaceCovers[tile] is SurfaceCover.None &&
+        (_terrain[tile] is Terrain.Shallows || _terrain[tile] is not Terrain.MegaWall &&
+            _surfaceWater[tile] is SurfaceWaterKind.FreshwaterLake);
 
     private bool IsRoadLandTerrain(int tile) =>
         _terrain[tile] is not (Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows or

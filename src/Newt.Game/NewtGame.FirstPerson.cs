@@ -32,7 +32,7 @@ public sealed partial class NewtGame
         // Solid ice and bridge decks support the walker above the water.
         if (!_firstPersonUnderIce && IsIce3D(tile) && WaterElevation3D(tile) is { } surface)
             ground = Math.Max(ground, ThreeDGeometry.ColumnHeight(surface) + 0.035f);
-        if (IsShallowsBridge3D(tile))
+        if (_world.HasRoadBridge(tile))
             ground = ThreeDGeometry.RoadHeight(ground, WaterElevation3D(tile), shallowsBridge: true);
         return ground;
     }
@@ -40,7 +40,7 @@ public sealed partial class NewtGame
     private float? FirstPersonWaterSurface(Vector2 position)
     {
         var tile = MapTile3D((int)MathF.Floor(position.X), (int)MathF.Floor(position.Y));
-        if ((IsIce3D(tile) && !_firstPersonUnderIce) || IsShallowsBridge3D(tile) || WaterElevation3D(tile) is not { } water)
+        if ((IsIce3D(tile) && !_firstPersonUnderIce) || _world.HasRoadBridge(tile) || WaterElevation3D(tile) is not { } water)
             return null;
         var surface = ThreeDGeometry.ColumnHeight(water);
         return surface > TileHeight3D(tile) ? surface : null;

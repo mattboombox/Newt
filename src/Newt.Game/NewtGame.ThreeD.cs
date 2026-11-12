@@ -322,13 +322,10 @@ public sealed partial class NewtGame
     private bool IsSurfaceSailor3D(CritterSnapshot critter) => ThreeDGeometry.IsSurfaceSailor(
         critter.Species, critter.IsColonist, _world.IsApePirate(critter.Id), critter.IsVeteranWarrior);
 
-    private bool IsShallowsBridge3D(GridPosition tile) =>
-        _world.GetTerrain(tile) is Terrain.Shallows && _world.GetRoadConnections(tile) != RiverConnection.None;
-
     private bool ShouldFlattenUnderWaterCover3D(CritterSnapshot critter) =>
         WaterElevation3D(critter.Position) is { } waterSurface &&
         ThreeDGeometry.FlattensUnderWaterCover(CritterHabitats.GetHabitat(critter.Species),
-            IsSurfaceSailor3D(critter), IsIce3D(critter.Position), IsShallowsBridge3D(critter.Position),
+            IsSurfaceSailor3D(critter), IsIce3D(critter.Position), _world.HasRoadBridge(critter.Position),
             ThreeDGeometry.ColumnHeight(waterSurface) - (TileHeight3D(critter.Position) + 0.025f) - 0.02f);
 
     private Terrain UnfrozenBedTerrain(GridPosition tile) =>
@@ -449,7 +446,7 @@ public sealed partial class NewtGame
             var tile = critter.Position;
             if (!ContainsTile3D(tile.X, tile.Y) || tile.Y < bounds.Top || tile.Y >= bounds.Bottom) continue;
             var height = TileHeight3D(tile);
-            if (IsShallowsBridge3D(tile) &&
+            if (_world.HasRoadBridge(tile) &&
                 ThreeDGeometry.StandsOnIce(CritterHabitats.GetHabitat(critter.Species)))
                 height = ThreeDGeometry.RoadHeight(height, WaterElevation3D(tile), shallowsBridge: true);
             if (IsIce3D(tile) && WaterElevation3D(tile) is { } surface &&
@@ -459,7 +456,7 @@ public sealed partial class NewtGame
                 IsSurfaceSailor3D(critter))
                 height = Math.Max(height, ThreeDGeometry.ColumnHeight(waterSurface) + 0.035f);
             var spriteHeight = height + 0.025f;
-            if (!IsIce3D(tile) && !IsShallowsBridge3D(tile) && IsSurfaceSailor3D(critter) &&
+            if (!IsIce3D(tile) && !_world.HasRoadBridge(tile) && IsSurfaceSailor3D(critter) &&
                 CritterHabitats.GetHabitat(critter.Species) is not CritterHabitat.Flier &&
                 WaterElevation3D(tile) is { } waterline)
             {
@@ -656,11 +653,11 @@ public sealed partial class NewtGame
                 AddConnectionSides3D(x, y, height + 0.01f, _world.GetRiverConnections(tile), GetSurfaceWaterColor(water));
             if (roads != RiverConnection.None)
                 AddConnectionSides3D(x, y,
-                    ThreeDGeometry.RoadHeight(height, waterElevation, IsShallowsBridge3D(tile)),
+                    ThreeDGeometry.RoadHeight(height, waterElevation, _world.HasRoadBridge(tile)),
                     roads, GetRoadColor(tile), road: true);
             if (hasGroundArt)
                 _cutouts3D.Add((new Vector3(x + 0.5f,
-                    ThreeDGeometry.RoadHeight(height, waterElevation, IsShallowsBridge3D(tile)),
+                    ThreeDGeometry.RoadHeight(height, waterElevation, _world.HasRoadBridge(tile)),
                     y + 0.5f), tile, -1, true));
             if (hasStructure)
                 _cutouts3D.Add((new Vector3(x + 0.5f, IsIce3D(tile) ? top + 0.05f : height + 0.015f, y + 0.5f),
@@ -759,7 +756,7 @@ public sealed partial class NewtGame
             // Stop at the receiving surface and clip against the adjacent column.
             var bottom = road
                 ? ThreeDGeometry.RoadSideBottom(TileHeight3D(target), TileHeight3D(adjacent),
-                    WaterElevation3D(target), IsShallowsBridge3D(target))
+                    WaterElevation3D(target), _world.HasRoadBridge(target))
                 : ThreeDGeometry.RiverSideBottom(TileHeight3D(target), TileHeight3D(adjacent), WaterElevation3D(target));
             if (bottom >= topHeight - (road ? offset : 0.012f)) continue;
             Vector3 a, b;

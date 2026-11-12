@@ -215,7 +215,6 @@ public sealed class RoadNetworkTests
     }
 
     [Theory]
-    [InlineData(Terrain.Plains, SurfaceWaterKind.FreshwaterLake)]
     [InlineData(Terrain.Ocean, SurfaceWaterKind.None)]
     [InlineData(Terrain.DeepOcean, SurfaceWaterKind.None)]
     [InlineData(Terrain.Mountain, SurfaceWaterKind.None)]
@@ -264,7 +263,7 @@ public sealed class RoadNetworkTests
     {
         var world = CreateTrunk();
         world.SetTerrain(new(20, 10), Terrain.Mountain);
-        world.SetSurfaceWater(new(30, 10), SurfaceWaterKind.FreshwaterLake);
+        world.SetTerrain(new(30, 10), Terrain.Ocean);
         world.AdvanceOneTick();
         Assert.Contains(Second, Reachable(world, First));
         Assert.Equal(Roads(world).Count, Reachable(world, First).Count);

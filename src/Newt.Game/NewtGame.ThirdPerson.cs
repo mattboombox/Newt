@@ -43,7 +43,7 @@ public sealed partial class NewtGame
                 // on either side, including while the shared walker swims below.
                 if (WaterElevation3D(tile) is not { } water) return false;
                 var surface = ThreeDGeometry.ColumnHeight(water);
-                return (IsIce3D(tile) || IsShallowsBridge3D(tile)) &&
+                return (IsIce3D(tile) || _world.HasRoadBridge(tile)) &&
                     Math.Abs(local.Y - surface) < clearance;
             }));
     }

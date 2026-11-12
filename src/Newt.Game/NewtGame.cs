@@ -36,9 +36,11 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
     private static readonly WorldPreset[] PlanetoidMenuSizes = [WorldPreset.PlanetoidMicro, WorldPreset.PlanetoidSmall,
         WorldPreset.PlanetoidStandard, WorldPreset.PlanetoidLarge, WorldPreset.PlanetoidHuge];
     private static readonly WorldMapShape[] MenuMapShapes = Enum.GetValues<WorldMapShape>();
-    private static readonly WorldMapType[] MenuMapTypes =
+    private static readonly WorldMapType[] PlanetaryMenuMapTypes =
         [WorldMapType.Earth, WorldMapType.Moon, WorldMapType.Mars, WorldMapType.Archipelago,
             WorldMapType.Continents, WorldMapType.Pangaea, WorldMapType.AllOcean];
+    private static readonly WorldMapType[] ProceduralMenuMapTypes =
+        [WorldMapType.Archipelago, WorldMapType.Continents, WorldMapType.Pangaea, WorldMapType.AllOcean];
     private static readonly double[] SimulationRates = [0.25, 0.5, 1, 2, 4, 8, 16, 32];
     private static readonly ToolCategory[] ToolCategoryOrder =
         [ToolCategory.WorldTools, ToolCategory.TerrainTools, ToolCategory.CritterTools,
@@ -107,7 +109,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
     private readonly GraphicsDeviceManager _graphics;
     private SimulationWorld _world = null!;
     private WorldPreset _preset = WorldPreset.Standard;
-    private WorldMapType _mapType = MenuMapTypes[Random.Shared.Next(MenuMapTypes.Length)];
+    private WorldMapType _mapType;
     private WorldMapShape _mapShape = MenuMapShapes[Random.Shared.Next(MenuMapShapes.Length)];
     private ulong _seed = CreateRandomSeed();
     private string _seedText;
@@ -182,7 +184,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
     private int _setupRow;
     private int _menuSizeIndex = 2;
     private int _menuRingSizeIndex;
-    private int _menuMapTypeIndex;
+    private WorldMapType _menuMapType;
     private int _menuMapShapeIndex;
     private CritterId _inspectedCritterId;
     private int _populationWindowMode;
@@ -197,6 +199,8 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
 
     public NewtGame()
     {
+        var mapTypes = GetMenuMapTypes(_mapShape);
+        _mapType = mapTypes[Random.Shared.Next(mapTypes.Length)];
         _preset = GetSetupPreset(_mapShape);
         _seedText = _seed.ToString(CultureInfo.InvariantCulture);
         _graphics = new GraphicsDeviceManager(this)
@@ -939,7 +943,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         }
         else if (WasPressed(keyboard, Keys.M))
         {
-            _menuMapTypeIndex = Array.IndexOf(MenuMapTypes, _mapType);
+            _menuMapType = _mapType;
             _menuMapShapeIndex = Array.IndexOf(MenuMapShapes, _mapShape);
             var currentSize = _preset == WorldPreset.Earth ? WorldPreset.Huge : _preset;
             if (GetSpecialMenuSizes(_mapShape) is { } sizes)
@@ -2445,11 +2449,17 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             if (_setupRow == 0)
             {
                 _menuMapShapeIndex = Mod(_menuMapShapeIndex + direction, MenuMapShapes.Length);
-                if (GetSpecialMenuSizes(MenuMapShapes[_menuMapShapeIndex]) is { } sizes)
+                var shape = MenuMapShapes[_menuMapShapeIndex];
+                if (!GetMenuMapTypes(shape).Contains(_menuMapType))
+                    _menuMapType = WorldMapType.Continents;
+                if (GetSpecialMenuSizes(shape) is { } sizes)
                     _menuRingSizeIndex = Math.Min(_menuRingSizeIndex, sizes.Length - 1);
             }
             else if (_setupRow == 1)
-                _menuMapTypeIndex = Mod(_menuMapTypeIndex + direction, MenuMapTypes.Length);
+            {
+                var types = GetMenuMapTypes(MenuMapShapes[_menuMapShapeIndex]);
+                _menuMapType = types[Mod(Array.IndexOf(types, _menuMapType) + direction, types.Length)];
+            }
             else if (_setupRow == 2)
             {
                 if (GetSpecialMenuSizes(MenuMapShapes[_menuMapShapeIndex]) is { } sizes)
@@ -2471,13 +2481,16 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
 
         if (WasPressed(keyboard, Keys.Enter) || (_setupRow == 4 && WasPressed(keyboard, Keys.Space)))
         {
-            _mapType = MenuMapTypes[_menuMapTypeIndex];
+            _mapType = _menuMapType;
             _mapShape = MenuMapShapes[_menuMapShapeIndex];
             _preset = GetSetupPreset(_mapShape);
             GenerateWorld();
             _setupMenuOpen = false;
         }
     }
+
+    private static WorldMapType[] GetMenuMapTypes(WorldMapShape shape) => shape is WorldMapShape.Board or WorldMapShape.Planetoid
+        ? PlanetaryMenuMapTypes : ProceduralMenuMapTypes;
 
     private static WorldPreset[]? GetSpecialMenuSizes(WorldMapShape shape) => shape switch
     {
@@ -2506,7 +2519,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         _spriteBatch.Draw(_pixel, new Rectangle(left, top, panelWidth, 2), new Color(126, 190, 213));
         _spriteBatch.DrawString(_hudFont, "NEW WORLD", new Vector2(left + 24, top + 20), new Color(126, 190, 213));
 
-        var type = MenuMapTypes[_menuMapTypeIndex];
+        var type = _menuMapType;
         var shape = MenuMapShapes[_menuMapShapeIndex];
         var selectedSize = GetSetupPreset(shape);
         var sizeName = GetWorldSizeName(selectedSize);
@@ -2628,7 +2641,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
     }
 
     private Color GetRoadColor(GridPosition position) =>
-        _world.GetSurfaceWater(position) is SurfaceWaterKind.River || _world.GetTerrain(position) is Terrain.Shallows
+        _world.GetSurfaceWater(position) is SurfaceWaterKind.River || _world.HasRoadBridge(position)
             ? new Color(145, 145, 145) : new Color(170, 125, 78);
 
     private void DrawVillageRoad(int screenX, int screenY, GridPosition position)

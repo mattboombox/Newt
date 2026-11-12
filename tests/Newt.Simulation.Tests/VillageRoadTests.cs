@@ -71,19 +71,23 @@ public sealed class VillageRoadTests
         Assert.Contains("already", status);
     }
 
-    [Fact]
-    public void ManualRoadCanBridgeTwoShallowsTilesAndFailureLeavesRoadsUnchanged()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ManualRoadCanBridgeTwoWaterTilesAndFailureLeavesRoadsUnchanged(bool lake)
     {
         var world = CreateWorld(2, 2);
         for (var y = 0; y < world.Height; y++)
         {
-            world.SetTerrain(new(20, y), Terrain.Shallows);
-            world.SetTerrain(new(21, y), Terrain.Shallows);
+            for (var x = 20; x <= 21; x++)
+            {
+                if (lake) world.SetSurfaceWater(new(x, y), SurfaceWaterKind.FreshwaterLake);
+                else world.SetTerrain(new(x, y), Terrain.Shallows);
+            }
             world.SetTerrain(new(60, y), Terrain.Ocean);
         }
         Assert.True(world.TryConnectVillageRoad(First, Second, out _));
-        Assert.Equal(2, Positions(world).Count(tile => world.GetTerrain(tile) is Terrain.Shallows &&
-            world.GetRoadConnections(tile) != RiverConnection.None));
+        Assert.Equal(2, Positions(world).Count(world.HasRoadBridge));
 
         var isolated = CreateWorld(2, 2);
         for (var y = 0; y < isolated.Height; y++)
@@ -138,7 +142,7 @@ public sealed class VillageRoadTests
     }
 
     [Fact]
-    public void UnchangedRoadsSkipValidationAndTerrainEditsStillRepairThem()
+    public void UnchangedRoadsSkipValidationAndFloodedSpansBecomeBridges()
     {
         var world = CreateWorld();
         Assert.True(world.TryPlaceVillageRoad(First));
@@ -154,29 +158,34 @@ public sealed class VillageRoadTests
         world.SetSurfaceWater(blocked, SurfaceWaterKind.FreshwaterLake);
         validate.Invoke(world, null);
         Assert.True(world.VillageRoadValidationCount > checks);
-        Assert.Equal(RiverConnection.None, world.GetRoadConnections(blocked));
+        Assert.True(world.HasRoadBridge(blocked));
         Assert.Equal(1, world.VillageRoadCount);
     }
 
     [Theory]
-    [InlineData(1, false, true)]
-    [InlineData(2, false, true)]
-    [InlineData(3, false, false)]
-    [InlineData(1, true, true)]
-    [InlineData(2, true, true)]
-    public void CheapShallowsBridgesBeatLongLandDetoursAndSpanUpToTwoTiles(int width, bool landRoute, bool connects)
+    [InlineData(1, false, true, false)]
+    [InlineData(2, false, true, false)]
+    [InlineData(3, false, false, false)]
+    [InlineData(1, true, true, false)]
+    [InlineData(2, true, true, false)]
+    [InlineData(2, true, true, true)]
+    [InlineData(3, false, false, true)]
+    public void CheapBridgesBeatLongLandDetoursAndSpanUpToTwoTiles(int width, bool landRoute, bool connects, bool lake)
     {
         var world = CreateWorld();
         for (var y = 0; y < world.Height; y++)
         {
-            for (var x = 20; x < 20 + width; x++) world.SetTerrain(new(x, y), Terrain.Shallows);
+            for (var x = 20; x < 20 + width; x++)
+            {
+                if (lake && (!landRoute || y != 0)) world.SetSurfaceWater(new(x, y), SurfaceWaterKind.FreshwaterLake);
+                else world.SetTerrain(new(x, y), Terrain.Shallows);
+            }
             world.SetTerrain(new(60, y), Terrain.Ocean);
         }
         if (landRoute)
             for (var x = 20; x < 20 + width; x++) world.SetTerrain(new(x, 0), Terrain.Plains);
         Assert.Equal(connects, world.TryPlaceVillageRoad(First));
-        var bridges = Positions(world).Where(p => world.GetTerrain(p) == Terrain.Shallows &&
-            world.GetRoadConnections(p) != RiverConnection.None).ToArray();
+        var bridges = Positions(world).Where(world.HasRoadBridge).ToArray();
         if (connects)
         {
             Assert.Equal(width, bridges.Length);
@@ -184,6 +193,7 @@ public sealed class VillageRoadTests
                 Assert.Equal(RiverConnection.East | RiverConnection.West, world.GetRoadConnections(bridge)));
             world.AdvanceOneTick();
             Assert.All(bridges, bridge => Assert.NotEqual(RiverConnection.None, world.GetRoadConnections(bridge)));
+            if (lake) world.SetSurfaceWater(bridges[0], SurfaceWaterKind.None);
             world.SetTerrain(bridges[0], Terrain.Ocean);
             world.AdvanceOneTick();
             Assert.All(bridges, bridge => Assert.Equal(RiverConnection.None, world.GetRoadConnections(bridge)));
@@ -287,7 +297,7 @@ public sealed class VillageRoadTests
     }
 
     [Fact]
-    public void RoadsCrossRiversButRouteAroundLakesAndSea()
+    public void RoadsCrossRiversAndBridgeLakesWhileAvoidingOpenSea()
     {
         var world = CreateWorld();
         for (var y = 0; y < world.Height; y++)
@@ -302,7 +312,7 @@ public sealed class VillageRoadTests
         world.SetSurfaceWater(new GridPosition(25, 10), SurfaceWaterKind.FreshwaterLake);
         Assert.True(world.TryPlaceVillageRoad(First));
         Assert.Equal(RiverConnection.East | RiverConnection.West, world.GetRoadConnections(bridge));
-        Assert.Equal(RiverConnection.None, world.GetRoadConnections(new GridPosition(25, 10)));
+        Assert.True(world.HasRoadBridge(new GridPosition(25, 10)));
         Assert.All(Positions(world).Where(position => world.GetTerrain(position) is Terrain.Shallows or Terrain.Ocean),
             position => Assert.Equal(RiverConnection.None, world.GetRoadConnections(position)));
     }
@@ -343,11 +353,13 @@ public sealed class VillageRoadTests
     }
 
     [Fact]
-    public void FloodingRoadReroutesItOnNextTick()
+    public void FloodingBeyondBridgeSpanReroutesRoadOnNextTick()
     {
         var world = CreateWorld();
         Assert.True(world.TryPlaceVillageRoad(First));
-        world.SetSurfaceWater(new GridPosition(20, 10), SurfaceWaterKind.FreshwaterLake);
+        for (var y = 9; y <= 11; y++)
+        for (var x = 19; x <= 21; x++)
+            world.SetSurfaceWater(new GridPosition(x, y), SurfaceWaterKind.FreshwaterLake);
         world.AdvanceOneTick();
         Assert.Equal(1, world.VillageRoadCount);
         Assert.Equal(RiverConnection.None, world.GetRoadConnections(new GridPosition(20, 10)));
