@@ -15,13 +15,14 @@ public sealed class DeerEvolutionTests
         world.SetBiome(position, biome);
 
         Assert.True(world.TryAddCritter(CritterSpecies.Deer, position));
+        var startingEnergy = world.GetCritter(0).Energy;
 
         for (var tick = 0; tick < 30 * SimulationWorld.TicksPerSecond; tick++)
         {
             world.AdvanceOneTick();
         }
 
-        Assert.Equal(4, world.GetCritter(0).Energy);
+        Assert.Equal(startingEnergy, world.GetCritter(0).Energy);
     }
 
     [Fact]

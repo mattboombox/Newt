@@ -8,7 +8,7 @@ public sealed class CombatProtectionTests
     [InlineData(CritterSpecies.Deer)]
     [InlineData(CritterSpecies.Elk)]
     [InlineData(CritterSpecies.Gazelle)]
-    public void HerbivoresDealOneDamageAndEveryEligiblePredatorMustFightThem(CritterSpecies species)
+    public void HerbivoresCanRetaliateAgainstEveryEligiblePredator(CritterSpecies species)
     {
         var sawRetaliation = false;
         var sawPredatorHit = false;
@@ -20,9 +20,11 @@ public sealed class CombatProtectionTests
             var defenderPosition = new GridPosition(1, 0);
             var attacker = world.AddCritter(predator, attackerPosition);
             var defender = world.AddCritter(species, defenderPosition);
+            FillDefenderEnergy(world, species);
             var beforeAttacker = world.GetCritter(0).Energy;
             var beforeDefender = world.GetCritter(1).Energy;
-            Assert.Equal(1, world.GetCritterCombatDamage(defender));
+            var retaliationDamage = species is CritterSpecies.Elk ? 2 : 1;
+            Assert.Equal(retaliationDamage, world.GetCritterCombatDamage(defender));
 
             world.CommitEncounter(attackerPosition, defenderPosition);
 
@@ -32,14 +34,13 @@ public sealed class CombatProtectionTests
             {
                 sawPredatorHit = true;
                 Assert.Equal(beforeAttacker, afterAttacker.Energy);
-                Assert.Equal(beforeDefender - Math.Min(world.GetCritterCombatDamage(attacker),
-                    beforeDefender - 1), afterDefender.Energy);
+                Assert.Equal(beforeDefender - world.GetCritterCombatDamage(attacker), afterDefender.Energy);
             }
             else
             {
                 sawRetaliation = true;
                 Assert.Equal(beforeDefender, afterDefender.Energy);
-                Assert.Equal(beforeAttacker - 1, afterAttacker.Energy);
+                Assert.Equal(beforeAttacker - retaliationDamage, afterAttacker.Energy);
             }
         }
         Assert.True(sawRetaliation);
@@ -52,6 +53,7 @@ public sealed class CombatProtectionTests
     [InlineData(CritterSpecies.Gazelle)]
     public void SpiderCannotStoreLivingHerbivoreWithoutFighting(CritterSpecies species)
     {
+        var sawRetaliation = false;
         for (ulong seed = 1; seed <= 20; seed++)
         {
             var world = new SimulationWorld(2, 1, Terrain.Plains, seed);
@@ -61,10 +63,32 @@ public sealed class CombatProtectionTests
             world.SetBiome(web, Biome.Forest);
             Assert.True(world.TryCreateMegaSpiderWeb(spider, web));
             var prey = world.AddCritter(species, web);
+            FillDefenderEnergy(world, species);
+            Assert.True(world.IsCritterCaughtInMegaSpiderWeb(prey));
+            Assert.Equal(1, world.GetCritterCombatDamage(prey));
+            var spiderEnergy = world.GetCritter(0).Energy;
+            var preyEnergy = world.GetCritter(1).Energy;
+
             world.CommitEncounter(attackerPosition, web);
-            Assert.True(world.TryGetCritter(prey, out _));
+
+            Assert.True(world.TryGetCritter(prey, out var survivor));
+            Assert.True(world.TryGetCritter(spider, out var spiderAfter));
+            if (spiderAfter.Energy < spiderEnergy)
+            {
+                sawRetaliation = true;
+                Assert.Equal(spiderEnergy - 1, spiderAfter.Energy);
+                Assert.Equal(preyEnergy, survivor.Energy);
+            }
+            else
+            {
+                Assert.Equal(spiderEnergy, spiderAfter.Energy);
+                Assert.Equal(preyEnergy - world.GetCritterCombatDamage(spider), survivor.Energy);
+            }
             Assert.Equal(0, world.GetMegaSpiderWebFood(web));
+            Assert.True(world.RemoveMegaSpiderWebAt(web));
+            Assert.Equal(species is CritterSpecies.Elk ? 2 : 1, world.GetCritterCombatDamage(prey));
         }
+        Assert.True(sawRetaliation);
     }
 
     [Fact]
@@ -79,6 +103,7 @@ public sealed class CombatProtectionTests
             var defenderPosition = new GridPosition(1, 0);
             var chief = world.AddCritter(CritterSpecies.ApeChieftain, attackerPosition);
             var therapsid = world.AddCritter(CritterSpecies.Therapsid, defenderPosition);
+            FillDefenderEnergy(world, CritterSpecies.Therapsid);
             var chiefEnergy = world.GetCritter(0).Energy;
             var therapsidEnergy = world.GetCritter(1).Energy;
 
@@ -97,7 +122,7 @@ public sealed class CombatProtectionTests
             else
             {
                 sawChiefHit = true;
-                Assert.Equal(1, afterTherapsid.Energy);
+                Assert.Equal(therapsidEnergy - world.GetCritterCombatDamage(chief), afterTherapsid.Energy);
             }
         }
         Assert.True(sawRetaliation);
@@ -112,13 +137,14 @@ public sealed class CombatProtectionTests
         foreach (var attackerSpecies in Enum.GetValues<CritterSpecies>())
         for (ulong seed = 1; seed <= 20; seed++)
         {
-            var world = new SimulationWorld(2, 1, Terrain.Shallows, seed);
+            var world = new SimulationWorld(6, 3, Terrain.Shallows, seed);
             var attackPosition = new GridPosition(0, 0);
             var traderPosition = new GridPosition(1, 0);
-            var attacker = world.AddCritter(attackerSpecies, attackPosition);
+            // Leave room for the lich's escort so it does not replace the trader.
             var trader = world.AddCritter(traderSpecies, traderPosition);
-            var beforeAttacker = world.GetCritter(0);
-            var beforeTrader = world.GetCritter(1);
+            var attacker = world.AddCritter(attackerSpecies, attackPosition);
+            Assert.True(world.TryGetCritter(attacker, out var beforeAttacker));
+            Assert.True(world.TryGetCritter(trader, out var beforeTrader));
             world.CommitEncounter(attackPosition, traderPosition);
             Assert.True(world.TryGetCritter(trader, out var afterTrader), $"{attackerSpecies} ate {traderSpecies}");
             Assert.True(world.TryGetCritter(attacker, out var afterAttacker));
@@ -257,21 +283,29 @@ public sealed class CombatProtectionTests
             // Cannibal spiders only attack while hungry; newly spawned ones are full.
             if (attacker == CritterSpecies.MegaSpider && defender == attacker)
                 continue;
-            var world = new SimulationWorld(2, 1, Terrain.Shallows, seed: 52);
+            var world = new SimulationWorld(6, 3, Terrain.Shallows, seed: 52);
             var attackPosition = new GridPosition(0, 0);
             var defensePosition = new GridPosition(1, 0);
-            var attackId = world.AddCritter(attacker, attackPosition);
-            var defenseId = world.AddCritter(defender, defensePosition);
+            // Place the other combatant before a lich can fill its tile.
+            CritterId attackId, defenseId;
+            if (attacker is CritterSpecies.Lich)
+            {
+                defenseId = world.AddCritter(defender, defensePosition);
+                attackId = world.AddCritter(attacker, attackPosition);
+            }
+            else
+            {
+                attackId = world.AddCritter(attacker, attackPosition);
+                defenseId = world.AddCritter(defender, defensePosition);
+            }
+            Assert.True(world.TryGetCritter(attackId, out var beforeAttacker));
+            Assert.True(world.TryGetCritter(defenseId, out var beforeDefender));
             var attackDamage = world.GetCritterCombatDamage(attackId);
             var defenseDamage = world.GetCritterCombatDamage(defenseId);
-            if (defenseDamage > 0)
-                attackDamage = Math.Min(attackDamage, Math.Max(1, CritterNutritions.Get(defender).InitialEnergy - 1));
-            if (world.GetCritterCombatDamage(attackId) > 0)
-                defenseDamage = Math.Min(defenseDamage, Math.Max(1, CritterNutritions.Get(attacker).InitialEnergy - 1));
-            var initial = world.GetCritter(0).Energy + world.GetCritter(1).Energy;
-            if (defenseDamage == 0 || world.GetCritter(0).Energy <= defenseDamage ||
-                world.GetCritter(1).Energy <= attackDamage)
+            if (defenseDamage == 0 || beforeAttacker.Energy <= defenseDamage ||
+                beforeDefender.Energy <= attackDamage)
                 continue;
+            var initial = beforeAttacker.Energy + beforeDefender.Energy;
 
             world.CommitEncounter(attackPosition, defensePosition);
 
@@ -308,6 +342,7 @@ public sealed class CombatProtectionTests
             var warrior = world.AddCritter(species, attacker);
             Assert.True(world.TryAssignApeToVillage(warrior, camp));
             var therapsid = world.AddCritter(CritterSpecies.Therapsid, defender);
+            FillDefenderEnergy(world, CritterSpecies.Therapsid);
             var initial = world.GetCritter(0).Energy + world.GetCritter(1).Energy;
 
             world.CommitEncounter(attacker, defender);
@@ -317,5 +352,12 @@ public sealed class CombatProtectionTests
             Assert.Contains(initial - survivingWarrior.Energy - survivingTherapsid.Energy,
                 new[] { 1, species is CritterSpecies.ApeChieftain ? 4 : 3 });
         }
+    }
+
+    private static void FillDefenderEnergy(SimulationWorld world, CritterSpecies defender)
+    {
+        var energy = (int[])typeof(SimulationWorld).GetField("_energy",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(world)!;
+        energy[1] = CritterNutritions.Get(defender).MaximumEnergy;
     }
 }

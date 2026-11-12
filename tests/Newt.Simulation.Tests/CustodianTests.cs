@@ -18,8 +18,8 @@ public sealed class CustodianTests
             Assert.True(world.TryGetCritter(south, out var southDrone));
             Assert.Equal(new GridPosition(2, 0), northDrone.Position);
             Assert.Equal(new GridPosition(3, 3), southDrone.Position);
-            Assert.Equal(30, northDrone.Energy);
-            Assert.Equal(30, southDrone.Energy);
+            Assert.Equal(CritterNutritions.Get(CritterSpecies.Custodian).InitialEnergy, northDrone.Energy);
+            Assert.Equal(CritterNutritions.Get(CritterSpecies.Custodian).InitialEnergy, southDrone.Energy);
         }
         Assert.False(world.TryGetCritter(groundAnimal, out _));
     }
@@ -82,7 +82,7 @@ public sealed class CustodianTests
             world.AdvanceOneTick();
         Assert.True(world.HasTeleporter(portal));
         Assert.Equal(1, world.TeleporterCount);
-        Assert.Equal(30, world.GetCritter(0).Energy);
+        Assert.Equal(CritterNutritions.Get(CritterSpecies.Custodian).InitialEnergy, world.GetCritter(0).Energy);
     }
 
     [Fact]
@@ -115,12 +115,13 @@ public sealed class CustodianTests
             Assert.False(SimulationWorld.CanEat(species, CritterSpecies.Custodian));
             Assert.False(SimulationWorld.CanPursuePreyAtDistance(species, CritterSpecies.Custodian, 1));
             var world = new SimulationWorld(3, 1, Terrain.Plains);
-            Assert.True(world.TrySpawnCritter(species, new(0, 0)));
+            // Reserve the target tile before spawning a lich and its warriors.
             var drone = world.AddCritter(CritterSpecies.Custodian, new(1, 0));
-            Assert.Null(world.FindHunterPrey(0, species, 8, null));
+            Assert.True(world.TrySpawnCritter(species, new(0, 0)));
+            Assert.Null(world.FindHunterPrey(1, species, 8, null));
             world.CommitEncounter(new(0, 0), new(1, 0));
             Assert.True(world.TryGetCritter(drone, out var untouched));
-            Assert.Equal(30, untouched.Energy);
+            Assert.Equal(CritterNutritions.Get(CritterSpecies.Custodian).InitialEnergy, untouched.Energy);
         }
     }
 
@@ -139,7 +140,7 @@ public sealed class CustodianTests
             world.AdvanceOneTick();
         Assert.True(world.TryGetCritter(drone, out var flying));
         Assert.NotEqual(web, flying.Position);
-        Assert.Equal(30, flying.Energy);
+        Assert.Equal(CritterNutritions.Get(CritterSpecies.Custodian).InitialEnergy, flying.Energy);
         Assert.False(world.IsCritterCaughtInMegaSpiderWeb(drone));
     }
 
@@ -195,14 +196,14 @@ public sealed class CustodianTests
         };
         world.SeedRingWorldCustodians();
         var drone = world.GetCritter(0);
-        Assert.Equal(30, drone.Energy);
+        Assert.Equal(CritterNutritions.Get(CritterSpecies.Custodian).InitialEnergy, drone.Energy);
         Assert.Equal(10, world.GetCritterCombatDamage(drone.Id));
         var positions = new HashSet<GridPosition>();
         for (var tick = 0; tick < 240 * SimulationWorld.TicksPerSecond; tick++)
         {
             world.AdvanceOneTick();
             Assert.True(world.TryGetCritter(drone.Id, out var snapshot));
-            Assert.Equal(30, snapshot.Energy);
+            Assert.Equal(CritterNutritions.Get(CritterSpecies.Custodian).InitialEnergy, snapshot.Energy);
             positions.Add(snapshot.Position);
         }
         Assert.True(positions.Count > 12);
@@ -232,7 +233,7 @@ public sealed class CustodianTests
         Assert.Equal(5, world.GetCritterCount(CritterSpecies.Custodian));
         var recruit = world.GetCritter(world.CritterCount - 1);
         Assert.False(recruit.IsAncientCustodian);
-        Assert.Equal(30, recruit.Energy);
+        Assert.Equal(CritterNutritions.Get(CritterSpecies.Custodian).InitialEnergy, recruit.Energy);
         var ancientTick = world.Tick + SimulationWorld.CustodianAncientAgeTicks;
         SetTick(world, ancientTick - 1);
         Assert.True(world.TryGetCritter(recruit.Id, out var modern));
@@ -240,7 +241,7 @@ public sealed class CustodianTests
         SetTick(world, ancientTick);
         Assert.True(world.TryGetCritter(recruit.Id, out var ancient));
         Assert.True(ancient.IsAncientCustodian);
-        Assert.Equal(30, ancient.Energy);
+        Assert.Equal(CritterNutritions.Get(CritterSpecies.Custodian).InitialEnergy, ancient.Energy);
         world.AdvanceCustodianFabricator();
         Assert.Equal(5, world.GetCritterCount(CritterSpecies.Custodian));
     }

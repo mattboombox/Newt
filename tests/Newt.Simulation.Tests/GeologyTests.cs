@@ -4,6 +4,35 @@ namespace Newt.Simulation.Tests;
 
 public sealed class GeologyTests
 {
+    [Fact]
+    public void TerrainGeometryReportsLocalChangesAndFreshwaterResets()
+    {
+        var world = new SimulationWorld(4, 4, Terrain.Plains);
+        var tile = new GridPosition(1, 1);
+        var changes = new List<GridPosition?>();
+        world.TerrainGeometryChanged += changes.Add;
+
+        world.SetElevation(tile, 0.25f);
+        world.SetElevation(tile, 0.25f);
+        world.SetTerrain(tile, Terrain.Hills);
+        world.SetTemperature(tile, 0.85f);
+        world.SetTemperature(tile, 0.90f);
+        world.SetBiome(tile, Biome.Grassland);
+        world.SetSurfaceWater(tile, SurfaceWaterKind.FreshwaterLake);
+        world.SetWaterSurfaceElevation(tile, 0.4f);
+        world.SetWaterSurfaceElevation(tile, 0.4f);
+        world.SetSurfaceCover(tile, SurfaceCover.Lava, 20);
+        Assert.Equal(7, changes.Count);
+        Assert.All(changes, changed => Assert.Equal(tile, changed));
+
+        world.ClearFreshwaterForTerrainRebuild(tile);
+        Assert.Equal(tile, changes[^1]);
+        Assert.Equal(8, changes.Count);
+        world.ClearFreshwater();
+        Assert.Null(changes[^1]);
+        Assert.Equal(9, changes.Count);
+    }
+
     [Theory]
     [InlineData(0.9f)]
     [InlineData(-0.9f)]

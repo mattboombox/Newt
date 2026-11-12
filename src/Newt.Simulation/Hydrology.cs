@@ -981,6 +981,8 @@ public static class Hydrology
         GridPosition position,
         GridPosition direction)
     {
+        if (world.Body == WorldBody.Planetoid)
+            return PlanetoidLayout.Offset(position, direction.X, direction.Y, PlanetoidLayout.FaceSize(world.Width));
         var y = position.Y + direction.Y;
         if (y < 0 || y >= world.Height)
         {

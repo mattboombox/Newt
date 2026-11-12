@@ -21,7 +21,7 @@ public sealed partial class SimulationWorld
 
     internal void SeedRingWorldCustodians()
     {
-        if (Body is not WorldBody.RingWorld || CustodianFabricator is not null)
+        if (!IsRingHabitat || CustodianFabricator is not null)
             return;
         var fabricatorCount = Math.Max(1, Width / WorldPreset.Ring.Width);
         // Spread stationary fabricators along the engineered north wall.

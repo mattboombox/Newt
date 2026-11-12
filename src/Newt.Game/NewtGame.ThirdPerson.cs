@@ -21,19 +21,18 @@ public sealed partial class NewtGame
 
     private Vector3 PlayerCameraPosition3D()
     {
-        var eye = WorldPoint3D(new Vector3(_focus3D.X, _firstPersonEyeHeight, _focus3D.Y));
-        if (_playerView is not PlayerView.ThirdPerson) return eye;
-        var up = SurfaceUp3D(_focus3D.X);
-        var east = IsRing3D ? Framework(RingGeometry.Frame(_focus3D.X, _world.Width).East) : Vector3.UnitX;
+        var cameraX = PlayerCameraX3D;
+        if (_playerView is not PlayerView.ThirdPerson)
+            return WorldPoint3D(new Vector3(cameraX, _firstPersonEyeHeight, _focus3D.Y));
+        var (east, up, south) = SurfaceFrame3D(cameraX, _focus3D.Y);
         // The walker's eye eases up after a step. Keep the lower chase target
         // above the new ground/deck during that transition too.
         var targetHeight = Math.Max(_firstPersonEyeHeight - 0.45f, WalkingSurfaceHeight(_focus3D) + 0.15f);
-        var target = WorldPoint3D(new Vector3(_focus3D.X, targetHeight, _focus3D.Y));
+        var target = WorldPoint3D(new Vector3(cameraX, targetHeight, _focus3D.Y));
         return Framework(ThreeDGeometry.ThirdPersonCameraPosition(Numerics(target),
-            Numerics(CameraLookDirection3D(east, up)), ThirdPersonDistance, point =>
+            Numerics(CameraLookDirection3D(east, up, south)), ThirdPersonDistance, point =>
             {
-                var local = IsRing3D
-                    ? Framework(RingGeometry.StripPosition(point, _world.Width, _world.Height)) : Framework(point);
+                var local = LocalPoint3D(Framework(point));
                 var x = (int)MathF.Floor(local.X);
                 var y = (int)MathF.Floor(local.Z);
                 if (!ContainsTile3D(x, y)) return true;
@@ -57,10 +56,11 @@ public sealed partial class NewtGame
         // or participates in collision, hunger, combat, or critter movement.
         var feet = Math.Max(WalkingSurfaceHeight(_focus3D) + 0.025f,
             _firstPersonEyeHeight - FirstPersonEyeOffset + 0.025f);
-        var position = WorldPoint3D(new Vector3(_focus3D.X, feet, _focus3D.Y));
+        var cameraX = PlayerCameraX3D;
+        var position = WorldPoint3D(new Vector3(cameraX, feet, _focus3D.Y));
         var camera = Matrix.Invert(view);
         var halfSize = WalkingSpriteScale3D * 0.5f;
-        var center = position + SurfaceUp3D(_focus3D.X) * halfSize;
+        var center = position + SurfaceUp3D(cameraX, _focus3D.Y) * halfSize;
         var right = camera.Right * halfSize;
         var up = camera.Up * halfSize;
         // Fade when an obstruction pushes the chase camera into the avatar.

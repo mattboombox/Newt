@@ -10,19 +10,18 @@ public static partial class WorldGenerator
             Body = WorldBody.Nexus,
             SeasonsEnabled = false,
         };
-        var center = NexusLayout.Center(world);
-        var elevations = GenerateNexusElevations(world, options.Seed);
+        var elevations = options.MapType is WorldMapType.Archipelago or WorldMapType.Pangaea
+            ? GenerateProceduralElevations(world.Width, world.Height, options.MapType, options.Seed)
+            : GenerateNexusElevations(world, options.Seed);
 
-        // All usable terrain, including the center, contributes to land coverage.
+        // The petals and the ring around the central opening contribute to land coverage.
         var petalElevations = new List<double>();
         for (var y = 0; y < world.Height; y++)
         for (var x = 0; x < world.Width; x++)
             if (!NexusLayout.IsWall(world, new(x, y)))
                 petalElevations.Add(elevations[y * world.Width + x]);
-        var threshold = FindLandThreshold(petalElevations.ToArray(), options.LandFraction);
-        var depths = petalElevations.Where(value => value < threshold).Select(value => threshold - value).Order().ToArray();
-        var depthScale = depths.Length == 0 ? 1 : Math.Max(1,
-            TerrainClassifier.DeepOceanDepthThreshold / Math.Max(0.001, depths[depths.Length / 4]));
+        var threshold = FindLandThreshold(petalElevations.ToArray(), LandFractionFor(options));
+        var depthScale = DeepOceanScale(petalElevations.Where(value => value < threshold).Select(value => threshold - value));
         for (var y = 0; y < world.Height; y++)
         for (var x = 0; x < world.Width; x++)
         {
@@ -30,15 +29,7 @@ public static partial class WorldGenerator
             if (height < 0) height *= depthScale;
             world.SetElevation(new(x, y), (float)height);
         }
-        NexusLayout.ApplyWalls(world);
-        SelectOceanSeeds(world, includeLargeSecondaryBasins: true);
-        TerrainClassifier.RebuildAll(world);
-        world.TryPlaceTeleporter(center);
-        for (var arm = 0; arm < NexusLayout.ArmCount; arm++)
-            world.TryPlaceTeleporter(NexusLayout.ArmPosition(world, arm));
-        SeedNaturalVolcanoes(world, options.Seed);
-        StartNaturalSprings(world, options.Seed);
-        world.SeedNexusCustodians(preset.Width >= WorldPreset.NexusMega.Width);
+        FinishGeneratedTerrain(world, includeLargeSecondaryBasins: true, seedVolcanoes: true);
         return world;
     }
 

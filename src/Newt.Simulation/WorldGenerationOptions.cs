@@ -5,4 +5,5 @@ public readonly record struct WorldGenerationOptions(
     WorldPreset Preset,
     ulong Seed,
     double LandFraction = 0.38,
-    WorldMapType MapType = WorldMapType.Continents);
+    WorldMapType MapType = WorldMapType.Continents,
+    WorldMapShape? Shape = null);

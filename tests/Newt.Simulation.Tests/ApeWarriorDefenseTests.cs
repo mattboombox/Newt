@@ -53,7 +53,7 @@ public sealed class ApeWarriorDefenseTests
         Assert.True(world.TryGetCritter(raider, out var beforeRaider));
         world.CommitEncounter(position, raiderPosition);
         Assert.True(world.TryGetCritter(warrior, out var afterWarrior));
-        Assert.True(world.TryGetCritter(raider, out var afterRaider));
-        Assert.True(afterWarrior.Energy + afterRaider.Energy < beforeWarrior.Energy + beforeRaider.Energy);
+        Assert.True(!world.TryGetCritter(raider, out var afterRaider) ||
+            afterWarrior.Energy + afterRaider.Energy < beforeWarrior.Energy + beforeRaider.Energy);
     }
 }

@@ -5,7 +5,19 @@ namespace Newt.Game;
 /// <summary>Shared finite-map geometry, independent of the graphics device.</summary>
 internal static class ThreeDGeometry
 {
+    private const float GroundRunSpeed = 24f;
+    private const float VerticalSpeedBoost = 4f;
+
     internal static float ColumnHeight(float elevation) => 0.25f + (elevation + 1) * 4;
+
+    internal static float NexusMaximumPetalLift(float radius) => radius * 0.08f;
+
+    internal static float NexusPetalLift(float offsetX, float offsetY, float radius)
+    {
+        var distanceSquared = (offsetX * offsetX + offsetY * offsetY) / (radius * radius);
+        var bend = Math.Clamp((distanceSquared - 0.25f) / 0.75f, 0f, 1f);
+        return NexusMaximumPetalLift(radius) * bend * bend;
+    }
 
     internal static float UnderwaterTintOpacity(float eyeHeight, float? waterHeight) =>
         waterHeight is { } surface ? Math.Clamp((surface - eyeHeight) / 0.15f, 0, 1) * 0.28f : 0;
@@ -29,7 +41,8 @@ internal static class ThreeDGeometry
     }
 
     internal static float FirstPersonSwimmingHeight(float current, float ground, float? waterSurface,
-        bool rising, float seconds, float eyeOffset = 1.2f, float? ceiling = null, bool fastSink = false)
+        bool rising, float seconds, float eyeOffset = 1.2f, float? ceiling = null, bool fastSink = false,
+        bool boosted = false)
     {
         var standing = ground + eyeOffset;
         if (waterSurface is not { } water)
@@ -37,10 +50,42 @@ internal static class ThreeDGeometry
         var target = rising ? Math.Max(standing, water + eyeOffset * 0.75f) : standing;
         if (ceiling is { } limit) target = Math.Min(target, limit);
         var speed = rising ? 0.8f : fastSink ? 1.2f : 0.4f;
+        if (boosted && (rising || fastSink)) speed *= VerticalSpeedBoost;
         var distance = speed * seconds;
         var floor = ceiling is null ? standing : ground + 0.15f;
         var result = Math.Max(floor, current + Math.Clamp(target - current, -distance, distance));
         return ceiling is { } top ? Math.Min(result, top) : result;
+    }
+
+    internal static (float Height, bool Flying) FirstPersonFlightHeight(float current, float ground,
+        float? waterSurface, bool flying, bool rising, bool fastSink, float seconds, float maximumHeight,
+        float eyeOffset = 1.2f, float? iceCeiling = null, bool boosted = false)
+    {
+        var standing = ground + eyeOffset;
+        var landingHeight = waterSurface is { } water
+            ? Math.Max(standing, water + eyeOffset * 0.75f)
+            : standing;
+        if (iceCeiling is not null ||
+            (!flying && (!rising || waterSurface is not null && current < landingHeight)))
+        {
+            return (FirstPersonSwimmingHeight(current, ground, waterSurface, rising, seconds,
+                eyeOffset, iceCeiling, fastSink, boosted), false);
+        }
+
+        var speed = rising ? (boosted ? GroundRunSpeed : 6f) : fastSink ? -6f : -2f;
+        if (boosted && fastSink && !rising) speed *= VerticalSpeedBoost;
+        var height = Math.Clamp(current + speed * seconds,
+            landingHeight, Math.Max(landingHeight, maximumHeight));
+        return (height, height > landingHeight);
+    }
+
+    // Keep the eye clear of the axis, where the two camera frames share the same position.
+    internal static float RingFlightCeiling(int width) => RingGeometry.Radius(width) - 0.1f;
+
+    internal static float? RingFlightCrossing(float x, int width, float previousHeight, float height)
+    {
+        var ceiling = RingFlightCeiling(width);
+        return previousHeight < ceiling && height >= ceiling ? WrapCamera(x + width / 2f, width) : null;
     }
 
     internal enum IceEntry { Above, Below, Blocked }
@@ -115,14 +160,33 @@ internal static class ThreeDGeometry
 
     internal static float FarClipDistance(float cameraDistance) => Math.Max(180, cameraDistance) * 2.2f;
 
-    internal static float RenderDistance(float maximum, int level, float cameraDistance = 0) => level switch
+    internal const int RenderDistanceLevels = 4;
+
+    internal static float FullWorldRenderDistance(int width, int length, bool cylindrical, float cameraDistance = 0)
     {
-        // Include the orbit distance so an overhead free camera still sees its
-        // focus tile when zoomed out. Walking views measure from the camera.
-        1 => Math.Min(maximum, cameraDistance + 64),
-        2 => Math.Min(maximum, cameraDistance + 32),
-        _ => maximum,
-    };
+        var crossSpan = cylindrical ? RingGeometry.Radius(width) * 2 : width;
+        return MathF.Sqrt((float)length * length + crossSpan * crossSpan) + cameraDistance + 16f;
+    }
+
+    internal static float WorldRenderDistance(SimulationWorld world, float minimumRange, int level,
+        float cameraDistance = 0)
+    {
+        var fullRange = FullWorldRenderDistance(world.Width, world.Height, world.IsRingHabitat, cameraDistance);
+        if (world.Body == WorldBody.Nexus)
+            fullRange += NexusMaximumPetalLift(NexusLayout.Radius(world));
+        if (world.Body == WorldBody.Planetoid)
+            fullRange = 2 * (PlanetoidGeometry.Radius(world.Width) + 32f) + cameraDistance;
+        return RenderDistance(Math.Max(minimumRange, fullRange), level, cameraDistance);
+    }
+
+    internal static float RenderDistance(float maximum, int level, float cameraDistance = 0)
+    {
+        var fraction = (RenderDistanceLevels - Math.Clamp(level, 0, RenderDistanceLevels - 1)) /
+            (float)RenderDistanceLevels;
+        // Keep the focus and its terrain in view even at minimum distance in the free camera.
+        var minimum = Math.Min(maximum, cameraDistance + 16f);
+        return Math.Max(minimum, maximum * fraction);
+    }
 
     internal static System.Numerics.Vector3 LookDirection(float yaw, float pitch) => new(
         -MathF.Sin(yaw) * MathF.Cos(pitch), -MathF.Sin(pitch), -MathF.Cos(yaw) * MathF.Cos(pitch));
@@ -132,7 +196,7 @@ internal static class ThreeDGeometry
         var movement = new System.Numerics.Vector2(-MathF.Sin(yaw), -MathF.Cos(yaw)) * forward +
             new System.Numerics.Vector2(MathF.Cos(yaw), -MathF.Sin(yaw)) * right;
         if (movement.LengthSquared() > 1) movement = System.Numerics.Vector2.Normalize(movement);
-        return movement * Math.Clamp(seconds, 0, 0.1f) * (running ? 8.75f : 3.5f);
+        return movement * Math.Clamp(seconds, 0, 0.1f) * (running ? GroundRunSpeed : 3.5f);
     }
 
     internal static int NearestZoomIndex(float pixelsPerTile, ReadOnlySpan<int> levels)
@@ -151,8 +215,33 @@ internal static class ThreeDGeometry
 
     internal static int WrapTile(int coordinate, int size) => (coordinate % size + size) % size;
 
+    internal static System.Numerics.Vector2 PlayerSpawnPosition(SimulationWorld world,
+        System.Numerics.Vector2 position)
+    {
+        var tile = new GridPosition((int)MathF.Floor(position.X), (int)MathF.Floor(position.Y));
+        if (world.Body is not WorldBody.Nexus || NexusLayout.Contains(world, tile))
+            return position;
+
+        var nearest = float.MaxValue;
+        var spawn = position;
+        for (var y = 0; y < world.Height; y++)
+        for (var x = 0; x < world.Width; x++)
+        {
+            if (!NexusLayout.Contains(world, new GridPosition(x, y))) continue;
+            var candidate = new System.Numerics.Vector2(x + 0.5f, y + 0.5f);
+            var distance = System.Numerics.Vector2.DistanceSquared(candidate, position);
+            if (distance >= nearest) continue;
+            nearest = distance;
+            spawn = candidate;
+        }
+        return spawn;
+    }
+
     internal static int FirstVisibleCopy(int tile, int minimum, int size) =>
         tile + (int)Math.Ceiling((minimum - tile) / (double)size) * size;
+
+    internal static int FirstVisibleChunkCopy(int start, int length, int minimum, int size) =>
+        FirstVisibleCopy(start + length - 1, minimum, size) - length + 1;
 
     internal static (int Left, int Right) SingleMapSpan(int left, int right, float focus, int width)
     {

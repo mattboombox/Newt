@@ -17,7 +17,19 @@ public static partial class WorldGenerator
         {
             throw new ArgumentOutOfRangeException(nameof(options), "Land fraction must be between 0.15 and 0.75.");
         }
-        if (options.MapType is WorldMapType.Nexus || options.Preset == WorldPreset.Nexus || options.Preset == WorldPreset.NexusMega)
+        if (options.Shape == WorldMapShape.Planetoid &&
+            (options.Preset.Width % 3 != 0 || options.Preset.Height != PlanetoidLayout.FaceSize(options.Preset.Width) * 2))
+            throw new ArgumentException("A planetoid needs six square faces in a three-by-two grid.", nameof(options));
+        var isCylinderPreset = options.Preset == WorldPreset.ONeillCylinder ||
+            options.Preset == WorldPreset.ONeillCylinderLarge || options.Preset == WorldPreset.ONeillCylinderMega;
+        var isCylinder = options.Shape == WorldMapShape.ONeillCylinder || options.Shape is null &&
+            (isCylinderPreset || options.MapType is WorldMapType.ONeillCylinder);
+        if (options.Shape is null && isCylinder && !isCylinderPreset)
+            options = options with { Preset = WorldPreset.ONeillCylinder };
+
+        var isNexus = options.Shape == WorldMapShape.Nexus || options.Shape is null &&
+            (options.MapType is WorldMapType.Nexus || options.Preset == WorldPreset.Nexus || options.Preset == WorldPreset.NexusMega);
+        if (isNexus && options.Shape is null)
             return GenerateNexus(options);
 
         if (options.MapType is WorldMapType.Earth || options.Preset == WorldPreset.Earth)
@@ -28,85 +40,52 @@ public static partial class WorldGenerator
         if (options.MapType is WorldMapType.Moon or WorldMapType.Mars)
             return GeneratePlanetaryRelief(options);
 
+        if (isNexus && options.MapType != WorldMapType.AllOcean)
+            return GenerateNexus(options);
+
         var preset = options.Preset;
-        var isRingWorld = options.MapType is WorldMapType.RingWorld ||
-            preset == WorldPreset.Ring || preset == WorldPreset.RingLarge || preset == WorldPreset.RingMega;
         var world = new SimulationWorld(preset.Width, preset.Height, Terrain.DeepOcean, options.Seed)
         {
-            Body = isRingWorld ? WorldBody.RingWorld : WorldBody.Terrarium,
-            SeasonsEnabled = !isRingWorld,
+            Body = options.Shape is { } shape ? ShapeBody(shape, WorldBody.Terrarium) :
+                isCylinder ? WorldBody.ONeillCylinder :
+                options.MapType == WorldMapType.RingWorld || preset == WorldPreset.Ring ||
+                    preset == WorldPreset.RingLarge || preset == WorldPreset.RingMega ? WorldBody.RingWorld : WorldBody.Terrarium,
         };
+        world.SeasonsEnabled = !world.IsRingHabitat && !isNexus;
         // Generate the ring as a crop of a full-height landscape. Its narrow
         // playable band must not compress continents, ranges, or noise vertically.
-        var generationHeight = isRingWorld ? Math.Max(preset.Height, WorldPreset.Standard.Height) : preset.Height;
-        var elevation = new double[checked(preset.Width * generationHeight)];
-        var random = new GeneratorRandom(options.Seed);
+        var generationHeight = world.IsRingHabitat ? Math.Max(preset.Height, WorldPreset.Standard.Height) : preset.Height;
         if (options.MapType is WorldMapType.AllOcean)
         {
-            AddElevationNoise(elevation, preset.Width, preset.Height, options.Seed);
+            var oceanElevation = world.Body == WorldBody.Planetoid
+                ? null : new double[checked(preset.Width * preset.Height)];
+            if (oceanElevation is not null)
+                AddElevationNoise(oceanElevation, preset.Width, preset.Height, options.Seed);
+            var faceSize = PlanetoidLayout.FaceSize(world.Width);
             for (var y = 0; y < preset.Height; y++)
             {
                 for (var x = 0; x < preset.Width; x++)
                 {
                     var position = new GridPosition(x, y);
+                    var elevationNoise = oceanElevation is null
+                        ? SphericalElevationNoise(TileDirection(x, y, faceSize), faceSize, world.Seed)
+                        : oceanElevation[y * preset.Width + x];
                     // Keep every tile submerged while retaining readable ocean
                     // basins, ridges, and temperature-driven polar sea ice.
                     world.SetElevation(position, (float)Math.Clamp(
-                        elevation[y * preset.Width + x] - 0.42,
+                        elevationNoise - 0.42,
                         -0.85,
                         -0.04));
                 }
             }
 
-            SelectOceanSeeds(world, includeLargeSecondaryBasins: false);
-            TerrainClassifier.RebuildAll(world);
+            FinishGeneratedTerrain(world, includeLargeSecondaryBasins: false, seedVolcanoes: false);
             return world;
         }
 
-        var area = preset.Width * generationHeight;
-        // Extra map area buys more local features instead of scaling up a small
-        // fixed set of continents and ranges.
-        var defaultMasses = Math.Clamp(area / 10_000 + 2, 2, 24);
-        var continentalMasses = options.MapType switch
-        {
-            WorldMapType.Pangaea => 0,
-            WorldMapType.Archipelago => Math.Min(72, defaultMasses * 3),
-            _ => defaultMasses,
-        };
-        var volcanicChains = options.MapType switch
-        {
-            WorldMapType.Pangaea => Math.Clamp(area / 15_000 + 3, 3, 18),
-            WorldMapType.Archipelago => Math.Min(40, Math.Max(3, continentalMasses / 2)),
-            _ => Math.Clamp(area / 7_000 + 2, 2, 24),
-        };
-        var continentScale = options.MapType switch
-        {
-            WorldMapType.Archipelago => 0.28,
-            _ => 1.0,
-        };
-
-        if (options.MapType is WorldMapType.Pangaea)
-        {
-            AddPangaea(elevation, preset.Width, generationHeight, ref random);
-        }
-
-        for (var continent = 0; continent < continentalMasses; continent++)
-        {
-            AddContinentalMass(elevation, preset.Width, generationHeight, ref random, continentScale);
-        }
-
-        var continentalFoundation = (double[])elevation.Clone();
-        for (var chain = 0; chain < volcanicChains; chain++)
-        {
-            AddVolcanicChain(
-                elevation,
-                continentalFoundation,
-                preset.Width,
-                generationHeight,
-                ref random);
-        }
-
-        AddElevationNoise(elevation, preset.Width, generationHeight, options.Seed);
+        var elevation = world.Body == WorldBody.Planetoid
+            ? GeneratePlanetoidElevations(world, options.MapType)
+            : GenerateProceduralElevations(preset.Width, generationHeight, options.MapType, options.Seed);
 
         if (generationHeight != preset.Height)
         {
@@ -116,18 +95,10 @@ public static partial class WorldGenerator
             elevation = strip;
         }
 
-        var landFraction = options.MapType switch
-        {
-            WorldMapType.Pangaea when options.LandFraction == 0.38 => 0.48,
-            WorldMapType.Archipelago when options.LandFraction == 0.38 => 0.22,
-            _ => options.LandFraction,
-        };
-        var threshold = FindLandThreshold(elevation, landFraction);
+        var threshold = FindLandThreshold(elevation, LandFractionFor(options));
         // Preserve coastlines and land relief, but deepen the submerged basins so
         // roughly three quarters lie beyond the productive continental shelf.
-        var depths = elevation.Where(value => value < threshold).Select(value => threshold - value).Order().ToArray();
-        var depthScale = depths.Length == 0 ? 1 :
-            Math.Max(1, TerrainClassifier.DeepOceanDepthThreshold / Math.Max(0.001, depths[depths.Length / 4]));
+        var depthScale = DeepOceanScale(elevation.Where(value => value < threshold).Select(value => threshold - value));
         for (var y = 0; y < preset.Height; y++)
         {
             for (var x = 0; x < preset.Width; x++)
@@ -139,15 +110,74 @@ public static partial class WorldGenerator
             }
         }
 
-        TerrainClassifier.ApplyMegaWalls(world);
-        SelectOceanSeeds(world, includeLargeSecondaryBasins: true);
-
-        TerrainClassifier.RebuildAll(world);
-        SeedRingWorldTeleporters(world);
-        SeedNaturalVolcanoes(world, options.Seed);
-        StartNaturalSprings(world, options.Seed);
-        world.SeedRingWorldCustodians();
+        FinishGeneratedTerrain(world, includeLargeSecondaryBasins: true, seedVolcanoes: true);
         return world;
+    }
+
+    private static double LandFractionFor(WorldGenerationOptions options) => options.MapType switch
+    {
+        WorldMapType.Pangaea when options.LandFraction == 0.38 => 0.48,
+        WorldMapType.Archipelago when options.LandFraction == 0.38 => 0.22,
+        _ => options.LandFraction,
+    };
+
+    private static double DeepOceanScale(IEnumerable<double> depths)
+    {
+        var ordered = depths.Order().ToArray();
+        return ordered.Length == 0 ? 1 : Math.Max(1,
+            TerrainClassifier.DeepOceanDepthThreshold / Math.Max(0.001, ordered[ordered.Length / 4]));
+    }
+
+    private static double[] GenerateProceduralElevations(int width, int height, WorldMapType mapType, ulong seed)
+    {
+        var elevation = new double[checked(width * height)];
+        var random = new GeneratorRandom(seed);
+        var area = width * height;
+        // Extra map area buys more local features instead of scaling up a small
+        // fixed set of continents and ranges.
+        var defaultMasses = Math.Clamp(area / 10_000 + 2, 2, 24);
+        var continentalMasses = mapType switch
+        {
+            WorldMapType.Pangaea => 0,
+            WorldMapType.Archipelago => Math.Min(72, defaultMasses * 3),
+            _ => defaultMasses,
+        };
+        var volcanicChains = mapType switch
+        {
+            WorldMapType.Pangaea => Math.Clamp(area / 15_000 + 3, 3, 18),
+            WorldMapType.Archipelago => Math.Min(40, Math.Max(3, continentalMasses / 2)),
+            _ => Math.Clamp(area / 7_000 + 2, 2, 24),
+        };
+        var continentScale = mapType switch
+        {
+            WorldMapType.Archipelago => 0.28,
+            _ => 1.0,
+        };
+
+        if (mapType is WorldMapType.Pangaea)
+        {
+            AddPangaea(elevation, width, height, ref random);
+        }
+
+        for (var continent = 0; continent < continentalMasses; continent++)
+        {
+            AddContinentalMass(elevation, width, height, ref random, continentScale);
+        }
+
+        var continentalFoundation = (double[])elevation.Clone();
+        for (var chain = 0; chain < volcanicChains; chain++)
+        {
+            AddVolcanicChain(
+                elevation,
+                continentalFoundation,
+                width,
+                height,
+                ref random);
+        }
+
+        AddElevationNoise(elevation, width, height, seed);
+
+        return elevation;
     }
 
     private static SimulationWorld GenerateEarth(WorldGenerationOptions options)
@@ -155,7 +185,7 @@ public static partial class WorldGenerator
         var preset = options.Preset == WorldPreset.Earth ? WorldPreset.Huge : options.Preset;
         var world = new SimulationWorld(preset.Width, preset.Height, Terrain.DeepOcean, options.Seed)
         {
-            Body = WorldBody.Earth,
+            Body = ShapeBody(options.Shape, WorldBody.Earth),
         };
         using var stream = typeof(WorldGenerator).Assembly.GetManifestResourceStream(
             "Newt.Simulation.EarthElevation") ??
@@ -167,24 +197,52 @@ public static partial class WorldGenerator
             source[index] = reader.ReadInt16();
         }
 
-        for (var y = 0; y < preset.Height; y++)
+        ApplyPlanetaryRelief(world, source, EarthSourceWidth, EarthSourceHeight, 5_000f, 10_000f);
+        if (world.IsRingHabitat || world.Body is WorldBody.Nexus or WorldBody.Planetoid)
+            FinishGeneratedTerrain(world, includeLargeSecondaryBasins: true, seedVolcanoes: true);
+        else
         {
-            for (var x = 0; x < preset.Width; x++)
-            {
-                var sourceX = Math.Min(EarthSourceWidth - 1,
-                    (int)((x + 0.5) * EarthSourceWidth / preset.Width));
-                var sourceY = Math.Min(EarthSourceHeight - 1,
-                    (int)((y + 0.5) * EarthSourceHeight / preset.Height));
-                var meters = source[sourceY * EarthSourceWidth + sourceX];
-                var elevation = meters >= 0 ? meters / 5_000f : meters / 10_000f;
-                world.SetElevation(new GridPosition(x, y), elevation);
-            }
+            OpenEarthSeaPassage(world, westLongitude: -6.1, eastLongitude: -4.7, latitude: 35.9);
+            TerrainClassifier.RebuildAll(world);
+            StartNaturalSprings(world, options.Seed);
         }
-
-        OpenEarthSeaPassage(world, westLongitude: -6.1, eastLongitude: -4.7, latitude: 35.9);
-        TerrainClassifier.RebuildAll(world);
-        StartNaturalSprings(world, options.Seed);
         return world;
+    }
+
+    private static WorldBody ShapeBody(WorldMapShape? shape, WorldBody boardBody) => shape switch
+    {
+        WorldMapShape.RingWorld => WorldBody.RingWorld,
+        WorldMapShape.ONeillCylinder => WorldBody.ONeillCylinder,
+        WorldMapShape.Nexus => WorldBody.Nexus,
+        WorldMapShape.Planetoid => WorldBody.Planetoid,
+        _ => boardBody,
+    };
+
+    private static void FinishGeneratedTerrain(SimulationWorld world, bool includeLargeSecondaryBasins, bool seedVolcanoes)
+    {
+        var nexus = world.Body == WorldBody.Nexus;
+        if (world.IsRingHabitat || nexus)
+            world.SeasonsEnabled = false;
+        TerrainClassifier.ApplyMegaWalls(world);
+        SelectOceanSeeds(world, includeLargeSecondaryBasins);
+        TerrainClassifier.RebuildAll(world);
+        if (nexus)
+        {
+            world.TryPlaceTeleporter(NexusLayout.HubPortal(world));
+            for (var arm = 0; arm < NexusLayout.ArmCount; arm++)
+                world.TryPlaceTeleporter(NexusLayout.ArmPosition(world, arm));
+        }
+        else
+            SeedRingWorldTeleporters(world);
+        if (seedVolcanoes)
+        {
+            SeedNaturalVolcanoes(world, world.Seed);
+            StartNaturalSprings(world, world.Seed);
+        }
+        if (nexus)
+            world.SeedNexusCustodians(world.Width >= WorldPreset.NexusMega.Width);
+        else
+            world.SeedRingWorldCustodians();
     }
 
     /// <summary>
@@ -234,41 +292,30 @@ public static partial class WorldGenerator
 
         var random = new GeneratorRandom(seed ^ 0x94D049BB133111EBUL);
         Shuffle(candidates, ref random);
-        var targetCount = Math.Clamp(world.Width * world.Height / 12_000 + 1, 1, 5);
-        var minimumDistance = Math.Max(8, Math.Min(world.Width, world.Height) / 5);
-        var selected = new List<GridPosition>(targetCount);
         foreach (var candidate in candidates)
         {
-            if (selected.Any(existing => WrappedDistanceSquared(world, existing, candidate) <
-                minimumDistance * minimumDistance))
-            {
-                continue;
-            }
-
             if (Volcanism.SpawnVolcano(world, candidate))
-            {
-                selected.Add(candidate);
-                if (selected.Count >= targetCount)
-                {
-                    break;
-                }
-            }
+                return;
         }
     }
 
     private static void SeedRingWorldTeleporters(SimulationWorld world)
     {
-        if (world.Body is not WorldBody.RingWorld)
+        if (!world.IsRingHabitat)
         {
             return;
         }
 
         var teleporterCount = 4 * Math.Max(1, world.Width / WorldPreset.Ring.Width);
-        var y = world.Height / 2;
+        var alongLength = world.Body is WorldBody.ONeillCylinder;
+        var span = alongLength ? world.Height : world.Width;
         for (var index = 0; index < teleporterCount; index++)
         {
-            var x = world.Width * (index * 2 + 1) / (teleporterCount * 2);
-            world.TryPlaceTeleporter(new GridPosition(x, y));
+            var offset = span * (index * 2 + 1) / (teleporterCount * 2);
+            var position = alongLength
+                ? new GridPosition(world.Width / 2, offset)
+                : new GridPosition(offset, world.Height / 2);
+            world.TryPlaceTeleporter(position);
         }
     }
 
@@ -650,14 +697,16 @@ public static partial class WorldGenerator
 
                     foreach (var direction in directions)
                     {
-                        var neighborY = current.Y + direction.Y;
+                        var neighbor = world.Body == WorldBody.Planetoid
+                            ? PlanetoidLayout.Offset(current, direction.X, direction.Y, PlanetoidLayout.FaceSize(world.Width))
+                            : new GridPosition(Mod(current.X + direction.X, world.Width), current.Y + direction.Y);
+                        var neighborY = neighbor.Y;
                         if (neighborY < 0 || neighborY >= world.Height)
                         {
                             continue;
                         }
 
-                        var neighborX = Mod(current.X + direction.X, world.Width);
-                        var neighbor = new GridPosition(neighborX, neighborY);
+                        var neighborX = neighbor.X;
                         var neighborIndex = neighborY * world.Width + neighborX;
                         if (visited[neighborIndex] ||
                             world.GetElevation(neighbor) > world.SeaLevel)

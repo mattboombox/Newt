@@ -28,6 +28,7 @@ public sealed class VampireTests
         var first = world.AddCritter(CritterSpecies.Vampire, new(10, 10));
         var second = world.AddCritter(CritterSpecies.Vampire, new(11, 10));
         SetEnergy(world, first, 2);
+        var secondEnergy = world.GetCritter(1).Energy;
         Assert.Null(world.FindHunterPrey(0, CritterSpecies.Vampire, 8, null));
         for (var attempt = 0; attempt < 20; attempt++)
         {
@@ -39,7 +40,7 @@ public sealed class VampireTests
         Assert.True(world.TryGetCritter(first, out var a));
         Assert.True(world.TryGetCritter(second, out var b));
         Assert.Equal(2, a.Energy);
-        Assert.Equal(6, b.Energy);
+        Assert.Equal(secondEnergy, b.Energy);
         Assert.False(a.IsDamageFlashing);
         Assert.False(b.IsDamageFlashing);
     }
@@ -197,10 +198,11 @@ public sealed class VampireTests
         var world = CreateWorld();
         world.AddCritter(species, new(10, 10));
         var vampire = world.AddCritter(CritterSpecies.Vampire, new(11, 10));
+        var vampireEnergy = world.GetCritter(1).Energy;
         Assert.Null(world.FindHunterPrey(0, species, 5, null));
         world.CommitEncounter(new(10, 10), new(11, 10));
         Assert.True(world.TryGetCritter(vampire, out var untouched));
-        Assert.Equal(6, untouched.Energy);
+        Assert.Equal(vampireEnergy, untouched.Energy);
     }
 
     [Fact]

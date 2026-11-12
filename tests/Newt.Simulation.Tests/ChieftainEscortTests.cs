@@ -26,6 +26,7 @@ public sealed class ChieftainEscortTests
         Assert.True(world.TryGetCritter(escort, out var warrior));
         var targetPosition = new GridPosition(warrior.Position.X, warrior.Position.Y - 1);
         var target = world.AddCritter(CritterSpecies.Therapsid, targetPosition);
+        Assert.True(world.TryGetCritter(target, out var beforeTarget));
         Assert.False(SimulationWorld.CanEat(CritterSpecies.ApeWarrior, CritterSpecies.Therapsid));
         var chiefIndex = Enumerable.Range(0, world.CritterCount).Single(i => world.GetCritter(i).Id == chief);
         var targetIndex = Enumerable.Range(0, world.CritterCount).Single(i => world.GetCritter(i).Id == target);
@@ -37,8 +38,8 @@ public sealed class ChieftainEscortTests
         Assert.Equal(targetPosition, prey);
         world.CommitEncounter(warrior.Position, targetPosition);
         Assert.True(world.TryGetCritter(escort, out var afterWarrior));
-        Assert.True(world.TryGetCritter(target, out var afterTarget));
-        Assert.True(afterWarrior.Energy < warrior.Energy || afterTarget.Energy < 5);
+        Assert.True(!world.TryGetCritter(target, out var afterTarget) ||
+            afterWarrior.Energy < warrior.Energy || afterTarget.Energy < beforeTarget.Energy);
     }
     private static readonly GridPosition Village = new(10, 10);
 

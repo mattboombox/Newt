@@ -185,31 +185,49 @@ public sealed class ApeCultureTests
     }
 
     [Theory]
-    [InlineData(CritterSpecies.ApeWarrior)]
-    [InlineData(CritterSpecies.ApeTrader)]
-    [InlineData(CritterSpecies.Therapsid)]
-    public void BombersReflectActualDamageAndDieImmediatelyWithoutFeeding(CritterSpecies prey)
+    [InlineData(CritterSpecies.ApeWarrior, false)]
+    [InlineData(CritterSpecies.ApeTrader, false)]
+    [InlineData(CritterSpecies.Therapsid, false)]
+    [InlineData(CritterSpecies.ApeWarrior, true)]
+    [InlineData(CritterSpecies.ApeTrader, true)]
+    [InlineData(CritterSpecies.Therapsid, true)]
+    public void BomberDiesFromFullReflectionWheneverItLandsAHit(CritterSpecies opponent, bool bomberDefends)
     {
-        var hits = 0;
+        var sawBomberHit = false;
+        var sawOpponentHit = false;
         for (ulong seed = 1; seed <= 40; seed++)
         {
             var w = new SimulationWorld(2, 1, Terrain.Plains, seed);
-            var bomber = w.AddCritter(CritterSpecies.ApeBomber, new(0, 0));
-            var victim = w.AddCritter(prey, new(1, 0));
-            var initial = w.GetCritter(1).Energy;
-            Assert.Equal(20, w.GetCritterCombatDamage(bomber));
+            var bomberPosition = new GridPosition(0, 0);
+            var opponentPosition = new GridPosition(1, 0);
+            var bomber = w.AddCritter(CritterSpecies.ApeBomber, bomberPosition);
+            var target = w.AddCritter(opponent, opponentPosition);
+            var targetEnergy = w.GetCritter(1).Energy;
+            var bomberEnergy = CritterNutritions.Get(CritterSpecies.ApeBomber).MaximumEnergy;
+            var energy = (int[])typeof(SimulationWorld).GetField("_energy",
+                BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(w)!;
+            energy[0] = bomberEnergy;
+            var bomberDamage = w.GetCritterCombatDamage(bomber);
+            var opponentDamage = w.GetCritterCombatDamage(target);
             typeof(SimulationWorld).GetMethod("CommitMutualPredatorCombat", BindingFlags.Instance | BindingFlags.NonPublic)!
-                .Invoke(w, [new GridPosition(0, 0), new GridPosition(1, 0)]);
-            if (!w.TryGetCritter(victim, out var after) || after.Energy < initial)
+                .Invoke(w, bomberDefends ? [opponentPosition, bomberPosition] : [bomberPosition, opponentPosition]);
+            var targetRemaining = w.TryGetCritter(target, out var after) ? after.Energy : 0;
+            if (targetRemaining < targetEnergy)
             {
-                hits++;
-                var dealt = Math.Min(20, initial);
-                Assert.Equal(initial - dealt, w.TryGetCritter(victim, out after) ? after.Energy : 0);
-                if (dealt == 20) Assert.False(w.TryGetCritter(bomber, out _));
-                else { Assert.True(w.TryGetCritter(bomber, out var survivor)); Assert.Equal(20 - dealt, survivor.Energy); }
+                sawBomberHit = true;
+                Assert.Equal(Math.Max(0, targetEnergy - bomberDamage), targetRemaining);
+                Assert.False(w.TryGetCritter(bomber, out _));
+            }
+            else
+            {
+                sawOpponentHit = true;
+                Assert.Equal(targetEnergy, targetRemaining);
+                Assert.True(w.TryGetCritter(bomber, out var survivor));
+                Assert.Equal(bomberEnergy - opponentDamage, survivor.Energy);
             }
         }
-        Assert.True(hits > 0);
+        Assert.True(sawBomberHit);
+        Assert.True(sawOpponentHit);
     }
 
     [Theory]
@@ -268,6 +286,12 @@ public sealed class ApeCultureTests
         Assert.True(w.TryStartApeWar(First, Second, true));
         var bomber = Residents(w, First).Single(c => c.Species == CritterSpecies.ApeBomber);
         var victim = Residents(w, Second).First(c => c.Species == CritterSpecies.ApeWarrior);
+        // Give the bomber room to take a counterhit before its own hit spends its reserve.
+        var energy = (int[])typeof(SimulationWorld).GetField("_energy",
+            BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(w)!;
+        var reserve = CritterNutritions.Get(CritterSpecies.ApeWarrior).MaximumEnergy;
+        energy[Enumerable.Range(0, w.CritterCount).Single(i => w.GetCritter(i).Id == bomber.Id)] = reserve;
+        energy[Enumerable.Range(0, w.CritterCount).Single(i => w.GetCritter(i).Id == victim.Id)] = reserve;
         var hit = false;
         for (var i = 0; i < 50 && w.TryGetCritter(bomber.Id, out _) && w.TryGetCritter(victim.Id, out _); i++)
         {

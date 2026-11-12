@@ -229,7 +229,9 @@ public sealed class TileNutritionTests
         var position = new GridPosition(0, 0);
         world.AddCritter(CritterSpecies.Fish, position);
 
-        for (var tick = 0; tick < 3 * 45 * SimulationWorld.TicksPerSecond; tick++)
+        var fishNutrition = CritterNutritions.Get(CritterSpecies.Fish);
+        var starvationTick = fishNutrition.InitialEnergy * fishNutrition.MetabolismIntervalTicks;
+        for (var tick = 0; tick < starvationTick; tick++)
         {
             world.AdvanceOneTick();
         }

@@ -5,6 +5,135 @@ namespace Newt.Simulation.Tests;
 
 public sealed class ThreeDGeometryTests
 {
+    [Fact]
+    public void PlanetoidCameraCarriesItsHeadingAcrossAFaceSeam()
+    {
+        const int width = 288, faceSize = 96;
+        var start = new System.Numerics.Vector2(144, 0.25f);
+        const float yaw = 0.7f;
+        var (east, up, south) = PlanetoidGeometry.Frame(start.X, start.Y, width);
+        var (end, endYaw) = PlanetoidGeometry.Move(start, new(0, -1), yaw, width);
+        Assert.NotEqual(PlanetoidLayout.FaceAt(start.X, start.Y, faceSize),
+            PlanetoidLayout.FaceAt(end.X, end.Y, faceSize));
+        var (nextEast, nextUp, nextSouth) = PlanetoidGeometry.Frame(end.X, end.Y, width);
+        var oldHeading = -east * MathF.Sin(yaw) - south * MathF.Cos(yaw);
+        var newHeading = -nextEast * MathF.Sin(endYaw) - nextSouth * MathF.Cos(endYaw);
+        var axis = System.Numerics.Vector3.Normalize(System.Numerics.Vector3.Cross(up, nextUp));
+        var angle = MathF.Acos(Math.Clamp(System.Numerics.Vector3.Dot(up, nextUp), -1f, 1f));
+        var expected = System.Numerics.Vector3.Transform(oldHeading,
+            System.Numerics.Quaternion.CreateFromAxisAngle(axis, angle));
+        Assert.InRange(System.Numerics.Vector3.Distance(expected, newHeading), 0, 0.0001f);
+    }
+
+    [Theory]
+    [InlineData(12.5f, 6.5f)]
+    [InlineData(191.5f, 96.5f)]
+    [InlineData(383.5f, 185.5f)]
+    public void PlanetoidWorldMapRoundTripsAcrossTheGlobe(float x, float y)
+    {
+        const int width = 384, height = 192;
+        var direction = PlanetoidLayout.MapDirection(x, y, width, height);
+        var atlas = PlanetoidLayout.AtlasPosition(direction, width / 4);
+        var face = PlanetoidLayout.FaceAt(atlas.X, atlas.Y, width / 4);
+        var projected = PlanetoidLayout.MapPosition(
+            PlanetoidLayout.Direction(atlas.X, atlas.Y, width / 4, face), width, height);
+        Assert.Equal(x, projected.X, precision: 3);
+        Assert.Equal(y, projected.Y, precision: 3);
+    }
+
+    [Fact]
+    public void PlanetoidJoinsItsEquatorialAndPolarFaces()
+    {
+        const int size = 96, width = size * 3;
+        for (var x = 0; x <= size; x++)
+        {
+            var front = PlanetoidGeometry.Position(new(x, 0, 0), width, new(0, 0));
+            var north = PlanetoidGeometry.Position(new(size + x, 0, 2 * size), width, new(size, size));
+            Assert.InRange((front - north).Length(), 0, 0.0001f);
+        }
+        var polarTile = new GridPosition(size + 24, 2 * size - 1);
+        Assert.Equal(polarTile, PlanetoidLayout.Offset(new(24, 0), 0, -1, size));
+        Assert.Equal(new GridPosition(24, 0), PlanetoidLayout.Offset(polarTile, 0, 1, size));
+    }
+
+    [Theory]
+    [InlineData(42.5f, 0.5f)]
+    [InlineData(144f, 144f)]
+    [InlineData(287.5f, 191.5f)]
+    public void PlanetoidProjectionPreservesTileCoordinatesAndCameraFrame(float x, float y)
+    {
+        const int width = 288;
+        var position = PlanetoidGeometry.Position(new(x, 7, y), width);
+        var local = PlanetoidGeometry.TilePosition(position, width);
+        Assert.Equal(x, local.X, precision: 3);
+        Assert.Equal(y, local.Z, precision: 3);
+        Assert.Equal(7f, local.Y, precision: 3);
+        var (east, up, south) = PlanetoidGeometry.Frame(x, y, width);
+        Assert.InRange(System.Numerics.Vector3.Distance(System.Numerics.Vector3.Cross(east, up), south), 0, 0.0001f);
+    }
+
+    [Theory]
+    [InlineData(448, 20.5f, 244.5f)]
+    [InlineData(768, 600.25f, 216.25f)]
+    public void RingFlightCrossesToTheOppositeSideOnlyWhenReachingTheCeiling(int width, float x, float opposite)
+    {
+        var ceiling = ThreeDGeometry.RingFlightCeiling(width);
+        Assert.Equal(opposite, ThreeDGeometry.RingFlightCrossing(x, width, ceiling - 1, ceiling));
+        Assert.Null(ThreeDGeometry.RingFlightCrossing(opposite, width, ceiling, ceiling));
+        Assert.Null(ThreeDGeometry.RingFlightCrossing(x, width, ceiling - 2, ceiling - 1));
+    }
+
+    [Theory]
+    [InlineData(true, false, 24f, 5.533333f)]
+    [InlineData(false, true, 16f, 4.2f)]
+    [InlineData(false, false, 19.666667f, 4.933333f)]
+    public void VerticalBoostSpeedsUpActiveFlightAndSwimming(bool rising, bool sinking, float flight, float swim)
+    {
+        var result = ThreeDGeometry.FirstPersonFlightHeight(20, 0, null, true, rising, sinking,
+            1f / 6, 32, boosted: true);
+        var swimming = ThreeDGeometry.FirstPersonSwimmingHeight(5, 0, 6, rising, 1f / 6,
+            fastSink: sinking, boosted: true);
+
+        Assert.Equal(flight, result.Height, precision: 4);
+        Assert.Equal(swim, swimming, precision: 4);
+    }
+
+    [Fact]
+    public void NexusPlayerSpawnMovesOutOfTheCenterOpening()
+    {
+        var world = new SimulationWorld(96, 96, Terrain.Plains) { Body = WorldBody.Nexus };
+        var center = new System.Numerics.Vector2(world.Width / 2f, world.Height / 2f);
+        Assert.False(NexusLayout.Contains(world, new GridPosition((int)center.X, (int)center.Y)));
+
+        var spawn = ThreeDGeometry.PlayerSpawnPosition(world, center);
+
+        Assert.True(NexusLayout.Contains(world, new GridPosition((int)spawn.X, (int)spawn.Y)));
+        Assert.Equal(spawn, ThreeDGeometry.PlayerSpawnPosition(world, spawn));
+    }
+
+    [Theory]
+    [InlineData(64, 16, -8, -16)]
+    [InlineData(64, 16, 0, 64)]
+    [InlineData(0, 32, 16, 0)]
+    [InlineData(0, 32, 32, 80)]
+    [InlineData(0, 32, 96, 80)]
+    public void WrappedChunkCopiesIncludePartiallyVisibleColumns(int start, int length, int visibleLeft, int expected)
+    {
+        Assert.Equal(expected, ThreeDGeometry.FirstVisibleChunkCopy(start, length, visibleLeft, 80));
+    }
+
+    [Fact]
+    public void NexusPetalsLiftTowardTheirTipsWhileTheHubStaysFlat()
+    {
+        const float radius = 100f;
+        Assert.Equal(0f, ThreeDGeometry.NexusPetalLift(0, 0, radius));
+        Assert.Equal(0f, ThreeDGeometry.NexusPetalLift(0, 50, radius));
+        var middle = ThreeDGeometry.NexusPetalLift(75, 0, radius);
+        Assert.InRange(middle, 1f, 2f);
+        Assert.Equal(middle, ThreeDGeometry.NexusPetalLift(0, -75, radius));
+        Assert.Equal(8f, ThreeDGeometry.NexusPetalLift(100, 0, radius));
+    }
+
     [Theory]
     [InlineData(96, 0)] // Walking camera.
     [InlineData(396, 28)] // Free camera.
@@ -13,12 +142,60 @@ public sealed class ThreeDGeometryTests
     public void RenderDistancePresetsReduceRangeWithoutClippingCameraFocus(float maximum, float orbitDistance)
     {
         var max = ThreeDGeometry.RenderDistance(maximum, 0, orbitDistance);
-        var medium = ThreeDGeometry.RenderDistance(maximum, 1, orbitDistance);
-        var low = ThreeDGeometry.RenderDistance(maximum, 2, orbitDistance);
+        var threeQuarters = ThreeDGeometry.RenderDistance(maximum, 1, orbitDistance);
+        var half = ThreeDGeometry.RenderDistance(maximum, 2, orbitDistance);
+        var quarter = ThreeDGeometry.RenderDistance(maximum, 3, orbitDistance);
         Assert.Equal(maximum, max);
-        Assert.True(max > medium && medium > low);
-        Assert.True(low > orbitDistance + 14); // Includes terrain's full height range at the focus.
-        Assert.Equal(32, medium - low);
+        Assert.Equal(maximum * 0.75f, threeQuarters);
+        Assert.Equal(maximum * 0.5f, half);
+        Assert.Equal(Math.Max(maximum * 0.25f, orbitDistance + 16), quarter);
+        Assert.True(quarter > orbitDistance + 14); // Includes terrain's full height range at the focus.
+    }
+
+    [Fact]
+    public void FullWorldRenderDistanceCoversFlatAndCylindricalMaps()
+    {
+        var flat = ThreeDGeometry.FullWorldRenderDistance(768, 768, cylindrical: false);
+        Assert.True(flat > MathF.Sqrt(2) * 768);
+        var cylinder = ThreeDGeometry.FullWorldRenderDistance(448, 672, cylindrical: true);
+        Assert.True(cylinder > 672);
+        Assert.True(cylinder < ThreeDGeometry.FullWorldRenderDistance(448, 672, cylindrical: false));
+        Assert.Equal(flat, ThreeDGeometry.RenderDistance(flat, 0));
+        Assert.Equal(cylinder, ThreeDGeometry.RenderDistance(cylinder, 0));
+    }
+
+    [Fact]
+    public void NexusFreeCameraCanSeeTheWholeWorldWithoutZoomingOut()
+    {
+        var size = WorldPreset.NexusMega;
+        var world = new SimulationWorld(size.Width, size.Height, Terrain.Plains) { Body = WorldBody.Nexus };
+        const float closeZoom = 28, distantZoom = 620;
+        var nearView = ThreeDGeometry.WorldRenderDistance(world, ThreeDGeometry.FarClipDistance(closeZoom), 0, closeZoom);
+        var farView = ThreeDGeometry.WorldRenderDistance(world, ThreeDGeometry.FarClipDistance(distantZoom), 0, distantZoom);
+
+        Assert.True(nearView > MathF.Sqrt(2) * size.Width + closeZoom);
+        Assert.True(farView > MathF.Sqrt(2) * size.Width + distantZoom);
+        Assert.Equal(nearView, ThreeDGeometry.RenderDistance(nearView, 0, closeZoom));
+    }
+
+    [Theory]
+    [InlineData(WorldBody.Terrarium, 1280, 642)]
+    [InlineData(WorldBody.RingWorld, 1280, 44)]
+    [InlineData(WorldBody.RingWorld, 5120, 44)]
+    [InlineData(WorldBody.ONeillCylinder, 448, 336)]
+    [InlineData(WorldBody.ONeillCylinder, 448, 672)]
+    [InlineData(WorldBody.ONeillCylinder, 512, 1344)]
+    public void AllCameraRangesUseTheFullMapAtMaximum(WorldBody body, int width, int height)
+    {
+        var world = new SimulationWorld(width, height, Terrain.Plains) { Body = body };
+        foreach (var (minimumRange, cameraDistance) in new[] { (96f, 0f), (96f, 4f), (396f, 28f) })
+        {
+            var full = ThreeDGeometry.WorldRenderDistance(world, minimumRange, 0, cameraDistance);
+            var crossSpan = world.IsRingHabitat ? width / MathF.PI : width;
+            Assert.True(full > MathF.Sqrt((float)height * height + crossSpan * crossSpan) + cameraDistance);
+            for (var level = 1; level < 4; level++)
+                Assert.Equal(full * (4 - level) / 4, ThreeDGeometry.WorldRenderDistance(world, minimumRange, level, cameraDistance));
+        }
     }
 
     [Fact]
@@ -179,12 +356,64 @@ public sealed class ThreeDGeometryTests
     }
 
     [Fact]
-    public void SpaceDoesNotRaiseCameraOnSolidGroundOrBridgeDecks()
+    public void SwimmingHeightKeepsTheCameraOnSolidGroundOrBridgeDecks()
     {
         var ground = ThreeDGeometry.RoadHeight(2, 0, shallowsBridge: true);
         var standing = ground + 1.2f;
         Assert.Equal(standing, ThreeDGeometry.FirstPersonSwimmingHeight(standing, ground, null, true, 1));
         Assert.Equal(standing, ThreeDGeometry.FirstPersonSwimmingHeight(standing, ground, null, false, 1));
+    }
+
+    [Fact]
+    public void FirstPersonTakesOffAndDescendsAtTwoSpeeds()
+    {
+        const float ground = 2, maximumHeight = 12;
+        var takeoff = ThreeDGeometry.FirstPersonFlightHeight(ground + 1.2f, ground, null,
+            flying: false, rising: true, fastSink: false, seconds: 1, maximumHeight);
+        Assert.True(takeoff.Flying);
+        Assert.Equal(9.2f, takeoff.Height, precision: 4);
+
+        var capped = ThreeDGeometry.FirstPersonFlightHeight(takeoff.Height, ground, null,
+            flying: true, rising: true, fastSink: false, seconds: 1, maximumHeight);
+        Assert.Equal(maximumHeight, capped.Height);
+        var sinking = ThreeDGeometry.FirstPersonFlightHeight(capped.Height, ground, null,
+            flying: true, rising: false, fastSink: false, seconds: 1, maximumHeight);
+        var fastSink = ThreeDGeometry.FirstPersonFlightHeight(capped.Height, ground, null,
+            flying: true, rising: false, fastSink: true, seconds: 1, maximumHeight);
+        Assert.Equal(10f, sinking.Height);
+        Assert.Equal(6f, fastSink.Height);
+
+        var landed = ThreeDGeometry.FirstPersonFlightHeight(fastSink.Height, ground, null,
+            flying: true, rising: false, fastSink: true, seconds: 1, maximumHeight);
+        Assert.Equal((ground + 1.2f, false), landed);
+    }
+
+    [Fact]
+    public void FirstPersonCanFlyOutOfOpenWaterAndSinkBackIntoIt()
+    {
+        const float water = 5, ground = 1, surfaceEye = water + 1.2f * 0.75f;
+        var surfaced = ThreeDGeometry.FirstPersonFlightHeight(water, ground, water,
+            flying: false, rising: true, fastSink: false, seconds: 2, maximumHeight: 32);
+        Assert.Equal((surfaceEye, false), surfaced);
+        var airborne = ThreeDGeometry.FirstPersonFlightHeight(surfaced.Height, ground, water,
+            flying: false, rising: true, fastSink: false, seconds: 1, maximumHeight: 32);
+        Assert.True(airborne.Flying);
+        var landed = ThreeDGeometry.FirstPersonFlightHeight(airborne.Height, ground, water,
+            flying: true, rising: false, fastSink: true, seconds: 2, maximumHeight: 32);
+        Assert.Equal((surfaceEye, false), landed);
+        var submerged = ThreeDGeometry.FirstPersonFlightHeight(landed.Height, ground, water,
+            flying: false, rising: false, fastSink: true, seconds: 1, maximumHeight: 32);
+        Assert.True(submerged.Height < water);
+        Assert.False(submerged.Flying);
+    }
+
+    [Fact]
+    public void FirstPersonCannotTakeOffThroughIce()
+    {
+        const float iceCeiling = 4.94f;
+        var result = ThreeDGeometry.FirstPersonFlightHeight(4.5f, 1, 5,
+            flying: false, rising: true, fastSink: false, seconds: 2, maximumHeight: 32, iceCeiling: iceCeiling);
+        Assert.Equal((iceCeiling, false), result);
     }
 
     [Theory]
@@ -305,7 +534,11 @@ public sealed class ThreeDGeometryTests
         var forward = ThreeDGeometry.WalkingStep(0, 1, 0, 0.1f, false);
         var diagonal = ThreeDGeometry.WalkingStep(0, 1, 1, 0.1f, false);
         Assert.Equal(forward.Length(), diagonal.Length(), precision: 5);
-        Assert.Equal(forward.Length() * 2.5f, ThreeDGeometry.WalkingStep(0, 1, 0, 0.1f, true).Length(), precision: 5);
+        var running = ThreeDGeometry.WalkingStep(0, 1, 0, 0.1f, true).Length();
+        var ascent = ThreeDGeometry.FirstPersonFlightHeight(10, 0, null, true, true, false, 0.1f, 32,
+            boosted: true);
+        Assert.Equal(2.4f, running, precision: 5);
+        Assert.Equal(running, ascent.Height - 10, precision: 5);
     }
 
     [Fact]

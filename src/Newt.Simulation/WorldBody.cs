@@ -8,4 +8,6 @@ public enum WorldBody : byte
     Nexus,
     Moon,
     Mars,
+    ONeillCylinder,
+    Planetoid,
 }

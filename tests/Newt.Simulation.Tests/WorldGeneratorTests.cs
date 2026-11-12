@@ -4,6 +4,86 @@ namespace Newt.Simulation.Tests;
 
 public sealed class WorldGeneratorTests
 {
+    [Fact]
+    public void PlanetoidCoastsFollowTheGlobeAcrossAtlasEdges()
+    {
+        const int size = 12;
+        var world = new SimulationWorld(size * 3, size * 2, Terrain.DeepOcean) { Body = WorldBody.Planetoid };
+        for (var y = 0; y < world.Height; y++)
+        for (var x = 0; x < world.Width; x++)
+            world.SetElevation(new(x, y), -0.5f);
+
+        var water = new GridPosition(size / 2, size - 1);
+        var unrelatedAtlasTile = new GridPosition(water.X, water.Y + 1);
+        world.SetElevation(unrelatedAtlasTile, 0.1f);
+        TerrainClassifier.RebuildAll(world);
+        Assert.Equal(Terrain.DeepOcean, world.GetTerrain(water));
+
+        var realNeighbor = PlanetoidLayout.Offset(water, 0, 1, size);
+        world.SetElevation(realNeighbor, 0.1f);
+        TerrainClassifier.RebuildAll(world);
+        Assert.Equal(Terrain.Shallows, world.GetTerrain(water));
+        Assert.Equal(Terrain.Beach, world.GetTerrain(realNeighbor));
+    }
+
+    [Theory]
+    [InlineData(WorldMapShape.ONeillCylinder, WorldMapType.Earth, 642, 1280)]
+    [InlineData(WorldMapShape.ONeillCylinder, WorldMapType.Moon, 1280, 2560)]
+    [InlineData(WorldMapShape.ONeillCylinder, WorldMapType.Mars, 1280, 2560)]
+    [InlineData(WorldMapShape.Nexus, WorldMapType.Earth, 642, 1280)]
+    [InlineData(WorldMapShape.Nexus, WorldMapType.Moon, 1280, 2560)]
+    [InlineData(WorldMapShape.Nexus, WorldMapType.Mars, 1280, 2560)]
+    public void PlanetaryExtensionsAreMostlyDeepAtBothEnds(WorldMapShape shape, WorldMapType type,
+        int sourceHeight, int sourceWidth)
+    {
+        var preset = shape == WorldMapShape.Nexus ? WorldPreset.Nexus : WorldPreset.ONeillCylinder;
+        var world = WorldGenerator.Generate(new(preset, Seed: 42, MapType: type, Shape: shape));
+        var polarRows = (int)Math.Ceiling((world.Height - world.Width * (double)sourceHeight / sourceWidth) / 2 - 0.5);
+
+        foreach (var startY in new[] { 1, world.Height - polarRows })
+        {
+            var depths = (from y in Enumerable.Range(startY, polarRows - 1)
+                          from x in Enumerable.Range(0, world.Width)
+                          let depth = world.SeaLevel - world.GetElevation(new(x, y))
+                          where depth > 0
+                          select depth).ToArray();
+            var deepCount = depths.Count(depth => depth > TerrainClassifier.DeepOceanDepthThreshold);
+            Assert.True(deepCount >= depths.Length * 0.74 && depths.Length > 0,
+                $"{type} polar extension at row {startY} had {deepCount}/{depths.Length} deep tiles.");
+        }
+    }
+
+    [Theory]
+    [InlineData(WorldMapShape.Board, WorldBody.Terrarium, 0)]
+    [InlineData(WorldMapShape.RingWorld, WorldBody.RingWorld, 4)]
+    [InlineData(WorldMapShape.ONeillCylinder, WorldBody.ONeillCylinder, 4)]
+    [InlineData(WorldMapShape.Nexus, WorldBody.Nexus, NexusLayout.ArmCount + 1)]
+    [InlineData(WorldMapShape.Planetoid, WorldBody.Planetoid, 0)]
+    public void MapShapeWorksWithEveryTerrainType(WorldMapShape shape, WorldBody body, int portals)
+    {
+        WorldMapType[] types = [WorldMapType.Earth, WorldMapType.Moon, WorldMapType.Mars,
+            WorldMapType.Archipelago, WorldMapType.Continents, WorldMapType.Pangaea, WorldMapType.AllOcean];
+        var size = shape == WorldMapShape.Planetoid ? WorldPreset.PlanetoidMicro
+            : new WorldPreset("Test", 96, shape == WorldMapShape.RingWorld ? 44 : 96);
+
+        foreach (var type in types)
+        {
+            var world = WorldGenerator.Generate(new(size, Seed: 13, MapType: type, Shape: shape));
+            var expectedBody = (shape, type) switch
+            {
+                (WorldMapShape.Board, WorldMapType.Earth) => WorldBody.Earth,
+                (WorldMapShape.Board, WorldMapType.Moon) => WorldBody.Moon,
+                (WorldMapShape.Board, WorldMapType.Mars) => WorldBody.Mars,
+                _ => body,
+            };
+            Assert.Equal(expectedBody, world.Body);
+            Assert.Equal((size.Width, size.Height), (world.Width, world.Height));
+            Assert.Equal(portals, world.TeleporterCount);
+            if (shape is WorldMapShape.RingWorld or WorldMapShape.ONeillCylinder or WorldMapShape.Nexus)
+                Assert.Equal(Terrain.MegaWall, world.GetTerrain(new(0, 0)));
+        }
+    }
+
     [Theory]
     [InlineData(WorldMapType.Continents)]
     [InlineData(WorldMapType.Pangaea)]
@@ -63,7 +143,7 @@ public sealed class WorldGeneratorTests
         Assert.True(terrains[Terrain.Ocean] + terrains[Terrain.DeepOcean] > 0);
         Assert.True(terrains[Terrain.Shallows] > 0);
         Assert.True(terrains[Terrain.Beach] > 0);
-        Assert.True(world.VolcanoCount > 0);
+        Assert.Equal(1, world.VolcanoCount);
         Assert.Contains(AllPositions(world), position => world.GetSurfaceCover(position) is SurfaceCover.Lava);
     }
 
@@ -342,7 +422,43 @@ public sealed class WorldGeneratorTests
             var x = world.Width * (index * 2 + 1) / 8;
             Assert.True(world.HasTeleporter(new GridPosition(x, world.Height / 2)));
         }
-        Assert.True(SimulationWorld.MegaWallElevation > SimulationWorld.MaximumGroundElevation);
+        Assert.InRange(SimulationWorld.MegaWallElevation - SimulationWorld.MaximumSeaLevel, 0.01f, 0.15f);
+        Assert.True(SimulationWorld.MegaWallElevation < SimulationWorld.MaximumGroundElevation);
+        Assert.Contains(AllPositions(world), position => world.GetTerrain(position) is Terrain.Mountain &&
+            world.GetElevation(position) > SimulationWorld.MegaWallElevation);
+    }
+
+    [Theory]
+    [InlineData("Standard", 448, 336)]
+    [InlineData("Large", 448, 672)]
+    [InlineData("Mega", 512, 1344)]
+    public void ONeillCylinderUsesItsSelectedDimensionsAndRingInfrastructure(string size, int width, int length)
+    {
+        var preset = size switch
+        {
+            "Large" => WorldPreset.ONeillCylinderLarge,
+            "Mega" => WorldPreset.ONeillCylinderMega,
+            _ => WorldPreset.Standard,
+        };
+        var world = WorldGenerator.Generate(new(preset, Seed: 9, MapType: WorldMapType.ONeillCylinder));
+
+        Assert.Equal(width, world.Width);
+        Assert.Equal(length, world.Height);
+        Assert.Equal(WorldBody.ONeillCylinder, world.Body);
+        Assert.InRange(world.VolcanoCount, 0, 1);
+        Assert.True(world.IsRingHabitat);
+        Assert.False(world.SeasonsEnabled);
+        for (var x = 0; x < world.Width; x++)
+        {
+            Assert.Equal(Terrain.MegaWall, world.GetTerrain(new(x, 0)));
+            Assert.Equal(Terrain.MegaWall, world.GetTerrain(new(x, world.Height - 1)));
+        }
+
+        Assert.Equal(4, world.TeleporterCount);
+        for (var index = 0; index < 4; index++)
+            Assert.True(world.HasTeleporter(new(width / 2, length * (index * 2 + 1) / 8)));
+        Assert.Single(world.CustodianFabricators);
+        Assert.Equal(5, world.GetCritterCount(CritterSpecies.Custodian));
     }
 
     [Fact]

@@ -58,7 +58,7 @@ public static class TerrainClassifier
             NexusLayout.ApplyWalls(world);
             return;
         }
-        if (world.Body is not WorldBody.RingWorld)
+        if (!world.IsRingHabitat)
         {
             return;
         }
@@ -94,6 +94,21 @@ public static class TerrainClassifier
 
         while (frontier.TryDequeue(out var current))
         {
+            if (world.Body == WorldBody.Planetoid)
+            {
+                var size = PlanetoidLayout.FaceSize(world.Width);
+                VisitOffset(1, 0);
+                VisitOffset(-1, 0);
+                VisitOffset(0, 1);
+                VisitOffset(0, -1);
+                continue;
+
+                void VisitOffset(int dx, int dy)
+                {
+                    var neighbor = PlanetoidLayout.Offset(current, dx, dy, size);
+                    TryVisit(neighbor.X, neighbor.Y);
+                }
+            }
             TryVisit((current.X + 1) % world.Width, current.Y);
             TryVisit((current.X - 1 + world.Width) % world.Width, current.Y);
             if (current.Y > 0)
@@ -203,6 +218,12 @@ public static class TerrainClassifier
         ReadOnlySpan<GridPosition> directions = [new(1, 0), new(-1, 0), new(0, 1), new(0, -1)];
         foreach (var direction in directions)
         {
+            if (world.Body == WorldBody.Planetoid)
+            {
+                var neighbor = PlanetoidLayout.Offset(position, direction.X, direction.Y, PlanetoidLayout.FaceSize(world.Width));
+                if (predicate(world.GetTerrain(neighbor))) return true;
+                continue;
+            }
             var y = position.Y + direction.Y;
             if (y < 0 || y >= world.Height)
             {

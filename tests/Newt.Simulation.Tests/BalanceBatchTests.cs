@@ -45,6 +45,7 @@ public sealed class BalanceBatchTests
             var ape = world.AddCritter(species, position);
             world.AddCritter(CritterSpecies.Wolf, new(4, 1));
             var energy = (int[])typeof(SimulationWorld).GetField("_energy", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(world)!;
+            energy[0] = CritterNutritions.Get(species).MaximumEnergy;
             energy[1] = 1;
             // Traders are not on the wolf's normal prey list; exercise their
             // retaliation kill through the same combat resolver directly.

@@ -4,6 +4,39 @@ namespace Newt.Simulation.Tests;
 
 public sealed class RingClimateTests
 {
+    [Fact]
+    public void CylinderClimateZonesWrapAroundTheCircumferenceAndAreColdestAtBothEnds()
+    {
+        var world = new SimulationWorld(96, 64, Terrain.Plains, seed: 9)
+        {
+            Body = WorldBody.ONeillCylinder,
+            SeasonsEnabled = false,
+        };
+        ClimateSystem.RebuildTemperature(world);
+        ClimateSystem.RebuildMoistureAndBiomes(world);
+
+        var temperatureByRing = new float[world.Height];
+        var moistureByRing = new float[world.Height];
+        for (var y = 0; y < world.Height; y++)
+        {
+            var ring = Enumerable.Range(0, world.Width).Select(x => new GridPosition(x, y)).ToArray();
+            var temperatures = ring.Select(world.GetTemperature).ToArray();
+            var moisture = ring.Select(world.GetMoisture).ToArray();
+            Assert.InRange(temperatures.Max() - temperatures.Min(), 0f, 0.18f);
+            Assert.InRange(moisture.Max() - moisture.Min(), 0f, 0.28f);
+            temperatureByRing[y] = temperatures.Average();
+            moistureByRing[y] = moisture.Average();
+        }
+
+        Assert.True(temperatureByRing.Max() - temperatureByRing.Min() > 0.55f);
+        Assert.True(moistureByRing.Max() - moistureByRing.Min() > 0.25f);
+        Assert.True(temperatureByRing[0] < ClimateSystem.SeaIceThreshold);
+        Assert.True(temperatureByRing[^1] < ClimateSystem.SeaIceThreshold);
+        Assert.True(temperatureByRing[world.Height / 2] > ClimateSystem.HotThreshold);
+        Assert.True(temperatureByRing[world.Height / 4] > temperatureByRing[0]);
+        Assert.True(temperatureByRing[3 * world.Height / 4] > temperatureByRing[^1]);
+    }
+
     [Theory]
     [InlineData(1280, 0UL)]
     [InlineData(1280, 9UL)]

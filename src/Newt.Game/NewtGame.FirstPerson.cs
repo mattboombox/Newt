@@ -13,8 +13,17 @@ public sealed partial class NewtGame
     private bool _firstPersonMouseReady;
     private float _firstPersonEyeHeight;
     private bool _firstPersonUnderIce;
+    private bool _firstPersonFlying;
+    private bool _firstPersonCrossing;
+    private float _ringCameraTurnRemaining;
+    private float _ringCameraTurnStartOffset;
+    private const float RingCameraTurnDuration = 0.4f;
     private const float FirstPersonEyeOffset = 1.2f;
     private const float FirstPersonRenderDistance = 96f;
+    private const float FirstPersonMaximumFlightHeight = 32f;
+
+    private float PlayerCameraX3D => _focus3D.X + MathHelper.SmoothStep(0, _ringCameraTurnStartOffset,
+        _ringCameraTurnRemaining / RingCameraTurnDuration);
 
     private float WalkingSurfaceHeight(Vector2 position)
     {
@@ -40,8 +49,19 @@ public sealed partial class NewtGame
     private float InitialFirstPersonEyeHeight(Vector2 position)
     {
         _firstPersonUnderIce = false;
+        _firstPersonFlying = false;
+        _firstPersonCrossing = false;
+        _ringCameraTurnRemaining = 0;
         return Math.Max(WalkingSurfaceHeight(position) + FirstPersonEyeOffset,
             FirstPersonWaterSurface(position) is { } water ? water + FirstPersonEyeOffset * 0.75f : float.MinValue);
+    }
+
+    private void PlacePlayerOnMap3D()
+    {
+        WrapCamera3D();
+        var spawn = ThreeDGeometry.PlayerSpawnPosition(_world, new(_focus3D.X, _focus3D.Y));
+        _focus3D = new Vector2(spawn.X, spawn.Y);
+        _firstPersonEyeHeight = InitialFirstPersonEyeHeight(_focus3D);
     }
 
     private void EnterFirstPerson()
@@ -55,22 +75,7 @@ public sealed partial class NewtGame
         _distance3D = 6;
         _pitch3D = 0;
         _inspectedCritterId = default;
-        WrapCamera3D();
-        if (!ContainsTile3D((int)_focus3D.X, (int)_focus3D.Y))
-        {
-            var nearest = float.MaxValue;
-            var start = _focus3D;
-            for (var y = 0; y < _world.Height; y++)
-            for (var x = 0; x < _world.Width; x++)
-            {
-                if (!ContainsTile3D(x, y)) continue;
-                var point = new Vector2(x + 0.5f, y + 0.5f);
-                var distance = Vector2.DistanceSquared(point, _focus3D);
-                if (distance < nearest) { nearest = distance; start = point; }
-            }
-            _focus3D = start;
-        }
-        _firstPersonEyeHeight = InitialFirstPersonEyeHeight(_focus3D);
+        PlacePlayerOnMap3D();
         IsMouseVisible = false;
         ResetToolRepeat();
     }
@@ -85,6 +90,7 @@ public sealed partial class NewtGame
         }
         IsMouseVisible = false;
         seconds = Math.Clamp(seconds, 0, 0.1f);
+        _ringCameraTurnRemaining = Math.Max(0, _ringCameraTurnRemaining - seconds);
         var centerX = GraphicsDevice.Viewport.Width / 2;
         var centerY = MapViewportHeight / 2;
         if (_firstPersonMouseReady)
@@ -110,7 +116,8 @@ public sealed partial class NewtGame
         var walkingOnIce = IsIce3D(previousTile) && !_firstPersonUnderIce &&
             WaterElevation3D(previousTile) is { } previousWater &&
             _firstPersonEyeHeight >= ThreeDGeometry.ColumnHeight(previousWater) + 0.035f;
-        _focus3D += new Vector2(step.X, step.Y);
+        var previousYaw = _yaw3D;
+        MoveCameraOnMap3D(new Vector2(step.X, step.Y));
         WrapCamera3D();
         if (!ContainsTile3D((int)MathF.Floor(_focus3D.X), (int)MathF.Floor(_focus3D.Y)))
             _focus3D = previous;
@@ -120,14 +127,18 @@ public sealed partial class NewtGame
             var entry = ThreeDGeometry.FirstPersonIceEntry(_firstPersonEyeHeight, TileHeight3D(nextTile),
                 ThreeDGeometry.ColumnHeight(iceWater), walkingOnIce, _firstPersonUnderIce);
             if (entry is ThreeDGeometry.IceEntry.Blocked)
+            {
                 _focus3D = previous;
+                _yaw3D = previousYaw;
+            }
             else
                 _firstPersonUnderIce = entry is ThreeDGeometry.IceEntry.Below;
         }
         else
             _firstPersonUnderIce = false;
         var playerTile = new GridPosition((int)MathF.Floor(_focus3D.X), (int)MathF.Floor(_focus3D.Y));
-        if (_world.FindTeleporterArrival(playerTile) is { } arrival && ContainsTile3D(arrival.X, arrival.Y))
+        if (!_firstPersonFlying && _world.FindTeleporterArrival(playerTile) is { } arrival &&
+            ContainsTile3D(arrival.X, arrival.Y))
         {
             _focus3D = new Vector2(arrival.X + 0.5f, arrival.Y + 0.5f);
             _firstPersonEyeHeight = InitialFirstPersonEyeHeight(_focus3D);
@@ -136,30 +147,54 @@ public sealed partial class NewtGame
         var currentTile = MapTile3D((int)MathF.Floor(_focus3D.X), (int)MathF.Floor(_focus3D.Y));
         float? ceiling = _firstPersonUnderIce && WaterElevation3D(currentTile) is { } iceSurface
             ? ThreeDGeometry.ColumnHeight(iceSurface) - 0.06f : null;
-        _firstPersonEyeHeight = ThreeDGeometry.FirstPersonSwimmingHeight(_firstPersonEyeHeight, ground,
-            FirstPersonWaterSurface(_focus3D), keyboard.IsKeyDown(Keys.Space), seconds, FirstPersonEyeOffset, ceiling,
-            fastSink: keyboard.IsKeyDown(Keys.LeftControl));
+        var waterSurface = FirstPersonWaterSurface(_focus3D);
+        var rising = keyboard.IsKeyDown(Keys.Space);
+        var fastSink = keyboard.IsKeyDown(Keys.LeftControl) || keyboard.IsKeyDown(Keys.RightControl);
+        if (!rising)
+            _firstPersonCrossing = false;
+        var flightCeiling = IsRing3D
+            ? ThreeDGeometry.RingFlightCeiling(_world.Width)
+            : IsPlanetoid3D ? FirstPersonMaximumFlightHeight * 4 : FirstPersonMaximumFlightHeight;
+        var previousHeight = _firstPersonEyeHeight;
+        (_firstPersonEyeHeight, _firstPersonFlying) = ThreeDGeometry.FirstPersonFlightHeight(
+            _firstPersonEyeHeight, ground, waterSurface, _firstPersonFlying,
+            rising && !_firstPersonCrossing, fastSink || (_firstPersonCrossing && _firstPersonFlying),
+            seconds, flightCeiling, FirstPersonEyeOffset, ceiling, boosted: running);
+        if (IsRing3D && rising && !_firstPersonCrossing && _firstPersonFlying &&
+            ThreeDGeometry.RingFlightCrossing(_focus3D.X, _world.Width, previousHeight,
+                _firstPersonEyeHeight) is { } oppositeX)
+        {
+            // Start from the current visual frame and turn around the axis to the new side.
+            _ringCameraTurnStartOffset = PlayerCameraX3D - _focus3D.X - _world.Width / 2f;
+            _ringCameraTurnRemaining = RingCameraTurnDuration;
+            _focus3D.X = oppositeX;
+            _firstPersonEyeHeight = flightCeiling;
+            _firstPersonCrossing = true;
+        }
     }
 
     private (Matrix View, Matrix Projection) FirstPersonMatrices3D()
     {
         var eye = PlayerCameraPosition3D();
-        var up = SurfaceUp3D(_focus3D.X);
-        var east = IsRing3D ? Framework(RingGeometry.Frame(_focus3D.X, _world.Width).East) : Vector3.UnitX;
-        var forward = CameraLookDirection3D(east, up);
+        var (east, up, south) = SurfaceFrame3D(PlayerCameraX3D, _focus3D.Y);
+        var forward = CameraLookDirection3D(east, up, south);
         var cameraUp = east * (-MathF.Sin(_yaw3D) * MathF.Sin(_pitch3D)) + up * MathF.Cos(_pitch3D) -
-            Vector3.UnitZ * (MathF.Cos(_yaw3D) * MathF.Sin(_pitch3D));
+            south * (MathF.Cos(_yaw3D) * MathF.Sin(_pitch3D));
         var far = IsRing3D ? Math.Max(396, RingGeometry.Radius(_world.Width) * 2.2f)
             : FirstPersonRenderDistance;
+        var chaseOffset = _playerView is PlayerView.ThirdPerson ? ThirdPersonDistance : 0f;
+        if (IsPlanetoid3D)
+            chaseOffset += Math.Max(0, _firstPersonEyeHeight - 14f);
         return (Matrix.CreateLookAt(eye, eye + forward, cameraUp),
-            Matrix.CreatePerspectiveFieldOfView(MathHelper.PiOver4, Viewport3D().AspectRatio, 0.03f, RenderDistance3D(far)));
+            Matrix.CreatePerspectiveFieldOfView(MathHelper.PiOver4, Viewport3D().AspectRatio, 0.03f,
+                RenderDistance3D(far, chaseOffset)));
     }
 
     private void DrawFirstPersonUnderwaterTint()
     {
         if (!IsWalkingCamera || _spriteBatch is null || _pixel is null) return;
         var eye = PlayerCameraPosition3D();
-        var localEye = IsRing3D ? Framework(RingGeometry.StripPosition(Numerics(eye), _world.Width, _world.Height)) : eye;
+        var localEye = LocalPoint3D(eye);
         var tile = MapTile3D((int)MathF.Floor(localEye.X), (int)MathF.Floor(localEye.Z));
         var elevation = WaterElevation3D(tile);
         var opacity = ThreeDGeometry.UnderwaterTintOpacity(localEye.Y,

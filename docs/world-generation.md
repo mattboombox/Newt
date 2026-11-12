@@ -28,7 +28,7 @@ fraction. Identical options produce identical terrain.
 8. Build moisture from saltwater distance, freshwater, elevation, and seeded
    regional variation.
 9. Classify biomes and choose the visible lowland surface.
-10. Seed spaced active volcanoes on mountain chains.
+10. Seed one active volcano if a suitable mountain tile is available.
 11. Select a small, spaced set of mountain tiles and start animated springs from them.
 
 Elevation remains part of world state after generation. It is stored as a signed
@@ -38,10 +38,10 @@ value together with normalized temperature, moisture, and its biome. Latitude
 does not choose terrain directly; it affects temperature. Extreme cold produces
 the Arctic biome on land and sea ice over saltwater without erasing landform.
 
-The ancient shield-chain pass creates the initial geological history, while the
-same world begins with live volcanoes that continue changing elevation after
-generation. Each newly spawned volcano raises a compact mountain shoulder around
-its vent and a lower skirt of hills. That footprint remains after dormancy or
+The ancient shield-chain pass creates the initial geological history. A starting
+volcano can continue changing elevation after generation. Each newly spawned
+volcano raises a compact mountain shoulder around its vent and a lower skirt of
+hills. That footprint remains after dormancy or
 extinction, allowing successive adjacent volcanoes to grow natural-looking ridges.
 
 Natural spring selection is seeded and requests six sources on a Micro world,
@@ -115,8 +115,9 @@ disabled for this preset. Cold climate troughs drop below the sea-ice threshold,
 allowing submerged tiles in both repeating climate sets to form Ice Sheets.
 
 Continuous steel-colored Mega Wall tiles run along its top and bottom
-edges. Their structural elevation is `2.15`, slightly above the normal `2.0`
-terrain ceiling, and terrain-changing events cannot permanently erode them.
+edges. Their structural elevation is `1.10`, just above the maximum sea level
+of `1.0`. Mountains can reach `2.0`, and terrain-changing events cannot
+permanently erode the walls.
 
 ### Nexus
 

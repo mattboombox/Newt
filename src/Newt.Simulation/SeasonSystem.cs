@@ -17,7 +17,7 @@ public static class SeasonSystem
     public static void SetEnabled(SimulationWorld world, bool enabled)
     {
         ArgumentNullException.ThrowIfNull(world);
-        if (world.Body is WorldBody.RingWorld or WorldBody.Nexus)
+        if (world.IsRingHabitat || world.Body is WorldBody.Nexus)
         {
             enabled = false;
         }
@@ -38,7 +38,7 @@ public static class SeasonSystem
             throw new ArgumentOutOfRangeException(nameof(position));
         }
 
-        var signedLatitude = GetSignedLatitude(world, position.Y);
+        var signedLatitude = GetSignedLatitude(world, position);
         if (!world.SeasonsEnabled || Math.Abs(signedLatitude) <= EquatorialBand)
         {
             return Season.PermanentSummer;
@@ -68,7 +68,7 @@ public static class SeasonSystem
             throw new ArgumentOutOfRangeException(nameof(position));
         }
 
-        return GetTemperatureOffset(world, position.Y);
+        return GetTemperatureOffset(world, GetSignedLatitude(world, position));
     }
 
     /// <summary>Moisture is intentionally not changed by the simple seasonal model.</summary>
@@ -83,14 +83,13 @@ public static class SeasonSystem
         return 0;
     }
 
-    internal static float GetTemperatureOffset(SimulationWorld world, int y)
+    internal static float GetTemperatureOffset(SimulationWorld world, float signedLatitude)
     {
         if (!world.SeasonsEnabled)
         {
             return 0;
         }
 
-        var signedLatitude = GetSignedLatitude(world, y);
         var distanceFromEquatorialBand = Math.Max(0, Math.Abs(signedLatitude) - EquatorialBand);
         var influence = distanceFromEquatorialBand / (1 - EquatorialBand);
         influence = influence * influence * (3 - 2 * influence);
@@ -131,6 +130,12 @@ public static class SeasonSystem
     private static float GetCyclePhase(SimulationWorld world) =>
         (world.SeasonTick % TicksPerYear) / (float)TicksPerYear;
 
-    private static float GetSignedLatitude(SimulationWorld world, int y) =>
-        1 - (y + 0.5f) / world.Height * 2;
+    internal static float GetSignedLatitude(SimulationWorld world, GridPosition position)
+    {
+        if (world.Body != WorldBody.Planetoid) return 1 - (position.Y + 0.5f) / world.Height * 2;
+        var size = PlanetoidLayout.FaceSize(world.Width);
+        var face = PlanetoidLayout.FaceAt(position.X, position.Y, size);
+        var north = PlanetoidLayout.Direction(position.X + 0.5f, position.Y + 0.5f, size, face).Y;
+        return MathF.Asin(Math.Clamp(north, -1f, 1f)) * (2 / MathF.PI);
+    }
 }

@@ -196,13 +196,15 @@ public sealed class LichTests
             Energy(world)[Index(world, source)] = 0;
             typeof(SimulationWorld).GetMethod("TryReanimateApe", Private)!.Invoke(world, [Index(world, source)]);
         }
-        var first = world.AddCritter(CritterSpecies.Ape, new(11, 10));
-        var second = world.AddCritter(CritterSpecies.Ape, new(12, 10));
+        var immuneRemainder = PlagueImmunityRemainder(world, source);
+        var first = AddSusceptibleApe(world, new(11, 10), immuneRemainder);
+        var second = AddSusceptibleApe(world, new(12, 10), immuneRemainder);
         var spread = typeof(SimulationWorld).GetMethod("TrySpreadCritterPlague", Private)!;
         Assert.True((bool)spread.Invoke(world,
-            [Index(world, source), new GridPosition(11, 10), PlagueKind.Zombie, (first.Value + 1) % 2])!);
+            [Index(world, source), new GridPosition(11, 10), PlagueKind.Zombie, immuneRemainder])!);
+        Assert.Equal(immuneRemainder, PlagueImmunityRemainder(world, first));
         Assert.True((bool)spread.Invoke(world,
-            [Index(world, first), new GridPosition(12, 10), PlagueKind.Zombie, (second.Value + 1) % 2])!);
+            [Index(world, first), new GridPosition(12, 10), PlagueKind.Zombie, immuneRemainder])!);
         // Both infection hops preserve the origin while their lich is alive.
         foreach (var id in new[] { first, second })
         {
@@ -237,9 +239,10 @@ public sealed class LichTests
             warriors.Add(Raise(lich, new(2 + n, 5), true));
         var zombie = Raise(lich, new(10, 10), false);
         var otherWarrior = Raise(otherLich, new(35, 10), true);
-        var infected = world.AddCritter(CritterSpecies.Ape, new(11, 10));
+        var immuneRemainder = PlagueImmunityRemainder(world, zombie);
+        var infected = AddSusceptibleApe(world, new(11, 10), immuneRemainder);
         Assert.True((bool)typeof(SimulationWorld).GetMethod("TrySpreadCritterPlague", Private)!
-            .Invoke(world, [Index(world, zombie), new GridPosition(11, 10), PlagueKind.Zombie, (infected.Value + 1) % 2])!);
+            .Invoke(world, [Index(world, zombie), new GridPosition(11, 10), PlagueKind.Zombie, immuneRemainder])!);
         world.RemoveCritterAt(world.GetCritter(Index(world, lich)).Position);
         Assert.All(warriors, id => Assert.False(world.TryGetCritter(id, out _)));
         Assert.True(world.TryGetCritter(otherWarrior, out var survivor));
@@ -255,6 +258,21 @@ public sealed class LichTests
         world.AdvanceOneTick();
         Assert.False(world.TryGetCritter(infected, out _));
         Assert.Equal(5, world.GetCritterCount(CritterSpecies.UndeadWarrior));
+    }
+
+    private static int PlagueImmunityRemainder(SimulationWorld world, CritterId source) =>
+        (int)typeof(SimulationWorld).GetMethod("GetPlagueImmunityRemainder", Private)!
+            .Invoke(world, [Index(world, source)])!;
+
+    private static CritterId AddSusceptibleApe(SimulationWorld world, GridPosition position, int immuneRemainder)
+    {
+        var ape = world.AddCritter(CritterSpecies.Ape, position);
+        if (ape.Value % 2 != immuneRemainder)
+            return ape;
+
+        // Consecutive IDs alternate between the two immunity groups.
+        Assert.True(world.RemoveCritterAt(position));
+        return world.AddCritter(CritterSpecies.Ape, position);
     }
 
     [Fact]

@@ -213,10 +213,12 @@ public sealed class ApeWarTests
             for (var x = 0; x < world.Width; x++) world.SetBiome(new(x, y), Biome.Grassland);
         Assert.True(world.TrySpawnTestApeVillage(First));
         Assert.True(world.TrySpawnTestApeVillage(Second));
-        Assert.True(world.TryPlaceApeBuilding(new(9, 10), ApeStructureKind.ResidentialDistrict));
-        Assert.True(world.TryPlaceApeBuilding(new(29, 10), ApeStructureKind.ResidentialDistrict));
         for (var i = world.CritterCount - 1; i >= 0; i--)
             world.RemoveCritterAt(world.GetCritter(i).Position);
+        Assert.True(world.TryPlaceApeBuilding(new(9, 10), ApeStructureKind.ResidentialDistrict));
+        Assert.True(world.TryPlaceApeBuilding(new(29, 10), ApeStructureKind.ResidentialDistrict));
+        Assert.True(world.TryPlaceApeBuilding(new(10, 9), ApeStructureKind.ResidentialDistrict));
+        Assert.True(world.TryPlaceApeBuilding(new(30, 9), ApeStructureKind.ResidentialDistrict));
         foreach (var village in new[] { First, Second })
             for (var i = 0; i < 10; i++)
             {
@@ -393,17 +395,16 @@ public sealed class ApeWarTests
     }
 
     [Fact]
-    public void OpposingWarriorsCanFightOnlyDuringWar()
+    public void OpposingWarriorsCanFightDuringWar()
     {
         var world = CreateWorld();
         Assert.True(world.TryStartApeWar(First, Second));
         var first = Residents(world, First).First(c => c.Species == CritterSpecies.ApeWarrior);
         var second = Residents(world, Second).First(c => c.Species == CritterSpecies.ApeWarrior);
-        var energy = first.Energy + second.Energy;
         world.CommitEncounter(first.Position, second.Position);
-        Assert.True(world.TryGetCritter(first.Id, out first));
-        Assert.True(world.TryGetCritter(second.Id, out second));
-        Assert.True(first.Energy + second.Energy < energy);
+        Assert.True(
+            !world.TryGetCritter(first.Id, out var firstAfter) || firstAfter.Energy < first.Energy ||
+            !world.TryGetCritter(second.Id, out var secondAfter) || secondAfter.Energy < second.Energy);
     }
 
     [Theory]

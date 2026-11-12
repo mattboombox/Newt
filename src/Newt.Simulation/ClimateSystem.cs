@@ -26,16 +26,20 @@ public static class ClimateSystem
 
         for (var y = 0; y < world.Height; y++)
         {
-            var latitude = Math.Abs((y + 0.5f) / world.Height * 2 - 1);
-            var latitudeWarmth = 1 - latitude;
+            var rowLatitude = 1 - (y + 0.5f) / world.Height * 2;
             for (var x = 0; x < world.Width; x++)
             {
                 var position = new GridPosition(x, y);
+                var latitude = world.Body == WorldBody.Planetoid ? SeasonSystem.GetSignedLatitude(world, position) : rowLatitude;
+                var latitudeWarmth = 1 - MathF.Abs(latitude);
                 var elevationCooling = Math.Max(0, world.GetElevation(position)) * 0.48f;
                 var variation = (FractalNoise(world, x, y, world.Seed ^ 0xA0761D6478BD642FUL) - 0.5f) * 0.18f;
-                var baseline = world.Body is WorldBody.RingWorld
-                    ? GetRingTemperatureNormal(world, x)
-                    : 0.06f + latitudeWarmth * 0.98f + SeasonSystem.GetTemperatureOffset(world, y);
+                var baseline = world.Body switch
+                {
+                    WorldBody.RingWorld => GetRingTemperatureNormal(world, x),
+                    WorldBody.ONeillCylinder => 0.035f + latitudeWarmth * 0.83f,
+                    _ => 0.06f + latitudeWarmth * 0.98f + SeasonSystem.GetTemperatureOffset(world, latitude),
+                };
                 var temperature = world.Body is WorldBody.Nexus
                     ? NexusLayout.Climate(world, position).Temperature + variation * 0.15f + world.GlobalTemperatureOffset
                     : baseline - elevationCooling + variation + world.GlobalTemperatureOffset;
@@ -57,6 +61,8 @@ public static class ClimateSystem
 
         for (var y = 0; y < world.Height; y++)
         {
+            var cylinderMoisture = world.Body is WorldBody.ONeillCylinder
+                ? GetRingMoistureNormal(world, y) : 0f;
             for (var x = 0; x < world.Width; x++)
             {
                 var position = new GridPosition(x, y);
@@ -75,6 +81,7 @@ public static class ClimateSystem
                 var engineeredZone = world.Body switch
                 {
                     WorldBody.RingWorld => GetRingMoistureNormal(world, x),
+                    WorldBody.ONeillCylinder => cylinderMoisture,
                     WorldBody.Nexus => (NexusLayout.Climate(world, position).Moisture - 0.5f) * 0.6f,
                     _ => 0f,
                 };
@@ -280,6 +287,21 @@ public static class ClimateSystem
         {
             var x = index % world.Width;
             var y = index / world.Width;
+            if (world.Body == WorldBody.Planetoid)
+            {
+                var size = PlanetoidLayout.FaceSize(world.Width);
+                VisitOffset(1, 0);
+                VisitOffset(-1, 0);
+                VisitOffset(0, 1);
+                VisitOffset(0, -1);
+                continue;
+
+                void VisitOffset(int dx, int dy)
+                {
+                    var neighbor = PlanetoidLayout.Offset(new(x, y), dx, dy, size);
+                    TryVisit(neighbor.X, neighbor.Y);
+                }
+            }
             TryVisit((x + 1) % world.Width, y);
             TryVisit((x - 1 + world.Width) % world.Width, y);
             if (y > 0)
@@ -319,12 +341,12 @@ public static class ClimateSystem
     private static float DistanceInfluence(int distance, float strength, float reach) =>
         distance == Unreachable ? 0 : strength * MathF.Exp(-distance / reach);
 
-    private static float GetRingClimatePhase(SimulationWorld world, int x) =>
-        (x + 0.5f) / (world.Width / 2f) * MathF.Tau;
+    private static float GetEngineeredClimatePhase(int coordinate, int length) =>
+        (coordinate + 0.5f) / (length / 2f) * MathF.Tau;
 
-    internal static float GetRingTemperatureNormal(SimulationWorld world, int x)
+    internal static float GetRingTemperatureNormal(SimulationWorld world, int coordinate)
     {
-        var phase = GetRingClimatePhase(world, x);
+        var phase = GetEngineeredClimatePhase(coordinate, world.Width);
         var seedPhase = (world.Seed % 10_000) / 10_000f * MathF.Tau;
         // Extend the cold trough below the sea-ice threshold even after seeded
         // variation, without changing the warm half of each climate cycle.
@@ -333,9 +355,11 @@ public static class ClimateSystem
             MathF.Sin(phase * 2 - seedPhase * 0.5f) * 0.08f - coldZone * coldZone * 0.25f;
     }
 
-    internal static float GetRingMoistureNormal(SimulationWorld world, int x)
+    internal static float GetRingMoistureNormal(SimulationWorld world, int coordinate)
     {
-        var phase = GetRingClimatePhase(world, x);
+        // Cylinder moisture bands wrap around the circumference and advance along its axis.
+        var length = world.Body is WorldBody.ONeillCylinder ? world.Height : world.Width;
+        var phase = GetEngineeredClimatePhase(coordinate, length);
         var seedPhase = (world.Seed % 8_192) / 8_192f * MathF.Tau;
         return MathF.Sin(phase + seedPhase) * 0.24f +
             MathF.Sin(phase * 2 - seedPhase) * 0.07f;

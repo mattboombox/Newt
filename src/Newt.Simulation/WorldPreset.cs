@@ -18,9 +18,25 @@ public readonly record struct WorldPreset(string Name, int Width, int Height)
 
     public static WorldPreset RingMega => new("Mega", Ring.Width * 4, Ring.Height);
 
+    public static WorldPreset ONeillCylinder => new("Standard", 448, 336);
+
+    public static WorldPreset ONeillCylinderLarge => new("Large", ONeillCylinder.Width, ONeillCylinder.Height * 2);
+
+    public static WorldPreset ONeillCylinderMega => new("Mega", 512, ONeillCylinder.Height * 4);
+
     public static WorldPreset Nexus => new("Nexus", 384, 384);
 
     public static WorldPreset NexusMega => new("Mega", 768, 768);
+
+    public static WorldPreset PlanetoidMicro => new("Micro", 72, 48);
+
+    public static WorldPreset PlanetoidSmall => new("Small", 144, 96);
+
+    public static WorldPreset PlanetoidStandard => new("Standard", 288, 192);
+
+    public static WorldPreset PlanetoidLarge => new("Large", 576, 384);
+
+    public static WorldPreset PlanetoidHuge => new("Huge", 1152, 768);
 
     public static WorldPreset Earth => new("Earth", 1280, 642);
 

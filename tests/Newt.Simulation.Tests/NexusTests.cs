@@ -51,8 +51,8 @@ public sealed class NexusTests
     public void StructuralWallsPreserveCustodiansAndRemoveOtherOccupants()
     {
         var world = new SimulationWorld(20, 20, Terrain.Plains) { Body = WorldBody.Nexus };
-        var apeTile = NexusLayout.Center(world);
-        var custodianTile = new GridPosition(apeTile.X, apeTile.Y - 1);
+        var apeTile = NexusLayout.ArmPosition(world, 0, 0.5f);
+        var custodianTile = NexusLayout.ArmPosition(world, 5, 0.5f);
         var ape = world.AddCritter(CritterSpecies.Ape, apeTile);
         var custodian = world.AddCritter(CritterSpecies.Custodian, custodianTile);
         world.SetStructuralTerrain(new(0, 0), Terrain.MegaWall, SimulationWorld.MegaWallElevation);
@@ -108,21 +108,26 @@ public sealed class NexusTests
     }
 
     [Fact]
-    public void CenterElevationVariesWithSeedInsteadOfUsingAFixedOceanBowl()
+    public void CentralOpeningLeavesASeededHubWithAnAccessiblePortal()
     {
         SimulationWorld Generate(ulong seed) => WorldGenerator.Generate(new(new("Test Nexus", 96, 96),
             seed, MapType: WorldMapType.Nexus));
         var first = Generate(19);
         var second = Generate(731);
-        Assert.NotEqual(first.GetElevation(NexusLayout.Center(first)), second.GetElevation(NexusLayout.Center(second)));
-        Assert.True(first.HasTeleporter(NexusLayout.Center(first)));
-        Assert.True(second.HasTeleporter(NexusLayout.Center(second)));
+        var center = NexusLayout.Center(first);
+        var portal = NexusLayout.HubPortal(first);
+        Assert.False(NexusLayout.Contains(first, center));
+        Assert.False(first.HasTeleporter(center));
+        Assert.False(first.TrySpawnCritter(CritterSpecies.Ape, center));
+        Assert.NotEqual(first.GetElevation(portal), second.GetElevation(portal));
+        Assert.True(first.HasTeleporter(portal));
+        Assert.True(second.HasTeleporter(portal));
     }
 
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void NexusHasTenClimatePetalsCentralPortalAndOppositeFabricators(bool mega)
+    public void NexusHasTenClimatePetalsHubPortalAndOppositeFabricators(bool mega)
     {
         var world = WorldGenerator.Generate(new(mega ? WorldPreset.NexusMega : WorldPreset.Nexus,
             731, MapType: WorldMapType.Nexus));
@@ -131,7 +136,8 @@ public sealed class NexusTests
         SeasonSystem.SetEnabled(world, true);
         Assert.False(world.SeasonsEnabled);
         var center = NexusLayout.Center(world);
-        Assert.True(world.HasTeleporter(center));
+        Assert.False(NexusLayout.Contains(world, center));
+        Assert.True(world.HasTeleporter(NexusLayout.HubPortal(world)));
         var expected = new[] { TemperatureBand.Freezing, TemperatureBand.Cold, TemperatureBand.Cold, TemperatureBand.Cold,
             TemperatureBand.Temperate, TemperatureBand.Temperate, TemperatureBand.Temperate,
             TemperatureBand.Hot, TemperatureBand.Hot, TemperatureBand.Hot };

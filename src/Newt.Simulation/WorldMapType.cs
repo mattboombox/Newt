@@ -12,4 +12,5 @@ public enum WorldMapType
     Nexus,
     Moon,
     Mars,
+    ONeillCylinder,
 }

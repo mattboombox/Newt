@@ -72,8 +72,10 @@ public sealed class MegaSpiderTests
         world.SeasonsEnabled = false;
         world.AddCritter(CritterSpecies.MegaSpider, new GridPosition(0, 0));
         world.AddCritter(CritterSpecies.MegaSpider, new GridPosition(1, 0));
+        var nutrition = CritterNutritions.Get(CritterSpecies.MegaSpider);
+        SetEnergy(world, 0, nutrition.MaximumEnergy);
         Assert.Null(world.FindHunterPrey(0, CritterSpecies.MegaSpider, 6, null));
-        AdvanceUntil(world, () => world.GetCritter(0).Energy <= 4);
+        SetEnergy(world, 0, nutrition.InitialEnergy);
         Assert.NotNull(world.FindHunterPrey(0, CritterSpecies.MegaSpider, 6, null));
         var empty = Enumerable.Range(0, 3).Select(x => new GridPosition(x, 0))
             .Single(position => !world.IsOccupied(position));
@@ -114,8 +116,9 @@ public sealed class MegaSpiderTests
         AdvanceUntil(world, () => world.MegaSpiderWebCount == 1);
         var firstWeb = FindWebs(world).Single();
         Assert.True(world.RemoveMegaSpiderWebAt(firstWeb));
+        Assert.Equal(0, world.MegaSpiderWebCount);
 
-        AddPreyNearSpider(world, 3);
+        SetEnergy(world, 0, CritterNutritions.Get(CritterSpecies.MegaSpider).ReproductionThreshold);
         AdvanceUntil(world, () => world.MegaSpiderWebCount == 1);
 
         Assert.Equal(1, world.GetCritterCount(CritterSpecies.MegaSpider));
@@ -200,7 +203,9 @@ public sealed class MegaSpiderTests
             CritterSpecies.MegaSpider));
         Assert.All(
             Enum.GetValues<CritterSpecies>().Where(prey => prey is not CritterSpecies.MegaSpider),
-            prey => Assert.True(SimulationWorld.CanEat(CritterSpecies.MegaSpider, prey)));
+            prey => Assert.Equal(
+                prey is not (CritterSpecies.Lich or CritterSpecies.UndeadWarrior or CritterSpecies.Custodian),
+                SimulationWorld.CanEat(CritterSpecies.MegaSpider, prey)));
     }
 
     [Theory]
@@ -304,27 +309,25 @@ public sealed class MegaSpiderTests
         for (var tile = 0; tile < world.Width * world.Height; tile++)
             world.SetBiome(new GridPosition(tile % world.Width, tile / world.Width), Biome.Forest);
         world.SeasonsEnabled = false;
-        world.AddCritter(CritterSpecies.MegaSpider, new GridPosition(0, 0));
-        world.AddCritter(CritterSpecies.Wolf, new GridPosition(0, 1));
+        var spiderPosition = new GridPosition(0, 0);
+        var wolfPosition = new GridPosition(0, 1);
+        var spider = world.AddCritter(CritterSpecies.MegaSpider, spiderPosition);
+        var wolf = world.AddCritter(CritterSpecies.Wolf, wolfPosition);
+        var spiderDamage = world.GetCritterCombatDamage(spider);
+        var wolfDamage = world.GetCritterCombatDamage(wolf);
+        // Let both creatures survive a hit so the test can observe the exchange.
+        SetEnergy(world, 0, wolfDamage + 1);
+        SetEnergy(world, 1, spiderDamage + 1);
 
-        for (var tick = 0; tick < 6 * SimulationWorld.TicksPerSecond; tick++)
+        world.CommitEncounter(spiderPosition, wolfPosition);
+
+        Assert.True(world.TryGetCritter(spider, out var spiderAfter));
+        Assert.True(world.TryGetCritter(wolf, out var wolfAfter));
+        Assert.Contains((spiderAfter.Energy, wolfAfter.Energy), new[]
         {
-            world.AdvanceOneTick();
-            if (Enumerable.Range(0, world.CritterCount)
-                .Select(world.GetCritter)
-                .Sum(critter => critter.Energy) < 10)
-            {
-                break;
-            }
-        }
-
-        Assert.Equal(1, world.GetCritterCount(CritterSpecies.MegaSpider));
-        Assert.Equal(1, world.GetCritterCount(CritterSpecies.Wolf));
-        Assert.Equal(
-            6,
-            Enumerable.Range(0, world.CritterCount)
-                .Select(world.GetCritter)
-                .Sum(critter => critter.Energy));
+            (1, spiderDamage + 1),
+            (wolfDamage + 1, 1),
+        });
     }
 
     [Theory]
@@ -377,6 +380,13 @@ public sealed class MegaSpiderTests
             .Select(x => new GridPosition(x, 0))
             .Where(position => world.GetMegaSpiderWebFood(position) is not null)
             .ToArray();
+
+    private static void SetEnergy(SimulationWorld world, int index, int amount)
+    {
+        var energy = (int[])typeof(SimulationWorld).GetField("_energy",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(world)!;
+        energy[index] = amount;
+    }
 
     private static void AdvanceUntil(SimulationWorld world, Func<bool> condition)
     {

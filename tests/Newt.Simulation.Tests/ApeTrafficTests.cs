@@ -24,6 +24,45 @@ public sealed class ApeTrafficTests
         Assert.Equal(expected ? surrounding : Terrain.Plains, world.GetTerrain(displaced.Position));
     }
 
+    [Fact]
+    public void TraderCannotShoveFishOntoAFloodedMegaWall()
+    {
+        var world = new SimulationWorld(10, 10, Terrain.MegaWall);
+        var origin = new GridPosition(4, 5);
+        var blocker = new GridPosition(5, 5);
+        var floodedWall = new GridPosition(6, 5);
+        world.SetTerrain(origin, Terrain.Plains);
+        world.SetTerrain(blocker, Terrain.Shallows);
+        world.SetSurfaceWater(floodedWall, SurfaceWaterKind.River);
+        world.AddCritter(CritterSpecies.ApeTrader, origin);
+        var fish = world.AddCritter(CritterSpecies.Fish, blocker);
+
+        var shoved = (bool)typeof(SimulationWorld).GetMethod("TryShoveCritter",
+            BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(world, [0, 55, null])!;
+
+        Assert.False(shoved);
+        Assert.True(world.TryGetCritter(fish, out var displaced));
+        Assert.Equal(blocker, displaced.Position);
+    }
+
+    [Fact]
+    public void PlanktonShoveChainCannotCrossAnOccupiedMegaWall()
+    {
+        var world = new SimulationWorld(6, 1, Terrain.Ocean);
+        world.AddCritter(CritterSpecies.Fish, new(0, 0));
+        var blocker = world.AddCritter(CritterSpecies.Plankton, new(1, 0));
+        var wall = new GridPosition(2, 0);
+        world.AddCritter(CritterSpecies.Plankton, wall);
+        world.SetTerrain(wall, Terrain.MegaWall);
+
+        var shoved = (bool)typeof(SimulationWorld).GetMethod("TryShovePlanktonChain",
+            BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(world, [0, 1, null])!;
+
+        Assert.False(shoved);
+        Assert.True(world.TryGetCritter(blocker, out var plankton));
+        Assert.Equal(new GridPosition(1, 0), plankton.Position);
+    }
+
     [Theory]
     [InlineData(CritterSpecies.Ape)]
     [InlineData(CritterSpecies.ApeFarmer)]

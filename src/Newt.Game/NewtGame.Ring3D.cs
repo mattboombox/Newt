@@ -6,16 +6,20 @@ namespace Newt.Game;
 
 public sealed partial class NewtGame
 {
-    private bool IsRing3D => _world.Body == WorldBody.RingWorld;
+    private bool IsRing3D => _world.IsRingHabitat;
+    private bool IsPlanetoid3D => _world.Body is WorldBody.Planetoid;
+    private bool HasCurvedSurface3D => IsRing3D || IsPlanetoid3D || _world.Body is WorldBody.Nexus;
     private Vector3[] _ringUpFrames3D = [];
-    private BoundingBox[] _ringBounds3D = [];
-    private int _ringBoundsWidth3D, _ringBoundsHeight3D;
 
     private static System.Numerics.Vector3 Numerics(Vector3 v) => new(v.X, v.Y, v.Z);
     private static Vector3 Framework(System.Numerics.Vector3 v) => new(v.X, v.Y, v.Z);
 
-    private Vector3 WorldPoint3D(Vector3 point)
+    private Vector3 WorldPoint3D(Vector3 point, GridPosition? owner = null)
     {
+        if (IsPlanetoid3D)
+            return Framework(PlanetoidGeometry.Position(Numerics(point), _world.Width, owner));
+        if (_world.Body is WorldBody.Nexus)
+            return new Vector3(point.X, point.Y + NexusLift3D(point.X, point.Z), point.Z);
         if (!IsRing3D) return point;
         if (_ringUpFrames3D.Length != _world.Width * 2)
         {
@@ -31,25 +35,54 @@ public sealed partial class NewtGame
         return new Vector3(0, radius, point.Z - _world.Height / 2f) - up * (radius - point.Y);
     }
 
-    private Vector3 SurfaceUp3D(float x) => IsRing3D
-        ? Framework(RingGeometry.Frame(x, _world.Width).Up) : Vector3.Up;
+    private float NexusLift3D(float x, float z)
+    {
+        var center = NexusLayout.Center(_world);
+        return ThreeDGeometry.NexusPetalLift(x - center.X, z - center.Y, NexusLayout.Radius(_world));
+    }
+
+    private Vector3 LocalPoint3D(Vector3 point)
+    {
+        if (IsPlanetoid3D)
+            return Framework(PlanetoidGeometry.TilePosition(Numerics(point), _world.Width));
+        if (IsRing3D)
+            return Framework(RingGeometry.StripPosition(Numerics(point), _world.Width, _world.Height));
+        if (_world.Body is WorldBody.Nexus)
+            point.Y -= NexusLift3D(point.X, point.Z);
+        return point;
+    }
+
+    private Vector3 SurfaceUp3D(float x, float y) => SurfaceFrame3D(x, y).Up;
+
+    private (Vector3 East, Vector3 Up, Vector3 South) SurfaceFrame3D(float x, float y)
+    {
+        if (IsPlanetoid3D)
+        {
+            var (east, up, south) = PlanetoidGeometry.Frame(x, y, _world.Width);
+            return (Framework(east), Framework(up), Framework(south));
+        }
+        if (IsRing3D)
+        {
+            var (east, up) = RingGeometry.Frame(x, _world.Width);
+            return (Framework(east), Framework(up), Vector3.UnitZ);
+        }
+        return (Vector3.UnitX, Vector3.Up, Vector3.UnitZ);
+    }
 
     private BoundingBox TileBounds3D(int x, int y, float height)
     {
-        if (!IsRing3D) return new BoundingBox(new Vector3(x, 0, y), new Vector3(x + 1, height, y + 1));
-        if (height == 14)
+        if (_world.Body is WorldBody.Nexus)
         {
-            if (_ringBoundsWidth3D != _world.Width || _ringBoundsHeight3D != _world.Height)
-            {
-                _ringBoundsWidth3D = _world.Width;
-                _ringBoundsHeight3D = _world.Height;
-                _ringBounds3D = new BoundingBox[_world.Width * _world.Height];
-                for (var row = 0; row < _world.Height; row++)
-                for (var column = 0; column < _world.Width; column++)
-                    _ringBounds3D[row * _world.Width + column] = CurvedTileBounds3D(column, row, 14);
-            }
-            return _ringBounds3D[y * _world.Width + x];
+            var center = NexusLayout.Center(_world);
+            var nearX = x < center.X ? x + 1 : x;
+            var nearY = y < center.Y ? y + 1 : y;
+            var farX = x < center.X ? x : x + 1;
+            var farY = y < center.Y ? y : y + 1;
+            return new BoundingBox(new Vector3(x, NexusLift3D(nearX, nearY), y),
+                new Vector3(x + 1, NexusLift3D(farX, farY) + height, y + 1));
         }
+        if (!IsRing3D && !IsPlanetoid3D)
+            return new BoundingBox(new Vector3(x, 0, y), new Vector3(x + 1, height, y + 1));
         return CurvedTileBounds3D(x, y, height);
     }
 
@@ -61,50 +94,51 @@ public sealed partial class NewtGame
         for (var dz = 0; dz <= 1; dz++)
         for (var dh = 0; dh <= 1; dh++)
         {
-            var p = WorldPoint3D(new Vector3(x + dx, height * dh, y + dz));
+            var p = WorldPoint3D(new Vector3(x + dx, height * dh, y + dz), new GridPosition(x, y));
             min = Vector3.Min(min, p);
             max = Vector3.Max(max, p);
         }
         return new BoundingBox(min, max);
     }
 
-    private (Matrix View, Matrix Projection) RingMatrices3D()
+    private (Matrix View, Matrix Projection) CurvedOrbitMatrices3D()
     {
         var tile = MapTile3D((int)_focus3D.X, (int)_focus3D.Y);
         var target = WorldPoint3D(new Vector3(_focus3D.X, Math.Max(4.5f, TileHeight3D(tile)), _focus3D.Y));
-        var frame = RingGeometry.Frame(_focus3D.X, _world.Width);
-        var east = Framework(frame.East);
-        var up = Framework(frame.Up);
+        var (east, up, south) = SurfaceFrame3D(_focus3D.X, _focus3D.Y);
         var offset = EyeOffset3D();
-        var eye = target + east * offset.X + up * offset.Y + Vector3.UnitZ * offset.Z;
-        // Keep the camera above the local terrain as the rail curves underneath it.
-        var stripEye = RingGeometry.StripPosition(Numerics(eye), _world.Width, _world.Height);
+        var eye = target + east * offset.X + up * offset.Y + south * offset.Z;
+        // Keep the camera above the local terrain as the surface curves underneath it.
+        var stripEye = LocalPoint3D(eye);
         var eyeTile = MapTile3D((int)stripEye.X, (int)MathF.Floor(stripEye.Z));
-        if (stripEye.Y < TileHeight3D(eyeTile) + 1.5f)
+        if ((!IsPlanetoid3D || ContainsTile3D(eyeTile.X, (int)MathF.Floor(stripEye.Z))) &&
+            stripEye.Y < TileHeight3D(eyeTile) + 1.5f)
         {
             stripEye.Y = TileHeight3D(eyeTile) + 1.5f;
-            eye = WorldPoint3D(Framework(stripEye));
+            eye = WorldPoint3D(stripEye);
         }
-        if (_pitch3D < 0.25f) target = eye + CameraLookDirection3D(east, up) * _distance3D;
+        var cameraDistance = Vector3.Distance(eye, target);
+        if (_pitch3D < 0.25f) target = eye + CameraLookDirection3D(east, up, south) * _distance3D;
         var cameraUp = east * (-MathF.Sin(_yaw3D) * MathF.Sin(_pitch3D)) +
-            up * MathF.Cos(_pitch3D) - Vector3.UnitZ * (MathF.Cos(_yaw3D) * MathF.Sin(_pitch3D));
+            up * MathF.Cos(_pitch3D) - south * (MathF.Cos(_yaw3D) * MathF.Sin(_pitch3D));
         return (Matrix.CreateLookAt(eye, target, cameraUp),
             Matrix.CreatePerspectiveFieldOfView(MathHelper.PiOver4, Viewport3D().AspectRatio, 0.1f,
                 RenderDistance3D(Math.Max(ThreeDGeometry.FarClipDistance(_distance3D),
-                    RingGeometry.Radius(_world.Width) * 2.2f), Vector3.Distance(eye, target))));
+                    RingGeometry.Radius(_world.Width) * 2.2f), cameraDistance)));
     }
 
-    private float? RingColumnHit3D(Ray ray, int x, int y, float height)
+    private float? CurvedColumnHit3D(Ray ray, int x, int y, float height)
     {
         if (ray.Intersects(TileBounds3D(x, y, 14)) is null) return null;
-        var a = WorldPoint3D(new Vector3(x, height, y));
-        var b = WorldPoint3D(new Vector3(x + 1, height, y));
-        var c = WorldPoint3D(new Vector3(x + 1, height, y + 1));
-        var d = WorldPoint3D(new Vector3(x, height, y + 1));
-        var e = WorldPoint3D(new Vector3(x, 0, y));
-        var f = WorldPoint3D(new Vector3(x + 1, 0, y));
-        var g = WorldPoint3D(new Vector3(x + 1, 0, y + 1));
-        var h = WorldPoint3D(new Vector3(x, 0, y + 1));
+        var tile = new GridPosition(x, y);
+        var a = WorldPoint3D(new Vector3(x, height, y), tile);
+        var b = WorldPoint3D(new Vector3(x + 1, height, y), tile);
+        var c = WorldPoint3D(new Vector3(x + 1, height, y + 1), tile);
+        var d = WorldPoint3D(new Vector3(x, height, y + 1), tile);
+        var e = WorldPoint3D(new Vector3(x, 0, y), tile);
+        var f = WorldPoint3D(new Vector3(x + 1, 0, y), tile);
+        var g = WorldPoint3D(new Vector3(x + 1, 0, y + 1), tile);
+        var h = WorldPoint3D(new Vector3(x, 0, y + 1), tile);
         float? closest = null;
         void Triangle(Vector3 p, Vector3 q, Vector3 r)
         {
@@ -124,7 +158,7 @@ public sealed partial class NewtGame
 
     private void CurveWaterVertices3D(List<VertexPositionColor> vertices)
     {
-        if (!IsRing3D) return;
+        if (!HasCurvedSurface3D || IsPlanetoid3D) return;
         for (var i = 0; i < vertices.Count; i++)
         {
             var v = vertices[i];
@@ -133,7 +167,7 @@ public sealed partial class NewtGame
         }
     }
 
-    private void Match2DCameraToRing3D()
+    private void Match2DCameraToCurved3D()
     {
         var viewport = Viewport3D();
         var (view, projection) = Matrices3D();
@@ -146,8 +180,9 @@ public sealed partial class NewtGame
         var east = viewport.Project(WorldPoint3D(local + Vector3.UnitX), projection, view, Matrix.Identity) - point;
         var south = viewport.Project(WorldPoint3D(local + Vector3.UnitZ), projection, view, Matrix.Identity) - point;
         _zoomIndex = ThreeDGeometry.NearestZoomIndex(MathF.Sqrt(Math.Abs(east.X * south.Y - east.Y * south.X)), ZoomLevels);
-        _cameraX = ConstrainCameraX((int)MathF.Round(local.X - (viewport.Width / 2f - MapOffsetX) / TileSize));
-        _cameraY = Math.Clamp((int)MathF.Round(local.Z - (viewport.Height / 2f - MapOffsetY) / TileSize),
+        var location = MapLocation2D(tile);
+        _cameraX = ConstrainCameraX((int)MathF.Round(location.X + 0.5f - (viewport.Width / 2f - MapOffsetX) / TileSize));
+        _cameraY = Math.Clamp((int)MathF.Round(location.Y + 0.5f - (viewport.Height / 2f - MapOffsetY) / TileSize),
             0, Math.Max(0, _world.Height - viewport.Height / TileSize));
     }
 }

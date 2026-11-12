@@ -9,17 +9,26 @@ public sealed class WhaleCarcassTests
     [InlineData(CritterSpecies.Fish, Terrain.Ocean)]
     [InlineData(CritterSpecies.Crab, Terrain.Ocean)]
     [InlineData(CritterSpecies.Nautilus, Terrain.Shallows)]
-    public void WhaleFallFeedsScavengersOutsideTheirNormalForagingTerrain(CritterSpecies species, Terrain terrain)
+    [InlineData(CritterSpecies.Squid, Terrain.Ocean)]
+    [InlineData(CritterSpecies.SeaScorpion, Terrain.Ocean)]
+    [InlineData(CritterSpecies.Wolf, Terrain.Plains)]
+    [InlineData(CritterSpecies.Crab, Terrain.Beach)]
+    public void EligibleCrittersFeedFromWhaleFallsDuringMovementTurns(CritterSpecies species, Terrain terrain)
     {
-        var world = new SimulationWorld(1, 1, terrain) { SeasonsEnabled = false };
+        var world = new SimulationWorld(1, 1, Terrain.Ocean) { SeasonsEnabled = false };
         NaturalEvents.SetEnabled(world, false);
         var tile = new GridPosition(0, 0);
         world.SetTemperature(tile, 0.5f);
         world.AddCritter(CritterSpecies.BaleenWhale, tile);
+        world.SetTerrain(tile, terrain);
         Assert.True(world.RemoveCritterAt(tile));
         world.AddCritter(species, tile);
         var before = world.GetCritter(0).Energy;
-        Assert.True((bool)typeof(SimulationWorld).GetMethod("TryFeedFromTerrain", Flags)!.Invoke(world, [0])!);
+        var movementTicks = (long[])typeof(SimulationWorld).GetField("_nextMovementTicks", Flags)!.GetValue(world)!;
+        var firstMovementTick = movementTicks[0];
+        while (world.Tick < firstMovementTick)
+            world.AdvanceOneTick();
+
         Assert.Equal(before + 1, world.GetCritter(0).Energy);
         Assert.Equal(9, world.GetWhaleFallNutrition(tile));
     }
@@ -50,7 +59,7 @@ public sealed class WhaleCarcassTests
     private const BindingFlags Flags = BindingFlags.Instance | BindingFlags.NonPublic;
 
     [Fact]
-    public void OnlyOceanForagersCanConsumeWhaleFall()
+    public void OnlyListedSpeciesAreExcludedFromWhaleFall()
     {
         foreach (var species in Enum.GetValues<CritterSpecies>())
         {
@@ -60,10 +69,10 @@ public sealed class WhaleCarcassTests
             typeof(SimulationWorld).GetMethod("RemoveCritterAtIndex", Flags)!.Invoke(world, [0]);
             var consume = typeof(SimulationWorld).GetMethod("TryConsumeEnvironmentalNutrition", Flags)!;
             consume.Invoke(world, [species, 0]);
-            var remaining = (byte[])typeof(SimulationWorld).GetField("_whaleFallNutrition", Flags)!.GetValue(world)!;
-            var canEat = species is CritterSpecies.Worm or CritterSpecies.Trilobite or CritterSpecies.Nautilus or
-                CritterSpecies.Fish or CritterSpecies.Crab;
-            Assert.Equal(canEat ? 9 : 10, remaining[0]);
+            var excluded = species is CritterSpecies.Deer or CritterSpecies.Elk or CritterSpecies.MegaSlug or
+                CritterSpecies.Gazelle or CritterSpecies.ToothedWhale or CritterSpecies.Plankton or
+                CritterSpecies.BaleenWhale;
+            Assert.Equal(excluded ? 10 : 9, world.GetWhaleFallNutrition(new(0, 0)));
         }
     }
 

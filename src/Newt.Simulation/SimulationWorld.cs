@@ -93,9 +93,9 @@ public sealed partial class SimulationWorld
     public const int TileNutritionRegenerationSeconds = 480;
     public const float MinimumGroundElevation = -1f;
     public const float MaximumGroundElevation = 2f;
-    public const float MegaWallElevation = 2.15f;
     public const float MinimumSeaLevel = -1f;
     public const float MaximumSeaLevel = 1f;
+    public const float MegaWallElevation = MaximumSeaLevel + 0.10f;
     public const float MinimumGlobalClimateOffset = -1f;
     public const float MaximumGlobalClimateOffset = 1f;
 
@@ -253,6 +253,9 @@ public sealed partial class SimulationWorld
     public ulong Seed { get; }
 
     public WorldBody Body { get; internal set; }
+    public bool IsRingHabitat => Body is WorldBody.RingWorld or WorldBody.ONeillCylinder;
+    /// <summary>Reports changes to terrain mesh inputs. A null position invalidates the whole map.</summary>
+    public event Action<GridPosition?>? TerrainGeometryChanged;
 
     public bool HasOceans { get; internal set; } = true;
 
@@ -577,7 +580,7 @@ public sealed partial class SimulationWorld
     {
         if (!Contains(position) || !_teleporters.Remove(GetIndex(position)))
             return false;
-        if (Body is WorldBody.RingWorld or WorldBody.Nexus)
+        if (IsRingHabitat || Body is WorldBody.Nexus)
             _destroyedTeleporterTiles.Add(GetIndex(position));
         return true;
     }
@@ -723,6 +726,7 @@ public sealed partial class SimulationWorld
         {
             InvalidateTransportNetwork();
             _terrain[index] = terrain;
+            TerrainGeometryChanged?.Invoke(position);
             if (terrain is Terrain.MegaWall)
             {
                 RemoveTeleporterAt(position);
@@ -735,11 +739,14 @@ public sealed partial class SimulationWorld
         }
     }
 
-    internal void SetElevation(GridPosition position, float elevation) =>
-        _elevation[GetIndex(position)] = Math.Clamp(
-            elevation,
-            MinimumGroundElevation,
-            MaximumGroundElevation);
+    internal void SetElevation(GridPosition position, float elevation)
+    {
+        var index = GetIndex(position);
+        var height = Math.Clamp(elevation, MinimumGroundElevation, MaximumGroundElevation);
+        if (_elevation[index] == height) return;
+        _elevation[index] = height;
+        TerrainGeometryChanged?.Invoke(position);
+    }
 
     internal void SetStructuralTerrain(
         GridPosition position,
@@ -748,9 +755,13 @@ public sealed partial class SimulationWorld
     {
         var index = GetIndex(position);
         InvalidateTransportNetwork();
+        var geometryChanged = _terrain[index] != terrain || _elevation[index] != elevation ||
+            _surfaceCovers[index] is not SurfaceCover.None;
         _terrain[index] = terrain;
         _elevation[index] = elevation;
         _surfaceCovers[index] = SurfaceCover.None;
+        if (geometryChanged)
+            TerrainGeometryChanged?.Invoke(position);
         _surfaceCoverUntilTicks[index] = 0;
         _activeSurfaceCovers.Remove(position);
         RemoveWolfDenAt(position);
@@ -766,8 +777,15 @@ public sealed partial class SimulationWorld
             RemoveCritterAt(position);
     }
 
-    internal void SetTemperature(GridPosition position, float temperature) =>
-        _temperature[GetIndex(position)] = Math.Clamp(temperature, 0, 1);
+    internal void SetTemperature(GridPosition position, float temperature)
+    {
+        var index = GetIndex(position);
+        var previous = _temperature[index];
+        _temperature[index] = Math.Clamp(temperature, 0, 1);
+        if (TerrainGeometryChanged is { } changed &&
+            ClimateSystem.ClassifyTemperature(previous) != ClimateSystem.ClassifyTemperature(_temperature[index]))
+            changed(position);
+    }
 
     internal void SetMoisture(GridPosition position, float moisture) =>
         _moisture[GetIndex(position)] = Math.Clamp(moisture, 0, 1);
@@ -782,6 +800,7 @@ public sealed partial class SimulationWorld
         }
 
         _biomes[index] = biome;
+        TerrainGeometryChanged?.Invoke(position);
         InvalidateTransportNetwork();
         RemoveInvalidApeStructureAt(position);
         RemoveInvalidMegaSpiderWebAt(position);
@@ -794,9 +813,12 @@ public sealed partial class SimulationWorld
     {
         var index = GetIndex(position);
         var previousCover = _surfaceCovers[index];
-        if (previousCover != cover)
-            InvalidateTransportNetwork();
         _surfaceCovers[index] = cover;
+        if (previousCover != cover)
+        {
+            InvalidateTransportNetwork();
+            TerrainGeometryChanged?.Invoke(position);
+        }
         _surfaceCoverUntilTicks[index] = untilTick;
         if (cover is SurfaceCover.None)
         {
@@ -837,13 +859,20 @@ public sealed partial class SimulationWorld
                 _lakeTileCounts.Clear();
             }
             _surfaceWater[index] = water;
+            TerrainGeometryChanged?.Invoke(position);
             RemoveInvalidApeStructureAt(position);
             RemoveInvalidMegaSpiderWebAt(position);
         }
     }
 
-    internal void SetWaterSurfaceElevation(GridPosition position, float? elevation) =>
-        _waterSurfaceElevations[GetIndex(position)] = elevation ?? float.NaN;
+    internal void SetWaterSurfaceElevation(GridPosition position, float? elevation)
+    {
+        var index = GetIndex(position);
+        var surface = elevation ?? float.NaN;
+        if (_waterSurfaceElevations[index].Equals(surface)) return;
+        _waterSurfaceElevations[index] = surface;
+        TerrainGeometryChanged?.Invoke(position);
+    }
 
     internal void AddRiverConnection(GridPosition position, RiverConnection connection) =>
         _riverConnections[GetIndex(position)] |= connection;
@@ -851,6 +880,8 @@ public sealed partial class SimulationWorld
     internal void ClearFreshwaterForTerrainRebuild(GridPosition position)
     {
         var index = GetIndex(position);
+        var geometryChanged = _surfaceWater[index] is not SurfaceWaterKind.None ||
+            !float.IsNaN(_waterSurfaceElevations[index]);
         if (_surfaceWater[index] is not SurfaceWaterKind.None)
             InvalidateTransportNetwork();
         if (_surfaceWater[index] is SurfaceWaterKind.FreshwaterLake)
@@ -860,6 +891,8 @@ public sealed partial class SimulationWorld
         _surfaceWater[index] = SurfaceWaterKind.None;
         _waterSurfaceElevations[index] = float.NaN;
         _riverConnections[index] = RiverConnection.None;
+        if (geometryChanged)
+            TerrainGeometryChanged?.Invoke(position);
         // The caller validates structures once final coastlines are available.
     }
 
@@ -961,6 +994,7 @@ public sealed partial class SimulationWorld
         Array.Fill(_waterSurfaceElevations, float.NaN);
         Array.Clear(_riverConnections);
         _activeSprings.Clear();
+        TerrainGeometryChanged?.Invoke(null);
     }
 
     internal bool AddWolfDenCharge(GridPosition position)
@@ -1486,6 +1520,9 @@ public sealed partial class SimulationWorld
             _nextMovementTicks[index] += GetCritterMovementIntervalTicks(index) *
                 (isStranded && _species[index] is not CritterSpecies.ToothedWhale
                     ? StrandedMovementIntervalMultiplier : 1);
+            if (TryFeedFromWhaleFall(index))
+                continue;
+
             var prey = isStranded
                 ? TryMoveStranded(index)
                 : _returningWarSailors.ContainsKey(_critterIds[index].Value) && !TryGetApeWar(index, out _)
@@ -3637,30 +3674,33 @@ public sealed partial class SimulationWorld
         CritterSpecies offspringSpecies,
         IReadOnlySet<GridPosition> reservedBirthTiles)
     {
-        var birthDirections = offspringSpecies is CritterSpecies.Fish
+        var prefersWater = offspringSpecies is CritterSpecies.Fish;
+        var birthDirections = prefersWater
             ? MovementDirections
             : CardinalDirections;
         var startDirection = NextInt(birthDirections.Length);
         var parentPosition = _positions[parentIndex];
+        GridPosition? fallback = null;
         for (var offset = 0; offset < birthDirections.Length; offset++)
         {
             var direction = birthDirections[(startDirection + offset) % birthDirections.Length];
-            var candidate = new GridPosition(
-                Mod(parentPosition.X + direction.X, Width),
-                parentPosition.Y + direction.Y);
+            var candidate = OffsetTile(parentPosition, direction);
             if (candidate.Y < 0 || candidate.Y >= Height || reservedBirthTiles.Contains(candidate))
             {
                 continue;
             }
 
             var tileIndex = GetIndex(candidate);
-            if (_occupants[tileIndex] < 0)
-            {
+            if (_occupants[tileIndex] >= 0)
+                continue;
+
+            if (!prefersWater || CanLiveOn(offspringSpecies, tileIndex))
                 return candidate;
-            }
+
+            fallback ??= candidate;
         }
 
-        return null;
+        return fallback;
     }
 
     private long GetFirstMetabolismTick(CritterNutrition nutrition, CritterId id) =>
@@ -3688,9 +3728,7 @@ public sealed partial class SimulationWorld
         for (var offset = 0; offset < MovementDirections.Length; offset++)
         {
             var direction = MovementDirections[(startDirection + offset) % MovementDirections.Length];
-            var candidate = new GridPosition(
-                Mod(current.X + direction.X, Width),
-                current.Y + direction.Y);
+            var candidate = OffsetTile(current, direction);
             if (candidate.Y < 0 || candidate.Y >= Height)
             {
                 continue;
@@ -3749,9 +3787,7 @@ public sealed partial class SimulationWorld
         for (var offset = 0; offset < MovementDirections.Length; offset++)
         {
             var direction = MovementDirections[(startDirection + offset) % MovementDirections.Length];
-            var candidate = new GridPosition(
-                Mod(current.X + direction.X, Width),
-                current.Y + direction.Y);
+            var candidate = OffsetTile(current, direction);
             if (candidate.Y < 0 || candidate.Y >= Height)
             {
                 continue;
@@ -3775,9 +3811,7 @@ public sealed partial class SimulationWorld
         for (var offset = 0; offset < MovementDirections.Length; offset++)
         {
             var direction = MovementDirections[(startDirection + offset) % MovementDirections.Length];
-            var candidate = new GridPosition(
-                Mod(current.X + direction.X, Width),
-                current.Y + direction.Y);
+            var candidate = OffsetTile(current, direction);
             if (candidate.Y < 0 || candidate.Y >= Height ||
                 _occupants[GetIndex(candidate)] >= 0 ||
                 IsLivingApe(species) && _terrain[GetIndex(candidate)] is Terrain.MegaWall)
@@ -3919,9 +3953,7 @@ public sealed partial class SimulationWorld
         for (var offset = 0; offset < MovementDirections.Length; offset++)
         {
             var direction = MovementDirections[(startDirection + offset) % MovementDirections.Length];
-            var candidate = new GridPosition(
-                Mod(current.X + direction.X, Width),
-                current.Y + direction.Y);
+            var candidate = OffsetTile(current, direction);
             if (candidate.Y < 0 || candidate.Y >= Height)
             {
                 continue;
@@ -4025,9 +4057,7 @@ public sealed partial class SimulationWorld
         for (var offset = 0; offset < MovementDirections.Length; offset++)
         {
             var direction = MovementDirections[(startDirection + offset) % MovementDirections.Length];
-            var candidate = new GridPosition(
-                Mod(current.X + direction.X, Width),
-                current.Y + direction.Y);
+            var candidate = OffsetTile(current, direction);
             if (candidate.Y < 0 || candidate.Y >= Height)
             {
                 continue;
@@ -4255,9 +4285,7 @@ public sealed partial class SimulationWorld
         for (var offset = 0; offset < MovementDirections.Length; offset++)
         {
             var direction = MovementDirections[(startDirection + offset) % MovementDirections.Length];
-            var candidate = new GridPosition(
-                Mod(current.X + direction.X, Width),
-                current.Y + direction.Y);
+            var candidate = OffsetTile(current, direction);
             if (candidate.Y < 0 || candidate.Y >= Height ||
                 reservedPrey?.Contains(candidate) is true)
             {
@@ -4325,9 +4353,7 @@ public sealed partial class SimulationWorld
             for (var offset = 0; offset < MovementDirections.Length; offset++)
             {
                 var direction = MovementDirections[(startDirection + offset) % MovementDirections.Length];
-                var candidate = new GridPosition(
-                    Mod(current.X + direction.X, Width),
-                    current.Y + direction.Y);
+                var candidate = OffsetTile(current, direction);
                 if (candidate.Y < 0 || candidate.Y >= Height)
                 {
                     continue;
@@ -4627,9 +4653,7 @@ public sealed partial class SimulationWorld
         for (var offset = 0; offset < MovementDirections.Length; offset++)
         {
             var direction = MovementDirections[(startDirection + offset) % MovementDirections.Length];
-            var companionPosition = new GridPosition(
-                Mod(founderPosition.X + direction.X, Width),
-                founderPosition.Y + direction.Y);
+            var companionPosition = OffsetTile(founderPosition, direction);
             if (companionPosition.Y < 0 || companionPosition.Y >= Height)
             {
                 continue;
@@ -4853,9 +4877,7 @@ public sealed partial class SimulationWorld
         for (var offset = 0; offset < MovementDirections.Length; offset++)
         {
             var direction = MovementDirections[(startDirection + offset) % MovementDirections.Length];
-            var candidate = new GridPosition(
-                Mod(current.X + direction.X, Width),
-                current.Y + direction.Y);
+            var candidate = OffsetTile(current, direction);
             if (candidate.Y < 0 || candidate.Y >= Height)
             {
                 continue;
@@ -5087,7 +5109,7 @@ public sealed partial class SimulationWorld
         for (var offset = 0; offset < MovementDirections.Length; offset++)
         {
             var direction = MovementDirections[(startDirection + offset) % MovementDirections.Length];
-            var candidate = new GridPosition(Mod(current.X + direction.X, Width), current.Y + direction.Y);
+            var candidate = OffsetTile(current, direction);
             if (candidate.Y < 0 || candidate.Y >= Height)
             {
                 continue;
@@ -5127,7 +5149,7 @@ public sealed partial class SimulationWorld
         for (var offset = 0; offset < MovementDirections.Length; offset++)
         {
             var direction = MovementDirections[(startDirection + offset) % MovementDirections.Length];
-            var candidate = new GridPosition(Mod(current.X + direction.X, Width), current.Y + direction.Y);
+            var candidate = OffsetTile(current, direction);
             if (candidate.Y < 0 || candidate.Y >= Height)
             {
                 continue;
@@ -5175,9 +5197,7 @@ public sealed partial class SimulationWorld
             for (var offset = 0; offset < MovementDirections.Length; offset++)
             {
                 var direction = MovementDirections[(startDirection + offset) % MovementDirections.Length];
-                var candidate = new GridPosition(
-                    Mod(current.X + direction.X, Width),
-                    current.Y + direction.Y);
+                var candidate = OffsetTile(current, direction);
                 if (candidate.Y < 0 || candidate.Y >= Height)
                 {
                     continue;
@@ -5244,9 +5264,7 @@ public sealed partial class SimulationWorld
         for (var offset = 0; offset < MovementDirections.Length; offset++)
         {
             var direction = MovementDirections[(startDirection + offset) % MovementDirections.Length];
-            var candidate = new GridPosition(
-                Mod(current.X + direction.X, Width),
-                current.Y + direction.Y);
+            var candidate = OffsetTile(current, direction);
             if (candidate.Y < 0 || candidate.Y >= Height)
             {
                 continue;
@@ -5354,9 +5372,7 @@ public sealed partial class SimulationWorld
         for (var offset = 0; offset < MovementDirections.Length; offset++)
         {
             var direction = MovementDirections[(startDirection + offset) % MovementDirections.Length];
-            var candidate = new GridPosition(
-                Mod(current.X + direction.X, Width),
-                current.Y + direction.Y);
+            var candidate = OffsetTile(current, direction);
             if (candidate.Y < 0 || candidate.Y >= Height)
             {
                 continue;
@@ -5459,9 +5475,7 @@ public sealed partial class SimulationWorld
         for (var offset = 0; offset < MovementDirections.Length; offset++)
         {
             var direction = MovementDirections[(startDirection + offset) % MovementDirections.Length];
-            var candidate = new GridPosition(
-                Mod(current.X + direction.X, Width),
-                current.Y + direction.Y);
+            var candidate = OffsetTile(current, direction);
             if (candidate.Y < 0 || candidate.Y >= Height)
             {
                 continue;
@@ -5501,9 +5515,7 @@ public sealed partial class SimulationWorld
         for (var offset = 0; offset < MovementDirections.Length; offset++)
         {
             var direction = MovementDirections[(startDirection + offset) % MovementDirections.Length];
-            var candidate = new GridPosition(
-                Mod(current.X + direction.X, Width),
-                current.Y + direction.Y);
+            var candidate = OffsetTile(current, direction);
             if (candidate.Y < 0 || candidate.Y >= Height)
             {
                 continue;
@@ -6028,12 +6040,17 @@ public sealed partial class SimulationWorld
             _ => IsHeavyCombatPredator(species) ? 2 : 1,
         };
 
-    private int GetCombatDamage(int critterIndex) =>
-        _species[critterIndex] is CritterSpecies.ApeBomber ? 20 :
-        (IsBarbarianApe(critterIndex)
-            ? GetCombatDamage(CritterSpecies.ApeWarrior) - 1 +
-                (_species[critterIndex] is CritterSpecies.ApeChieftain ? 1 : 0) :
-            GetCombatDamage(_species[critterIndex])) + (IsVeteranWarrior(critterIndex) ? 2 : 0);
+    private int GetCombatDamage(int critterIndex)
+    {
+        var species = _species[critterIndex];
+        var damage = species is CritterSpecies.ApeBomber ? 20 :
+            (IsBarbarianApe(critterIndex)
+                ? GetCombatDamage(CritterSpecies.ApeWarrior) - 1 +
+                    (species is CritterSpecies.ApeChieftain ? 1 : 0)
+                : GetCombatDamage(species)) + (IsVeteranWarrior(critterIndex) ? 2 : 0);
+
+        return IsCaughtInMegaSpiderWeb(critterIndex) ? Math.Max(1, damage - 2) : damage;
+    }
 
     private static bool CanCritterFight(CritterSpecies species) =>
         IsLivingApe(species) || IsPredator(species) || species is CritterSpecies.Custodian or CritterSpecies.BaleenWhale or
@@ -6243,7 +6260,7 @@ public sealed partial class SimulationWorld
         var current = _positions[critterIndex];
         foreach (var direction in CardinalDirections)
         {
-            var candidate = new GridPosition(Mod(current.X + direction.X, Width), current.Y + direction.Y);
+            var candidate = OffsetTile(current, direction);
             if (candidate.Y < 0 || candidate.Y >= Height || reservedPrey?.Contains(candidate) is true)
                 continue;
             var occupant = _occupants[GetIndex(candidate)];
@@ -6256,6 +6273,22 @@ public sealed partial class SimulationWorld
 
     private bool CanFeedFromEnvironment(CritterSpecies species, int tileIndex)
         => FindEnvironmentalFoodTile(species, tileIndex) >= 0;
+
+    private bool TryFeedFromWhaleFall(int critterIndex)
+    {
+        var species = _species[critterIndex];
+        var tileIndex = GetIndex(_positions[critterIndex]);
+        if (!HasWhaleFallNutrition(species, tileIndex) ||
+            _energy[critterIndex] >= CritterNutritions.Get(species).MaximumEnergy ||
+            IsApeFeedingBlocked(critterIndex))
+        {
+            return false;
+        }
+
+        _whaleFallNutrition[tileIndex]--;
+        _energy[critterIndex]++;
+        return true;
+    }
 
     private bool TryFeedFromTerrain(int critterIndex)
     {
@@ -6294,7 +6327,7 @@ public sealed partial class SimulationWorld
             return true;
         }
 
-        if (CanEatWhaleFall(species) && _whaleFallNutrition[foodTile] > 0)
+        if (HasWhaleFallNutrition(species, foodTile))
         {
             _whaleFallNutrition[foodTile]--;
             return true;
@@ -6321,7 +6354,7 @@ public sealed partial class SimulationWorld
     private int FindEnvironmentalFoodTile(CritterSpecies species, int tileIndex)
     {
         // Carcasses are a separate food source from the species' usual foraging terrain.
-        if (CanEatWhaleFall(species) && _whaleFallNutrition[tileIndex] > 0)
+        if (HasWhaleFallNutrition(species, tileIndex))
             return tileIndex;
         if (_terrain[tileIndex] is Terrain.Beach && species is not CritterSpecies.Crab)
             return -1;
@@ -6372,13 +6405,15 @@ public sealed partial class SimulationWorld
         return -1;
     }
 
-    private static bool CanEatWhaleFall(CritterSpecies species) =>
-        species is CritterSpecies.Worm or CritterSpecies.Trilobite or CritterSpecies.Nautilus or
-            CritterSpecies.Fish or CritterSpecies.Crab;
+    private bool HasWhaleFallNutrition(CritterSpecies species, int tileIndex) =>
+        _whaleFallNutrition[tileIndex] > 0 &&
+        species is not (CritterSpecies.Deer or CritterSpecies.Elk or CritterSpecies.MegaSlug or
+            CritterSpecies.Gazelle or CritterSpecies.ToothedWhale or CritterSpecies.Plankton or
+            CritterSpecies.BaleenWhale);
 
     private bool HasDepositedTileNutrition(CritterSpecies species, int tileIndex) =>
         _depositedTileNutrition[tileIndex] > 0 ||
-        (CanEatWhaleFall(species) && _whaleFallNutrition[tileIndex] > 0);
+        HasWhaleFallNutrition(species, tileIndex);
 
     private bool HasNaturalTileNutrition(int tileIndex)
     {
@@ -6658,9 +6693,7 @@ public sealed partial class SimulationWorld
         for (var offset = 0; offset < MovementDirections.Length; offset++)
         {
             var direction = MovementDirections[(startDirection + offset) % MovementDirections.Length];
-            var candidate = new GridPosition(
-                Mod(blockerPosition.X + direction.X, Width),
-                blockerPosition.Y + direction.Y);
+            var candidate = OffsetTile(blockerPosition, direction);
             if (candidate.Y < 0 || candidate.Y >= Height ||
                 reservedPrey?.Contains(candidate) is true)
             {
@@ -6755,9 +6788,7 @@ public sealed partial class SimulationWorld
         for (var offset = 0; offset < MovementDirections.Length; offset++)
         {
             var direction = MovementDirections[(startDirection + offset) % MovementDirections.Length];
-            var candidate = new GridPosition(
-                Mod(planktonPosition.X + direction.X, Width),
-                planktonPosition.Y + direction.Y);
+            var candidate = OffsetTile(planktonPosition, direction);
             if (candidate.Y < 0 || candidate.Y >= Height ||
                 reservedPrey?.Contains(candidate) is true)
             {
@@ -6823,9 +6854,7 @@ public sealed partial class SimulationWorld
         for (var offset = 0; offset < MovementDirections.Length; offset++)
         {
             var direction = MovementDirections[(startDirection + offset) % MovementDirections.Length];
-            var candidate = new GridPosition(
-                Mod(newtPosition.X + direction.X, Width),
-                newtPosition.Y + direction.Y);
+            var candidate = OffsetTile(newtPosition, direction);
             if (candidate.Y < 0 || candidate.Y >= Height ||
                 reservedPrey?.Contains(candidate) is true)
             {
@@ -6889,9 +6918,7 @@ public sealed partial class SimulationWorld
         for (var offset = 0; offset < MovementDirections.Length; offset++)
         {
             var direction = MovementDirections[(startDirection + offset) % MovementDirections.Length];
-            var candidate = new GridPosition(
-                Mod(wormPosition.X + direction.X, Width),
-                wormPosition.Y + direction.Y);
+            var candidate = OffsetTile(wormPosition, direction);
             if (candidate.Y < 0 || candidate.Y >= Height ||
                 reservedPrey?.Contains(candidate) is true)
             {
@@ -6922,9 +6949,8 @@ public sealed partial class SimulationWorld
             var current = firstPosition;
             for (var length = 1; length <= MaximumPlanktonShoveChainLength; length++)
             {
-                var candidate = new GridPosition(
-                    Mod(current.X + direction.X, Width),
-                    current.Y + direction.Y);
+                var candidate = new GridPosition(Mod(current.X + direction.X, Width), current.Y + direction.Y);
+                if (Body == WorldBody.Planetoid && candidate != OffsetTile(current, direction)) break;
                 if (candidate.Y < 0 || candidate.Y >= Height || candidate == moverPosition ||
                     candidate == firstPosition || reservedPrey?.Contains(candidate) is true)
                 {
@@ -6932,6 +6958,11 @@ public sealed partial class SimulationWorld
                 }
 
                 var candidateIndex = GetIndex(candidate);
+                if (_terrain[candidateIndex] is Terrain.MegaWall)
+                {
+                    break;
+                }
+
                 var occupant = _occupants[candidateIndex];
                 if (occupant < 0)
                 {
@@ -7320,6 +7351,10 @@ public sealed partial class SimulationWorld
         return selected is not null && TryAddCritter(CritterSpecies.Plankton, selected.Value);
     }
 
+    private GridPosition OffsetTile(GridPosition position, GridPosition direction) => Body == WorldBody.Planetoid
+        ? PlanetoidLayout.Offset(position, direction.X, direction.Y, PlanetoidLayout.FaceSize(Width))
+        : new GridPosition(Mod(position.X + direction.X, Width), position.Y + direction.Y);
+
     private int GetIndex(GridPosition position)
     {
         if (position.X < 0 || position.X >= Width || position.Y < 0 || position.Y >= Height)
@@ -7396,6 +7431,7 @@ public sealed partial class SimulationWorld
 
     private bool IsFishTile(int tileIndex) =>
         _surfaceCovers[tileIndex] is SurfaceCover.None &&
+        _terrain[tileIndex] is not Terrain.MegaWall &&
         (_terrain[tileIndex] is Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows ||
             _surfaceWater[tileIndex] is SurfaceWaterKind.River or SurfaceWaterKind.FreshwaterLake);
 

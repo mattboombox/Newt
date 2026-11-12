@@ -30,10 +30,15 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
     private static readonly WorldPreset[] MenuSizes =
         [WorldPreset.Micro, WorldPreset.Small, WorldPreset.Standard, WorldPreset.Large, WorldPreset.Huge];
     private static readonly WorldPreset[] RingMenuSizes = [WorldPreset.Ring, WorldPreset.RingLarge, WorldPreset.RingMega];
+    private static readonly WorldPreset[] CylinderMenuSizes =
+        [WorldPreset.ONeillCylinder, WorldPreset.ONeillCylinderLarge, WorldPreset.ONeillCylinderMega];
     private static readonly WorldPreset[] NexusMenuSizes = [WorldPreset.Nexus, WorldPreset.NexusMega];
+    private static readonly WorldPreset[] PlanetoidMenuSizes = [WorldPreset.PlanetoidMicro, WorldPreset.PlanetoidSmall,
+        WorldPreset.PlanetoidStandard, WorldPreset.PlanetoidLarge, WorldPreset.PlanetoidHuge];
+    private static readonly WorldMapShape[] MenuMapShapes = Enum.GetValues<WorldMapShape>();
     private static readonly WorldMapType[] MenuMapTypes =
-        [WorldMapType.Continents, WorldMapType.Pangaea, WorldMapType.Archipelago, WorldMapType.AllOcean,
-            WorldMapType.RingWorld, WorldMapType.Nexus, WorldMapType.Earth, WorldMapType.Moon, WorldMapType.Mars];
+        [WorldMapType.Earth, WorldMapType.Moon, WorldMapType.Mars, WorldMapType.Archipelago,
+            WorldMapType.Continents, WorldMapType.Pangaea, WorldMapType.AllOcean];
     private static readonly double[] SimulationRates = [0.25, 0.5, 1, 2, 4, 8, 16, 32];
     private static readonly ToolCategory[] ToolCategoryOrder =
         [ToolCategory.WorldTools, ToolCategory.TerrainTools, ToolCategory.CritterTools,
@@ -78,11 +83,12 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         "G  toggle auto speed",
         "V  2D > 3D free > first person > 2D",
         "F  1st <-> 3rd (random ghost on 3rd)",
-        "L  3D render distance: Max > Medium > Low",
+        "L  3D render distance: Full / 3/4 / 1/2 / 1/4",
         "1st/3rd: WASD walk; Shift move faster",
         "1st/3rd: mouse or arrows look around",
         "Arrows: Left/Right turn; Up/Down look",
-        "1st/3rd: Space swim up; Left Ctrl sink faster",
+        "1st/3rd: Space fly/swim up; Ctrl descend faster",
+        "1st/3rd: Shift + Space/Ctrl boosts ascent/descent",
         "1st/3rd: V to 2D; wheel ignored",
         "2D: WASD / arrows pan; wheel zoom",
         "Free 3D: WASD move; arrows rotate",
@@ -102,6 +108,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
     private SimulationWorld _world = null!;
     private WorldPreset _preset = WorldPreset.Standard;
     private WorldMapType _mapType = MenuMapTypes[Random.Shared.Next(MenuMapTypes.Length)];
+    private WorldMapShape _mapShape = MenuMapShapes[Random.Shared.Next(MenuMapShapes.Length)];
     private ulong _seed = CreateRandomSeed();
     private string _seedText;
     private SpriteBatch? _spriteBatch;
@@ -176,6 +183,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
     private int _menuSizeIndex = 2;
     private int _menuRingSizeIndex;
     private int _menuMapTypeIndex;
+    private int _menuMapShapeIndex;
     private CritterId _inspectedCritterId;
     private int _populationWindowMode;
     private readonly List<int> _combinedApeHistory = [];
@@ -189,10 +197,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
 
     public NewtGame()
     {
-        if (_mapType is WorldMapType.RingWorld)
-            _preset = WorldPreset.Ring;
-        else if (_mapType is WorldMapType.Nexus)
-            _preset = WorldPreset.Nexus;
+        _preset = GetSetupPreset(_mapShape);
         _seedText = _seed.ToString(CultureInfo.InvariantCulture);
         _graphics = new GraphicsDeviceManager(this)
         {
@@ -210,7 +215,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
     private int TileSize => _drawing3DAtlas ? 32 : ZoomLevels[_zoomIndex];
 
     private int MapOffsetX => _drawing3DAtlas ? 0 : Math.Max(0,
-        (GraphicsDevice.Viewport.Width - _world.Width * TileSize) / 2);
+        (GraphicsDevice.Viewport.Width - MapWidth2D * TileSize) / 2);
 
     private int MapOffsetY => _drawing3DAtlas ? 0 : Math.Max(0,
         (MapViewportHeight - _world.Height * TileSize) / 2);
@@ -326,7 +331,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             HandleWorldShortcuts(keyboard, mouse);
             if (WasPressed(keyboard, Keys.V)) CycleViewMode();
             if (WasPressed(keyboard, Keys.F)) TogglePlayerPerspective();
-            if (_view3D && WasPressed(keyboard, Keys.L)) _renderDistanceLevel3D = (_renderDistanceLevel3D + 1) % 3;
+            if (_view3D && WasPressed(keyboard, Keys.L)) CycleRenderDistance3D();
             if (_view3D) HandleCamera3D(keyboard, mouse, (float)gameTime.ElapsedGameTime.TotalSeconds);
             else HandleCamera(keyboard, mouse);
             HandleActiveTool(mouse, gameTime.ElapsedGameTime.TotalSeconds);
@@ -386,7 +391,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         }
 
         var visibleColumns = MapOffsetX > 0
-            ? _world.Width
+            ? MapWidth2D
             : GraphicsDevice.Viewport.Width / TileSize + 2;
         var visibleRows = MapOffsetY > 0
             ? _world.Height
@@ -405,8 +410,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
                 var worldX = _cameraX + screenX;
                 if (_world.Body is WorldBody.Nexus && worldX >= _world.Width)
                     break;
-                worldX %= _world.Width;
-                var position = new GridPosition(worldX, worldY);
+                var position = MapTile2D(worldX, worldY);
                 if (_world.Body is WorldBody.Nexus && !NexusLayout.Contains(_world, position))
                     continue;
                 var terrain = _world.GetTerrain(position);
@@ -437,7 +441,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         {
             var x = _cameraX + screenX;
             if (_world.Body == WorldBody.Nexus && x >= _world.Width) break;
-            var position = new GridPosition(Mod(x, _world.Width), _cameraY + screenY);
+            var position = MapTile2D(x, _cameraY + screenY);
             if (_world.Body == WorldBody.Nexus && !NexusLayout.Contains(_world, position)) continue;
             if (!IsIce3D(position)) continue;
             var ice = GetTerrainColor(Terrain.Ice, _world.GetBiome(position),
@@ -482,8 +486,9 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
                 ThreeDGeometry.StandsOnIce(CritterHabitats.GetHabitat(critter.Species));
             if (standsOnIce != aboveIce) continue;
             if (_world.Body == WorldBody.Nexus && !NexusLayout.Contains(_world, critter.Position)) continue;
-            var screenX = WrappedScreenX(critter.Position.X);
-            var screenY = critter.Position.Y - _cameraY;
+            var location = MapLocation2D(critter.Position);
+            var screenX = WrappedScreenX(location.X);
+            var screenY = location.Y - _cameraY;
             if (screenX < 0 || screenX >= visibleColumns || screenY < 0 || screenY >= visibleRows)
             {
                 continue;
@@ -935,14 +940,14 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         else if (WasPressed(keyboard, Keys.M))
         {
             _menuMapTypeIndex = Array.IndexOf(MenuMapTypes, _mapType);
-            if (_menuMapTypeIndex < 0)
-            {
-                _menuMapTypeIndex = 0;
-            }
+            _menuMapShapeIndex = Array.IndexOf(MenuMapShapes, _mapShape);
             var currentSize = _preset == WorldPreset.Earth ? WorldPreset.Huge : _preset;
-            var ringSizeIndex = Array.IndexOf(_mapType is WorldMapType.Nexus ? NexusMenuSizes : RingMenuSizes, _preset);
-            if (ringSizeIndex >= 0)
-                _menuRingSizeIndex = ringSizeIndex;
+            if (GetSpecialMenuSizes(_mapShape) is { } sizes)
+            {
+                var ringSizeIndex = Array.IndexOf(sizes, _preset);
+                if (ringSizeIndex >= 0)
+                    _menuRingSizeIndex = ringSizeIndex;
+            }
             var sizeIndex = Array.IndexOf(MenuSizes, currentSize);
             if (sizeIndex >= 0)
             {
@@ -1474,6 +1479,9 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
 
         var zoomDirection = Math.Sign(mouse.ScrollWheelValue - _previousMouse.ScrollWheelValue);
         var anchor = zoomDirection == 0 ? null : ScreenToWorld(mouse.X, mouse.Y);
+        if (anchor is not null && IsPlanetoid3D)
+            anchor = new GridPosition(_cameraX + FloorDiv(mouse.X - MapOffsetX, TileSize),
+                _cameraY + (mouse.Y - MapOffsetY) / TileSize);
         var previousZoomIndex = _zoomIndex;
         if (zoomDirection > 0)
         {
@@ -1508,9 +1516,10 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             return;
         }
 
-        _cameraX = ConstrainCameraX((int)MathF.Round(_focus3D.X -
+        var location = MapLocation2D(tile);
+        _cameraX = ConstrainCameraX((int)MathF.Round(location.X + 0.5f -
             (GraphicsDevice.Viewport.Width / 2f - MapOffsetX) / TileSize));
-        _cameraY = Math.Clamp((int)MathF.Round(_focus3D.Y -
+        _cameraY = Math.Clamp((int)MathF.Round(location.Y + 0.5f -
             (MapViewportHeight / 2f - MapOffsetY) / TileSize),
             0, Math.Max(0, _world.Height - MapViewportHeight / TileSize));
     }
@@ -1535,9 +1544,10 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         }
         var visibleColumns = Math.Max(1, GraphicsDevice.Viewport.Width / TileSize);
         var visibleRows = Math.Max(1, MapViewportHeight / TileSize);
-        _cameraX = ConstrainCameraX(critter.Position.X - visibleColumns / 2);
+        var location = MapLocation2D(critter.Position);
+        _cameraX = ConstrainCameraX(location.X - visibleColumns / 2);
         _cameraY = Math.Clamp(
-            critter.Position.Y - visibleRows / 2,
+            location.Y - visibleRows / 2,
             0,
             Math.Max(0, _world.Height - visibleRows));
     }
@@ -1548,7 +1558,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
 
     private int ConstrainCameraX(int x) => _world.Body is WorldBody.Nexus
         ? Math.Clamp(x, 0, Math.Max(0, _world.Width - Math.Max(1, GraphicsDevice.Viewport.Width / TileSize)))
-        : Mod(x, _world.Width);
+        : Mod(x, MapWidth2D);
 
     private void DrawHud()
     {
@@ -1572,9 +1582,12 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         DrawHudDivider(critterX, hudY);
         DrawHudDivider(buildingX, hudY);
 
+        var distanceLevels = ThreeDGeometry.RenderDistanceLevels;
+        var worldName = $"{GetMapShapeName(_mapShape)} / {GetWorldSizeName(_preset)} / {GetMapTypeName(_mapType)}";
+        var worldSize = $"{_world.Width} x {_world.Height}";
         DrawHudLines(HudPadding, hudY + 8,
-            "WORLD",
-            $"{GetMapTypeName(_mapType)} / {_preset.Name}  {_world.Width} x {_world.Height}",
+            worldName,
+            _view3D ? $"{worldSize}  RD {distanceLevels - RenderDistanceLevel3D}/{distanceLevels}" : worldSize,
             $"Seed {_seed}   Tick {_world.Tick}   Year {_world.Year}   {GetSimulationRateText()}",
             _world.HasOceans
                 ? $"Sea {_world.SeaLevel:+0.00;-0.00;0.00}   Seeds {1 + _world.AdditionalOceanSeeds.Count}   Primary ({_world.OceanSeed.X}, {_world.OceanSeed.Y})"
@@ -1887,7 +1900,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         }
     }
 
-    private string GetWorldSeasonLine() => _world.Body is WorldBody.RingWorld or WorldBody.Nexus
+    private string GetWorldSeasonLine() => _world.IsRingHabitat || _world.Body is WorldBody.Nexus
         ? "Engineered climate zones"
         : _world.SeasonsEnabled
         ? $"Seasons N {SeasonSystem.GetSeason(_world, new GridPosition(0, 0))} / S {SeasonSystem.GetSeason(_world, new GridPosition(0, _world.Height - 1))}"
@@ -1912,8 +1925,16 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
 
         for (var index = 0; index < lines.Length; index++)
         {
-            var color = index == 0 ? new Color(126, 190, 213) : new Color(220, 225, 228);
-            _spriteBatch.DrawString(_hudFont, lines[index], new Vector2(x, y + index * 17), color);
+            var position = new Vector2(x, y + index * 17);
+            if (index == 0)
+            {
+                var availableWidth = Math.Max(1, GraphicsDevice.Viewport.Width / 5 - HudPadding * 2);
+                var scale = Math.Min(1f, availableWidth / Math.Max(1f, _hudFont.MeasureString(lines[index]).X));
+                _spriteBatch.DrawString(_hudFont, lines[index], position, new Color(126, 190, 213),
+                    0f, Vector2.Zero, scale, SpriteEffects.None, 0f);
+            }
+            else
+                _spriteBatch.DrawString(_hudFont, lines[index], position, new Color(220, 225, 228));
         }
     }
 
@@ -2352,7 +2373,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         var mapX = screenX - MapOffsetX;
         var mapY = screenY - MapOffsetY;
         if (mapY < 0 || mapY >= _world.Height * TileSize ||
-            (MapOffsetX > 0 && (mapX < 0 || mapX >= _world.Width * TileSize)))
+            (MapOffsetX > 0 && (mapX < 0 || mapX >= MapWidth2D * TileSize)))
         {
             return null;
         }
@@ -2366,7 +2387,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         var x = _cameraX + FloorDiv(mapX, TileSize);
         if (_world.Body is WorldBody.Nexus && (x < 0 || x >= _world.Width))
             return null;
-        var position = new GridPosition(Mod(x, _world.Width), y);
+        var position = MapTile2D(x, y);
         return _world.Body is WorldBody.Nexus && !NexusLayout.Contains(_world, position) ? null : position;
     }
 
@@ -2376,9 +2397,12 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         ResetSpeedGuard();
         _warAttacker = null; _warAttackerLich = null;
         _warToolStatus = "L select attacker / village at war: stop";
-        _world = WorldGenerator.Generate(new WorldGenerationOptions(_preset, _seed, MapType: _mapType));
+        ReleaseTerrainChunks3D();
+        _megaCylinderRenderDistanceLevel3D = 0;
+        _megaCylinderFirstPersonDistanceLevel3D = 1;
+        _world = WorldGenerator.Generate(new WorldGenerationOptions(_preset, _seed, MapType: _mapType, Shape: _mapShape));
         _focus3D = new Vector2(_world.Width / 2f, _world.Height / 2f);
-        if (IsWalkingCamera) _firstPersonEyeHeight = InitialFirstPersonEyeHeight(_focus3D);
+        if (IsWalkingCamera) PlacePlayerOnMap3D();
         _cameraX = 0;
         _cameraY = 0;
         _inspectedCritterId = default;
@@ -2405,12 +2429,12 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         }
         if (WasPressed(keyboard, Keys.Up) || WasPressed(keyboard, Keys.W))
         {
-            _setupRow = Mod(_setupRow - 1, 4);
+            _setupRow = Mod(_setupRow - 1, 5);
             FinishSeedTyping();
         }
         else if (WasPressed(keyboard, Keys.Down) || WasPressed(keyboard, Keys.S))
         {
-            _setupRow = Mod(_setupRow + 1, 4);
+            _setupRow = Mod(_setupRow + 1, 5);
             FinishSeedTyping();
         }
 
@@ -2420,41 +2444,52 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         {
             if (_setupRow == 0)
             {
-                _menuMapTypeIndex = Mod(_menuMapTypeIndex + direction, MenuMapTypes.Length);
-                if (MenuMapTypes[_menuMapTypeIndex] == WorldMapType.Nexus)
-                    _menuRingSizeIndex = Math.Min(_menuRingSizeIndex, NexusMenuSizes.Length - 1);
+                _menuMapShapeIndex = Mod(_menuMapShapeIndex + direction, MenuMapShapes.Length);
+                if (GetSpecialMenuSizes(MenuMapShapes[_menuMapShapeIndex]) is { } sizes)
+                    _menuRingSizeIndex = Math.Min(_menuRingSizeIndex, sizes.Length - 1);
             }
             else if (_setupRow == 1)
+                _menuMapTypeIndex = Mod(_menuMapTypeIndex + direction, MenuMapTypes.Length);
+            else if (_setupRow == 2)
             {
-                if (MenuMapTypes[_menuMapTypeIndex] == WorldMapType.Nexus)
-                    _menuRingSizeIndex = Mod(_menuRingSizeIndex + direction, NexusMenuSizes.Length);
-                else if (MenuMapTypes[_menuMapTypeIndex] == WorldMapType.RingWorld)
-                    _menuRingSizeIndex = Mod(_menuRingSizeIndex + direction, RingMenuSizes.Length);
+                if (GetSpecialMenuSizes(MenuMapShapes[_menuMapShapeIndex]) is { } sizes)
+                    _menuRingSizeIndex = Mod(_menuRingSizeIndex + direction, sizes.Length);
                 else
                     _menuSizeIndex = Mod(_menuSizeIndex + direction, MenuSizes.Length);
             }
-            else if (_setupRow == 2)
+            else if (_setupRow == 3)
             {
                 _seed = direction > 0 ? _seed + 1 : _seed == 0 ? ulong.MaxValue : _seed - 1;
                 FinishSeedTyping();
             }
         }
 
-        if (_setupRow == 2)
+        if (_setupRow == 3)
         {
             HandleSeedTyping(keyboard);
         }
 
-        if (WasPressed(keyboard, Keys.Enter) || (_setupRow == 3 && WasPressed(keyboard, Keys.Space)))
+        if (WasPressed(keyboard, Keys.Enter) || (_setupRow == 4 && WasPressed(keyboard, Keys.Space)))
         {
             _mapType = MenuMapTypes[_menuMapTypeIndex];
-            _preset = _mapType is WorldMapType.RingWorld
-                ? RingMenuSizes[_menuRingSizeIndex]
-                : _mapType is WorldMapType.Nexus ? NexusMenuSizes[_menuRingSizeIndex] : MenuSizes[_menuSizeIndex];
+            _mapShape = MenuMapShapes[_menuMapShapeIndex];
+            _preset = GetSetupPreset(_mapShape);
             GenerateWorld();
             _setupMenuOpen = false;
         }
     }
+
+    private static WorldPreset[]? GetSpecialMenuSizes(WorldMapShape shape) => shape switch
+    {
+        WorldMapShape.RingWorld => RingMenuSizes,
+        WorldMapShape.ONeillCylinder => CylinderMenuSizes,
+        WorldMapShape.Nexus => NexusMenuSizes,
+        WorldMapShape.Planetoid => PlanetoidMenuSizes,
+        _ => null,
+    };
+
+    private WorldPreset GetSetupPreset(WorldMapShape shape) => GetSpecialMenuSizes(shape) is { } sizes
+        ? sizes[_menuRingSizeIndex] : MenuSizes[_menuSizeIndex];
 
     private void DrawSetupMenu()
     {
@@ -2464,7 +2499,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         }
 
         var panelWidth = 520;
-        var panelHeight = 250;
+        var panelHeight = 284;
         var left = (GraphicsDevice.Viewport.Width - panelWidth) / 2;
         var top = (MapViewportHeight - panelHeight) / 2;
         _spriteBatch.Draw(_pixel, new Rectangle(left, top, panelWidth, panelHeight), new Color(12, 16, 20, 245));
@@ -2472,15 +2507,15 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         _spriteBatch.DrawString(_hudFont, "NEW WORLD", new Vector2(left + 24, top + 20), new Color(126, 190, 213));
 
         var type = MenuMapTypes[_menuMapTypeIndex];
-        var selectedSize = type is WorldMapType.RingWorld
-            ? RingMenuSizes[_menuRingSizeIndex]
-            : type is WorldMapType.Nexus ? NexusMenuSizes[_menuRingSizeIndex] : MenuSizes[_menuSizeIndex];
-        var sizeName = selectedSize == WorldPreset.Ring || selectedSize == WorldPreset.Nexus ? "Standard" : selectedSize.Name;
+        var shape = MenuMapShapes[_menuMapShapeIndex];
+        var selectedSize = GetSetupPreset(shape);
+        var sizeName = GetWorldSizeName(selectedSize);
         var sizeText = $"{sizeName}  {selectedSize.Width} x {selectedSize.Height}";
         string[] rows =
         [
-            $"Map Shape       <  {GetMapTypeName(type)}  >",
-            $"World Size      <  {sizeText}  >",
+            $"Map Shape       <  {GetMapShapeName(shape)}  >",
+            $"Map Type        <  {GetMapTypeName(type)}  >",
+            $"Map Size        <  {sizeText}  >",
             $"Seed            <  {(_seedText.Length == 0 ? "_" : _seedText)}  >",
             "Generate World",
         ];
@@ -2490,7 +2525,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             var prefix = row == _setupRow ? "> " : "  ";
             _spriteBatch.DrawString(_hudFont, prefix + rows[row], new Vector2(left + 24, top + 62 + row * 34), color);
         }
-        var help = _setupRow == 2
+        var help = _setupRow == 3
             ? "Type digits to replace seed   Backspace edits   Enter generate"
             : "Arrows or WASD navigate   Enter generate   M/Esc close";
         _spriteBatch.DrawString(_hudFont, help,
@@ -2562,10 +2597,23 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         return seed;
     }
 
+    private static string GetWorldSizeName(WorldPreset preset)
+    {
+        if (preset == WorldPreset.Ring || preset == WorldPreset.Nexus)
+            return WorldPreset.Standard.Name;
+        return preset == WorldPreset.Earth ? WorldPreset.Huge.Name : preset.Name;
+    }
+
+    private static string GetMapShapeName(WorldMapShape shape) => shape switch
+    {
+        WorldMapShape.RingWorld => "Ring World",
+        WorldMapShape.ONeillCylinder => "O'Neill Cylinder",
+        _ => shape.ToString(),
+    };
+
     private static string GetMapTypeName(WorldMapType type) => type switch
     {
-        WorldMapType.RingWorld => "Ring World",
-        WorldMapType.Nexus => "Nexus",
+        WorldMapType.Pangaea => "Pangea",
         WorldMapType.AllOcean => "Water World",
         _ => type.ToString(),
     };
@@ -2575,7 +2623,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
     private int WrappedScreenX(int worldX)
     {
         var difference = _world.Body is WorldBody.Nexus
-            ? worldX - _cameraX : Mod(worldX - _cameraX, _world.Width);
+            ? worldX - _cameraX : Mod(worldX - _cameraX, MapWidth2D);
         return difference;
     }
 
@@ -3216,7 +3264,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             $"L +0.5%; R -0.5%   {_world.EvolutionChancePercent:0.0}%",
         WorldTool.Sentience => $"L on; R off   {(_world.SentienceEnabled ? "On" : "Off")}",
         WorldTool.DayNightCycle => $"L on; R off   {(_dayNightCycleEnabled ? "On" : "Off")} (3D, 2 years)",
-        WorldTool.Seasons => _world.Body is WorldBody.RingWorld or WorldBody.Nexus
+        WorldTool.Seasons => _world.IsRingHabitat || _world.Body is WorldBody.Nexus
             ? "Fixed climate"
             : "L on; R off",
         WorldTool.Life => _world.LifeEnabled

@@ -13,6 +13,7 @@ public static class NexusLayout
 
     public static GridPosition Center(SimulationWorld world) => new(world.Width / 2, world.Height / 2);
     public static float Radius(SimulationWorld world) => Math.Min(world.Width, world.Height) * 0.46f;
+    public static GridPosition HubPortal(SimulationWorld world) => ArmPosition(world, 0, 0.25f);
 
     public static GridPosition ArmPosition(SimulationWorld world, int arm, float distance = 0.72f)
     {
@@ -28,9 +29,14 @@ public static class NexusLayout
         var center = Center(world);
         var dx = position.X - center.X;
         var dy = position.Y - center.Y;
+        var distanceSquared = dx * dx + dy * dy;
+        var radius = Radius(world);
+        var holeRadius = radius * 0.18f;
+        if (distanceSquared < holeRadius * holeRadius) return false;
+
         var angle = MathF.Atan2(dy, dx) + MathF.PI / 2;
-        var edge = Radius(world) * (0.68f + 0.32f * MathF.Cos(ArmCount * angle));
-        return dx * dx + dy * dy <= edge * edge;
+        var edge = radius * (0.68f + 0.32f * MathF.Cos(ArmCount * angle));
+        return distanceSquared <= edge * edge;
     }
 
     internal static bool IsWall(SimulationWorld world, GridPosition position)

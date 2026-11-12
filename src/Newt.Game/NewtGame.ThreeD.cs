@@ -8,7 +8,9 @@ namespace Newt.Game;
 public sealed partial class NewtGame
 {
     private bool _view3D = true;
-    private int _renderDistanceLevel3D; // Max, medium, low; shared by all 3D camera modes.
+    private int _renderDistanceLevel3D; // Four distance levels, shared by the regular 3D camera modes.
+    private int _megaCylinderRenderDistanceLevel3D;
+    private int _megaCylinderFirstPersonDistanceLevel3D = 1;
     private bool _drawing3DAtlas;
     // Tint submerged objects while blending unchanged water tiles back to their 2D palette.
     private const int WaterSurfaceTintAlpha3D = 64;
@@ -56,8 +58,9 @@ public sealed partial class NewtGame
     {
         var sun = ThreeDGeometry.SunDirection(_dayNightCycleEnabled ? SkyPhase3D() : 0.14f);
         // Cross the ring's width from north to south rather than following its circumference.
-        var sunriseDirection = IsRing3D ? -Vector3.UnitZ : Vector3.UnitX;
-        var direction = sunriseDirection * sun.X + SurfaceUp3D(_focus3D.X) * sun.Y;
+        var (east, up, south) = SurfaceFrame3D(_focus3D.X, _focus3D.Y);
+        var sunriseDirection = IsRing3D ? -south : east;
+        var direction = sunriseDirection * sun.X + up * sun.Y;
         // A direction (w = 0) keeps the sun infinitely distant as the camera moves.
         var clip = Vector4.Transform(new Vector4(direction, 0), view * projection);
         if (clip.W <= 0) return;
@@ -90,6 +93,7 @@ public sealed partial class NewtGame
     private const int AtlasCapacity3D = AtlasColumns3D * AtlasColumns3D;
     private float MaximumDistance3D => IsRing3D
         ? Math.Max(6, RingGeometry.Radius(_world.Width) - 15)
+        : IsPlanetoid3D ? Math.Max(28, PlanetoidGeometry.Radius(_world.Width) * 3)
         : ThreeDGeometry.MaximumZoomDistance(MapViewportHeight, ZoomLevels[0]);
 
     private void CycleViewMode()
@@ -117,7 +121,14 @@ public sealed partial class NewtGame
             _focus3D = new Vector2(
                 _cameraX + (GraphicsDevice.Viewport.Width / 2f - MapOffsetX) / TileSize,
                 _cameraY + (MapViewportHeight / 2f - MapOffsetY) / TileSize);
-            _distance3D = Math.Clamp(ThreeDGeometry.OverheadDistance(MapViewportHeight, TileSize),
+            if (IsPlanetoid3D)
+            {
+                var tile = MapTile2D((int)_focus3D.X, Math.Clamp((int)_focus3D.Y, 0, _world.Height - 1));
+                _focus3D = new Vector2(tile.X + 0.5f, tile.Y + 0.5f);
+            }
+            var distance = IsPlanetoid3D ? PlanetoidGeometry.Radius(_world.Width) * 2
+                : ThreeDGeometry.OverheadDistance(MapViewportHeight, TileSize);
+            _distance3D = Math.Clamp(distance,
                 6, MaximumDistance3D);
             WrapCamera3D();
         }
@@ -139,7 +150,7 @@ public sealed partial class NewtGame
 
     private void Match2DCameraTo3D()
     {
-        if (IsRing3D) { Match2DCameraToRing3D(); return; }
+        if (HasCurvedSurface3D) { Match2DCameraToCurved3D(); return; }
         var (view, projection) = Matrices3D();
         var viewport = Viewport3D();
         var centerX = viewport.Width / 2;
@@ -199,7 +210,7 @@ public sealed partial class NewtGame
         if (keyboard.IsKeyDown(Keys.D)) movement += right;
         if (movement.LengthSquared() > 0) movement.Normalize();
         var speed = keyboard.IsKeyDown(Keys.LeftShift) || keyboard.IsKeyDown(Keys.RightShift) ? 2.5f : 1;
-        _focus3D += movement * seconds * _distance3D * 0.65f * speed;
+        MoveCameraOnMap3D(movement * seconds * _distance3D * 0.65f * speed);
         _distance3D = Math.Clamp(_distance3D * MathF.Pow(0.85f,
             (mouse.ScrollWheelValue - _previousMouse.ScrollWheelValue) / 120f), 6, MaximumDistance3D);
         WrapCamera3D();
@@ -211,7 +222,20 @@ public sealed partial class NewtGame
         _focus3D.X = _world.Body == WorldBody.Nexus
             ? Math.Clamp(_focus3D.X, 0, _world.Width - 1)
             : ThreeDGeometry.WrapCamera(_focus3D.X, _world.Width);
-        _focus3D.Y = Math.Clamp(_focus3D.Y, 0, _world.Height - 1);
+        _focus3D.Y = IsPlanetoid3D ? Math.Clamp(_focus3D.Y, 0, _world.Height - 0.001f)
+            : Math.Clamp(_focus3D.Y, 0, _world.Height - 1);
+    }
+
+    private void MoveCameraOnMap3D(Vector2 step)
+    {
+        if (!IsPlanetoid3D)
+        {
+            _focus3D += step;
+            return;
+        }
+        var (atlas, yaw) = PlanetoidGeometry.Move(new(_focus3D.X, _focus3D.Y), new(step.X, step.Y), _yaw3D, _world.Width);
+        _focus3D = new Vector2(atlas.X, atlas.Y);
+        _yaw3D = yaw;
     }
 
     private Vector3 EyeOffset3D()
@@ -223,32 +247,57 @@ public sealed partial class NewtGame
             MathF.Cos(_yaw3D) * MathF.Cos(orbitPitch) * _distance3D);
     }
 
-    private Vector3 CameraLookDirection3D(Vector3 east, Vector3 up)
+    private Vector3 CameraLookDirection3D(Vector3 east, Vector3 up, Vector3 south)
     {
         var local = ThreeDGeometry.LookDirection(_yaw3D, _pitch3D);
-        return east * local.X + up * local.Y + Vector3.UnitZ * local.Z;
+        return east * local.X + up * local.Y + south * local.Z;
     }
 
     private Viewport Viewport3D() => new(0, 0, GraphicsDevice.Viewport.Width, MapViewportHeight);
 
-    private float RenderDistance3D(float maximum, float cameraDistance = 0) =>
-        ThreeDGeometry.RenderDistance(maximum, _renderDistanceLevel3D, cameraDistance);
+    private int RenderDistanceLevel3D => !IsMegaCylinder3D ? _renderDistanceLevel3D :
+        _playerView is PlayerView.FirstPerson ? _megaCylinderFirstPersonDistanceLevel3D :
+        _megaCylinderRenderDistanceLevel3D;
+
+    private float RenderDistance3D(float minimumRange, float cameraDistance = 0) =>
+        ThreeDGeometry.WorldRenderDistance(_world, minimumRange, RenderDistanceLevel3D, cameraDistance);
+
+    private void CycleRenderDistance3D()
+    {
+        var next = (RenderDistanceLevel3D + 1) % ThreeDGeometry.RenderDistanceLevels;
+        if (!IsMegaCylinder3D)
+            _renderDistanceLevel3D = next;
+        else if (_playerView is PlayerView.FirstPerson)
+            _megaCylinderFirstPersonDistanceLevel3D = next;
+        else
+            _megaCylinderRenderDistanceLevel3D = next;
+    }
 
     private (Matrix View, Matrix Projection) Matrices3D()
     {
         if (IsWalkingCamera) return FirstPersonMatrices3D();
-        if (IsRing3D) return RingMatrices3D();
+        if (IsRing3D || IsPlanetoid3D) return CurvedOrbitMatrices3D();
         var tile = MapTile3D((int)_focus3D.X, (int)_focus3D.Y);
-        var target = new Vector3(_focus3D.X, Math.Max(4.5f, TileHeight3D(tile)), _focus3D.Y);
+        var targetHeight = ContainsTile3D((int)_focus3D.X, (int)_focus3D.Y)
+            ? Math.Max(4.5f, TileHeight3D(tile)) : 4.5f;
+        var target = WorldPoint3D(new Vector3(_focus3D.X, targetHeight, _focus3D.Y));
         var eye = target + EyeOffset3D();
-        var eyeTile = MapTile3D((int)MathF.Floor(eye.X), (int)MathF.Floor(eye.Z));
-        eye.Y = Math.Max(eye.Y, TileHeight3D(eyeTile) + 1.5f);
-        if (_pitch3D < 0.25f) target = eye + CameraLookDirection3D(Vector3.UnitX, Vector3.Up) * _distance3D;
+        var localEye = LocalPoint3D(eye);
+        var eyeX = (int)MathF.Floor(localEye.X);
+        var eyeY = (int)MathF.Floor(localEye.Z);
+        if (_world.Body is not WorldBody.Nexus || ContainsTile3D(eyeX, eyeY))
+        {
+            localEye.Y = Math.Max(localEye.Y, TileHeight3D(MapTile3D(eyeX, eyeY)) + 1.5f);
+            eye = WorldPoint3D(localEye);
+        }
+        var cameraDistance = Vector3.Distance(eye, target);
+        if (_pitch3D < 0.25f) target = eye + CameraLookDirection3D(Vector3.UnitX, Vector3.Up, Vector3.UnitZ) * _distance3D;
         var cameraUp = new Vector3(-MathF.Sin(_yaw3D) * MathF.Sin(_pitch3D),
             MathF.Cos(_pitch3D), -MathF.Cos(_yaw3D) * MathF.Sin(_pitch3D));
+        var far = ThreeDGeometry.FarClipDistance(_distance3D);
         return (Matrix.CreateLookAt(eye, target, cameraUp),
             Matrix.CreatePerspectiveFieldOfView(MathHelper.PiOver4, Viewport3D().AspectRatio, 0.1f,
-                RenderDistance3D(ThreeDGeometry.FarClipDistance(_distance3D), Vector3.Distance(eye, target))));
+                RenderDistance3D(far, cameraDistance)));
     }
 
     private float TileHeight3D(GridPosition tile) =>
@@ -297,36 +346,45 @@ public sealed partial class NewtGame
         var ray = new Ray(near, Vector3.Normalize(far - near));
         GridPosition? picked = null;
         var nearest = float.MaxValue;
-        var bounds = VisibleBounds3D();
-        for (var ty = bounds.Top; ty < bounds.Bottom; ty++)
-        for (var tx = bounds.Left; tx < bounds.Right; tx++)
+        EnsureTerrainChunks3D();
+        var visibleTiles = VisibleBounds3D(new BoundingFrustum(view * projection));
+        foreach (var chunk in GetChunkViews3D(visibleTiles))
+            if (ray.Intersects(chunk.Bounds) is { } entry && entry < nearest)
+                PickWithin(chunk.Tiles);
+        return picked;
+
+        void PickWithin(Rectangle bounds)
         {
-            if (!ContainsTile3D(tx, ty)) continue;
-            var tile = MapTile3D(tx, ty);
-            var height = IsIce3D(tile) && WaterElevation3D(tile) is { } surface
-                ? ThreeDGeometry.ColumnHeight(surface) + 0.035f : TileHeight3D(tile);
-            var distance = IsRing3D ? RingColumnHit3D(ray, tx, ty, height)
-                : ThreeDGeometry.IntersectColumn(ray.Position.X, ray.Position.Y, ray.Position.Z,
-                    ray.Direction.X, ray.Direction.Y, ray.Direction.Z, tx, ty, height);
-            if (distance is { } hit && hit < nearest)
+            for (var ty = bounds.Top; ty < bounds.Bottom; ty++)
+            for (var tx = bounds.Left; tx < bounds.Right; tx++)
             {
-                var projected = viewport.Project(ray.Position + ray.Direction * hit, projection, view, Matrix.Identity);
-                if (projected.Z >= 0 && projected.Z <= 1) { nearest = hit; picked = tile; }
+                if (!ContainsTile3D(tx, ty)) continue;
+                var tile = MapTile3D(tx, ty);
+                var height = IsIce3D(tile) && WaterElevation3D(tile) is { } surface
+                    ? ThreeDGeometry.ColumnHeight(surface) + 0.035f : TileHeight3D(tile);
+                var distance = HasCurvedSurface3D ? CurvedColumnHit3D(ray, tx, ty, height)
+                    : ThreeDGeometry.IntersectColumn(ray.Position.X, ray.Position.Y, ray.Position.Z,
+                        ray.Direction.X, ray.Direction.Y, ray.Direction.Z, tx, ty, height);
+                if (distance is { } hit && hit < nearest)
+                {
+                    var projected = viewport.Project(ray.Position + ray.Direction * hit, projection, view, Matrix.Identity);
+                    if (projected.Z >= 0 && projected.Z <= 1) { nearest = hit; picked = tile; }
+                }
             }
         }
-        return picked;
     }
 
-    private Rectangle VisibleBounds3D()
+    private Rectangle VisibleBounds3D(BoundingFrustum frustum)
     {
-        // A physical ring closes once; its far arc may be visible across the interior.
-        if (IsRing3D) return new Rectangle(0, 0, _world.Width, _world.Height);
+        // Closed surfaces use their world-space chunk bounds for visibility.
+        if (IsRing3D || IsPlanetoid3D) return new Rectangle(0, 0, _world.Width, _world.Height);
         // Intersect the view frustum with the terrain's vertical range. This avoids
         // scanning a huge square of invisible tiles at the larger zoom distances.
-        var (view, projection) = Matrices3D();
-        var corners = new BoundingFrustum(view * projection).GetCorners();
+        var corners = frustum.GetCorners();
         var minimum = new Vector2(float.MaxValue);
         var maximum = new Vector2(float.MinValue);
+        var maximumHeight = _world.Body is WorldBody.Nexus
+            ? 14f + ThreeDGeometry.NexusMaximumPetalLift(NexusLayout.Radius(_world)) : 14f;
         void Include(Vector3 point)
         {
             var p = new Vector2(point.X, point.Z);
@@ -334,7 +392,7 @@ public sealed partial class NewtGame
             maximum = Vector2.Max(maximum, p);
         }
         foreach (var corner in corners)
-            if (corner.Y >= 0 && corner.Y <= 14) Include(corner);
+            if (corner.Y >= 0 && corner.Y <= maximumHeight) Include(corner);
         for (var i = 0; i < 4; i++)
         {
             Clip(corners[i], corners[(i + 1) % 4]);
@@ -344,7 +402,7 @@ public sealed partial class NewtGame
         void Clip(Vector3 a, Vector3 b)
         {
             if (Math.Abs(a.Y - b.Y) < 0.000001f) return;
-            foreach (var plane in new[] { 0f, 14f })
+            foreach (var plane in new[] { 0f, maximumHeight })
             {
                 var t = (plane - a.Y) / (b.Y - a.Y);
                 if (t >= 0 && t <= 1) Include(Vector3.Lerp(a, b, t));
@@ -380,47 +438,11 @@ public sealed partial class NewtGame
         _cutouts3D.Clear();
         var (view, projection) = Matrices3D();
         var frustum = new BoundingFrustum(view * projection);
-        var bounds = VisibleBounds3D();
+        var bounds = VisibleBounds3D(frustum);
         var hovered = ScreenToWorld(Mouse.GetState().X, Mouse.GetState().Y);
-        for (var y = bounds.Top; y < bounds.Bottom; y++)
-        for (var x = bounds.Left; x < bounds.Right; x++)
-        {
-            if (!frustum.Intersects(TileBounds3D(x, y, 14))) continue;
-            if (!ContainsTile3D(x, y)) continue;
-            var tile = MapTile3D(x, y);
-            var height = TileHeight3D(tile);
-            var top = Math.Max(height, ThreeDGeometry.ColumnHeight(WaterElevation3D(tile) ?? _world.GetElevation(tile)));
-            if (!frustum.Intersects(TileBounds3D(x, y, top + 2))) continue;
-            var terrain = UnfrozenBedTerrain(tile);
-            var water = _world.GetSurfaceWater(tile);
-            var color = water == SurfaceWaterKind.FreshwaterLake
-                ? GetLakeColor(_world.GetWaterDepth(tile), frozen: false)
-                : GetTileColor(tile, terrain, _world.GetBiome(tile), _world.GetTemperatureBand(tile));
-
-            if (hovered == tile) color = Color.Lerp(color, Color.White, 0.45f);
-            AddColumn3D(new GridPosition(x, y), height, color);
-            if (_world.GetWhaleFallNutrition(tile) > 0)
-                // Carcasses stay on the bed, including beneath ice and bridge decks.
-                _cutouts3D.Add((new Vector3(x + 0.5f, height + 0.012f, y + 0.5f), tile, WhaleFallCutout3D, true));
-            if (water is not (SurfaceWaterKind.None or SurfaceWaterKind.FreshwaterLake))
-                AddConnectionSides3D(x, y, height + 0.01f, _world.GetRiverConnections(tile), GetSurfaceWaterColor(water));
-            var roadConnections = _world.GetRoadConnections(tile);
-            if (roadConnections != RiverConnection.None)
-                AddConnectionSides3D(x, y,
-                    ThreeDGeometry.RoadHeight(height, WaterElevation3D(tile), IsShallowsBridge3D(tile)),
-                    roadConnections, GetRoadColor(tile), road: true);
-            if (water is not (SurfaceWaterKind.None or SurfaceWaterKind.FreshwaterLake) || _world.GetRoadConnections(tile) != RiverConnection.None ||
-                _world.ActiveImpactWaveCount > 0)
-                _cutouts3D.Add((new Vector3(x + 0.5f,
-                    ThreeDGeometry.RoadHeight(height, WaterElevation3D(tile),
-                        IsShallowsBridge3D(tile)),
-                    y + 0.5f), tile, -1, true));
-            if (_world.GetApeStructure(tile) is not null || _world.HasVampireLair(tile) ||
-                _world.GetWolfDenCharges(tile) is not null || _world.GetMegaSpiderWebFood(tile) is not null ||
-                _world.HasTeleporter(tile) || _world.IsCustodianFabricator(tile) ||
-                _world.GetVolcanoState(tile) is { } state && state != VolcanoState.Extinct)
-                _cutouts3D.Add((new Vector3(x + 0.5f, IsIce3D(tile) ? top + 0.05f : height + 0.015f, y + 0.5f), tile, -1, false));
-        }
+        PrepareTerrainChunks3D(frustum, bounds);
+        foreach (var chunk in _visibleChunks3D)
+            CollectTerrainDetails3D(chunk.Tiles, frustum, hovered);
         for (var i = 0; i < _world.CritterCount; i++)
         {
             var critter = _world.GetCritter(i);
@@ -520,6 +542,7 @@ public sealed partial class NewtGame
         GraphicsDevice.RasterizerState = RasterizerState.CullNone;
         _terrainEffect3D.View = view;
         _terrainEffect3D.Projection = projection;
+        DrawTerrainChunks3D(static chunk => chunk.Terrain);
         var vertices = _terrainVertices3D.ToArray();
         if (vertices.Length > 0)
         foreach (var pass in _terrainEffect3D.CurrentTechnique.Passes)
@@ -551,7 +574,7 @@ public sealed partial class NewtGame
                 // Screen-aligned sprites stay flat and upright even directly overhead.
                 var scale = IsWalkingCamera ? WalkingSpriteScale3D : 1f;
                 var underWaterCover = item.Critter >= 0 && ShouldFlattenUnderWaterCover3D(_world.GetCritter(item.Critter));
-                var center = WorldPoint3D(p) + SurfaceUp3D(p.X) * (0.5f * scale);
+                var center = WorldPoint3D(p) + SurfaceUp3D(p.X, p.Z) * (0.5f * scale);
                 var spriteRight = right * scale;
                 var spriteUp = up * scale;
                 var a = new VertexPositionColorTexture(center - spriteRight + spriteUp, Color.White, new Vector2(u, v));
@@ -567,10 +590,10 @@ public sealed partial class NewtGame
                 if (flat)
                 {
                     var halfSize = IsWalkingCamera && item.Critter >= 0 ? WalkingSpriteScale3D * 0.5f : 0.5f;
-                    a.Position = WorldPoint3D(p + new Vector3(-halfSize, 0, -halfSize));
-                    b.Position = WorldPoint3D(p + new Vector3(halfSize, 0, -halfSize));
-                    c.Position = WorldPoint3D(p + new Vector3(halfSize, 0, halfSize));
-                    d.Position = WorldPoint3D(p + new Vector3(-halfSize, 0, halfSize));
+                    a.Position = WorldPoint3D(p + new Vector3(-halfSize, 0, -halfSize), item.Tile);
+                    b.Position = WorldPoint3D(p + new Vector3(halfSize, 0, -halfSize), item.Tile);
+                    c.Position = WorldPoint3D(p + new Vector3(halfSize, 0, halfSize), item.Tile);
+                    d.Position = WorldPoint3D(p + new Vector3(-halfSize, 0, halfSize), item.Tile);
                 }
                 quads.AddRange([a, b, c, a, c, d]);
             }
@@ -583,89 +606,144 @@ public sealed partial class NewtGame
             }
         }
         DrawPlayerGhost3D(view, projection);
-        DrawWaterSurfaces3D(bounds);
+        DrawWaterSurfaces3D();
         GraphicsDevice.Viewport = originalViewport;
     }
 
-    private void DrawWaterSurfaces3D(Rectangle bounds)
+    private Color TerrainColumnColor3D(GridPosition tile) =>
+        _world.GetSurfaceWater(tile) is SurfaceWaterKind.FreshwaterLake
+            ? GetLakeColor(_world.GetWaterDepth(tile), frozen: false)
+            : GetTileColor(tile, UnfrozenBedTerrain(tile), _world.GetBiome(tile), _world.GetTemperatureBand(tile));
+
+    private void CollectTerrainDetails3D(Rectangle bounds, BoundingFrustum frustum, GridPosition? hovered)
     {
-        if (_terrainEffect3D is null) return;
-        var vertices = new List<VertexPositionColor>();
-        var iceVertices = new List<VertexPositionColor>();
-        var frustum = new BoundingFrustum(_terrainEffect3D.View * _terrainEffect3D.Projection);
+        var hasImpactWave = _world.ActiveImpactWaveCount > 0;
         for (var y = bounds.Top; y < bounds.Bottom; y++)
         for (var x = bounds.Left; x < bounds.Right; x++)
         {
-            if (!frustum.Intersects(TileBounds3D(x, y, 14))) continue;
             if (!ContainsTile3D(x, y)) continue;
             var tile = MapTile3D(x, y);
-            // Lakes use their own spill elevation, including on worlds without oceans.
-            // Pick one surface per tile so lakes below sea level do not get two sheets.
-            var surface = WaterElevation3D(tile);
-            if (surface is null || _world.GetElevation(tile) >= surface.Value) continue;
-            var ice = IsIce3D(tile);
-            var height = ThreeDGeometry.ColumnHeight(surface.Value) + (ice ? 0.035f : 0.005f);
-            // Matching the bed's palette avoids shifting its final color:
-            // target * alpha + target * (1 - alpha) = target.
-            var waterColor = _world.GetSurfaceWater(tile) is SurfaceWaterKind.FreshwaterLake
-                ? GetLakeColor(_world.GetWaterDepth(tile), frozen: false)
-                : GetTileColor(tile, UnfrozenBedTerrain(tile), _world.GetBiome(tile), _world.GetTemperatureBand(tile));
-            var color = ice ? new Color(GetTerrainColor(Terrain.Ice, _world.GetBiome(tile),
-                _world.GetTemperatureBand(tile), _world.GetElevation(tile)), 210)
-                : new Color(waterColor, WaterSurfaceTintAlpha3D);
-            var a = new VertexPositionColor(new Vector3(x, height, y), color);
-            var b = new VertexPositionColor(new Vector3(x + 1, height, y), color);
-            var c = new VertexPositionColor(new Vector3(x + 1, height, y + 1), color);
-            var d = new VertexPositionColor(new Vector3(x, height, y + 1), color);
-            (ice ? iceVertices : vertices).AddRange([a, b, c, a, c, d]);
-            if (ice)
+            var water = _world.GetSurfaceWater(tile);
+            var river = water is not (SurfaceWaterKind.None or SurfaceWaterKind.FreshwaterLake);
+            var roads = _world.GetRoadConnections(tile);
+            var whaleFall = _world.GetWhaleFallNutrition(tile) > 0;
+            var hasGroundArt = river || roads != RiverConnection.None || hasImpactWave;
+            var hasStructure = _world.GetApeStructure(tile) is not null || _world.HasVampireLair(tile) ||
+                _world.GetWolfDenCharges(tile) is not null || _world.GetMegaSpiderWebFood(tile) is not null ||
+                _world.HasTeleporter(tile) || _world.IsCustodianFabricator(tile) ||
+                _world.GetVolcanoState(tile) is { } state && state != VolcanoState.Extinct;
+            var drawColumn = _world.GetSurfaceCover(tile) is SurfaceCover.Lava;
+            if (!drawColumn && hovered != tile && !whaleFall && !hasGroundArt && !hasStructure) continue;
+
+            var height = TileHeight3D(tile);
+            var waterElevation = WaterElevation3D(tile);
+            var top = Math.Max(height, ThreeDGeometry.ColumnHeight(waterElevation ?? _world.GetElevation(tile)));
+            if (!frustum.Intersects(TileBounds3D(x, y, top + 2))) continue;
+            if (drawColumn || hovered == tile)
             {
-                // A thin slab, rather than a white column down to the lake/ocean bed.
-                void Edge(Vector3 p, Vector3 q)
-                {
-                    var lowerP = p - Vector3.Up * 0.03f;
-                    var lowerQ = q - Vector3.Up * 0.03f;
-                    var shade = new Color(new Vector4(color.ToVector3() * 0.8f, 0.3f));
-                    iceVertices.AddRange([new(p, shade), new(q, shade), new(lowerQ, shade),
-                        new(p, shade), new(lowerQ, shade), new(lowerP, shade)]);
-                }
-                Edge(a.Position, b.Position);
-                Edge(b.Position, c.Position);
-                Edge(c.Position, d.Position);
-                Edge(d.Position, a.Position);
+                var color = TerrainColumnColor3D(tile);
+                if (hovered == tile) color = Color.Lerp(color, Color.White, 0.45f);
+                AddColumn3D(new GridPosition(x, y), drawColumn ? height : height + 0.003f, color,
+                    topOnly: !drawColumn);
+                if (drawColumn)
+                    AddWaterTile3D(tile, x, y, _dynamicWater3D, _dynamicIce3D);
             }
+
+            // Carcasses stay on the bed, including beneath ice and bridge decks.
+            if (whaleFall)
+                _cutouts3D.Add((new Vector3(x + 0.5f, height + 0.012f, y + 0.5f), tile, WhaleFallCutout3D, true));
+            if (river)
+                AddConnectionSides3D(x, y, height + 0.01f, _world.GetRiverConnections(tile), GetSurfaceWaterColor(water));
+            if (roads != RiverConnection.None)
+                AddConnectionSides3D(x, y,
+                    ThreeDGeometry.RoadHeight(height, waterElevation, IsShallowsBridge3D(tile)),
+                    roads, GetRoadColor(tile), road: true);
+            if (hasGroundArt)
+                _cutouts3D.Add((new Vector3(x + 0.5f,
+                    ThreeDGeometry.RoadHeight(height, waterElevation, IsShallowsBridge3D(tile)),
+                    y + 0.5f), tile, -1, true));
+            if (hasStructure)
+                _cutouts3D.Add((new Vector3(x + 0.5f, IsIce3D(tile) ? top + 0.05f : height + 0.015f, y + 0.5f),
+                    tile, -1, false));
         }
-        CurveWaterVertices3D(iceVertices);
-        CurveWaterVertices3D(vertices);
-        if (iceVertices.Count > 0)
-        {
-            GraphicsDevice.BlendState = BlendState.NonPremultiplied;
-            GraphicsDevice.DepthStencilState = DepthStencilState.DepthRead;
-            var iceData = iceVertices.ToArray();
-            foreach (var pass in _terrainEffect3D.CurrentTechnique.Passes)
-            {
-                pass.Apply();
-                GraphicsDevice.DrawUserPrimitives(PrimitiveType.TriangleList, iceData, 0, iceData.Length / 3);
-            }
-        }
-        if (vertices.Count == 0)
-        {
-            GraphicsDevice.BlendState = BlendState.Opaque;
-            GraphicsDevice.DepthStencilState = DepthStencilState.Default;
-            return;
-        }
+    }
+
+    private void DrawWaterSurfaces3D()
+    {
         // Composite after opaque terrain and cutouts, tinting submerged objects without
         // hiding them or blocking subsequent depth tests with transparent fragments.
         GraphicsDevice.BlendState = BlendState.NonPremultiplied;
         GraphicsDevice.DepthStencilState = DepthStencilState.DepthRead;
+        DrawTerrainChunks3D(static chunk => chunk.Ice);
+        DrawUnbufferedWater3D(_dynamicIce3D);
+        DrawTerrainChunks3D(static chunk => chunk.Water);
+        DrawUnbufferedWater3D(_dynamicWater3D);
+        GraphicsDevice.BlendState = BlendState.Opaque;
+        GraphicsDevice.DepthStencilState = DepthStencilState.Default;
+    }
+
+    private void DrawUnbufferedWater3D(List<VertexPositionColor> vertices)
+    {
+        if (vertices.Count == 0) return;
+        CurveWaterVertices3D(vertices);
         var data = vertices.ToArray();
-        foreach (var pass in _terrainEffect3D.CurrentTechnique.Passes)
+        foreach (var pass in _terrainEffect3D!.CurrentTechnique.Passes)
         {
             pass.Apply();
             GraphicsDevice.DrawUserPrimitives(PrimitiveType.TriangleList, data, 0, data.Length / 3);
         }
-        GraphicsDevice.BlendState = BlendState.Opaque;
-        GraphicsDevice.DepthStencilState = DepthStencilState.Default;
+    }
+
+    private void AddWaterTile3D(GridPosition tile, int x, int y,
+        List<VertexPositionColor> vertices, List<VertexPositionColor> iceVertices)
+    {
+        // Lakes use their own spill elevation, including on worlds without oceans.
+        // Pick one surface per tile so lakes below sea level do not get two sheets.
+        var surface = WaterElevation3D(tile);
+        if (surface is null || _world.GetElevation(tile) >= surface.Value) return;
+        var ice = IsIce3D(tile);
+        var height = ThreeDGeometry.ColumnHeight(surface.Value) + (ice ? 0.035f : 0.005f);
+        // Matching the bed's palette avoids shifting its final color:
+        // target * alpha + target * (1 - alpha) = target.
+        var waterColor = _world.GetSurfaceWater(tile) is SurfaceWaterKind.FreshwaterLake
+            ? GetLakeColor(_world.GetWaterDepth(tile), frozen: false)
+            : GetTileColor(tile, UnfrozenBedTerrain(tile), _world.GetBiome(tile), _world.GetTemperatureBand(tile));
+        var color = ice ? new Color(GetTerrainColor(Terrain.Ice, _world.GetBiome(tile),
+            _world.GetTemperatureBand(tile), _world.GetElevation(tile)), 210)
+            : new Color(waterColor, WaterSurfaceTintAlpha3D);
+        var waterStart = vertices.Count;
+        var iceStart = iceVertices.Count;
+        var a = new VertexPositionColor(new Vector3(x, height, y), color);
+        var b = new VertexPositionColor(new Vector3(x + 1, height, y), color);
+        var c = new VertexPositionColor(new Vector3(x + 1, height, y + 1), color);
+        var d = new VertexPositionColor(new Vector3(x, height, y + 1), color);
+        (ice ? iceVertices : vertices).AddRange([a, b, c, a, c, d]);
+        if (ice)
+        {
+            // A thin slab, rather than a white column down to the lake/ocean bed.
+            void Edge(Vector3 p, Vector3 q)
+            {
+                var lowerP = p - Vector3.Up * 0.03f;
+                var lowerQ = q - Vector3.Up * 0.03f;
+                var shade = new Color(new Vector4(color.ToVector3() * 0.8f, 0.3f));
+                iceVertices.AddRange([new(p, shade), new(q, shade), new(lowerQ, shade),
+                    new(p, shade), new(lowerQ, shade), new(lowerP, shade)]);
+            }
+            Edge(a.Position, b.Position);
+            Edge(b.Position, c.Position);
+            Edge(c.Position, d.Position);
+            Edge(d.Position, a.Position);
+        }
+        if (IsPlanetoid3D)
+        {
+            var surfaceVertices = ice ? iceVertices : vertices;
+            for (var index = ice ? iceStart : waterStart; index < surfaceVertices.Count; index++)
+            {
+                var vertex = surfaceVertices[index];
+                vertex.Position = WorldPoint3D(vertex.Position, tile);
+                surfaceVertices[index] = vertex;
+            }
+        }
     }
 
     private void AddConnectionSides3D(int x, int y, float topHeight, RiverConnection connections, Color color,
@@ -699,33 +777,41 @@ public sealed partial class NewtGame
             }
             var c = b with { Y = topHeight };
             var d = a with { Y = topHeight };
-            a = WorldPoint3D(a);
-            b = WorldPoint3D(b);
-            c = WorldPoint3D(c);
-            d = WorldPoint3D(d);
+            var owner = new GridPosition(x, y);
+            a = WorldPoint3D(a, owner);
+            b = WorldPoint3D(b, owner);
+            c = WorldPoint3D(c, owner);
+            d = WorldPoint3D(d, owner);
             _terrainVertices3D.AddRange([new(a, color), new(b, color), new(c, color),
                 new(a, color), new(c, color), new(d, color)]);
         }
     }
 
-    private void AddColumn3D(GridPosition tile, float height, Color color)
+    private void AddColumn3D(GridPosition tile, float height, Color color, bool topOnly = false)
     {
         float x = tile.X, z = tile.Y;
         void Face(Vector3 a, Vector3 b, Vector3 c, Vector3 d, Color shade)
         {
-            a = WorldPoint3D(a);
-            b = WorldPoint3D(b);
-            c = WorldPoint3D(c);
-            d = WorldPoint3D(d);
+            a = WorldPoint3D(a, tile);
+            b = WorldPoint3D(b, tile);
+            c = WorldPoint3D(c, tile);
+            d = WorldPoint3D(d, tile);
             _terrainVertices3D.AddRange([new(a, shade), new(b, shade), new(c, shade),
                 new(a, shade), new(c, shade), new(d, shade)]);
         }
         Face(new(x, height, z), new(x + 1, height, z), new(x + 1, height, z + 1), new(x, height, z + 1), color);
+        if (topOnly) return;
         if (IsRing3D)
             Face(new(x, 0, z), new(x, 0, z + 1), new(x + 1, 0, z + 1), new(x + 1, 0, z),
                 new Color(color.ToVector3() * 0.45f));
         void Side(int nx, int ny, Vector3 a, Vector3 b, Vector3 c, Vector3 d, float shade)
         {
+            if (IsPlanetoid3D)
+            {
+                var neighbor = PlanetoidLayout.Offset(tile, nx - tile.X, ny - tile.Y, PlanetoidLayout.FaceSize(_world.Width));
+                nx = neighbor.X;
+                ny = neighbor.Y;
+            }
             if (!ContainsTile3D(nx, ny) || TileHeight3D(MapTile3D(nx, ny)) < height)
                 Face(a, b, c, d, new Color(color.ToVector3() * shade));
         }
@@ -737,6 +823,7 @@ public sealed partial class NewtGame
 
     protected override void UnloadContent()
     {
+        ReleaseTerrainChunks3D();
         _whaleFallSprite?.Dispose();
         foreach (var page in _atlasPages3D) page.Dispose();
         _terrainEffect3D?.Dispose();

@@ -42,7 +42,8 @@ public sealed partial class SimulationWorld
     {
         if (_species[attacker] is CritterSpecies.Vampire && _species[victim] is CritterSpecies.Vampire)
             return;
-        var damage = Math.Min(_energy[victim], GetCombatDamage(attacker));
+        var hitDamage = GetCombatDamage(attacker);
+        var damage = Math.Min(_energy[victim], hitDamage);
         _energy[victim] -= damage;
         // Traders lose provisions when hit; the robber gains the energy actually taken.
         // Combine this with vampire feeding so vampires do not collect twice.
@@ -53,7 +54,7 @@ public sealed partial class SimulationWorld
                     ? ApeSettlerInitialEnergy : CritterNutritions.Get(_species[attacker]).MaximumEnergy,
                 _energy[attacker] + damage);
         if (_species[attacker] is CritterSpecies.ApeBomber)
-            _energy[attacker] = Math.Max(0, _energy[attacker] - damage);
+            _energy[attacker] = Math.Max(0, _energy[attacker] - hitDamage);
     }
 
     private int GetMaximumHitDamage(int attacker, int victim) => GetCombatDamage(attacker);
