@@ -481,7 +481,7 @@ public sealed partial class SimulationWorld
 
     public int GetCritterCombatDamage(CritterId critterId) =>
         _critterIndicesById.TryGetValue(critterId.Value, out var critterIndex) &&
-        CanCritterFight(_species[critterIndex])
+        (CanCritterFight(_species[critterIndex]) || _species[critterIndex] is CritterSpecies.Jellyfish)
             ? GetCombatDamage(critterIndex)
             : 0;
 
@@ -5712,7 +5712,8 @@ public sealed partial class SimulationWorld
                     }
                     RecordWarriorCombatKill(defenderIndex);
                     RemoveCritterAt(attackerPosition);
-                    FeedPredatorAt(defenderPosition, attackerSpecies);
+                    if (defenderSpecies is not CritterSpecies.Jellyfish)
+                        FeedPredatorAt(defenderPosition, attackerSpecies);
                 }
                 return;
             }
@@ -5871,7 +5872,7 @@ public sealed partial class SimulationWorld
         CritterSpecies.Fish => prey is CritterSpecies.Plankton,
         CritterSpecies.SeaScorpion =>
             prey is CritterSpecies.Fish or CritterSpecies.Worm or CritterSpecies.Trilobite or CritterSpecies.Newt or
-                CritterSpecies.Crab or CritterSpecies.Squid or CritterSpecies.Nautilus or
+                CritterSpecies.Crab or CritterSpecies.Squid or CritterSpecies.Nautilus or CritterSpecies.Jellyfish or
                 CritterSpecies.Therapsid or CritterSpecies.Monkey or CritterSpecies.Ape or CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack or
                 CritterSpecies.Wolf or CritterSpecies.ApeWarrior or CritterSpecies.ApeRoyalGuard or CritterSpecies.ApeScholar or CritterSpecies.ApeChieftain or CritterSpecies.ApeKing or CritterSpecies.ApeQueen or
                 CritterSpecies.ApeSailor or CritterSpecies.Deer or CritterSpecies.Elk or
@@ -5880,7 +5881,7 @@ public sealed partial class SimulationWorld
         CritterSpecies.Nautilus => prey is CritterSpecies.Plankton,
         CritterSpecies.Squid =>
             prey is CritterSpecies.Fish or CritterSpecies.Worm or CritterSpecies.Trilobite or
-                CritterSpecies.Nautilus or CritterSpecies.Crab or
+                CritterSpecies.Nautilus or CritterSpecies.Crab or CritterSpecies.Jellyfish or
                 CritterSpecies.Newt or CritterSpecies.SeaScorpion or
                 CritterSpecies.ApeSailor or CritterSpecies.Therapsid or
                 CritterSpecies.Deer or CritterSpecies.Elk or CritterSpecies.Gazelle,
@@ -6007,6 +6008,7 @@ public sealed partial class SimulationWorld
         defender switch
         {
             CritterSpecies.BaleenWhale => attacker is CritterSpecies.ApeSailor,
+            CritterSpecies.Jellyfish => attacker is CritterSpecies.Squid or CritterSpecies.SeaScorpion,
             CritterSpecies.Therapsid => attacker is CritterSpecies.MegaToad or CritterSpecies.Wolf,
             CritterSpecies.SeaScorpion or CritterSpecies.Squid =>
                 attacker is CritterSpecies.MegaToad,
@@ -6028,7 +6030,7 @@ public sealed partial class SimulationWorld
             CritterSpecies.UndeadApe => 1,
             CritterSpecies.Lich => 7,
             CritterSpecies.UndeadWarrior => 2,
-            CritterSpecies.MegaSpider => 2,
+            CritterSpecies.MegaSpider or CritterSpecies.Jellyfish => 2,
             CritterSpecies.SeaScorpion or CritterSpecies.Squid => 3,
             CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack => 2,
             CritterSpecies.ToothedWhale => 6,

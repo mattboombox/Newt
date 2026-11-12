@@ -5,7 +5,7 @@ public static class ClimateSystem
 {
     public const float GlobalClimateEditStep = 0.05f;
     private const int Unreachable = int.MaxValue;
-    internal const float SeaIceThreshold = 0.12f;
+    internal const float SeaIceThreshold = 0.16f;
     internal const float FreezingThreshold = 0.18f;
     internal const float ColdThreshold = 0.33f;
     internal const float HotThreshold = 0.67f;

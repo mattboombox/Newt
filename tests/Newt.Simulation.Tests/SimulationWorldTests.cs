@@ -1391,20 +1391,36 @@ public sealed class SimulationWorldTests
     [Theory]
     [InlineData(CritterSpecies.SeaScorpion)]
     [InlineData(CritterSpecies.Squid)]
-    public void JellyfishAreNotPreyForActiveMarineHunters(CritterSpecies predator)
+    public void MarineHuntersCanEatJellyfishThatDefendThemselves(CritterSpecies predator)
     {
         var world = new SimulationWorld(1, 2, Terrain.Ocean, seed: 46);
-        world.SeasonsEnabled = false;
-        world.AddCritter(predator, new GridPosition(0, 0));
-        world.AddCritter(CritterSpecies.Jellyfish, new GridPosition(0, 1));
+        var predatorPosition = new GridPosition(0, 0);
+        var jellyfishPosition = new GridPosition(0, 1);
+        var predatorId = world.AddCritter(predator, predatorPosition);
+        var jellyfishId = world.AddCritter(CritterSpecies.Jellyfish, jellyfishPosition);
 
-        for (var tick = 0; tick < 12 * SimulationWorld.TicksPerSecond; tick++)
+        Assert.True(SimulationWorld.CanEat(predator, CritterSpecies.Jellyfish));
+        Assert.False(SimulationWorld.CanEat(CritterSpecies.Jellyfish, predator));
+        Assert.Equal(2, world.GetCritterCombatDamage(jellyfishId));
+
+        var defended = false;
+        for (var attempt = 0; attempt < 32 && !defended; attempt++)
         {
-            world.AdvanceOneTick();
+            defended = CommitSurvivableEncounter(world).Id == predatorId;
+        }
+        Assert.True(defended);
+
+        for (var attempt = 0; attempt < 32 && world.CritterCount == 2; attempt++)
+        {
+            SetEnergy(world, 0, 3);
+            SetEnergy(world, 1, 1);
+            world.CommitEncounter(predatorPosition, jellyfishPosition);
         }
 
-        Assert.Equal(1, world.GetCritterCount(predator));
-        Assert.Equal(1, world.GetCritterCount(CritterSpecies.Jellyfish));
+        Assert.False(world.TryGetCritter(jellyfishId, out _));
+        Assert.True(world.TryGetCritter(predatorId, out var fed));
+        Assert.Equal(jellyfishPosition, fed.Position);
+        Assert.Equal(3 + CritterNutritions.Get(CritterSpecies.Jellyfish).FoodEnergy, fed.Energy);
     }
 
     [Fact]
@@ -3247,6 +3263,30 @@ public sealed class SimulationWorldTests
 
         Assert.Equal(new GridPosition(1, 0), deerWorld.GetCritter(0).Position);
         Assert.Equal(new GridPosition(0, 0), elkWorld.GetCritter(0).Position);
+    }
+
+    [Theory]
+    [InlineData(CritterSpecies.Elk, Biome.Taiga)]
+    [InlineData(CritterSpecies.Gazelle, Biome.Arid)]
+    public void ElkAndGazellesCanProduceDeerInAdjacentForest(CritterSpecies species, Biome parentBiome)
+    {
+        var world = new SimulationWorld(1, 2, Terrain.Plains, seed: 94);
+        world.SeasonsEnabled = false;
+        NaturalEvents.SetEnabled(world, false);
+        world.AdjustEvolutionChance(CritterEvolution.MaximumChanceSteps);
+        var parentPosition = new GridPosition(0, 0);
+        var forest = new GridPosition(0, 1);
+        world.SetBiome(parentPosition, parentBiome);
+        world.SetBiome(forest, Biome.Forest);
+        world.AddCritter(species, parentPosition);
+        SetEnergy(world, 0, CritterNutritions.Get(species).MaximumEnergy);
+
+        world.AdvanceOneTick();
+
+        Assert.Equal(2, world.CritterCount);
+        Assert.Equal(species, world.GetCritter(0).Species);
+        Assert.Equal(CritterSpecies.Deer, world.GetCritter(1).Species);
+        Assert.Equal(forest, world.GetCritter(1).Position);
     }
 
     [Theory]

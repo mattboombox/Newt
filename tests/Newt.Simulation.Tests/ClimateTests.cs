@@ -145,6 +145,34 @@ public sealed class ClimateTests
         Assert.Equal(Terrain.Ice, world.GetTerrain(polarDeepOcean));
     }
 
+    [Theory]
+    [InlineData(0.159f, TemperatureBand.Freezing, true)]
+    [InlineData(0.16f, TemperatureBand.Freezing, false)]
+    [InlineData(0.179f, TemperatureBand.Freezing, false)]
+    [InlineData(0.18f, TemperatureBand.Cold, false)]
+    public void FreezingSaltwaterFormsIceOnlyBelowTheSeaIceThreshold(
+        float temperature, TemperatureBand band, bool iced)
+    {
+        var world = new SimulationWorld(1, 4, Terrain.Ocean);
+        world.OceanSeed = new GridPosition(0, 0);
+        var openTerrains = new[] { Terrain.DeepOcean, Terrain.Ocean, Terrain.Shallows };
+        world.SetElevation(new GridPosition(0, 0), world.SeaLevel - 0.30f);
+        world.SetElevation(new GridPosition(0, 1), world.SeaLevel - 0.15f);
+        world.SetElevation(new GridPosition(0, 2), world.SeaLevel - 0.05f);
+        world.SetElevation(new GridPosition(0, 3), world.SeaLevel + 0.15f);
+        for (var y = 0; y < openTerrains.Length; y++)
+            world.SetTemperature(new GridPosition(0, y), temperature);
+
+        TerrainClassifier.RebuildLandformsFromCurrentTemperature(world);
+
+        for (var y = 0; y < openTerrains.Length; y++)
+        {
+            var position = new GridPosition(0, y);
+            Assert.Equal(band, world.GetTemperatureBand(position));
+            Assert.Equal(iced ? Terrain.Ice : openTerrains[y], world.GetTerrain(position));
+        }
+    }
+
     [Fact]
     public void HemispheresHaveOppositeSeasonsAndEquatorIsUnaffected()
     {

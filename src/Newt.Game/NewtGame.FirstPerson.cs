@@ -154,7 +154,7 @@ public sealed partial class NewtGame
             _firstPersonCrossing = false;
         var flightCeiling = IsRing3D
             ? ThreeDGeometry.RingFlightCeiling(_world.Width)
-            : IsPlanetoid3D ? FirstPersonMaximumFlightHeight * 4 : FirstPersonMaximumFlightHeight;
+            : IsPlanetoid3D ? FirstPersonMaximumFlightHeight * 8 : FirstPersonMaximumFlightHeight;
         var previousHeight = _firstPersonEyeHeight;
         (_firstPersonEyeHeight, _firstPersonFlying) = ThreeDGeometry.FirstPersonFlightHeight(
             _firstPersonEyeHeight, ground, waterSurface, _firstPersonFlying,

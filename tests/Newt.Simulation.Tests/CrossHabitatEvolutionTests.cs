@@ -22,9 +22,11 @@ public sealed class CrossHabitatEvolutionTests
     }
 
     [Theory]
-    [InlineData(Terrain.Plains)]
-    [InlineData(Terrain.Ocean)]
-    public void EveryEvolutionAndDevolutionIgnoresCurrentHabitat(Terrain terrain)
+    [InlineData(Terrain.Plains, true)]
+    [InlineData(Terrain.Ocean, true)]
+    [InlineData(Terrain.Plains, false)]
+    [InlineData(Terrain.Ocean, false)]
+    public void EveryEvolutionAndDevolutionIgnoresCurrentHabitat(Terrain terrain, bool evolve)
     {
         foreach (var species in Enum.GetValues<CritterSpecies>())
         {
@@ -32,14 +34,13 @@ public sealed class CrossHabitatEvolutionTests
             var position = new GridPosition(0, 0);
             Assert.True(world.TrySpawnCritter(species, position));
             var original = world.GetCritter(0).Species;
-            if (CritterEvolution.GetEvolvedSpeciesCount(original) > 0)
+            if (evolve && CritterEvolution.GetEvolvedSpeciesCount(original) > 0)
             {
                 Assert.True(world.TryEvolveCritterAt(position), original.ToString());
                 Assert.Equal(position, world.GetCritter(0).Position);
-                Assert.True(world.TryDevolveCritterAt(position));
-                Assert.Equal(original, world.GetCritter(0).Species);
+                Assert.NotEqual(original, world.GetCritter(0).Species);
             }
-            if (CritterEvolution.TryGetDevolvedSpecies(original, out var ancestor))
+            if (!evolve && CritterEvolution.TryGetDevolvedSpecies(original, out var ancestor))
             {
                 Assert.True(world.TryDevolveCritterAt(position), original.ToString());
                 Assert.Equal(ancestor, world.GetCritter(0).Species);

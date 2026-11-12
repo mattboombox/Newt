@@ -1,6 +1,6 @@
 namespace Newt.Simulation;
 
-/// <summary>The primitive critter evolution tree and reproduction mutations.</summary>
+/// <summary>Critter evolution paths, ancestors, and reproduction mutations.</summary>
 public static class CritterEvolution
 {
     public const int ChanceStepsPerPercent = 2;
@@ -32,6 +32,7 @@ public static class CritterEvolution
         CritterSpecies.Therapsid => 4,
         CritterSpecies.Monkey => 1,
         CritterSpecies.Deer => 2,
+        CritterSpecies.Elk or CritterSpecies.Gazelle => 1,
         CritterSpecies.ToothedWhale => 1,
         _ => 0,
     };
@@ -64,6 +65,7 @@ public static class CritterEvolution
             (CritterSpecies.Monkey, 0) => CritterSpecies.Ape,
             (CritterSpecies.Deer, 0) => CritterSpecies.Elk,
             (CritterSpecies.Deer, 1) => CritterSpecies.Gazelle,
+            (CritterSpecies.Elk or CritterSpecies.Gazelle, 0) => CritterSpecies.Deer,
             (CritterSpecies.ToothedWhale, 0) => CritterSpecies.BaleenWhale,
             _ => species,
         };
