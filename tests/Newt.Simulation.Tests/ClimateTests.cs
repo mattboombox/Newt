@@ -5,6 +5,29 @@ namespace Newt.Simulation.Tests;
 public sealed class ClimateTests
 {
     [Fact]
+    public void PlanetoidClimateVariesSmoothlyAcrossCubeFaceSeams()
+    {
+        var preset = WorldPreset.PlanetoidLarge;
+        var world = new SimulationWorld(preset.Width, preset.Height, Terrain.Plains, seed: 6)
+        {
+            Body = WorldBody.Planetoid,
+            SeasonsEnabled = false,
+        };
+        ClimateSystem.RebuildTemperature(world);
+        ClimateSystem.RebuildMoistureAndBiomes(world);
+
+        var size = PlanetoidLayout.FaceSize(world.Width);
+        for (var y = 0; y < size; y++)
+        {
+            // The fourth and first equatorial faces touch on the globe and are separated in the atlas.
+            var first = new GridPosition(0, y);
+            var fourth = PlanetoidLayout.Offset(first, -1, 0, size);
+            Assert.InRange(Math.Abs(world.GetTemperature(first) - world.GetTemperature(fourth)), 0, 0.012f);
+            Assert.InRange(Math.Abs(world.GetMoisture(first) - world.GetMoisture(fourth)), 0, 0.012f);
+        }
+    }
+
+    [Fact]
     public void OneYearTakesTwentyFourMinutesAtNormalSpeed()
     {
         Assert.Equal(1440, SeasonSystem.CycleSeconds);

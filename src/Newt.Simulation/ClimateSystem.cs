@@ -370,6 +370,18 @@ public static class ClimateSystem
 
     private static float FractalNoise(SimulationWorld world, int x, int y, ulong seed)
     {
+        if (world.Body == WorldBody.Planetoid)
+        {
+            // Adjacent points on the globe can be far apart in the cube atlas.
+            var size = PlanetoidLayout.FaceSize(world.Width);
+            var direction = PlanetoidLayout.Direction(x + 0.5f, y + 0.5f, size,
+                PlanetoidLayout.FaceAt(x, y, size));
+            var radius = size * (2f / MathF.PI);
+            var broadGlobe = WorldGenerator.GlobeNoise(direction * (radius / 32), seed);
+            var regionalGlobe = WorldGenerator.GlobeNoise(direction * (radius / 13), seed ^ 0x8EBC6AF09C88C6E3UL);
+            return (float)(0.5 + (broadGlobe * 0.68 + regionalGlobe * 0.32) * 0.5);
+        }
+
         var broad = ValueNoise(world.Width, x, y, seed, scale: 32);
         var regional = ValueNoise(world.Width, x, y, seed ^ 0x8EBC6AF09C88C6E3UL, scale: 13);
         return broad * 0.68f + regional * 0.32f;

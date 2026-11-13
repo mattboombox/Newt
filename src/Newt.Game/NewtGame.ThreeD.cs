@@ -96,22 +96,26 @@ public sealed partial class NewtGame
         : IsPlanetoid3D ? Math.Max(28, PlanetoidGeometry.Radius(_world.Width) * 3)
         : ThreeDGeometry.MaximumZoomDistance(MapViewportHeight, ZoomLevels[0]);
 
-    private void CycleViewMode()
+    private void ToggleWalkingCamera()
     {
-        if (_view3D && !IsWalkingCamera)
+        if (!_view3D) return;
+        if (!IsWalkingCamera)
         {
             EnterFirstPerson();
             return;
         }
-        if (IsWalkingCamera)
-        {
-            _playerView = PlayerView.FreeCamera;
-            _firstPersonMouseReady = false;
-            _distance3D = Math.Clamp(28, 6, MaximumDistance3D);
-            _pitch3D = 0.85f;
-            IsMouseVisible = true;
-            ResetToolRepeat();
-        }
+
+        _playerView = PlayerView.FreeCamera;
+        _firstPersonMouseReady = false;
+        _distance3D = Math.Clamp(28, 6, MaximumDistance3D);
+        _pitch3D = 0.85f;
+        IsMouseVisible = true;
+        ResetToolRepeat();
+    }
+
+    private void Toggle3DView()
+    {
+        if (IsWalkingCamera) ToggleWalkingCamera();
         _view3D = !_view3D;
         ResetToolRepeat();
         if (_view3D)
@@ -123,7 +127,7 @@ public sealed partial class NewtGame
                 _cameraY + (MapViewportHeight / 2f - MapOffsetY) / TileSize);
             if (IsPlanetoid3D)
             {
-                var tile = MapTile2D((int)_focus3D.X, Math.Clamp((int)_focus3D.Y, 0, _world.Height - 1));
+                var tile = PlanetoidTileAtMapCenter((int)_focus3D.X, (int)_focus3D.Y);
                 _focus3D = new Vector2(tile.X + 0.5f, tile.Y + 0.5f);
             }
             var distance = IsPlanetoid3D ? PlanetoidGeometry.Radius(_world.Width) * 2

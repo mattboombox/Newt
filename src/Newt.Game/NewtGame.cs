@@ -83,7 +83,8 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         "- / =  decrease / increase magnitude",
         "P  pause or resume",
         "G  toggle auto speed",
-        "V  2D > 3D free > first person > 2D",
+        "Tab  2D <-> 3D",
+        "V  3D free <-> first person",
         "F  1st <-> 3rd (random ghost on 3rd)",
         "L  3D render distance: Full / 3/4 / 1/2 / 1/4",
         "1st/3rd: WASD walk; Shift move faster",
@@ -91,7 +92,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         "Arrows: Left/Right turn; Up/Down look",
         "1st/3rd: Space fly/swim up; Ctrl descend faster",
         "1st/3rd: Shift + Space/Ctrl boosts ascent/descent",
-        "1st/3rd: V to 2D; wheel ignored",
+        "1st/3rd: V to free camera; wheel ignored",
         "2D: WASD / arrows pan; wheel zoom",
         "Free 3D: WASD move; arrows rotate",
         "Free 3D: middle mouse rotate; wheel zoom",
@@ -222,7 +223,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         (GraphicsDevice.Viewport.Width - MapWidth2D * TileSize) / 2);
 
     private int MapOffsetY => _drawing3DAtlas ? 0 : Math.Max(0,
-        (MapViewportHeight - _world.Height * TileSize) / 2);
+        (MapViewportHeight - MapHeight2D * TileSize) / 2);
 
     protected override void LoadContent()
     {
@@ -333,7 +334,8 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         if (acceptInput)
         {
             HandleWorldShortcuts(keyboard, mouse);
-            if (WasPressed(keyboard, Keys.V)) CycleViewMode();
+            if (WasPressed(keyboard, Keys.Tab)) Toggle3DView();
+            if (WasPressed(keyboard, Keys.V)) ToggleWalkingCamera();
             if (WasPressed(keyboard, Keys.F)) TogglePlayerPerspective();
             if (_view3D && WasPressed(keyboard, Keys.L)) CycleRenderDistance3D();
             if (_view3D) HandleCamera3D(keyboard, mouse, (float)gameTime.ElapsedGameTime.TotalSeconds);
@@ -398,13 +400,13 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             ? MapWidth2D
             : GraphicsDevice.Viewport.Width / TileSize + 2;
         var visibleRows = MapOffsetY > 0
-            ? _world.Height
+            ? MapHeight2D
             : MapViewportHeight / TileSize + 2;
         _spriteBatch.Begin(samplerState: SamplerState.PointClamp);
         for (var screenY = 0; screenY < visibleRows; screenY++)
         {
             var worldY = _cameraY + screenY;
-            if (worldY >= _world.Height)
+            if (worldY >= MapHeight2D)
             {
                 break;
             }
@@ -412,9 +414,9 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             for (var screenX = 0; screenX < visibleColumns; screenX++)
             {
                 var worldX = _cameraX + screenX;
-                if (_world.Body is WorldBody.Nexus && worldX >= _world.Width)
+                if (!WrapsMapX && worldX >= MapWidth2D)
                     break;
-                var position = MapTile2D(worldX, worldY);
+                if (MapTile2D(worldX, worldY) is not { } position) continue;
                 if (_world.Body is WorldBody.Nexus && !NexusLayout.Contains(_world, position))
                     continue;
                 var terrain = _world.GetTerrain(position);
@@ -440,12 +442,12 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
 
         DrawVisibleCritters2D(visibleColumns, visibleRows, aboveIce: false);
         // Ice lies above aquatic critters, with terrestrial critters and buildings on top.
-        for (var screenY = 0; screenY < visibleRows && _cameraY + screenY < _world.Height; screenY++)
+        for (var screenY = 0; screenY < visibleRows && _cameraY + screenY < MapHeight2D; screenY++)
         for (var screenX = 0; screenX < visibleColumns; screenX++)
         {
             var x = _cameraX + screenX;
-            if (_world.Body == WorldBody.Nexus && x >= _world.Width) break;
-            var position = MapTile2D(x, _cameraY + screenY);
+            if (!WrapsMapX && x >= MapWidth2D) break;
+            if (MapTile2D(x, _cameraY + screenY) is not { } position) continue;
             if (_world.Body == WorldBody.Nexus && !NexusLayout.Contains(_world, position)) continue;
             if (!IsIce3D(position)) continue;
             var ice = GetTerrainColor(Terrain.Ice, _world.GetBiome(position),
@@ -1483,9 +1485,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
 
         var zoomDirection = Math.Sign(mouse.ScrollWheelValue - _previousMouse.ScrollWheelValue);
         var anchor = zoomDirection == 0 ? null : ScreenToWorld(mouse.X, mouse.Y);
-        if (anchor is not null && IsPlanetoid3D)
-            anchor = new GridPosition(_cameraX + FloorDiv(mouse.X - MapOffsetX, TileSize),
-                _cameraY + (mouse.Y - MapOffsetY) / TileSize);
+        if (anchor is { } tile) anchor = MapLocation2D(tile);
         var previousZoomIndex = _zoomIndex;
         if (zoomDirection > 0)
         {
@@ -1505,7 +1505,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
 
         _cameraX = ConstrainCameraX(_cameraX);
         var visibleRows = Math.Max(1, MapViewportHeight / TileSize);
-        _cameraY = Math.Clamp(_cameraY, 0, Math.Max(0, _world.Height - visibleRows));
+        _cameraY = Math.Clamp(_cameraY, 0, Math.Max(0, MapHeight2D - visibleRows));
     }
 
     private void TeleportCameraToTile(GridPosition tile)
@@ -1525,7 +1525,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             (GraphicsDevice.Viewport.Width / 2f - MapOffsetX) / TileSize));
         _cameraY = Math.Clamp((int)MathF.Round(location.Y + 0.5f -
             (MapViewportHeight / 2f - MapOffsetY) / TileSize),
-            0, Math.Max(0, _world.Height - MapViewportHeight / TileSize));
+            0, Math.Max(0, MapHeight2D - MapViewportHeight / TileSize));
     }
 
     private void UpdateInspectedCritterFollow()
@@ -1553,15 +1553,15 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         _cameraY = Math.Clamp(
             location.Y - visibleRows / 2,
             0,
-            Math.Max(0, _world.Height - visibleRows));
+            Math.Max(0, MapHeight2D - visibleRows));
     }
 
     private int MapViewportHeight => _hudHidden
         ? GraphicsDevice.Viewport.Height
         : Math.Max(1, GraphicsDevice.Viewport.Height - HudHeight);
 
-    private int ConstrainCameraX(int x) => _world.Body is WorldBody.Nexus
-        ? Math.Clamp(x, 0, Math.Max(0, _world.Width - Math.Max(1, GraphicsDevice.Viewport.Width / TileSize)))
+    private int ConstrainCameraX(int x) => !WrapsMapX
+        ? Math.Clamp(x, 0, Math.Max(0, MapWidth2D - Math.Max(1, GraphicsDevice.Viewport.Width / TileSize)))
         : Mod(x, MapWidth2D);
 
     private void DrawHud()
@@ -2376,22 +2376,22 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
 
         var mapX = screenX - MapOffsetX;
         var mapY = screenY - MapOffsetY;
-        if (mapY < 0 || mapY >= _world.Height * TileSize ||
+        if (mapY < 0 || mapY >= MapHeight2D * TileSize ||
             (MapOffsetX > 0 && (mapX < 0 || mapX >= MapWidth2D * TileSize)))
         {
             return null;
         }
 
         var y = _cameraY + mapY / TileSize;
-        if (y >= _world.Height)
+        if (y >= MapHeight2D)
         {
             return null;
         }
 
         var x = _cameraX + FloorDiv(mapX, TileSize);
-        if (_world.Body is WorldBody.Nexus && (x < 0 || x >= _world.Width))
+        if (!WrapsMapX && (x < 0 || x >= MapWidth2D))
             return null;
-        var position = MapTile2D(x, y);
+        if (MapTile2D(x, y) is not { } position) return null;
         return _world.Body is WorldBody.Nexus && !NexusLayout.Contains(_world, position) ? null : position;
     }
 
@@ -2635,7 +2635,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
 
     private int WrappedScreenX(int worldX)
     {
-        var difference = _world.Body is WorldBody.Nexus
+        var difference = !WrapsMapX
             ? worldX - _cameraX : Mod(worldX - _cameraX, MapWidth2D);
         return difference;
     }

@@ -17,6 +17,25 @@ public static class PlanetoidLayout
 
     public static int FaceSize(int width) => width / 3;
 
+    // The four equatorial faces share a row. Both polar faces attach to face zero.
+    public static GridPosition TileToNet(GridPosition tile, int size) => FaceAt(tile.X, tile.Y, size) switch
+    {
+        3 => tile,
+        4 => new(tile.X, tile.Y - size),
+        5 => new(tile.X - size, tile.Y + size),
+        _ => new(tile.X + size, tile.Y + size),
+    };
+
+    public static GridPosition? TileFromNet(GridPosition cell, int size)
+    {
+        if (cell.X < 0 || cell.X >= 4 * size || cell.Y < 0 || cell.Y >= 3 * size)
+            return null;
+        if (cell.Y >= size && cell.Y < 2 * size)
+            return cell.X < size ? cell : new(cell.X - size, cell.Y - size);
+        if (cell.X < size || cell.X >= 2 * size) return null;
+        return cell.Y < size ? new(cell.X, cell.Y + size) : new(cell.X + size, cell.Y - size);
+    }
+
     public static int FaceAt(float x, float y, int size) =>
         Math.Clamp((int)(x / size), 0, 2) + 3 * Math.Clamp((int)(y / size), 0, 1);
 

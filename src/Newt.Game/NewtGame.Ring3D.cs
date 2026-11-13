@@ -183,6 +183,6 @@ public sealed partial class NewtGame
         var location = MapLocation2D(tile);
         _cameraX = ConstrainCameraX((int)MathF.Round(location.X + 0.5f - (viewport.Width / 2f - MapOffsetX) / TileSize));
         _cameraY = Math.Clamp((int)MathF.Round(location.Y + 0.5f - (viewport.Height / 2f - MapOffsetY) / TileSize),
-            0, Math.Max(0, _world.Height - viewport.Height / TileSize));
+            0, Math.Max(0, MapHeight2D - viewport.Height / TileSize));
     }
 }

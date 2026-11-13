@@ -6,6 +6,36 @@ namespace Newt.Simulation.Tests;
 public sealed class ThreeDGeometryTests
 {
     [Fact]
+    public void PlanetoidNetMapsEachTileOnceAndLeavesTheCornersEmpty()
+    {
+        const int size = 24;
+        var tiles = new HashSet<GridPosition>();
+        for (var y = 0; y < 3 * size; y++)
+        for (var x = 0; x < 4 * size; x++)
+        {
+            var cell = new GridPosition(x, y);
+            var tile = PlanetoidLayout.TileFromNet(cell, size);
+            if ((x < size || x >= 2 * size) && (y < size || y >= 2 * size))
+            {
+                Assert.Null(tile);
+                continue;
+            }
+
+            Assert.True(tile.HasValue);
+            Assert.True(tiles.Add(tile.Value));
+            Assert.Equal(cell, PlanetoidLayout.TileToNet(tile.Value, size));
+        }
+        Assert.Equal(6 * size * size, tiles.Count);
+
+        var northEdge = new GridPosition(12, 0);
+        var southEdge = new GridPosition(12, size - 1);
+        Assert.Equal(new GridPosition(size + 12, size - 1),
+            PlanetoidLayout.TileToNet(PlanetoidLayout.Offset(northEdge, 0, -1, size), size));
+        Assert.Equal(new GridPosition(size + 12, 2 * size),
+            PlanetoidLayout.TileToNet(PlanetoidLayout.Offset(southEdge, 0, 1, size), size));
+    }
+
+    [Fact]
     public void PlanetoidCameraCarriesItsHeadingAcrossAFaceSeam()
     {
         const int width = 288, faceSize = 96;

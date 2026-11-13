@@ -25,7 +25,9 @@ dotnet test Newt.sln --no-build
 dotnet run --project src/Newt.Game/Newt.Game.csproj
 ```
 
-Press Escape to exit. Press **V** to cycle **2D → 3D free camera → first person → 2D**.
+Press Escape to exit. Press **Tab** to switch between **2D and 3D**.
+In 2D, planetoids unfold into four equatorial faces with the two polar faces attached above and below.
+In 3D, press **V** to switch between the free camera and first person.
 While in a character view, press **F** to swap **first person ↔ third person**.
 This changes only the camera perspective: position, walking/swimming height,
 under-ice state, and look direction are preserved. **F** has no effect in 2D or
@@ -51,7 +53,8 @@ In water, release **Space** to sink, hold **Space** to swim up, or hold **Left C
 to sink faster. Ice and bridge decks support walking; swimmers can pass below ice.
 The zoom wheel is ignored in both walking views. The cursor releases
 when menus open or the game loses focus. Press **V** from either walking view to
-return to 2D. Walking follows curved ring worlds too.
+return to the 3D free camera, or press **Tab** to return to 2D. Walking follows
+curved ring worlds too.
 In 3D, terrain forms columns whose heights follow elevation, while buildings
 and critters face the camera in both yaw and pitch, remaining visible overhead.
 Ocean and lake surfaces share a subtle, nearly neutral translucent sheet.

@@ -156,7 +156,7 @@ public static partial class WorldGenerator
         0.24 * GlobeNoise(direction * Math.Max(2f, faceSize / 20f), seed) +
         0.10 * GlobeNoise(direction * Math.Max(4f, faceSize / 6f), seed ^ 0xC2B2AE3D27D4EB4FUL);
 
-    private static double GlobeNoise(Vector3 point, ulong seed)
+    internal static double GlobeNoise(Vector3 point, ulong seed)
     {
         var x = (int)MathF.Floor(point.X);
         var y = (int)MathF.Floor(point.Y);
