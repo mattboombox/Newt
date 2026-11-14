@@ -13,7 +13,6 @@ public static class NexusLayout
 
     public static GridPosition Center(SimulationWorld world) => new(world.Width / 2, world.Height / 2);
     public static float Radius(SimulationWorld world) => Math.Min(world.Width, world.Height) * 0.46f;
-    public static GridPosition HubPortal(SimulationWorld world) => ArmPosition(world, 0, 0.25f);
 
     public static GridPosition ArmPosition(SimulationWorld world, int arm, float distance = 0.72f)
     {

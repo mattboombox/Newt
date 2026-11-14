@@ -5,6 +5,7 @@ public sealed partial class SimulationWorld
     private readonly Dictionary<int, (int Step, int Portal, int NextPortalVisit)> _custodianPatrols = [];
     private readonly Dictionary<int, long> _custodianCreatedTicks = [];
     private readonly HashSet<int> _destroyedTeleporterTiles = [];
+    private int[]? _nexusArmTeleporters;
     public const long CustodianAncientAgeTicks = 100L * SeasonSystem.TicksPerYear;
     public const int CustodianRecruitmentIntervalTicks = 60 * TicksPerSecond;
     private const int CustodianPortalPatrolSteps = 15 * 60 / 5;
@@ -55,6 +56,66 @@ public sealed partial class SimulationWorld
             }
         }
         SeedInitialCustodians();
+    }
+
+    internal void SeedNexusTeleporters()
+    {
+        if (_nexusArmTeleporters is not null)
+            return;
+
+        _nexusArmTeleporters = Enumerable.Repeat(-1, NexusLayout.ArmCount).ToArray();
+        RestoreNexusArmTeleporters();
+    }
+
+    private void RestoreNexusArmTeleporters()
+    {
+        if (_nexusArmTeleporters is not { } armTeleporters)
+            return;
+
+        for (var arm = 0; arm < armTeleporters.Length; arm++)
+        {
+            var previous = armTeleporters[arm];
+            if (previous >= 0 && _teleporters.Contains(previous))
+                continue;
+
+            var preferred = NexusLayout.ArmPosition(this, arm);
+            if (previous >= 0 && TryPlaceTeleporter(GetPosition(previous)))
+                continue;
+
+            var replacement = CanPlaceTeleporter(preferred, GetIndex(preferred))
+                ? preferred : FindNexusArmTeleporterSite(arm, preferred);
+            if (replacement is { } site && TryPlaceTeleporter(site))
+            {
+                _destroyedTeleporterTiles.Remove(previous);
+                armTeleporters[arm] = GetIndex(site);
+            }
+        }
+    }
+
+    private GridPosition? FindNexusArmTeleporterSite(int arm, GridPosition preferred)
+    {
+        var center = NexusLayout.Center(this);
+        var branchStart = NexusLayout.Radius(this) * 0.5f;
+        GridPosition? best = null;
+        var bestDistance = int.MaxValue;
+        for (var y = 0; y < Height; y++)
+        {
+            for (var x = 0; x < Width; x++)
+            {
+                var distance = Math.Max(Math.Abs(x - preferred.X), Math.Abs(y - preferred.Y));
+                var dx = x - center.X;
+                var dy = y - center.Y;
+                var site = new GridPosition(x, y);
+                if (distance >= bestDistance || dx * dx + dy * dy < branchStart * branchStart ||
+                    !CanPlaceTeleporter(site, GetIndex(site)) || !NexusLayout.Contains(this, site) ||
+                    NexusLayout.ArmIndex(this, site) != arm)
+                    continue;
+
+                best = site;
+                bestDistance = distance;
+            }
+        }
+        return best;
     }
 
     private void SeedInitialCustodians()
@@ -122,6 +183,7 @@ public sealed partial class SimulationWorld
         foreach (var fabricator in _custodianFabricators)
             if (GetCritterCount(CritterSpecies.Custodian) < CustodianCapacity)
                 RecruitCustodianAt(fabricator);
+        RestoreNexusArmTeleporters();
     }
 
     private bool IsCustodianTarget(int index) =>
@@ -179,10 +241,7 @@ public sealed partial class SimulationWorld
         foreach (var tile in _destroyedTeleporterTiles.OrderBy(tile => tile))
         {
             // Keep damaged locations queued while disaster cover or buildings block repairs.
-            if (_occupants[tile] >= 0 || _surfaceCovers[tile] is not SurfaceCover.None ||
-                _terrain[tile] is Terrain.MegaWall || _apeStructures.ContainsKey(tile) ||
-                _wolfDenCharges.ContainsKey(tile) || _megaSpiderWebFood.ContainsKey(tile) ||
-                _volcanoes.Any(volcano => volcano.Position == GetPosition(tile)))
+            if (!CanPlaceTeleporter(GetPosition(tile), tile))
                 continue;
             var distance = WrappedManhattanDistance(current, GetPosition(tile));
             if (distance < repairDistance)

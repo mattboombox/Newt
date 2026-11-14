@@ -6,6 +6,60 @@ namespace Newt.Simulation.Tests;
 public sealed class WhaleCarcassTests
 {
     [Theory]
+    [InlineData(CritterSpecies.ToothedWhale)]
+    [InlineData(CritterSpecies.BaleenWhale)]
+    public void StrandedWhaleCannotCrossMountainsToReachOcean(CritterSpecies species)
+    {
+        var world = new SimulationWorld(5, 1, Terrain.Mountain);
+        var stranded = new GridPosition(0, 0);
+        var ocean = new GridPosition(2, 0);
+        world.SetTerrain(stranded, Terrain.Beach);
+        world.SetTerrain(ocean, Terrain.Ocean);
+        Assert.True(world.TrySpawnCritter(species, stranded));
+        var recover = typeof(SimulationWorld).GetMethod("TryMoveStranded", Flags)!;
+
+        recover.Invoke(world, [0]);
+
+        Assert.Equal(stranded, world.GetCritter(0).Position);
+
+        world.SetTerrain(new GridPosition(1, 0), Terrain.Shallows);
+        recover.Invoke(world, [0]);
+
+        Assert.Equal(new GridPosition(1, 0), world.GetCritter(0).Position);
+    }
+
+    [Theory]
+    [InlineData(CritterSpecies.ToothedWhale)]
+    [InlineData(CritterSpecies.BaleenWhale)]
+    public void WhaleFallsAreClearedAndCannotBeDepositedOnMountains(CritterSpecies species)
+    {
+        var world = new SimulationWorld(1, 1, Terrain.Ocean);
+        var tile = new GridPosition(0, 0);
+        world.AddCritter(species, tile);
+        Assert.True(world.RemoveCritterAt(tile));
+        Assert.Equal(10, world.GetWhaleFallNutrition(tile));
+
+        world.AddCritter(species, tile);
+        world.SetTerrain(tile, Terrain.Mountain);
+        Assert.Equal(0, world.GetWhaleFallNutrition(tile));
+        Assert.True(world.RemoveCritterAt(tile));
+        Assert.Equal(0, world.GetWhaleFallNutrition(tile));
+    }
+
+    [Fact]
+    public void TeleporterCannotDropWhaleOnMountain()
+    {
+        var world = new SimulationWorld(2, 1, Terrain.Mountain);
+        var portal = new GridPosition(0, 0);
+        world.SetTerrain(portal, Terrain.Ocean);
+        Assert.True(world.TryPlaceTeleporter(portal));
+        world.AddCritter(CritterSpecies.ToothedWhale, portal);
+
+        Assert.False(world.TryActivateTeleporterAt(portal));
+        Assert.Equal(portal, world.GetCritter(0).Position);
+    }
+
+    [Theory]
     [InlineData(CritterSpecies.Fish, Terrain.Ocean)]
     [InlineData(CritterSpecies.Crab, Terrain.Ocean)]
     [InlineData(CritterSpecies.Nautilus, Terrain.Shallows)]

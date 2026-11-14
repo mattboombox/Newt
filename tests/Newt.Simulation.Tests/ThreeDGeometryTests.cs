@@ -5,6 +5,37 @@ namespace Newt.Simulation.Tests;
 
 public sealed class ThreeDGeometryTests
 {
+    [Theory]
+    [InlineData(WorldBody.Terrarium)]
+    [InlineData(WorldBody.Nexus)]
+    [InlineData(WorldBody.Planetoid)]
+    [InlineData(WorldBody.RingWorld)]
+    public void SkyFadesToBlackAboveTerrain(WorldBody body)
+    {
+        var terrainHeight = ThreeDGeometry.ColumnHeight(SimulationWorld.MaximumGroundElevation);
+
+        Assert.Equal(0f, ThreeDGeometry.SkyBlackBlend(terrainHeight, body));
+        Assert.Equal(0.5f, ThreeDGeometry.SkyBlackBlend(3 * terrainHeight, body));
+        Assert.Equal(1f, ThreeDGeometry.SkyBlackBlend(5 * terrainHeight, body));
+        Assert.Equal(1f, ThreeDGeometry.SkyBlackBlend(6 * terrainHeight, body));
+    }
+
+    [Fact]
+    public void CylinderSkyKeepsItsColorAtHighAltitude()
+    {
+        Assert.Equal(0f, ThreeDGeometry.SkyBlackBlend(ThreeDGeometry.BlackSkyHeight, WorldBody.ONeillCylinder));
+    }
+
+    [Theory]
+    [InlineData(true, 0.40f)]
+    [InlineData(false, 0.88f)]
+    public void PlanetoidSkyUsesNoonHorizonAndNightPalette(bool afternoon, float horizonPhase)
+    {
+        Assert.Equal(0.14f, ThreeDGeometry.PlanetoidSkyPhase(1, afternoon), 5);
+        Assert.Equal(horizonPhase, ThreeDGeometry.PlanetoidSkyPhase(0, afternoon), 5);
+        Assert.InRange(ThreeDGeometry.PlanetoidSkyPhase(-1, afternoon), 0.55f, 0.72f);
+    }
+
     [Fact]
     public void PlanetoidNetMapsEachTileOnceAndLeavesTheCornersEmpty()
     {

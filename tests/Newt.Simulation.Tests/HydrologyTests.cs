@@ -5,6 +5,52 @@ namespace Newt.Simulation.Tests;
 public sealed class HydrologyTests
 {
     [Fact]
+    public void RingWallsBlockSpringFlowAndLakeFill()
+    {
+        var world = new SimulationWorld(9, 5, Terrain.Plains) { Body = WorldBody.RingWorld };
+        TerrainClassifier.ApplyMegaWalls(world);
+        var source = new GridPosition(4, 1);
+        world.SetElevation(source, SimulationWorld.MegaWallElevation + 0.1f);
+        var wall = new GridPosition(4, 0);
+
+        Assert.Equal(SpringTermination.InvalidSource, Hydrology.StartSpring(world, wall).Termination);
+        Assert.False(Hydrology.FillBasin(world, wall).Created);
+        Hydrology.TraceSpring(world, source);
+
+        for (var x = 0; x < world.Width; x++)
+        {
+            foreach (var y in new[] { 0, world.Height - 1 })
+            {
+                var position = new GridPosition(x, y);
+                Assert.Equal(SurfaceWaterKind.None, world.GetSurfaceWater(position));
+                Assert.Equal(RiverConnection.None, world.GetRiverConnections(position));
+            }
+        }
+    }
+
+    [Fact]
+    public void RebuildingRingWallsClearsExistingRiverAndItsConnection()
+    {
+        var world = new SimulationWorld(5, 5, Terrain.Plains) { Body = WorldBody.RingWorld };
+        var source = new GridPosition(2, 1);
+        var wall = new GridPosition(2, 0);
+        world.SetElevation(source, 0.6f);
+        world.SetElevation(wall, -0.1f);
+        Hydrology.StartSpring(world, source);
+        Hydrology.AdvanceSprings(world);
+        Assert.Equal(SurfaceWaterKind.River, world.GetSurfaceWater(wall));
+        Assert.Equal(RiverConnection.North, world.GetRiverConnections(source));
+
+        TerrainClassifier.ApplyMegaWalls(world);
+        Hydrology.AdvanceSprings(world);
+
+        Assert.Equal(SurfaceWaterKind.None, world.GetSurfaceWater(wall));
+        Assert.Equal(RiverConnection.None, world.GetRiverConnections(wall));
+        Assert.Equal(RiverConnection.None, world.GetRiverConnections(source));
+        Assert.Equal(0, world.ActiveSpringCount);
+    }
+
+    [Fact]
     public void NaturalSpringRejectsPlainTerrain()
     {
         var world = new SimulationWorld(9, 9, Terrain.Plains, seed: 4);

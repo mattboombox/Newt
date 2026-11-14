@@ -562,19 +562,20 @@ public sealed partial class SimulationWorld
         }
 
         var tileIndex = GetIndex(position);
-        if (_teleporters.Contains(tileIndex) || _occupants[tileIndex] >= 0 ||
-            _terrain[tileIndex] is Terrain.MegaWall ||
-            _surfaceCovers[tileIndex] is not SurfaceCover.None ||
-            _wolfDenCharges.ContainsKey(tileIndex) || _megaSpiderWebFood.ContainsKey(tileIndex) ||
-            _apeStructures.ContainsKey(tileIndex) ||
-            _volcanoes.Any(volcano => volcano.Position == position))
-        {
+        if (!CanPlaceTeleporter(position, tileIndex))
             return false;
-        }
 
         _destroyedTeleporterTiles.Remove(tileIndex);
         return _teleporters.Add(tileIndex);
     }
+
+    private bool CanPlaceTeleporter(GridPosition position, int tileIndex) =>
+        !_teleporters.Contains(tileIndex) && _occupants[tileIndex] < 0 &&
+        _terrain[tileIndex] is not Terrain.MegaWall &&
+        _surfaceCovers[tileIndex] is SurfaceCover.None &&
+        !_wolfDenCharges.ContainsKey(tileIndex) && !_megaSpiderWebFood.ContainsKey(tileIndex) &&
+        !_apeStructures.ContainsKey(tileIndex) &&
+        !_volcanoes.Any(volcano => volcano.Position == position);
 
     public bool RemoveTeleporterAt(GridPosition position)
     {
@@ -726,11 +727,17 @@ public sealed partial class SimulationWorld
         {
             InvalidateTransportNetwork();
             _terrain[index] = terrain;
-            TerrainGeometryChanged?.Invoke(position);
+            if (terrain is Terrain.Mountain)
+                _whaleFallNutrition[index] = 0;
             if (terrain is Terrain.MegaWall)
             {
+                ClearMegaWallFreshwater(position, index);
                 RemoveTeleporterAt(position);
+                var occupant = _occupants[index];
+                if (occupant >= 0 && !CanOccupyMegaWall(_species[occupant], index))
+                    RemoveCritterAt(position);
             }
+            TerrainGeometryChanged?.Invoke(position);
             if (validateApeStructure)
             {
                 RemoveInvalidApeStructureAt(position);
@@ -760,6 +767,8 @@ public sealed partial class SimulationWorld
         _terrain[index] = terrain;
         _elevation[index] = elevation;
         _surfaceCovers[index] = SurfaceCover.None;
+        if (terrain is Terrain.MegaWall)
+            ClearMegaWallFreshwater(position, index);
         if (geometryChanged)
             TerrainGeometryChanged?.Invoke(position);
         _surfaceCoverUntilTicks[index] = 0;
@@ -850,7 +859,8 @@ public sealed partial class SimulationWorld
     internal void SetSurfaceWater(GridPosition position, SurfaceWaterKind water)
     {
         var index = GetIndex(position);
-        if (_surfaceWater[index] != water)
+        if (_surfaceWater[index] != water &&
+            (water is SurfaceWaterKind.None || _terrain[index] is not Terrain.MegaWall))
         {
             InvalidateTransportNetwork();
             if (_surfaceWater[index] is SurfaceWaterKind.FreshwaterLake ||
@@ -868,7 +878,7 @@ public sealed partial class SimulationWorld
     internal void SetWaterSurfaceElevation(GridPosition position, float? elevation)
     {
         var index = GetIndex(position);
-        var surface = elevation ?? float.NaN;
+        var surface = _terrain[index] is Terrain.MegaWall ? float.NaN : elevation ?? float.NaN;
         if (_waterSurfaceElevations[index].Equals(surface)) return;
         _waterSurfaceElevations[index] = surface;
         TerrainGeometryChanged?.Invoke(position);
@@ -876,6 +886,29 @@ public sealed partial class SimulationWorld
 
     internal void AddRiverConnection(GridPosition position, RiverConnection connection) =>
         _riverConnections[GetIndex(position)] |= connection;
+
+    private void ClearMegaWallFreshwater(GridPosition position, int index)
+    {
+        var connections = _riverConnections[index];
+        if (connections is not RiverConnection.None)
+        {
+            var directions = Hydrology.FlowDirections;
+            for (var direction = 0; direction < directions.Length; direction++)
+            {
+                if ((connections & (RiverConnection)(1 << direction)) == 0)
+                    continue;
+
+                var neighbor = OffsetTile(position, directions[direction]);
+                if (!Contains(neighbor))
+                    continue;
+
+                var reverse = (RiverConnection)(1 << ((direction + directions.Length / 2) % directions.Length));
+                _riverConnections[GetIndex(neighbor)] &= ~reverse;
+                TerrainGeometryChanged?.Invoke(neighbor);
+            }
+        }
+        ClearFreshwaterForTerrainRebuild(position);
+    }
 
     internal void ClearFreshwaterForTerrainRebuild(GridPosition position)
     {
@@ -1296,8 +1329,8 @@ public sealed partial class SimulationWorld
     }
 
     /// <summary>
-    /// Spawns a player-selected critter on any empty in-bounds tile. Habitat
-    /// rules resume immediately afterward, so an incompatible critter is
+    /// Spawns a player-selected critter on an empty in-bounds tile, subject to
+    /// mega wall restrictions. An incompatible critter is
     /// stranded and attempts to recover normally.
     /// </summary>
     public bool TrySpawnCritter(CritterSpecies species, GridPosition position)
@@ -1308,7 +1341,7 @@ public sealed partial class SimulationWorld
         }
 
         var tileIndex = GetIndex(position);
-        if (_occupants[tileIndex] >= 0)
+        if (_occupants[tileIndex] >= 0 || !CanOccupyMegaWall(species, tileIndex))
         {
             return false;
         }
@@ -1817,7 +1850,7 @@ public sealed partial class SimulationWorld
             {
                 // Births may cross habitat boundaries; offspring recover from stranding normally.
                 var birthTile = GetIndex(birth.Position);
-                var added = LifeEnabled && _occupants[birthTile] < 0;
+                var added = LifeEnabled && _occupants[birthTile] < 0 && CanOccupyMegaWall(birth.Species, birthTile);
                 if (added)
                     AddCritterUnchecked(birth.Species, birth.Position, birthTile);
                 if (added)
@@ -3691,7 +3724,7 @@ public sealed partial class SimulationWorld
             }
 
             var tileIndex = GetIndex(candidate);
-            if (_occupants[tileIndex] >= 0)
+            if (_occupants[tileIndex] >= 0 || !CanOccupyMegaWall(offspringSpecies, tileIndex))
                 continue;
 
             if (!prefersWater || CanLiveOn(offspringSpecies, tileIndex))
@@ -3814,7 +3847,8 @@ public sealed partial class SimulationWorld
             var candidate = OffsetTile(current, direction);
             if (candidate.Y < 0 || candidate.Y >= Height ||
                 _occupants[GetIndex(candidate)] >= 0 ||
-                IsLivingApe(species) && _terrain[GetIndex(candidate)] is Terrain.MegaWall)
+                !CanOccupyMegaWall(species, GetIndex(candidate)) ||
+                IsWhaleMountain(species, GetIndex(candidate)))
             {
                 continue;
             }
@@ -6030,7 +6064,8 @@ public sealed partial class SimulationWorld
             CritterSpecies.UndeadApe => 1,
             CritterSpecies.Lich => 7,
             CritterSpecies.UndeadWarrior => 2,
-            CritterSpecies.MegaSpider or CritterSpecies.Jellyfish => 2,
+            CritterSpecies.MegaSpider => 2,
+            CritterSpecies.Jellyfish => 1,
             CritterSpecies.SeaScorpion or CritterSpecies.Squid => 3,
             CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack => 2,
             CritterSpecies.ToothedWhale => 6,
@@ -7021,6 +7056,9 @@ public sealed partial class SimulationWorld
     {
         var origin = _positions[critterIndex];
         var movingSpecies = _species[critterIndex];
+        if (!CanOccupyMegaWall(movingSpecies, destinationIndex) || IsWhaleMountain(movingSpecies, destinationIndex))
+            return;
+
         _occupants[GetIndex(origin)] = -1;
         _occupants[destinationIndex] = critterIndex;
         _positions[critterIndex] = destination;
@@ -7045,7 +7083,7 @@ public sealed partial class SimulationWorld
             return false;
         }
 
-        var arrival = FindTeleporterArrival(position);
+        var arrival = FindTeleporterArrival(position, _species[critterIndex]);
         if (arrival is null)
         {
             return false;
@@ -7060,21 +7098,24 @@ public sealed partial class SimulationWorld
     }
 
     /// <summary>Chooses an empty, non-portal arrival for a traveler, including the first-person player.</summary>
-    public GridPosition? FindTeleporterArrival(GridPosition source)
+    public GridPosition? FindTeleporterArrival(GridPosition source) =>
+        FindTeleporterArrival(source, species: null);
+
+    private GridPosition? FindTeleporterArrival(GridPosition source, CritterSpecies? species)
     {
         if (!HasTeleporter(source)) return null;
         return _teleporters.Count == 1
-            ? FindRandomUnoccupiedTeleporterArrival()
-            : FindLinkedTeleporterArrival(GetIndex(source)) ?? FindRandomUnoccupiedTeleporterArrival();
+            ? FindRandomUnoccupiedTeleporterArrival(species)
+            : FindLinkedTeleporterArrival(GetIndex(source), species) ?? FindRandomUnoccupiedTeleporterArrival(species);
     }
 
-    private GridPosition? FindRandomUnoccupiedTeleporterArrival()
+    private GridPosition? FindRandomUnoccupiedTeleporterArrival(CritterSpecies? species)
     {
         var candidates = new List<int>();
         for (var tileIndex = 0; tileIndex < _terrain.Length; tileIndex++)
         {
             if (_occupants[tileIndex] < 0 && !_teleporters.Contains(tileIndex) &&
-                _terrain[tileIndex] is not Terrain.MegaWall)
+                _terrain[tileIndex] is not Terrain.MegaWall && !IsWhaleMountain(species, tileIndex))
             {
                 candidates.Add(tileIndex);
             }
@@ -7085,7 +7126,7 @@ public sealed partial class SimulationWorld
             : GetPosition(candidates[NextInt(candidates.Count)]);
     }
 
-    private GridPosition? FindLinkedTeleporterArrival(int sourceTile)
+    private GridPosition? FindLinkedTeleporterArrival(int sourceTile, CritterSpecies? species)
     {
         var destinations = new List<(int PortalTile, List<int> ArrivalTiles)>();
         foreach (var portalTile in _teleporters)
@@ -7109,7 +7150,7 @@ public sealed partial class SimulationWorld
                 var candidateTile = GetIndex(candidate);
                 if (_occupants[candidateTile] < 0 && !_teleporters.Contains(candidateTile) &&
                     _terrain[candidateTile] is not Terrain.MegaWall &&
-                    !arrivals.Contains(candidateTile))
+                    !IsWhaleMountain(species, candidateTile) && !arrivals.Contains(candidateTile))
                 {
                     arrivals.Add(candidateTile);
                 }
@@ -7274,7 +7315,7 @@ public sealed partial class SimulationWorld
         _warriorCombatKills.Remove(removedId.Value);
         _toothedWhaleHunts.Remove(removedId.Value);
         var removedSpecies = _species[critterIndex];
-        if (removedSpecies is CritterSpecies.ToothedWhale or CritterSpecies.BaleenWhale)
+        if (IsWhaleSpecies(removedSpecies) && !IsWhaleMountain(removedSpecies, tileIndex))
             _whaleFallNutrition[tileIndex] =
                 (byte)Math.Min(byte.MaxValue, _whaleFallNutrition[tileIndex] + 10);
         _critterIndicesById.Remove(removedId.Value);
@@ -7353,7 +7394,7 @@ public sealed partial class SimulationWorld
         return selected is not null && TryAddCritter(CritterSpecies.Plankton, selected.Value);
     }
 
-    private GridPosition OffsetTile(GridPosition position, GridPosition direction) => Body == WorldBody.Planetoid
+    internal GridPosition OffsetTile(GridPosition position, GridPosition direction) => Body == WorldBody.Planetoid
         ? PlanetoidLayout.Offset(position, direction.X, direction.Y, PlanetoidLayout.FaceSize(Width))
         : new GridPosition(Mod(position.X + direction.X, Width), position.Y + direction.Y);
 
@@ -7370,7 +7411,17 @@ public sealed partial class SimulationWorld
     private GridPosition GetPosition(int tileIndex) =>
         new(tileIndex % Width, tileIndex / Width);
 
+    private static bool IsWhaleSpecies(CritterSpecies? species) =>
+        species is CritterSpecies.ToothedWhale or CritterSpecies.BaleenWhale;
+
+    private bool IsWhaleMountain(CritterSpecies? species, int tileIndex) =>
+        _terrain[tileIndex] is Terrain.Mountain && IsWhaleSpecies(species);
+
+    private bool CanOccupyMegaWall(CritterSpecies species, int tileIndex) =>
+        _terrain[tileIndex] is not Terrain.MegaWall || species is CritterSpecies.Custodian;
+
     private bool CanLiveOn(CritterSpecies species, int tileIndex) =>
+        CanOccupyMegaWall(species, tileIndex) &&
         (Body is not WorldBody.Nexus || NexusLayout.Contains(this, GetPosition(tileIndex))) &&
         (species is CritterSpecies.Custodian ||
         _terrain[tileIndex] is Terrain.Ice &&
@@ -7447,7 +7498,8 @@ public sealed partial class SimulationWorld
 
     internal bool IsValidReproductionSite(CritterSpecies species, GridPosition position) => true;
 
-    internal bool IsValidBirthSite(CritterSpecies species, GridPosition position) => true;
+    internal bool IsValidBirthSite(CritterSpecies species, GridPosition position) =>
+        CanOccupyMegaWall(species, GetIndex(position));
 
     private bool IsMegaToadTile(int tileIndex) =>
         _surfaceCovers[tileIndex] is SurfaceCover.None &&

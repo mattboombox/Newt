@@ -1401,7 +1401,7 @@ public sealed class SimulationWorldTests
 
         Assert.True(SimulationWorld.CanEat(predator, CritterSpecies.Jellyfish));
         Assert.False(SimulationWorld.CanEat(CritterSpecies.Jellyfish, predator));
-        Assert.Equal(2, world.GetCritterCombatDamage(jellyfishId));
+        Assert.Equal(1, world.GetCritterCombatDamage(jellyfishId));
 
         var defended = false;
         for (var attempt = 0; attempt < 32 && !defended; attempt++)

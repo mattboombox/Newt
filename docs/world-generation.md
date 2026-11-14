@@ -136,15 +136,16 @@ without changing the flower boundary or engineered temperature/moisture sectors.
 Temperature gently blends across petal boundaries and toward the center; petal
 interiors retain their engineered temperatures.
 
-The center has its own seeded terrain, blended smoothly into the petal roots, with a teleporter at its center
-and one in each arm (eleven total). There is no forced circular ocean or elevation ring.
+Seeded terrain around the central opening blends smoothly into the petal roots.
+Each arm has one teleporter, for ten total.
 A continuous Mega Wall follows the entire
 flower perimeter and is restored by terrain rebuilds. Space outside the structure
 is inaccessible and is not rendered as playable terrain.
 
 Standard has one Custodian fabricator at the north arm's wall tip and five drones.
 Mega has two fabricators at the north and opposite south tips and ten drones.
-Custodians can repair destroyed Nexus teleporters as on Ring World.
+Custodians can repair destroyed Nexus teleporters. A periodic maintenance check restores
+missing branch teleporters, using a nearby tile in the same branch if the old site is blocked.
 
 ## Prototype controls
 

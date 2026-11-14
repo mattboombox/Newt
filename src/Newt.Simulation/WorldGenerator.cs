@@ -227,11 +227,7 @@ public static partial class WorldGenerator
         SelectOceanSeeds(world, includeLargeSecondaryBasins);
         TerrainClassifier.RebuildAll(world);
         if (nexus)
-        {
-            world.TryPlaceTeleporter(NexusLayout.HubPortal(world));
-            for (var arm = 0; arm < NexusLayout.ArmCount; arm++)
-                world.TryPlaceTeleporter(NexusLayout.ArmPosition(world, arm));
-        }
+            world.SeedNexusTeleporters();
         else
             SeedRingWorldTeleporters(world);
         if (seedVolcanoes)

@@ -280,6 +280,9 @@ public sealed class CombatProtectionTests
                 continue;
             if (!SimulationWorld.CanEat(attacker, defender))
                 continue;
+            // Jellyfish have a combat damage stat for their sting against specific predators.
+            if (defender is CritterSpecies.Jellyfish && !SimulationWorld.CanFightBackAgainst(defender, attacker))
+                continue;
             // Cannibal spiders only attack while hungry; newly spawned ones are full.
             if (attacker == CritterSpecies.MegaSpider && defender == attacker)
                 continue;

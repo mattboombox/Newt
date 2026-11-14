@@ -17,10 +17,14 @@ public sealed partial class NewtGame
     private const int WhaleFallCutout3D = -2;
     private const float WalkingSpriteScale3D = 0.8f;
     private bool _dayNightCycleEnabled = true;
+    private static readonly (Vector3 Direction, bool Cross)[] Stars3D = CreateStars3D();
+    private const int TwilightGrid3D = 20;
+    private readonly VertexPositionColor[] _twilightVertices3D = new VertexPositionColor[TwilightGrid3D * TwilightGrid3D * 6];
+    private static readonly Color DaySkyBlue3D = new(65, 138, 204);
     private static readonly (float Phase, Color Color)[] SkyCycle3D =
     [
-        (0f, Color.SkyBlue),
-        (0.20f, Color.SkyBlue),
+        (0f, DaySkyBlue3D),
+        (0.20f, DaySkyBlue3D),
         (0.32f, new Color(255, 166, 92)), // Sunset gold.
         (0.40f, new Color(203, 91, 130)), // Rose dusk.
         (0.48f, new Color(49, 36, 82)),
@@ -28,15 +32,14 @@ public sealed partial class NewtGame
         (0.72f, Color.Black),
         (0.80f, new Color(64, 49, 103)),
         (0.88f, new Color(244, 151, 163)), // Dawn pink.
-        (0.94f, new Color(255, 207, 151)), // Morning peach.
-        (1f, Color.SkyBlue),
+        (0.94f, new Color(242, 108, 105)), // Morning red.
+        (1f, DaySkyBlue3D),
     ];
 
-    private Color GetSkyColor3D()
+    private Color GetDayNightSkyColor3D(float phase)
     {
-        if (!_dayNightCycleEnabled) return Color.SkyBlue;
+        if (!_dayNightCycleEnabled) return DaySkyBlue3D;
         // Use simulation ticks so the sky follows pause/speed and works without seasons.
-        var phase = SkyPhase3D();
         for (var i = 1; i < SkyCycle3D.Length; i++)
         {
             var (end, to) = SkyCycle3D[i];
@@ -45,7 +48,7 @@ public sealed partial class NewtGame
             var blend = MathHelper.SmoothStep(0, 1, (phase - start) / (end - start));
             return Color.Lerp(from, to, blend);
         }
-        return Color.SkyBlue;
+        return DaySkyBlue3D;
     }
 
     private float SkyPhase3D()
@@ -54,15 +57,150 @@ public sealed partial class NewtGame
         return (_world.Tick % cycleTicks) / (float)cycleTicks;
     }
 
-    private void DrawSun3D(Matrix view, Matrix projection)
+    private static (Vector3 Direction, bool Cross)[] CreateStars3D()
     {
-        var sun = ThreeDGeometry.SunDirection(_dayNightCycleEnabled ? SkyPhase3D() : 0.14f);
+        var random = new Random(7349);
+        var stars = new (Vector3 Direction, bool Cross)[640];
+        for (var i = 0; i < stars.Length; i++)
+        {
+            var y = 2 * random.NextSingle() - 1;
+            var azimuth = MathHelper.TwoPi * random.NextSingle();
+            var radius = MathF.Sqrt(1 - y * y);
+            stars[i] = (new Vector3(radius * MathF.Cos(azimuth), y, radius * MathF.Sin(azimuth)),
+                random.Next(5) == 0);
+        }
+        return stars;
+    }
+
+    private void DrawStars3D(Matrix viewProjection, Color sky, Vector3 sun, float twilight, float dawn)
+    {
+        if (twilight == 0 && StarOpacity3D(sky) <= 0)
+            return;
+
+        var viewport = GraphicsDevice.Viewport;
+        _spriteBatch!.Begin(samplerState: SamplerState.PointClamp, depthStencilState: DepthStencilState.None);
+        foreach (var (direction, cross) in Stars3D)
+        {
+            var clip = Vector4.Transform(new Vector4(direction, 0), viewProjection);
+            if (clip.W <= 0 || Math.Abs(clip.X) >= clip.W || Math.Abs(clip.Y) >= clip.W)
+                continue;
+            var localSky = TwilightColor3D(sky, Vector3.Dot(direction, sun), twilight, dawn);
+            var opacity = StarOpacity3D(localSky);
+            if (opacity <= 0)
+                continue;
+            var color = Color.White * opacity;
+            var x = (int)((clip.X / clip.W + 1) * viewport.Width * 0.5f);
+            var y = (int)((1 - clip.Y / clip.W) * viewport.Height * 0.5f);
+            if (cross)
+            {
+                _spriteBatch.Draw(_pixel, new Rectangle(x - 1, y, 3, 1), color);
+                _spriteBatch.Draw(_pixel, new Rectangle(x, y - 1, 1, 1), color);
+                _spriteBatch.Draw(_pixel, new Rectangle(x, y + 1, 1, 1), color);
+            }
+            else
+                _spriteBatch.Draw(_pixel, new Rectangle(x, y, 1, 1), color);
+        }
+        _spriteBatch.End();
+    }
+
+    private (Color Sky, Vector3 Sun, float Dawn) SkyAtCamera3D(Vector3 eye)
+    {
+        var phase = _dayNightCycleEnabled ? SkyPhase3D() : 0.14f;
+        if (IsPlanetoid3D && _dayNightCycleEnabled)
+        {
+            var angle = MathHelper.TwoPi * phase;
+            var sun = new Vector3(MathF.Cos(angle), 0, MathF.Sin(angle));
+            var localUp = Vector3.Normalize(eye);
+            var sunsetward = new Vector3(MathF.Sin(angle), 0, -MathF.Cos(angle));
+            var elevation = Vector3.Dot(localUp, sun);
+            var dawn = GetDayNightSkyColor3D(ThreeDGeometry.PlanetoidSkyPhase(elevation, afternoon: false));
+            var dusk = GetDayNightSkyColor3D(ThreeDGeometry.PlanetoidSkyPhase(elevation, afternoon: true));
+            var blend = MathHelper.SmoothStep(0, 1, 0.5f + 2.5f * Vector3.Dot(localUp, sunsetward));
+            return (Color.Lerp(dawn, dusk, blend), sun, 1 - blend);
+        }
+
+        var localSun = ThreeDGeometry.SunDirection(phase);
         // Cross the ring's width from north to south rather than following its circumference.
         var (east, up, south) = SurfaceFrame3D(_focus3D.X, _focus3D.Y);
         var sunriseDirection = IsRing3D ? -south : east;
-        var direction = sunriseDirection * sun.X + up * sun.Y;
+        var dawnTint = phase >= 0.72f ? 1f : MathHelper.SmoothStep(1, 0, phase / 0.05f);
+        return (GetDayNightSkyColor3D(phase), sunriseDirection * localSun.X + up * localSun.Y, dawnTint);
+    }
+
+    private static float StarOpacity3D(Color sky)
+    {
+        var brightness = Math.Max(sky.R, Math.Max(sky.G, sky.B)) / 255f;
+        return 1 - MathHelper.SmoothStep(0, 1, brightness / 0.55f);
+    }
+
+    private float TwilightStrength3D(float sunHeight, float altitudeFade)
+    {
+        if (!_dayNightCycleEnabled || altitudeFade >= 1)
+            return 0;
+        return (1 - altitudeFade) * (sunHeight < 0
+            ? MathHelper.SmoothStep(0, 1, 1 + sunHeight / 0.42f)
+            : MathHelper.SmoothStep(0, 1, 1 - sunHeight / 0.55f));
+    }
+
+    private static Color TwilightColor3D(Color sky, float alignment, float twilight, float dawn)
+    {
+        var warmth = MathHelper.SmoothStep(0, 1, (alignment - 0.28f) / 0.72f);
+        var glow = warmth * warmth;
+        var warmColor = Color.Lerp(new Color(255, 166, 92), new Color(235, 72, 75), dawn);
+        var glowColor = Color.Lerp(new Color(255, 226, 166), new Color(255, 126, 113), dawn);
+        var twilightColor = Color.Lerp(new Color(49, 36, 82), warmColor, warmth);
+        var color = Color.Lerp(sky, twilightColor, twilight * 0.8f);
+        return Color.Lerp(color, glowColor, twilight * glow * 0.55f);
+    }
+
+    private void DrawTwilight3D(Matrix view, Matrix projection, Color sky, Vector3 sun, float twilight, float dawn)
+    {
+        if (twilight == 0)
+            return;
+
+        var camera = Matrix.Invert(view);
+        VertexPositionColor Vertex(int column, int row)
+        {
+            var x = 2f * column / TwilightGrid3D - 1;
+            var y = 2f * row / TwilightGrid3D - 1;
+            var ray = Vector3.Normalize(Vector3.TransformNormal(
+                new Vector3(x / projection.M11, y / projection.M22, -1), camera));
+            var color = TwilightColor3D(sky, Vector3.Dot(ray, sun), twilight, dawn);
+            return new VertexPositionColor(new Vector3(x, y, 0.5f), color);
+        }
+
+        for (var row = 0; row < TwilightGrid3D; row++)
+        for (var column = 0; column < TwilightGrid3D; column++)
+        {
+            var index = (row * TwilightGrid3D + column) * 6;
+            var bottomLeft = Vertex(column, row);
+            var bottomRight = Vertex(column + 1, row);
+            var topLeft = Vertex(column, row + 1);
+            var topRight = Vertex(column + 1, row + 1);
+            _twilightVertices3D[index] = bottomLeft;
+            _twilightVertices3D[index + 1] = bottomRight;
+            _twilightVertices3D[index + 2] = topLeft;
+            _twilightVertices3D[index + 3] = topLeft;
+            _twilightVertices3D[index + 4] = bottomRight;
+            _twilightVertices3D[index + 5] = topRight;
+        }
+
+        GraphicsDevice.BlendState = BlendState.Opaque;
+        GraphicsDevice.DepthStencilState = DepthStencilState.None;
+        GraphicsDevice.RasterizerState = RasterizerState.CullNone;
+        _terrainEffect3D!.View = Matrix.Identity;
+        _terrainEffect3D.Projection = Matrix.Identity;
+        foreach (var pass in _terrainEffect3D.CurrentTechnique.Passes)
+        {
+            pass.Apply();
+            GraphicsDevice.DrawUserPrimitives(PrimitiveType.TriangleList, _twilightVertices3D, 0, _twilightVertices3D.Length / 3);
+        }
+    }
+
+    private void DrawSun3D(Matrix viewProjection, Vector3 direction)
+    {
         // A direction (w = 0) keeps the sun infinitely distant as the camera moves.
-        var clip = Vector4.Transform(new Vector4(direction, 0), view * projection);
+        var clip = Vector4.Transform(new Vector4(direction, 0), viewProjection);
         if (clip.W <= 0) return;
         var viewport = GraphicsDevice.Viewport;
         var x = (clip.X / clip.W + 1) * viewport.Width * 0.5f;
@@ -536,8 +674,18 @@ public sealed partial class NewtGame
         finally { _drawing3DAtlas = false; GraphicsDevice.SetRenderTarget(null); }
         var originalViewport = GraphicsDevice.Viewport;
         GraphicsDevice.Viewport = Viewport3D();
-        GraphicsDevice.Clear(GetSkyColor3D());
-        DrawSun3D(view, projection);
+        var eye = Matrix.Invert(view).Translation;
+        var eyeHeight = _playerView is PlayerView.FirstPerson
+            ? _firstPersonEyeHeight : LocalPoint3D(eye).Y;
+        var skyBlend = ThreeDGeometry.SkyBlackBlend(eyeHeight, _world.Body);
+        var (dayNightSky, sunDirection, dawn) = SkyAtCamera3D(eye);
+        var sky = Color.Lerp(dayNightSky, Color.Black, skyBlend);
+        GraphicsDevice.Clear(sky);
+        var skyUp = IsPlanetoid3D ? Vector3.Normalize(eye) : SurfaceUp3D(_focus3D.X, _focus3D.Y);
+        var twilight = TwilightStrength3D(Vector3.Dot(sunDirection, skyUp), skyBlend);
+        DrawTwilight3D(view, projection, sky, sunDirection, twilight, dawn);
+        DrawStars3D(view * projection, sky, sunDirection, twilight, dawn);
+        DrawSun3D(view * projection, sunDirection);
         GraphicsDevice.BlendState = BlendState.Opaque;
         GraphicsDevice.DepthStencilState = DepthStencilState.Default;
         GraphicsDevice.RasterizerState = RasterizerState.CullNone;

@@ -10,7 +10,7 @@ public static class Hydrology
     public const int MaximumLakeTileCount = 1_500;
     private const int TerminalLakeTileBudget = 128;
 
-    private static readonly GridPosition[] FlowDirections =
+    internal static readonly GridPosition[] FlowDirections =
     [
         new(0, -1),
         new(1, -1),
@@ -299,7 +299,8 @@ public static class Hydrology
         IReadOnlySet<GridPosition>? blocked)
     {
         ArgumentNullException.ThrowIfNull(world);
-        if (!world.Contains(sink) || IsOcean(world.GetTerrain(sink)))
+        if (!world.Contains(sink) || world.GetTerrain(sink) is Terrain.MegaWall ||
+            IsOcean(world.GetTerrain(sink)))
         {
             return default;
         }
@@ -444,12 +445,17 @@ public static class Hydrology
     private static SpringResult? AdvanceSpring(SimulationWorld world, ActiveSpring spring)
     {
         var current = spring.Current;
+        if (world.GetTerrain(current) is Terrain.MegaWall)
+        {
+            return Completed(SpringTermination.InvalidSource, spring);
+        }
         if (IsOcean(world.GetTerrain(current)))
         {
             return Completed(SpringTermination.ReachedOcean, spring);
         }
         if (spring.PlannedRoute.TryPeek(out var nextPlanned) &&
-            world.GetElevation(nextPlanned) < world.GetElevation(current) - ElevationTolerance)
+            (world.GetTerrain(nextPlanned) is Terrain.MegaWall ||
+                world.GetElevation(nextPlanned) < world.GetElevation(current) - ElevationTolerance))
         {
             // The minimax route is only needed to cross the lake's rim or a flat
             // spillway. Once it descends again, normal routing must take over so
@@ -981,27 +987,16 @@ public static class Hydrology
         GridPosition position,
         GridPosition direction)
     {
-        if (world.Body == WorldBody.Planetoid)
-            return PlanetoidLayout.Offset(position, direction.X, direction.Y, PlanetoidLayout.FaceSize(world.Width));
-        var y = position.Y + direction.Y;
-        if (y < 0 || y >= world.Height)
-        {
-            return null;
-        }
-
-        var x = Mod(position.X + direction.X, world.Width);
-        return new GridPosition(x, y);
+        var neighbor = world.OffsetTile(position, direction);
+        return world.Contains(neighbor) && world.GetTerrain(neighbor) is not Terrain.MegaWall
+            ? neighbor
+            : null;
     }
 
     private static bool IsOcean(Terrain terrain) => terrain is
         Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows or Terrain.Ice;
 
-    private static int Mod(int value, int modulus)
-    {
-        var result = value % modulus;
-        return result < 0 ? result + modulus : result;
-    }
-
     private static bool IsValidSource(SimulationWorld world, GridPosition source) =>
-        world.Contains(source) && !IsOcean(world.GetTerrain(source)) && world.GetElevation(source) > 0;
+        world.Contains(source) && world.GetTerrain(source) is not Terrain.MegaWall &&
+        !IsOcean(world.GetTerrain(source)) && world.GetElevation(source) > 0;
 }

@@ -33,7 +33,9 @@ public sealed class ApeTrafficTests
         var floodedWall = new GridPosition(6, 5);
         world.SetTerrain(origin, Terrain.Plains);
         world.SetTerrain(blocker, Terrain.Shallows);
+        world.SetTerrain(floodedWall, Terrain.Plains);
         world.SetSurfaceWater(floodedWall, SurfaceWaterKind.River);
+        SetLegacyWall(world, floodedWall);
         world.AddCritter(CritterSpecies.ApeTrader, origin);
         var fish = world.AddCritter(CritterSpecies.Fish, blocker);
 
@@ -53,7 +55,7 @@ public sealed class ApeTrafficTests
         var blocker = world.AddCritter(CritterSpecies.Plankton, new(1, 0));
         var wall = new GridPosition(2, 0);
         world.AddCritter(CritterSpecies.Plankton, wall);
-        world.SetTerrain(wall, Terrain.MegaWall);
+        SetLegacyWall(world, wall);
 
         var shoved = (bool)typeof(SimulationWorld).GetMethod("TryShovePlanktonChain",
             BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(world, [0, 1, null])!;
@@ -125,10 +127,46 @@ public sealed class ApeTrafficTests
     public void SwapNeverPushesApeOntoRingWall()
     {
         var world = new SimulationWorld(10, 10, Terrain.Plains);
-        world.SetTerrain(new(4, 5), Terrain.MegaWall);
-        Assert.True(world.TrySpawnCritter(CritterSpecies.ApeTrader, new(4, 5)));
+        world.AddCritter(CritterSpecies.ApeTrader, new(4, 5));
+        SetLegacyWall(world, new(4, 5));
         world.AddCritter(CritterSpecies.Ape, new(5, 5));
         Assert.False(Swap(world));
+    }
+
+    private static void SetLegacyWall(SimulationWorld world, GridPosition tile)
+    {
+        var terrain = (Terrain[])typeof(SimulationWorld).GetField("_terrain",
+            BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(world)!;
+        terrain[tile.Y * world.Width + tile.X] = Terrain.MegaWall;
+    }
+
+    [Fact]
+    public void OnlyCustodiansCanSpawnOnMegaWalls()
+    {
+        var world = new SimulationWorld(3, 3, Terrain.MegaWall);
+        var wall = new GridPosition(1, 1);
+
+        foreach (var species in Enum.GetValues<CritterSpecies>().Where(species => species is not CritterSpecies.Custodian))
+        {
+            Assert.False(world.TrySpawnCritter(species, wall));
+            Assert.Throws<InvalidOperationException>(() => world.AddCritter(species, wall));
+        }
+
+        Assert.True(world.TrySpawnCritter(CritterSpecies.Custodian, wall));
+    }
+
+    [Fact]
+    public void StrandedNewtCannotRecoverAcrossMegaWalls()
+    {
+        var world = new SimulationWorld(5, 3, Terrain.MegaWall);
+        var start = new GridPosition(2, 0);
+        world.SetTerrain(start, Terrain.Mountain);
+        Assert.True(world.TrySpawnCritter(CritterSpecies.Newt, start));
+
+        typeof(SimulationWorld).GetMethod("TryMoveStranded", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(world, [0]);
+
+        Assert.Equal(start, world.GetCritter(0).Position);
     }
 
     private static bool Swap(SimulationWorld world, IReadOnlySet<GridPosition>? reserved = null) =>

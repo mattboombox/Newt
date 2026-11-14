@@ -10,6 +10,30 @@ internal static class ThreeDGeometry
 
     internal static float ColumnHeight(float elevation) => 0.25f + (elevation + 1) * 4;
 
+    internal static float BlackSkyHeight => 5 * ColumnHeight(SimulationWorld.MaximumGroundElevation);
+
+    internal static float PlanetoidSkyPhase(float sunElevation, bool afternoon)
+    {
+        var angle = MathF.Acos(Math.Clamp(sunElevation, -1, 1)) / MathF.PI;
+        return (afternoon, angle <= 0.5f) switch
+        {
+            (true, true) => 0.14f + 0.52f * angle,
+            (false, true) => (1.14f - 0.52f * angle) % 1f,
+            (true, false) => 0.40f + 0.47f * (angle - 0.5f),
+            _ => 0.88f - 0.49f * (angle - 0.5f),
+        };
+    }
+
+    internal static float SkyBlackBlend(float eyeHeight, WorldBody body)
+    {
+        if (body is WorldBody.ONeillCylinder)
+            return 0;
+
+        var fadeStart = ColumnHeight(SimulationWorld.MaximumGroundElevation);
+        var progress = Math.Clamp((eyeHeight - fadeStart) / (BlackSkyHeight - fadeStart), 0, 1);
+        return progress * progress * (3 - 2 * progress);
+    }
+
     internal static float NexusMaximumPetalLift(float radius) => radius * 0.08f;
 
     internal static float NexusPetalLift(float offsetX, float offsetY, float radius)

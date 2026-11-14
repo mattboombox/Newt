@@ -7,9 +7,8 @@ public sealed partial class SimulationWorld
             ? CritterSpecies.ApeTrader : _species[mover], _species[blocker]);
 
     private bool CanBeShovedOnto(int blocker, int tile) =>
-        IsLivingApe(_species[blocker])
-            ? _terrain[tile] is not Terrain.MegaWall
-            : CanCritterLiveOn(blocker, tile);
+        CanOccupyMegaWall(_species[blocker], tile) &&
+        (IsLivingApe(_species[blocker]) || CanCritterLiveOn(blocker, tile));
 
     private void DelayShovedApeMovement(int index)
     {

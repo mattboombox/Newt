@@ -108,26 +108,26 @@ public sealed class NexusTests
     }
 
     [Fact]
-    public void CentralOpeningLeavesASeededHubWithAnAccessiblePortal()
+    public void CentralOpeningLeavesSeededTerrainWithoutAHubPortal()
     {
         SimulationWorld Generate(ulong seed) => WorldGenerator.Generate(new(new("Test Nexus", 96, 96),
             seed, MapType: WorldMapType.Nexus));
         var first = Generate(19);
         var second = Generate(731);
         var center = NexusLayout.Center(first);
-        var portal = NexusLayout.HubPortal(first);
+        var hub = NexusLayout.ArmPosition(first, 0, 0.25f);
         Assert.False(NexusLayout.Contains(first, center));
         Assert.False(first.HasTeleporter(center));
         Assert.False(first.TrySpawnCritter(CritterSpecies.Ape, center));
-        Assert.NotEqual(first.GetElevation(portal), second.GetElevation(portal));
-        Assert.True(first.HasTeleporter(portal));
-        Assert.True(second.HasTeleporter(portal));
+        Assert.NotEqual(first.GetElevation(hub), second.GetElevation(hub));
+        Assert.False(first.HasTeleporter(hub));
+        Assert.False(second.HasTeleporter(hub));
     }
 
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void NexusHasTenClimatePetalsHubPortalAndOppositeFabricators(bool mega)
+    public void NexusHasTenPetalPortalsAndOppositeFabricators(bool mega)
     {
         var world = WorldGenerator.Generate(new(mega ? WorldPreset.NexusMega : WorldPreset.Nexus,
             731, MapType: WorldMapType.Nexus));
@@ -137,7 +137,7 @@ public sealed class NexusTests
         Assert.False(world.SeasonsEnabled);
         var center = NexusLayout.Center(world);
         Assert.False(NexusLayout.Contains(world, center));
-        Assert.True(world.HasTeleporter(NexusLayout.HubPortal(world)));
+        Assert.False(world.HasTeleporter(NexusLayout.ArmPosition(world, 0, 0.25f)));
         var expected = new[] { TemperatureBand.Freezing, TemperatureBand.Cold, TemperatureBand.Cold, TemperatureBand.Cold,
             TemperatureBand.Temperate, TemperatureBand.Temperate, TemperatureBand.Temperate,
             TemperatureBand.Hot, TemperatureBand.Hot, TemperatureBand.Hot };
@@ -147,7 +147,7 @@ public sealed class NexusTests
             Assert.True(world.HasTeleporter(position));
             Assert.Equal(expected[arm], world.GetTemperatureBand(position));
         }
-        Assert.Equal(11, world.TeleporterCount);
+        Assert.Equal(NexusLayout.ArmCount, world.TeleporterCount);
         var terrainKinds = new HashSet<Terrain>();
         for (var y = 0; y < world.Height; y++)
         for (var x = 0; x < world.Width; x++)
@@ -187,6 +187,54 @@ public sealed class NexusTests
         Assert.Equal(SimulationWorld.MegaWallElevation, world.GetElevation(wall));
         var portal = NexusLayout.ArmPosition(world, 3);
         Assert.True(world.RemoveTeleporterAt(portal));
-        Assert.True(world.TryPlaceTeleporter(portal));
+        for (var tick = 0; tick < SimulationWorld.CustodianRecruitmentIntervalTicks; tick++)
+            world.AdvanceOneTick();
+
+        Assert.True(world.HasTeleporter(portal));
+        Assert.Equal(NexusLayout.ArmCount, world.TeleporterCount);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void BlockedNexusPortalGetsAnAlternativeInTheSameBranch(bool afterGeneration)
+    {
+        var world = new SimulationWorld(96, 96, Terrain.Plains) { Body = WorldBody.Nexus };
+        TerrainClassifier.ApplyMegaWalls(world);
+        const int arm = 6;
+        var blocked = NexusLayout.ArmPosition(world, arm);
+
+        if (afterGeneration)
+        {
+            world.SeedNexusTeleporters();
+            Assert.True(world.HasTeleporter(blocked));
+        }
+        world.SetSurfaceCover(blocked, SurfaceCover.Lava, long.MaxValue);
+        if (afterGeneration)
+        {
+            for (var tick = 0; tick < SimulationWorld.CustodianRecruitmentIntervalTicks; tick++)
+                world.AdvanceOneTick();
+        }
+        else
+        {
+            world.SeedNexusTeleporters();
+        }
+
+        Assert.False(world.HasTeleporter(blocked));
+        Assert.Equal(NexusLayout.ArmCount, world.TeleporterCount);
+        var replacement = Assert.Single(
+            from y in Enumerable.Range(blocked.Y - 1, 3)
+            from x in Enumerable.Range(blocked.X - 1, 3)
+            let site = new GridPosition(x, y)
+            where world.HasTeleporter(site)
+            select site);
+        Assert.Equal(arm, NexusLayout.ArmIndex(world, replacement));
+
+        world.SetSurfaceCover(blocked, SurfaceCover.None, 0);
+        world.AddCritter(CritterSpecies.Custodian, blocked);
+        for (var tick = 0; tick < SimulationWorld.CustodianRecruitmentIntervalTicks; tick++)
+            world.AdvanceOneTick();
+        Assert.Equal(NexusLayout.ArmCount, world.TeleporterCount);
+        Assert.True(world.HasTeleporter(replacement));
     }
 }

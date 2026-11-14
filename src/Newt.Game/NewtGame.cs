@@ -318,7 +318,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         if (_setupMenuOpen)
         {
             if (acceptInput)
-                HandleSetupMenu(keyboard);
+                HandleSetupMenu(keyboard, mouse);
             _previousKeyboard = keyboard;
             _previousMouse = mouse;
             base.Update(gameTime);
@@ -2424,7 +2424,12 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         RecordPopulationSample();
     }
 
-    private void HandleSetupMenu(KeyboardState keyboard)
+    private const int SetupGenerateRow = 4;
+    private const int SetupRandomizeRow = 5;
+    private const int SetupRowHeight = 34;
+    private const int SetupRowsTop = 62;
+
+    private void HandleSetupMenu(KeyboardState keyboard, MouseState mouse)
     {
         if (WasPressed(keyboard, Keys.M) || WasPressed(keyboard, Keys.Escape))
         {
@@ -2433,12 +2438,12 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         }
         if (WasPressed(keyboard, Keys.Up) || WasPressed(keyboard, Keys.W))
         {
-            _setupRow = Mod(_setupRow - 1, 5);
+            _setupRow = Mod(_setupRow - 1, SetupRandomizeRow + 1);
             FinishSeedTyping();
         }
         else if (WasPressed(keyboard, Keys.Down) || WasPressed(keyboard, Keys.S))
         {
-            _setupRow = Mod(_setupRow + 1, 5);
+            _setupRow = Mod(_setupRow + 1, SetupRandomizeRow + 1);
             FinishSeedTyping();
         }
 
@@ -2479,7 +2484,18 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             HandleSeedTyping(keyboard);
         }
 
-        if (WasPressed(keyboard, Keys.Enter) || (_setupRow == 4 && WasPressed(keyboard, Keys.Space)))
+        var enterPressed = WasPressed(keyboard, Keys.Enter);
+        var spacePressed = WasPressed(keyboard, Keys.Space);
+        var clicked = mouse.LeftButton is ButtonState.Pressed && _previousMouse.LeftButton is ButtonState.Released;
+        if ((_setupRow == SetupRandomizeRow && (enterPressed || spacePressed)) ||
+            (clicked && GetSetupRandomizeBounds(GetSetupMenuBounds()).Contains(mouse.X, mouse.Y)))
+        {
+            RandomizeSetup();
+            _setupRow = SetupRandomizeRow;
+            return;
+        }
+
+        if (enterPressed || (_setupRow == SetupGenerateRow && spacePressed))
         {
             _mapType = _menuMapType;
             _mapShape = MenuMapShapes[_menuMapShapeIndex];
@@ -2487,6 +2503,21 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             GenerateWorld();
             _setupMenuOpen = false;
         }
+    }
+
+    private void RandomizeSetup()
+    {
+        _menuMapShapeIndex = Random.Shared.Next(MenuMapShapes.Length);
+        var shape = MenuMapShapes[_menuMapShapeIndex];
+        var types = GetMenuMapTypes(shape);
+        _menuMapType = types[Random.Shared.Next(types.Length)];
+        if (GetSpecialMenuSizes(shape) is { } sizes)
+            _menuRingSizeIndex = Random.Shared.Next(sizes.Length);
+        else
+            _menuSizeIndex = Random.Shared.Next(MenuSizes.Length);
+
+        _seed = CreateRandomSeed();
+        FinishSeedTyping();
     }
 
     private static WorldMapType[] GetMenuMapTypes(WorldMapShape shape) => shape is WorldMapShape.Board or WorldMapShape.Planetoid
@@ -2504,6 +2535,18 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
     private WorldPreset GetSetupPreset(WorldMapShape shape) => GetSpecialMenuSizes(shape) is { } sizes
         ? sizes[_menuRingSizeIndex] : MenuSizes[_menuSizeIndex];
 
+    private Rectangle GetSetupMenuBounds()
+    {
+        const int width = 520;
+        const int height = 318;
+        return new Rectangle((GraphicsDevice.Viewport.Width - width) / 2,
+            (MapViewportHeight - height) / 2, width, height);
+    }
+
+    private static Rectangle GetSetupRandomizeBounds(Rectangle panel) =>
+        new(panel.X + 18, panel.Y + SetupRowsTop + SetupRandomizeRow * SetupRowHeight - 4,
+            panel.Width - 36, SetupRowHeight - 4);
+
     private void DrawSetupMenu()
     {
         if (_spriteBatch is null || _pixel is null || _hudFont is null)
@@ -2511,12 +2554,11 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             return;
         }
 
-        var panelWidth = 520;
-        var panelHeight = 284;
-        var left = (GraphicsDevice.Viewport.Width - panelWidth) / 2;
-        var top = (MapViewportHeight - panelHeight) / 2;
-        _spriteBatch.Draw(_pixel, new Rectangle(left, top, panelWidth, panelHeight), new Color(12, 16, 20, 245));
-        _spriteBatch.Draw(_pixel, new Rectangle(left, top, panelWidth, 2), new Color(126, 190, 213));
+        var panel = GetSetupMenuBounds();
+        var left = panel.X;
+        var top = panel.Y;
+        _spriteBatch.Draw(_pixel, panel, new Color(12, 16, 20, 245));
+        _spriteBatch.Draw(_pixel, new Rectangle(left, top, panel.Width, 2), new Color(126, 190, 213));
         _spriteBatch.DrawString(_hudFont, "NEW WORLD", new Vector2(left + 24, top + 20), new Color(126, 190, 213));
 
         var type = _menuMapType;
@@ -2531,18 +2573,21 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             $"Map Size        <  {sizeText}  >",
             $"Seed            <  {(_seedText.Length == 0 ? "_" : _seedText)}  >",
             "Generate World",
+            "Randomize",
         ];
         for (var row = 0; row < rows.Length; row++)
         {
             var color = row == _setupRow ? Color.White : new Color(160, 168, 174);
             var prefix = row == _setupRow ? "> " : "  ";
-            _spriteBatch.DrawString(_hudFont, prefix + rows[row], new Vector2(left + 24, top + 62 + row * 34), color);
+            _spriteBatch.DrawString(_hudFont, prefix + rows[row], new Vector2(left + 24, top + SetupRowsTop + row * SetupRowHeight), color);
         }
         var help = _setupRow == 3
             ? "Type digits to replace seed   Backspace edits   Enter generate"
-            : "Arrows or WASD navigate   Enter generate   M/Esc close";
+            : _setupRow == SetupRandomizeRow
+                ? "Enter / Space randomize   Up to Generate World"
+                : "Arrows or WASD navigate   Enter generate   M/Esc close";
         _spriteBatch.DrawString(_hudFont, help,
-            new Vector2(left + 24, top + panelHeight - 32), new Color(130, 140, 146));
+            new Vector2(left + 24, panel.Bottom - 32), new Color(130, 140, 146));
     }
 
     private void HandleSeedTyping(KeyboardState keyboard)

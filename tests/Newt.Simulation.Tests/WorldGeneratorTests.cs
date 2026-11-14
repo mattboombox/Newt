@@ -57,7 +57,7 @@ public sealed class WorldGeneratorTests
     [InlineData(WorldMapShape.Board, WorldBody.Terrarium, 0)]
     [InlineData(WorldMapShape.RingWorld, WorldBody.RingWorld, 4)]
     [InlineData(WorldMapShape.ONeillCylinder, WorldBody.ONeillCylinder, 4)]
-    [InlineData(WorldMapShape.Nexus, WorldBody.Nexus, NexusLayout.ArmCount + 1)]
+    [InlineData(WorldMapShape.Nexus, WorldBody.Nexus, NexusLayout.ArmCount)]
     [InlineData(WorldMapShape.Planetoid, WorldBody.Planetoid, 0)]
     public void MapShapeWorksWithEveryTerrainType(WorldMapShape shape, WorldBody body, int portals)
     {
