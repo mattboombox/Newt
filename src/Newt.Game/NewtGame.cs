@@ -767,7 +767,20 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
     [DllImport("SDL2", EntryPoint = "SDL_FreeSurface", CallingConvention = CallingConvention.Cdecl)]
     private static extern void SdlFreeSurface(IntPtr surface);
 
-    private void DrawCritter(CritterSnapshot critter, int screenX, int screenY)
+    private static readonly Point[] CustodianEyePixels =
+        [new(6, 3), new(8, 3), new(5, 4), new(9, 4), new(5, 6), new(9, 6)];
+    private static readonly Point[] JellyfishHeadPixels =
+        [new(2, 2), new(5, 3), new(7, 3), new(3, 5), new(5, 5)];
+    private static readonly Point[] UndeadApeEyePixels = [new(5, 3), new(7, 3)];
+    private static readonly Point[] LichEyePixels = [new(6, 4), new(9, 4)];
+    private static readonly Point[] UndeadWarriorEyePixels = [new(6, 2), new(9, 2)];
+    private static readonly Point[] MegaToadEyePixels =
+    [
+        new(0, 2), new(1, 2), new(2, 2), new(7, 2), new(8, 2), new(9, 2),
+        new(0, 4), new(1, 4), new(2, 4), new(7, 4), new(8, 4), new(9, 4),
+    ];
+
+    private void DrawCritter(CritterSnapshot critter, int screenX, int screenY, float brightness = 1f)
     {
         Texture2D? sprite;
         Texture2D? flashSprite;
@@ -889,15 +902,38 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
                 sprite = flashSprite;
             }
 
-            _spriteBatch!.Draw(
-                sprite,
-                new Rectangle(
-                    MapOffsetX + screenX * TileSize,
-                    MapOffsetY + screenY * TileSize,
-                    TileSize,
-                    TileSize),
-                critter.IsDamageFlashing ? GetDamageFlashColor(critter) :
-                    Color.White);
+            var destination = new Rectangle(MapOffsetX + screenX * TileSize, MapOffsetY + screenY * TileSize,
+                TileSize, TileSize);
+            var color = critter.IsDamageFlashing ? GetDamageFlashColor(critter) : Color.White;
+            _spriteBatch!.Draw(sprite, destination, WithSpriteBrightness(color, brightness));
+            if (brightness < 1f && !critter.IsDamageFlashing && sprite.Width == 16 && sprite.Height == 16)
+            {
+                var brightPixels = critter.Species switch
+                {
+                    CritterSpecies.Custodian or CritterSpecies.MegaSpider => CustodianEyePixels,
+                    CritterSpecies.Jellyfish => JellyfishHeadPixels,
+                    CritterSpecies.MegaToad => MegaToadEyePixels,
+                    CritterSpecies.UndeadApe or CritterSpecies.Vampire => UndeadApeEyePixels,
+                    CritterSpecies.Lich => LichEyePixels,
+                    CritterSpecies.UndeadWarrior => UndeadWarriorEyePixels,
+                    _ => Array.Empty<Point>(),
+                };
+                var offset = critter.Species switch
+                {
+                    CritterSpecies.MegaSpider => new Point(-4, 4),
+                    CritterSpecies.Vampire when sprite == _vampireColonistSailorSprite => new Point(0, 3),
+                    _ => Point.Zero,
+                };
+                var scale = TileSize / sprite.Width;
+                foreach (var brightPixel in brightPixels)
+                {
+                    var pixel = brightPixel + offset;
+                    var source = new Rectangle(pixel.X, pixel.Y, 1, 1);
+                    var target = new Rectangle(destination.X + pixel.X * scale, destination.Y + pixel.Y * scale,
+                        scale, scale);
+                    _spriteBatch.Draw(sprite, target, source, Color.White);
+                }
+            }
             return;
         }
 
@@ -908,8 +944,12 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
                 MapOffsetY + screenY * TileSize + GetCritterMarkerInset(),
                 GetCritterMarkerSize(),
                 GetCritterMarkerSize()),
-            GetCritterColor(critter));
+            WithSpriteBrightness(GetCritterColor(critter), brightness));
     }
+
+    private static Color WithSpriteBrightness(Color color, float brightness) => brightness == 1f
+        ? color
+        : new Color(color.ToVector4() * new Vector4(brightness, brightness, brightness, 1f));
 
     private bool IsWaterTile(GridPosition position) =>
         _world.GetTerrain(position) is Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows ||
