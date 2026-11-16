@@ -194,11 +194,10 @@ Sea Scorpions nor Squid hunt them, preserving Jellyfish control of Plankton. Adu
 crabs can roam across ordinary Ocean, Shallows, Beach, Ice Sheets, and non-Arctic land while
 Deep Ocean remains impassable. Every active predator except Fish may consume Crabs only on adjacent
 encounters rather than pursuing them at range, including strikes across habitat boundaries.
-Newts cannot consume Crabs. Crabs consume detritus only from Beaches and Shallows without freshwater on
-their normal movement action, remain there while building breeding energy,
-and reproduce directly on those coastal tiles at seven energy for a cost of four,
-leaving the parent safely fed. Feeding remains
-coastal, and hungry Crabs detect suitable food within five Manhattan tiles
+Newts cannot consume Crabs. On their normal movement action, Crabs consume detritus from
+Beaches, Shallows, and land in Swamp or Jungle biomes without freshwater. They remain there while building breeding energy
+and reproduce at seven energy for a cost of four,
+leaving the parent safely fed. Hungry Crabs detect suitable food within five Manhattan tiles
 and move back toward it. Rivers and Freshwater Lakes remain traversable but provide no
 natural or deposited food for Crabs, even over Swamp or Jungle biomes.
 Reproduction and offspring placement may occur anywhere Crabs can live.

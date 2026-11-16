@@ -763,7 +763,7 @@ public static class Hydrology
         {
             if (world.GetSurfaceWater(tile) is SurfaceWaterKind.FreshwaterLake)
             {
-                world.ClearFreshwaterForTerrainRebuild(tile);
+                world.ClearFreshwaterForTerrainRebuild(tile, keepRiverInlets: true);
             }
         }
         TerrainClassifier.RebuildAll(world);
@@ -957,6 +957,22 @@ public static class Hydrology
 
     private static void Connect(SimulationWorld world, GridPosition from, GridPosition to)
     {
+        world.AddRiverConnection(from, ConnectionBetween(world, from, to), downstream: true);
+        world.AddRiverConnection(to, ConnectionBetween(world, to, from), downstream: false);
+    }
+
+    internal static RiverConnection ConnectionBetween(SimulationWorld world, GridPosition from, GridPosition to)
+    {
+        if (world.Body is WorldBody.Planetoid)
+        {
+            foreach (var direction in FlowDirections)
+            {
+                if (world.OffsetTile(from, direction) == to)
+                    return ToConnection(direction.X, direction.Y);
+            }
+            return RiverConnection.None;
+        }
+
         var deltaX = to.X - from.X;
         if (Math.Abs(deltaX) > 1)
         {
@@ -965,8 +981,7 @@ public static class Hydrology
         var deltaY = Math.Sign(to.Y - from.Y);
         deltaX = Math.Sign(deltaX);
 
-        world.AddRiverConnection(from, ToConnection(deltaX, deltaY));
-        world.AddRiverConnection(to, ToConnection(-deltaX, -deltaY));
+        return ToConnection(deltaX, deltaY);
     }
 
     private static RiverConnection ToConnection(int deltaX, int deltaY) => (deltaX, deltaY) switch

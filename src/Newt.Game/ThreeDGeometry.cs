@@ -125,9 +125,9 @@ internal static class ThreeDGeometry
     }
 
     internal readonly record struct ConnectionSideSegment(
-        int FaceX, int FaceY, int TargetX, int TargetY, float Start, float End);
+        int FaceX, int FaceY, int TargetX, int TargetY, float Start, float End, RiverConnection Connection);
 
-    private static readonly (RiverConnection Flag, int X, int Y)[] ConnectionDirections =
+    internal static readonly (RiverConnection Flag, int X, int Y)[] ConnectionDirections =
     [
         (RiverConnection.North, 0, -1), (RiverConnection.NorthEast, 1, -1),
         (RiverConnection.East, 1, 0), (RiverConnection.SouthEast, 1, 1),
@@ -139,6 +139,43 @@ internal static class ThreeDGeometry
         Math.Max(Math.Max(targetHeight, adjacentHeight),
             waterElevation is { } water ? ColumnHeight(water) : float.MinValue);
 
+    internal static (int X, int Y) BeachwardWaveDirection(
+        RiverConnection beaches, RiverConnection ocean, RiverConnection shallows)
+    {
+        // Where two banks flank a shallow inlet, carry the swell inland along the channel.
+        for (var i = 0; i < ConnectionDirections.Length; i += 2)
+        {
+            var (flag, dx, dy) = ConnectionDirections[i];
+            var opposite = ConnectionDirections[(i + 4) % 8].Flag;
+            var banks = ConnectionDirections[(i + 2) % 8].Flag | ConnectionDirections[(i + 6) % 8].Flag;
+            if ((shallows & flag) != 0 && (ocean & opposite) != 0 && (beaches & banks) == banks)
+                return (dx, dy);
+        }
+
+        var bestDirection = (0, 0);
+        var bestScore = -1;
+        for (var i = 0; i < ConnectionDirections.Length; i++)
+        {
+            var (flag, dx, dy) = ConnectionDirections[i];
+            if ((beaches & flag) == 0)
+                continue;
+
+            // Prefer the nearest beach. At a corner, let the ocean-facing edge win,
+            // then prefer the edge with more beach continuing to either side.
+            var score = dx == 0 || dy == 0 ? 8 : 0;
+            var opposite = ConnectionDirections[(i + 4) % 8].Flag;
+            if ((ocean & opposite) != 0) score += 4;
+            if ((beaches & ConnectionDirections[(i + 7) % 8].Flag) != 0) score++;
+            if ((beaches & ConnectionDirections[(i + 1) % 8].Flag) != 0) score++;
+            if (score <= bestScore)
+                continue;
+
+            bestScore = score;
+            bestDirection = (dx, dy);
+        }
+        return bestDirection;
+    }
+
     internal static IEnumerable<ConnectionSideSegment> ConnectionSideSegments(RiverConnection connections)
     {
         const float width = 1f / 3;
@@ -146,12 +183,12 @@ internal static class ThreeDGeometry
         {
             if ((connections & flag) == 0) continue;
             if (dx == 0 || dy == 0)
-                yield return new(dx, dy, dx, dy, 0.5f - width / 2, 0.5f + width / 2);
+                yield return new(dx, dy, dx, dy, 0.5f - width / 2, 0.5f + width / 2, flag);
             else
             {
                 // Diagonal top artwork reaches a corner along both adjoining faces.
-                yield return new(dx, 0, dx, dy, dy < 0 ? 0 : 1 - width, dy < 0 ? width : 1);
-                yield return new(0, dy, dx, dy, dx < 0 ? 0 : 1 - width, dx < 0 ? width : 1);
+                yield return new(dx, 0, dx, dy, dy < 0 ? 0 : 1 - width, dy < 0 ? width : 1, flag);
+                yield return new(0, dy, dx, dy, dx < 0 ? 0 : 1 - width, dx < 0 ? width : 1, flag);
             }
         }
     }

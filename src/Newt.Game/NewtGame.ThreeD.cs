@@ -15,6 +15,7 @@ public sealed partial class NewtGame
     // Tint submerged objects while blending unchanged water tiles back to their 2D palette.
     private const int WaterSurfaceTintAlpha3D = 64;
     private const int WhaleFallCutout3D = -2;
+    private const int WaterSurfaceArtCutout3D = -3;
     private const float WalkingSpriteScale3D = 0.8f;
     private bool _dayNightCycleEnabled = true;
     private static readonly (Vector3 Direction, bool Cross)[] Stars3D = CreateStars3D();
@@ -703,7 +704,7 @@ public sealed partial class NewtGame
         var hovered = ScreenToWorld(Mouse.GetState().X, Mouse.GetState().Y);
         PrepareTerrainChunks3D(frustum, bounds);
         foreach (var chunk in _visibleChunks3D)
-            CollectTerrainDetails3D(chunk.Tiles, frustum, hovered);
+            CollectTerrainDetails3D(chunk.Tiles, frustum, hovered, elapsedSeconds);
         for (var i = 0; i < _world.CritterCount; i++)
         {
             var critter = _world.GetCritter(i);
@@ -784,11 +785,13 @@ public sealed partial class NewtGame
                         DrawCritter(_world.GetCritter(item.Critter), sx, sy, UsePlanetoidDaylight3D
                             ? PlanetoidTileBrightness3D(item.Tile, sunDirection) : terrainBrightness);
                     else if (item.Critter == WhaleFallCutout3D) DrawWhaleFall(sx, sy, item.Tile);
+                    else if (item.Critter == WaterSurfaceArtCutout3D)
+                        DrawWaterSurfaceArt(sx, sy, item.Tile, elapsedSeconds);
                     else if (item.Ground)
                     {
                         var water = _world.GetSurfaceWater(item.Tile);
                         if (water is not (SurfaceWaterKind.None or SurfaceWaterKind.FreshwaterLake))
-                            DrawSurfaceWater(sx, sy, item.Tile, water);
+                            DrawSurfaceWater(sx, sy, item.Tile, water, elapsedSeconds);
                         DrawVillageRoad(sx, sy, item.Tile);
                         DrawImpactWave(sx, sy, item.Tile);
                     }
@@ -850,9 +853,11 @@ public sealed partial class NewtGame
         // directions cause radial rotation and foreshortening in overhead views.
         var right = cameraWorld.Right * 0.5f;
         var up = cameraWorld.Up * 0.5f;
+        var surfaceArt = new List<(int Page, List<VertexPositionColorTexture> Quads)>();
         for (var page = 0; page < pages; page++)
         {
             var quads = new List<VertexPositionColorTexture>();
+            List<VertexPositionColorTexture>? surfaceQuads = null;
             for (var i = 0; i < _cutouts3D.Count; i++)
             {
                 var item = _cutouts3D[i];
@@ -877,7 +882,8 @@ public sealed partial class NewtGame
                 var d = new VertexPositionColorTexture(center - spriteRight - spriteUp, tint, new Vector2(u, v + step));
                 // Aquatic critters lie beneath bridge decks and low ice sheets.
                 var flat = underWaterCover || item.Ground || (item.Critter >= 0
-                    ? _world.GetCritter(item.Critter).Species is CritterSpecies.Plankton or CritterSpecies.Trilobite
+                    ? _world.GetCritter(item.Critter).Species is
+                        CritterSpecies.Plankton or CritterSpecies.Trilobite or CritterSpecies.SeaScorpion
                     : _world.GetApeStructure(item.Tile) is ApeStructureKind.Farm or ApeStructureKind.BlightedFarm or
                         ApeStructureKind.RicePaddy or ApeStructureKind.Aquaculture ||
                         _world.GetVolcanoState(item.Tile) is { } volcanoState && volcanoState != VolcanoState.Extinct);
@@ -889,8 +895,32 @@ public sealed partial class NewtGame
                     c.Position = WorldPoint3D(p + new Vector3(halfSize, 0, halfSize), item.Tile);
                     d.Position = WorldPoint3D(p + new Vector3(-halfSize, 0, halfSize), item.Tile);
                 }
-                quads.AddRange([a, b, c, a, c, d]);
+                var target = item.Critter == WaterSurfaceArtCutout3D ? surfaceQuads ??= [] : quads;
+                target.AddRange([a, b, c, a, c, d]);
             }
+            if (surfaceQuads is not null)
+                surfaceArt.Add((page, surfaceQuads));
+            DrawCutoutPage(page, quads);
+        }
+        DrawPlayerGhost3D(view, projection);
+        DrawWaterSurfaces3D();
+        if (surfaceArt.Count > 0)
+        {
+            GraphicsDevice.BlendState = BlendState.AlphaBlend;
+            GraphicsDevice.DepthStencilState = DepthStencilState.DepthRead;
+            _cutoutEffect3D.ReferenceAlpha = 0;
+            foreach (var (page, quads) in surfaceArt)
+                DrawCutoutPage(page, quads);
+            _cutoutEffect3D.ReferenceAlpha = 100;
+            GraphicsDevice.BlendState = BlendState.Opaque;
+            GraphicsDevice.DepthStencilState = DepthStencilState.Default;
+        }
+        DrawClouds3D(elapsedSeconds, frustum, bounds, terrainBrightness);
+        GraphicsDevice.Viewport = originalViewport;
+
+        void DrawCutoutPage(int page, List<VertexPositionColorTexture> quads)
+        {
+            if (quads.Count == 0) return;
             _cutoutEffect3D.Texture = _atlasPages3D[page];
             var data = quads.ToArray();
             foreach (var pass in _cutoutEffect3D.CurrentTechnique.Passes)
@@ -899,10 +929,6 @@ public sealed partial class NewtGame
                 GraphicsDevice.DrawUserPrimitives(PrimitiveType.TriangleList, data, 0, data.Length / 3);
             }
         }
-        DrawPlayerGhost3D(view, projection);
-        DrawWaterSurfaces3D();
-        DrawClouds3D(elapsedSeconds, frustum, bounds, terrainBrightness);
-        GraphicsDevice.Viewport = originalViewport;
     }
 
     private Color TerrainColumnColor3D(GridPosition tile) =>
@@ -910,7 +936,8 @@ public sealed partial class NewtGame
             ? GetLakeColor(_world.GetWaterDepth(tile), frozen: false)
             : GetBedColor(tile, UnfrozenBedTerrain(tile), _world.GetBiome(tile), _world.GetTemperatureBand(tile));
 
-    private void CollectTerrainDetails3D(Rectangle bounds, BoundingFrustum frustum, GridPosition? hovered)
+    private void CollectTerrainDetails3D(
+        Rectangle bounds, BoundingFrustum frustum, GridPosition? hovered, double elapsedSeconds)
     {
         var hasImpactWave = _world.ActiveImpactWaveCount > 0;
         for (var y = bounds.Top; y < bounds.Bottom; y++)
@@ -928,7 +955,10 @@ public sealed partial class NewtGame
                     _world.HasTeleporter(tile) || _world.IsCustodianFabricator(tile) ||
                     _world.GetVolcanoState(tile) is { } state && state != VolcanoState.Extinct;
                 var drawColumn = _world.GetSurfaceCover(tile) is SurfaceCover.Lava;
-                if (!drawColumn && hovered != tile && !whaleFall && !hasGroundArt && !hasStructure) continue;
+                var hasWaterSurfaceArt = !river &&
+                    (GetRiverMouths(tile) != RiverConnection.None || BeachwardDirection(tile) != Vector2.Zero);
+                if (!drawColumn && hovered != tile && !whaleFall && !hasGroundArt && !hasStructure && !hasWaterSurfaceArt)
+                    continue;
 
                 var height = TileHeight3D(tile);
                 var waterElevation = WaterElevation3D(tile);
@@ -953,8 +983,11 @@ public sealed partial class NewtGame
                 // Carcasses stay on the bed, including beneath ice and bridge decks.
                 if (whaleFall)
                     _cutouts3D.Add((new Vector3(x + 0.5f, height + 0.012f, y + 0.5f), tile, WhaleFallCutout3D, true));
+                if (hasWaterSurfaceArt)
+                    _cutouts3D.Add((new Vector3(x + 0.5f, top + 0.012f, y + 0.5f), tile, WaterSurfaceArtCutout3D, true));
                 if (river)
-                    AddConnectionSides3D(x, y, height + 0.01f, _world.GetRiverConnections(tile), GetSurfaceWaterColor(water));
+                    AddConnectionSides3D(x, y, height + 0.01f, _world.GetRiverConnections(tile),
+                        GetSurfaceWaterColor(water), outflows: _world.GetRiverOutflows(tile), elapsedSeconds: elapsedSeconds);
                 if (roads != RiverConnection.None)
                     AddConnectionSides3D(x, y,
                         ThreeDGeometry.RoadHeight(height, waterElevation, _world.HasRoadBridge(tile)),
@@ -1052,7 +1085,7 @@ public sealed partial class NewtGame
     }
 
     private void AddConnectionSides3D(int x, int y, float topHeight, RiverConnection connections, Color color,
-        bool road = false)
+        bool road = false, RiverConnection outflows = RiverConnection.None, double elapsedSeconds = 0)
     {
         var offset = road ? 0.003f : 0.002f;
         var owner = new GridPosition(x, y);
@@ -1081,6 +1114,11 @@ public sealed partial class NewtGame
             }
             var c = b with { Y = topHeight };
             var d = a with { Y = topHeight };
+            if ((outflows & segment.Connection) != 0 && topHeight - bottom >= 0.14f)
+            {
+                var normal = new Vector3(segment.FaceX, 0, segment.FaceY);
+                AddWaterfallSpray3D(owner, a, b, normal, topHeight - bottom, color, elapsedSeconds);
+            }
             a = WorldPoint3D(a, owner);
             b = WorldPoint3D(b, owner);
             c = WorldPoint3D(c, owner);
@@ -1089,9 +1127,53 @@ public sealed partial class NewtGame
                 new(a, color), new(c, color), new(d, color)]);
         }
 
-        GridPosition? Neighbor(int dx, int dy) => road && IsPlanetoid3D
+        GridPosition? Neighbor(int dx, int dy) => IsPlanetoid3D
             ? PlanetoidLayout.Offset(owner, dx, dy, PlanetoidLayout.FaceSize(_world.Width))
             : ContainsTile3D(x + dx, y + dy) ? MapTile3D(x + dx, y + dy) : null;
+    }
+
+    private void AddWaterfallSpray3D(GridPosition tile, Vector3 left, Vector3 right, Vector3 outward,
+        float dropHeight, Color water, double elapsedSeconds)
+    {
+        var across = Vector3.Normalize(right - left);
+        var phase = (tile.X * 0.37 + tile.Y * 0.23) % 1;
+        var mist = new Color(215, 240, 251);
+        for (var drop = 0; drop < 6; drop++)
+        {
+            var age = (float)((elapsedSeconds * 0.92 + phase + drop / 6.0) % 1);
+            var center = Vector3.Lerp(left, right, 0.19f + drop % 3 * 0.31f) + outward * 0.008f;
+            var falling = age < 0.73f;
+            if (falling)
+            {
+                var fall = age / 0.73f;
+                center.Y += dropHeight * (1f - fall * fall);
+            }
+            else
+            {
+                // Droplets rebound at the foot of the falls and spread away from the face.
+                var bounce = (age - 0.73f) / 0.27f;
+                center += outward * (bounce * 0.22f) + across * ((drop % 3 - 1) * bounce * 0.09f);
+                center.Y += Math.Min(dropHeight * 0.5f, 0.22f) * (4f * bounce * (1f - bounce));
+            }
+
+            var bright = falling ? 0.8f : (1f - age) / 0.27f * 0.8f;
+            var halfWidth = falling ? 0.024f : 0.034f;
+            var halfHeight = falling ? Math.Min(0.065f, dropHeight * 0.12f) : 0.034f;
+            var lower = center - Vector3.Up * halfHeight;
+            var upper = center + Vector3.Up * halfHeight;
+            if (falling)
+            {
+                lower.Y = Math.Max(lower.Y, left.Y);
+                upper.Y = Math.Min(upper.Y, left.Y + dropHeight);
+            }
+            var shade = Color.Lerp(water, mist, bright);
+            var a = WorldPoint3D(lower - across * halfWidth, tile);
+            var b = WorldPoint3D(lower + across * halfWidth, tile);
+            var c = WorldPoint3D(upper + across * halfWidth, tile);
+            var d = WorldPoint3D(upper - across * halfWidth, tile);
+            _terrainVertices3D.AddRange([new(a, shade), new(b, shade), new(c, shade),
+                new(a, shade), new(c, shade), new(d, shade)]);
+        }
     }
 
     private void AddColumn3D(GridPosition tile, float height, Color color, bool topOnly = false,

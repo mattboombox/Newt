@@ -478,6 +478,26 @@ public sealed class ThreeDGeometryTests
     }
 
     [Theory]
+    [InlineData(RiverConnection.North | RiverConnection.East | RiverConnection.West, RiverConnection.South, 0, -1)]
+    [InlineData(RiverConnection.North | RiverConnection.West, RiverConnection.East, -1, 0)]
+    [InlineData(RiverConnection.North | RiverConnection.East | RiverConnection.NorthWest,
+        RiverConnection.South | RiverConnection.West, 0, -1)]
+    public void ShallowWavesFollowTheBeachEdgeFacingOpenWater(
+        RiverConnection beaches, RiverConnection ocean, int dx, int dy)
+    {
+        Assert.Equal((dx, dy), ThreeDGeometry.BeachwardWaveDirection(beaches, ocean, RiverConnection.None));
+    }
+
+    [Theory]
+    [InlineData(RiverConnection.East | RiverConnection.West, RiverConnection.South, RiverConnection.North, 0, -1)]
+    [InlineData(RiverConnection.North | RiverConnection.South, RiverConnection.West, RiverConnection.East, 1, 0)]
+    public void ShallowWavesTravelBetweenOppositeBeachBanks(
+        RiverConnection beaches, RiverConnection ocean, RiverConnection shallows, int dx, int dy)
+    {
+        Assert.Equal((dx, dy), ThreeDGeometry.BeachwardWaveDirection(beaches, ocean, shallows));
+    }
+
+    [Theory]
     [InlineData(RiverConnection.North, 0, -1, 1)]
     [InlineData(RiverConnection.NorthEast, 1, -1, 2)]
     [InlineData(RiverConnection.East, 1, 0, 1)]

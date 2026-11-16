@@ -47,6 +47,7 @@ public sealed class HydrologyTests
         Assert.Equal(SurfaceWaterKind.None, world.GetSurfaceWater(wall));
         Assert.Equal(RiverConnection.None, world.GetRiverConnections(wall));
         Assert.Equal(RiverConnection.None, world.GetRiverConnections(source));
+        Assert.Equal(RiverConnection.None, world.GetRiverOutflows(source));
         Assert.Equal(0, world.ActiveSpringCount);
     }
 
@@ -157,6 +158,18 @@ public sealed class HydrologyTests
         Assert.Equal(SpringTermination.ReachedOcean, result.Termination);
         Assert.True(result.RiverTileCount > 1);
         Assert.Equal(SurfaceWaterKind.River, world.GetSurfaceWater(new GridPosition(10, 2)));
+
+        var lastRiver = result.FinalPosition;
+        var direction = Assert.Single(Hydrology.FlowDirections, direction =>
+            (world.GetRiverOutflows(lastRiver) &
+                Hydrology.ConnectionBetween(world, lastRiver, world.OffsetTile(lastRiver, direction))) != 0);
+        var oceanMouth = world.OffsetTile(lastRiver, direction);
+        var inlet = Hydrology.ConnectionBetween(world, oceanMouth, lastRiver);
+
+        TerrainClassifier.RebuildAll(world);
+
+        Assert.Equal(inlet, world.GetRiverConnections(oceanMouth));
+        Assert.Equal(RiverConnection.None, world.GetRiverOutflows(oceanMouth));
     }
 
     [Fact]
@@ -286,7 +299,9 @@ public sealed class HydrologyTests
         Assert.Equal(existingWater, world.GetSurfaceWater(watercourse));
         Assert.Equal(0, world.ActiveSpringCount);
         Assert.Equal(SpringTermination.ReachedWatercourse, world.LastCompletedSpring?.Termination);
-        Assert.NotEqual(RiverConnection.None, world.GetRiverConnections(source));
+        Assert.Equal(RiverConnection.East, world.GetRiverOutflows(source));
+        Assert.Equal(RiverConnection.West, world.GetRiverConnections(watercourse));
+        Assert.Equal(RiverConnection.None, world.GetRiverOutflows(watercourse));
     }
 
     [Fact]

@@ -231,8 +231,8 @@ The game starts in Critter Tools with Plankton selected.
   can shove blocking Newts into adjacent valid empty habitat.
   Fish flee nearby Sea Scorpions, Squid, and Mega Toads before hunting. Crabs may
   travel through ordinary Ocean, Shallows, Beaches, and non-Arctic land, but not
-  Deep Ocean. They feed during normal actions only on Beaches and Shallows without
-  freshwater, detect feeding terrain within five Manhattan tiles,
+  Deep Ocean. They feed during normal actions on Beaches, Shallows, and land in
+  Swamp or Jungle biomes without freshwater, detect feeding terrain within five Manhattan tiles,
   move back toward it when hungry, and reproduce throughout valid habitat,
   creating a rapidly renewing feeder population. Newts cannot eat Crabs. Every active predator except Fish consumes
   Crabs only on adjacent encounters and does not pursue them at range, including

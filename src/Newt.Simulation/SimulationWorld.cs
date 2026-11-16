@@ -136,6 +136,7 @@ public sealed partial class SimulationWorld
     private readonly List<int> _lakeInspectionTiles = [];
     private readonly float[] _waterSurfaceElevations;
     private readonly RiverConnection[] _riverConnections;
+    private readonly RiverConnection[] _riverOutflows;
     private readonly List<ActiveSpring> _activeSprings = [];
     private readonly List<SpringSource> _springSources = [];
     private readonly List<VolcanoActivity> _volcanoes = [];
@@ -230,6 +231,7 @@ public sealed partial class SimulationWorld
         _waterSurfaceElevations = new float[_terrain.Length];
         Array.Fill(_waterSurfaceElevations, float.NaN);
         _riverConnections = new RiverConnection[_terrain.Length];
+        _riverOutflows = new RiverConnection[_terrain.Length];
         _occupants = new int[_terrain.Length];
         Array.Fill(_occupants, -1);
         _critterIds = new CritterId[_terrain.Length];
@@ -709,6 +711,9 @@ public sealed partial class SimulationWorld
     public RiverConnection GetRiverConnections(GridPosition position) =>
         _riverConnections[GetIndex(position)];
 
+    public RiverConnection GetRiverOutflows(GridPosition position) =>
+        _riverOutflows[GetIndex(position)];
+
     public bool IsOccupied(GridPosition position) => _occupants[GetIndex(position)] >= 0;
 
     public void SetTerrain(GridPosition position, Terrain terrain)
@@ -884,8 +889,13 @@ public sealed partial class SimulationWorld
         TerrainGeometryChanged?.Invoke(position);
     }
 
-    internal void AddRiverConnection(GridPosition position, RiverConnection connection) =>
-        _riverConnections[GetIndex(position)] |= connection;
+    internal void AddRiverConnection(GridPosition position, RiverConnection connection, bool downstream)
+    {
+        var index = GetIndex(position);
+        if (downstream && (_riverConnections[index] & connection) == 0)
+            _riverOutflows[index] |= connection;
+        _riverConnections[index] |= connection;
+    }
 
     private void ClearMegaWallFreshwater(GridPosition position, int index)
     {
@@ -902,15 +912,17 @@ public sealed partial class SimulationWorld
                 if (!Contains(neighbor))
                     continue;
 
-                var reverse = (RiverConnection)(1 << ((direction + directions.Length / 2) % directions.Length));
-                _riverConnections[GetIndex(neighbor)] &= ~reverse;
+                var reverse = Hydrology.ConnectionBetween(this, neighbor, position);
+                var neighborIndex = GetIndex(neighbor);
+                _riverConnections[neighborIndex] &= ~reverse;
+                _riverOutflows[neighborIndex] &= ~reverse;
                 TerrainGeometryChanged?.Invoke(neighbor);
             }
         }
         ClearFreshwaterForTerrainRebuild(position);
     }
 
-    internal void ClearFreshwaterForTerrainRebuild(GridPosition position)
+    internal void ClearFreshwaterForTerrainRebuild(GridPosition position, bool keepRiverInlets = false)
     {
         var index = GetIndex(position);
         var geometryChanged = _surfaceWater[index] is not SurfaceWaterKind.None ||
@@ -923,7 +935,10 @@ public sealed partial class SimulationWorld
         }
         _surfaceWater[index] = SurfaceWaterKind.None;
         _waterSurfaceElevations[index] = float.NaN;
-        _riverConnections[index] = RiverConnection.None;
+        _riverConnections[index] = keepRiverInlets
+            ? _riverConnections[index] & ~_riverOutflows[index]
+            : RiverConnection.None;
+        _riverOutflows[index] = RiverConnection.None;
         if (geometryChanged)
             TerrainGeometryChanged?.Invoke(position);
         // The caller validates structures once final coastlines are available.
@@ -1026,6 +1041,7 @@ public sealed partial class SimulationWorld
         Array.Clear(_surfaceWater);
         Array.Fill(_waterSurfaceElevations, float.NaN);
         Array.Clear(_riverConnections);
+        Array.Clear(_riverOutflows);
         _activeSprings.Clear();
         TerrainGeometryChanged?.Invoke(null);
     }
@@ -6609,7 +6625,10 @@ public sealed partial class SimulationWorld
         IsNautilusFeedingTerrain(_terrain[tileIndex]) || IsIceOverOcean(tileIndex);
 
     private bool IsCrabFeedingTile(int tileIndex) =>
-        _terrain[tileIndex] is Terrain.Beach or Terrain.Shallows;
+        _terrain[tileIndex] is Terrain.Beach or Terrain.Shallows ||
+        (_biomes[tileIndex] is Biome.Swamp or Biome.Jungle &&
+            _terrain[tileIndex] is not Terrain.Ocean &&
+            IsCrabTile(tileIndex));
 
     private bool IsFishForagingTile(int tileIndex) =>
         _surfaceWater[tileIndex] is SurfaceWaterKind.River or SurfaceWaterKind.FreshwaterLake ||

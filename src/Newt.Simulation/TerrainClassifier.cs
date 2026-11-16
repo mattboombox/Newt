@@ -38,7 +38,7 @@ public static class TerrainClassifier
                 if (ocean[index])
                 {
                     // Saltwater replaces freshwater, including frozen lake overlays.
-                    world.ClearFreshwaterForTerrainRebuild(position);
+                    world.ClearFreshwaterForTerrainRebuild(position, keepRiverInlets: true);
                 }
                 world.SetClimateTerrain(position, ocean[index]
                     ? ClassifyOcean(world.SeaLevel - world.GetElevation(position), world.GetTemperature(position))

@@ -431,7 +431,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
                 var water = _world.GetSurfaceWater(position);
                 if (water is not SurfaceWaterKind.None && !IsIce3D(position))
                 {
-                    DrawSurfaceWater(screenX, screenY, position, water);
+                    DrawSurfaceWater(screenX, screenY, position, water, gameTime.TotalGameTime.TotalSeconds);
                 }
                 else if (water is SurfaceWaterKind.None && _world.GetSurfaceCover(position) is SurfaceCover.Lava &&
                     !IsIce3D(position) && WaterElevation3D(position) is { } surface &&
@@ -440,6 +440,10 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
                     _spriteBatch.Draw(_pixel, tileRectangle, TerrainColumnColor3D(position) * (WaterSurfaceTintAlpha3D / 255f));
                 }
                 DrawWhaleFall(screenX, screenY, position);
+                if (TileSize >= 4)
+                {
+                    DrawWaterSurfaceArt(screenX, screenY, position, gameTime.TotalGameTime.TotalSeconds);
+                }
                 if (!IsIce3D(position)) DrawTileObjects2D(screenX, screenY, position);
             }
         }
@@ -2758,7 +2762,8 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         int screenX,
         int screenY,
         GridPosition worldPosition,
-        SurfaceWaterKind water)
+        SurfaceWaterKind water,
+        double elapsedSeconds)
     {
         if (_spriteBatch is null || _pixel is null)
         {
@@ -2787,6 +2792,284 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
 
         var connections = _world.GetRiverConnections(worldPosition);
         DrawRiverConnections(connections, originX, originY, centerX, centerY, width, color);
+        if (!IsIce3D(worldPosition))
+        {
+            DrawRiverFlow(worldPosition, connections, originX, originY, width, elapsedSeconds);
+        }
+    }
+
+    private void DrawRiverFlow(
+        GridPosition tile, RiverConnection connections, int originX, int originY, int width, double elapsedSeconds)
+    {
+        var tileSize = TileSize;
+        if (_spriteBatch is null || _pixel is null || connections is RiverConnection.None || tileSize < 4)
+            return;
+
+        var tileBounds = new Rectangle(originX, originY, tileSize, tileSize);
+        var center = new Vector2(tileSize / 2f);
+        var elevation = WaterElevation3D(tile) ?? _world.GetElevation(tile);
+        var tileIndex = tile.Y * _world.Width + tile.X;
+        var outflows = _world.GetRiverOutflows(tile);
+        var glint = Color.Lerp(GetSurfaceWaterColor(SurfaceWaterKind.River), new Color(210, 236, 248), 0.75f);
+        foreach (var (flag, dx, dy) in ThreeDGeometry.ConnectionDirections)
+        {
+            if ((connections & flag) == 0)
+                continue;
+
+            var neighbor = RiverNeighbor(tile, dx, dy);
+            if (!_world.Contains(neighbor))
+                continue;
+
+            var neighborIndex = neighbor.Y * _world.Width + neighbor.X;
+            var neighborElevation = WaterElevation3D(neighbor) ?? _world.GetElevation(neighbor);
+            var outgoing = (outflows & flag) != 0;
+
+            // Both halves share the downstream direction, speed, and phase.
+            var edgeSeed = unchecked((uint)Math.Min(tileIndex, neighborIndex) * 73856093u ^
+                (uint)Math.Max(tileIndex, neighborIndex) * 19349663u);
+            var slope = MathF.Abs(elevation - neighborElevation);
+            var speed = MathHelper.Lerp(0.22f, 0.58f, MathHelper.Clamp(slope / 0.01f, 0f, 1f));
+            var edge = center + new Vector2(dx, dy) * (tileSize / 2f);
+            var diagonal = dx != 0 && dy != 0;
+            var elbow = new Vector2(edge.X - dx * width / 2f, center.Y);
+            var downstreamNormal = new Vector2(-dy, dx) * (outgoing ? 1f : -1f);
+            var laneCount = diagonal || width < 4 ? 1 : 2;
+            for (var lane = 0; lane < laneCount; lane++)
+            {
+                var phase = edgeSeed % 1009 / 673.0 + lane * 0.65;
+                var progress = (float)((elapsedSeconds * speed + phase) % 1.5);
+                var offset = laneCount == 1 ? Vector2.Zero : downstreamNormal * ((lane * 2 - 1) * width / 4f);
+
+                // Paint from the faint end of the trail toward its bright head.
+                for (var sample = 3; sample >= 0; sample--)
+                {
+                    var travel = progress - sample * 0.04f;
+                    var fade = MathHelper.Clamp(Math.Min(travel, 1f - travel) * 8f, 0f, 1f);
+                    var distance = (outgoing ? travel : 1f - travel) * 2f;
+                    if (fade <= 0f || distance < 0f || distance > 1f)
+                        continue;
+
+                    // Diagonal channels follow the elbow in the tile art.
+                    var position = !diagonal ? Vector2.Lerp(center, edge, distance)
+                        : distance < 0.5f ? Vector2.Lerp(center, elbow, distance * 2f)
+                        : Vector2.Lerp(elbow, edge, distance * 2f - 1f);
+                    position += offset;
+                    var strength = 1f - sample * 0.22f;
+                    var size = Math.Max(1, (int)(width * 0.45f * strength));
+                    var patch = Rectangle.Intersect(tileBounds, new Rectangle(
+                        originX + (int)MathF.Floor(position.X - size / 2f),
+                        originY + (int)MathF.Floor(position.Y - size / 2f), size, size));
+                    if (patch.Width > 0 && patch.Height > 0)
+                        _spriteBatch.Draw(_pixel, patch, glint * (strength * fade * 0.85f));
+                }
+            }
+        }
+    }
+
+    private GridPosition RiverNeighbor(GridPosition tile, int dx, int dy) =>
+        _world.Body == WorldBody.Planetoid
+            ? PlanetoidLayout.Offset(tile, dx, dy, PlanetoidLayout.FaceSize(_world.Width))
+            : new GridPosition(Mod(tile.X + dx, _world.Width), tile.Y + dy);
+
+    private Vector2 BeachwardDirection(GridPosition tile)
+    {
+        if (!_world.HasOceans || _world.GetTerrain(tile) is not Terrain.Shallows ||
+            _world.GetSurfaceWater(tile) is not SurfaceWaterKind.None ||
+            _world.GetRiverOutflows(tile) != RiverConnection.None)
+        {
+            return Vector2.Zero;
+        }
+
+        var beaches = RiverConnection.None;
+        var ocean = RiverConnection.None;
+        var shallows = RiverConnection.None;
+        var bordersOcean = false;
+        foreach (var (flag, dx, dy) in ThreeDGeometry.ConnectionDirections)
+        {
+            var neighbor = RiverNeighbor(tile, dx, dy);
+            if (!_world.Contains(neighbor))
+                continue;
+
+            var terrain = _world.GetTerrain(neighbor);
+            if (terrain is Terrain.Ocean or Terrain.DeepOcean)
+            {
+                ocean |= flag;
+                bordersOcean |= dx == 0 || dy == 0;
+            }
+            if (terrain is Terrain.Beach)
+                beaches |= flag;
+            if (terrain is Terrain.Shallows)
+                shallows |= flag;
+        }
+
+        if (!bordersOcean)
+            return Vector2.Zero;
+
+        var direction = ThreeDGeometry.BeachwardWaveDirection(beaches, ocean, shallows);
+        return new Vector2(direction.X, direction.Y);
+    }
+
+    private void DrawWaterSurfaceArt(int screenX, int screenY, GridPosition tile, double elapsedSeconds)
+    {
+        var mouths = GetRiverMouths(tile);
+        if (mouths != RiverConnection.None)
+            DrawRiverMouthSpray(screenX, screenY, tile, mouths, elapsedSeconds);
+        else
+            DrawShallowWaves(screenX, screenY, tile, BeachwardDirection(tile), elapsedSeconds);
+    }
+
+    private void DrawShallowWaves(
+        int screenX, int screenY, GridPosition tile, Vector2 beachward, double elapsedSeconds)
+    {
+        var spriteBatch = _spriteBatch;
+        var pixel = _pixel;
+        if (spriteBatch is null || pixel is null || beachward == Vector2.Zero)
+            return;
+
+        const double waveSeconds = 3.4;
+        const double intervalSeconds = 5.2;
+        // Repeat the stagger over stretches of coast, with a whole number of cycles across the wrap seam.
+        var phase = (tile.X + 0.5) * Math.Max(1, _world.Width / 28) / _world.Width + tile.Y / 36.0;
+        if (_world.Body is WorldBody.Planetoid)
+        {
+            var faceSize = PlanetoidLayout.FaceSize(_world.Width);
+            var face = PlanetoidLayout.FaceAt(tile.X, tile.Y, faceSize);
+            var direction = PlanetoidLayout.Direction(tile.X + 0.5f, tile.Y + 0.5f, faceSize, face);
+            phase = ((direction.X + 1f) + (direction.Y + 1f) * 0.65f) * Math.Max(1, faceSize / 18);
+        }
+
+        var clock = elapsedSeconds / intervalSeconds - phase;
+        var age = (clock - Math.Floor(clock)) * intervalSeconds;
+        if (age >= waveSeconds)
+            return;
+
+        var progress = (float)(age / waveSeconds);
+        var envelope = (float)Math.Min(age / 1.05, (waveSeconds - age) / 0.8);
+        var strength = MathHelper.SmoothStep(0f, 1f, envelope);
+        var size = TileSize;
+        var origin = new Point(MapOffsetX + screenX * size, MapOffsetY + screenY * size);
+        var bounds = new Rectangle(origin.X, origin.Y, size, size);
+        var towardBeach = Vector2.Normalize(beachward);
+        var alongBeach = new Vector2(-towardBeach.Y, towardBeach.X);
+        var foam = new Color(185, 223, 242);
+        ReadOnlySpan<int> sections = [0, -1, 1, -2, 2];
+        Span<Rectangle> coverage = stackalloc Rectangle[2 * sections.Length];
+        var coveredCount = 0;
+        var length = Math.Max(1, (int)MathF.Ceiling(size * 0.13f));
+        // Draw the strongest sections first. Each later patch fills only uncovered pixels.
+        for (var wake = 0; wake <= 1; wake++)
+        {
+            var crest = (progress - 0.5f) * 0.9f - wake * 0.12f;
+            var thickness = Math.Max(1, size / (wake == 0 ? 13 : 21));
+            var width = beachward.Y != 0 ? length : thickness;
+            var height = beachward.X != 0 ? length : thickness;
+            if (beachward.X != 0 && beachward.Y != 0)
+                width = height = Math.Max(thickness, length * 2 / 3);
+            foreach (var section in sections)
+            {
+                var span = section * 0.11f;
+                var point = new Vector2(0.5f) + alongBeach * span +
+                    towardBeach * (crest - 0.014f * section * section);
+                var patch = Rectangle.Intersect(bounds, new Rectangle(
+                    origin.X + (int)MathF.Floor(point.X * size - width / 2f),
+                    origin.Y + (int)MathF.Floor(point.Y * size - height / 2f), width, height));
+                var brightness = strength * (1f - Math.Abs(section) * 0.17f) * (wake == 0 ? 0.68f : 0.27f);
+                if (patch.Width <= 0 || patch.Height <= 0)
+                    continue;
+                DrawUncovered(patch, foam * brightness, coverage[..coveredCount]);
+                coverage[coveredCount++] = patch;
+            }
+        }
+
+        void DrawUncovered(Rectangle patch, Color color, ReadOnlySpan<Rectangle> stronger)
+        {
+            if (patch.Width <= 0 || patch.Height <= 0)
+                return;
+
+            for (var i = 0; i < stronger.Length; i++)
+            {
+                var overlap = Rectangle.Intersect(patch, stronger[i]);
+                if (overlap.Width <= 0 || overlap.Height <= 0)
+                    continue;
+
+                var remaining = stronger[(i + 1)..];
+                DrawUncovered(new Rectangle(patch.Left, patch.Top, patch.Width, overlap.Top - patch.Top), color, remaining);
+                DrawUncovered(new Rectangle(patch.Left, overlap.Bottom, patch.Width, patch.Bottom - overlap.Bottom), color, remaining);
+                DrawUncovered(new Rectangle(patch.Left, overlap.Top, overlap.Left - patch.Left, overlap.Height), color, remaining);
+                DrawUncovered(new Rectangle(overlap.Right, overlap.Top, patch.Right - overlap.Right, overlap.Height), color, remaining);
+                return;
+            }
+
+            spriteBatch.Draw(pixel, patch, color);
+        }
+    }
+
+    private RiverConnection GetRiverMouths(GridPosition tile)
+    {
+        var connections = _world.GetRiverConnections(tile) & ~_world.GetRiverOutflows(tile);
+        if (connections == RiverConnection.None || _world.GetSurfaceWater(tile) is SurfaceWaterKind.River ||
+            WaterElevation3D(tile) is null || IsIce3D(tile))
+        {
+            return RiverConnection.None;
+        }
+
+        var mouths = RiverConnection.None;
+        foreach (var (flag, dx, dy) in ThreeDGeometry.ConnectionDirections)
+        {
+            if ((connections & flag) == 0)
+                continue;
+
+            var neighbor = RiverNeighbor(tile, dx, dy);
+            if (_world.Contains(neighbor) && _world.GetSurfaceWater(neighbor) is SurfaceWaterKind.River &&
+                !IsIce3D(neighbor))
+            {
+                mouths |= flag;
+            }
+        }
+
+        return mouths;
+    }
+
+    private void DrawRiverMouthSpray(
+        int screenX, int screenY, GridPosition tile, RiverConnection mouths, double elapsedSeconds)
+    {
+        if (_spriteBatch is null || _pixel is null || mouths == RiverConnection.None)
+            return;
+
+        var size = TileSize;
+        var origin = new Point(MapOffsetX + screenX * size, MapOffsetY + screenY * size);
+        var bounds = new Rectangle(origin.X, origin.Y, size, size);
+        var center = new Vector2(size / 2f);
+        var water = TerrainColumnColor3D(tile);
+        var spray = new Color(199, 232, 246);
+        foreach (var (flag, dx, dy) in ThreeDGeometry.ConnectionDirections)
+        {
+            if ((mouths & flag) == 0)
+                continue;
+
+            var edge = center + new Vector2(dx, dy) * (size / 2f);
+            var inward = Vector2.Normalize(new Vector2(-dx, -dy));
+            var sideways = new Vector2(-inward.Y, inward.X);
+            var phase = (tile.X * 0.73 + tile.Y * 0.37 + (int)flag * 0.19) % 1.35;
+            for (var drop = 0; drop < 5; drop++)
+            {
+                // Stagger the droplets across a fan. They spread and dim as they reach open water.
+                var age = (float)((elapsedSeconds + phase + drop * 0.13) % 1.35);
+                if (age >= 1f)
+                    continue;
+
+                var spread = (drop - 2) * 0.22f;
+                var position = edge + size * (inward * (0.07f + age * 0.52f) +
+                    sideways * (spread * (0.12f + age * 0.47f)));
+                var fade = MathHelper.Clamp(age * 8f, 0f, 1f) * (1f - age);
+                var diameter = Math.Max(1, (int)(size * (0.12f - age * 0.07f)));
+                var patch = Rectangle.Intersect(bounds, new Rectangle(
+                    origin.X + (int)MathF.Floor(position.X - diameter / 2f),
+                    origin.Y + (int)MathF.Floor(position.Y - diameter / 2f), diameter, diameter));
+                if (patch.Width > 0 && patch.Height > 0)
+                    _spriteBatch.Draw(_pixel, patch, Color.Lerp(water, spray, fade));
+            }
+        }
     }
 
     private void DrawVolcanoVent(int screenX, int screenY, GridPosition position)

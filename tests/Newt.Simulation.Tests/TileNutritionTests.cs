@@ -247,7 +247,7 @@ public sealed class TileNutritionTests
     [InlineData(Terrain.Ocean, SurfaceWaterKind.FreshwaterLake)]
     [InlineData(Terrain.Plains, SurfaceWaterKind.None)]
     [InlineData(Terrain.Ice, SurfaceWaterKind.None)]
-    public void CrabCannotConsumeDepositedNutritionOutsideBeachAndShallows(
+    public void CrabCannotConsumeDepositedNutritionOnUnsuitableTiles(
         Terrain terrain,
         SurfaceWaterKind water)
     {

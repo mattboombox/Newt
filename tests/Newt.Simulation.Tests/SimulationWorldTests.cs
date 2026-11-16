@@ -937,7 +937,7 @@ public sealed class SimulationWorldTests
     [Theory]
     [InlineData(Biome.Swamp)]
     [InlineData(Biome.Jungle)]
-    public void CrabDoesNotFeedInWetlandBiomesWithoutCoastalTerrain(Biome biome)
+    public void CrabFeedsOnLandInSwampsAndJungles(Biome biome)
     {
         var world = new SimulationWorld(1, 1, Terrain.Plains, seed: 4202);
         world.SeasonsEnabled = false;
@@ -950,7 +950,7 @@ public sealed class SimulationWorldTests
             world.AdvanceOneTick();
         }
 
-        Assert.Equal(CritterNutritions.Get(CritterSpecies.Crab).InitialEnergy, world.GetCritter(0).Energy);
+        Assert.True(world.GetCritter(0).Energy > CritterNutritions.Get(CritterSpecies.Crab).InitialEnergy);
     }
 
     [Theory]
