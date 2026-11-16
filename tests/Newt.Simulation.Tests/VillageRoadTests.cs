@@ -353,6 +353,49 @@ public sealed class VillageRoadTests
     }
 
     [Fact]
+    public void PlanetoidRoadConnectsTheCorrectEdgesOfRotatedFaces()
+    {
+        var world = new SimulationWorld(48, 32, Terrain.Plains) { Body = WorldBody.Planetoid };
+        foreach (var tile in Positions(world))
+            world.SetBiome(tile, Biome.Grassland);
+        var first = new GridPosition(21, 0);
+        var second = new GridPosition(31, 26);
+        Assert.True(world.TrySpawnTestApeVillage(first));
+        Assert.True(world.TrySpawnTestApeVillage(second));
+
+        Assert.True(world.TryPlaceVillageRoad(first));
+        Assert.Equal(1, world.VillageRoadCount);
+        Assert.Equal(RiverConnection.North, world.GetRoadConnections(first));
+        Assert.Equal(RiverConnection.East, world.GetRoadConnections(second));
+        Assert.Equal(2, Positions(world).Count(tile => world.GetRoadConnections(tile) != RiverConnection.None));
+    }
+
+    [Fact]
+    public void PlanetoidBridgeFollowsAndSurvivesValidationAcrossRotatedFaces()
+    {
+        var world = new SimulationWorld(48, 32, Terrain.Plains) { Body = WorldBody.Planetoid };
+        foreach (var tile in Positions(world))
+            world.SetBiome(tile, Biome.Grassland);
+        var first = new GridPosition(21, 1);
+        var firstWater = new GridPosition(21, 0);
+        var secondWater = new GridPosition(31, 26);
+        var second = new GridPosition(30, 26);
+        Assert.True(world.TrySpawnTestApeVillage(first));
+        Assert.True(world.TrySpawnTestApeVillage(second));
+        world.SetTerrain(firstWater, Terrain.Shallows);
+        world.SetTerrain(secondWater, Terrain.Shallows);
+
+        Assert.True(world.TryConnectVillageRoad(first, second, out _));
+        Assert.False(world.TryConnectVillageRoad(first, second, out var status));
+        Assert.Contains("already", status);
+        Assert.Equal(1, world.VillageRoadCount);
+        Assert.True(world.HasRoadBridge(firstWater));
+        Assert.True(world.HasRoadBridge(secondWater));
+        Assert.Equal(RiverConnection.North | RiverConnection.South, world.GetRoadConnections(firstWater));
+        Assert.Equal(RiverConnection.East | RiverConnection.West, world.GetRoadConnections(secondWater));
+    }
+
+    [Fact]
     public void FloodingBeyondBridgeSpanReroutesRoadOnNextTick()
     {
         var world = CreateWorld();

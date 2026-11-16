@@ -17,3 +17,8 @@
 /importer:FontDescriptionImporter
 /processor:FontDescriptionProcessor
 /build:HudFont.spritefont
+
+#begin PlanetoidDaylight.fx
+/importer:EffectImporter
+/processor:EffectProcessor
+/build:PlanetoidDaylight.fx

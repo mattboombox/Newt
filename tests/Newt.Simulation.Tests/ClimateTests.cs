@@ -217,8 +217,35 @@ public sealed class ClimateTests
         Assert.Equal(equatorialTemperature, world.GetTemperature(equator), precision: 5);
         Assert.Equal(0f, SeasonSystem.GetTemperatureChange(world, equator));
         Assert.Equal(0f, SeasonSystem.GetMoistureChange(world, north));
-        Assert.InRange(SeasonSystem.GetTemperatureChange(world, north), 0.09f, 0.10f);
+        Assert.InRange(SeasonSystem.GetTemperatureChange(world, north), 0.11f, 0.12f);
+        Assert.True(SeasonSystem.GetTemperatureChange(world, new GridPosition(10, 12)) < 0f);
         Assert.True(world.GetTemperature(north) > world.GetTemperature(south));
+    }
+
+    [Fact]
+    public void PolarSeaIceSurvivesPeakSummerAndReachesFartherInWinter()
+    {
+        var world = new SimulationWorld(40, 100, Terrain.Ocean, seed: 7);
+        world.SeasonTick = SeasonSystem.TicksPerYear / 4;
+        TerrainClassifier.RebuildLandforms(world);
+        var summerCap = SeaIceCount(0, 2);
+        var summerEdge = SeaIceCount(8, 12);
+
+        world.SeasonTick = 3 * SeasonSystem.TicksPerYear / 4;
+        TerrainClassifier.RebuildLandforms(world);
+        Assert.True(summerCap > 0);
+        Assert.True(SeaIceCount(8, 12) > summerEdge);
+        Assert.NotEqual(Terrain.Ice, world.GetTerrain(new GridPosition(20, 50)));
+
+        int SeaIceCount(int startRow, int endRow)
+        {
+            var count = 0;
+            for (var y = startRow; y < endRow; y++)
+            for (var x = 0; x < world.Width; x++)
+                if (world.GetTerrain(new GridPosition(x, y)) is Terrain.Ice)
+                    count++;
+            return count;
+        }
     }
 
     [Fact]

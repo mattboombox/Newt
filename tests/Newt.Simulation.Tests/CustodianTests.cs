@@ -318,6 +318,31 @@ public sealed class CustodianTests
     }
 
     [Fact]
+    public void NexusPatrolLeavesTheWesternPetalWall()
+    {
+        var world = new SimulationWorld(96, 96, Terrain.MegaWall)
+        {
+            Body = WorldBody.Nexus,
+            SeasonsEnabled = false,
+        };
+        const int startArm = 7;
+        var start = NexusLayout.ArmPosition(world, startArm, 0.98f);
+        var drone = world.AddCritter(CritterSpecies.Custodian, start);
+        var visited = new HashSet<GridPosition> { start };
+        for (var action = 0; action < 120; action++)
+        {
+            for (var tick = 0; tick < 5 * SimulationWorld.TicksPerSecond; tick++)
+                world.AdvanceOneTick();
+            Assert.True(world.TryGetCritter(drone, out var snapshot));
+            visited.Add(snapshot.Position);
+        }
+
+        Assert.All(visited, position => Assert.True(NexusLayout.Contains(world, position)));
+        Assert.Contains(visited, position => NexusLayout.ArmIndex(world, position) != startArm);
+        Assert.True(visited.Count >= 40, $"Patrol only visited {visited.Count} tiles.");
+    }
+
+    [Fact]
     public void WideRingPatrolMakesRepeatedTripsToNearestPortal()
     {
         var world = new SimulationWorld(1280, 8, Terrain.MegaWall, seed: 42)

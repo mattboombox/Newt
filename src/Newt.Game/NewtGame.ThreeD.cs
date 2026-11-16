@@ -22,6 +22,7 @@ public sealed partial class NewtGame
     private readonly VertexPositionColor[] _twilightVertices3D = new VertexPositionColor[TwilightGrid3D * TwilightGrid3D * 6];
     private readonly Color[] _twilightColors3D = new Color[(TwilightGrid3D + 1) * (TwilightGrid3D + 1)];
     private static readonly Color DaySkyBlue3D = new(65, 138, 204);
+    private const float StarVisibilityBrightness3D = 0.55f;
     // This palette is only the overhead sky. It deepens from day blue to black after sunset and
     // climbs back to day blue after sunrise, and it never reverses direction, so the dark side of
     // the sky darkens (and the stars fade in) exactly once per evening. All of the warm sunrise and
@@ -63,8 +64,9 @@ public sealed partial class NewtGame
 
     private float SkyPhase3D()
     {
-        const long cycleTicks = 2L * SeasonSystem.TicksPerYear;
-        return (_world.Tick % cycleTicks) / (float)cycleTicks;
+        const int cycleTicks = DayNightCycleSeconds3D * SimulationWorld.TicksPerSecond;
+        var tickFraction = _accumulator / SimulationStep;
+        return (float)((_world.Tick % cycleTicks + tickFraction) / cycleTicks);
     }
 
     private static (Vector3 Direction, bool Cross)[] CreateStars3D()
@@ -141,7 +143,7 @@ public sealed partial class NewtGame
     private static float StarOpacity3D(Color sky)
     {
         var brightness = Math.Max(sky.R, Math.Max(sky.G, sky.B)) / 255f;
-        return 1 - MathHelper.SmoothStep(0, 1, brightness / 0.55f);
+        return 1 - MathHelper.SmoothStep(0, 1, brightness / StarVisibilityBrightness3D);
     }
 
     private float TwilightStrength3D(float sunHeight, float altitudeFade)
@@ -220,10 +222,15 @@ public sealed partial class NewtGame
         return new Color(color);
     }
 
-    // The sun reddens as it nears the horizon.
-    private static Color SunColor3D(float sunHeight) =>
-        Color.Lerp(Color.White, new Color(255, 190, 120),
-            0.9f * (1 - MathHelper.SmoothStep(0, 1, Math.Clamp(sunHeight / 0.35f, 0, 1))));
+    private static Color SunColor3D(float sunHeight, float altitudeFade)
+    {
+        // Fade out the horizon tint by the altitude where stars are visible even at noon.
+        var noonBrightness = Color.Lerp(DaySkyBlue3D, Color.Black, altitudeFade).B / 255f;
+        var atmosphere = MathHelper.SmoothStep(0, 1, (noonBrightness - StarVisibilityBrightness3D) /
+            (DaySkyBlue3D.B / 255f - StarVisibilityBrightness3D));
+        var horizon = 1 - MathHelper.SmoothStep(0, 1, sunHeight / 0.35f);
+        return Color.Lerp(Color.White, new Color(255, 190, 120), 0.9f * horizon * atmosphere);
+    }
 
     private void DrawTwilight3D(Matrix view, Matrix projection, Color sky, Vector3 sun, Vector3 up,
         float twilight, float dawn)
@@ -313,9 +320,33 @@ public sealed partial class NewtGame
     private Vector2 _focus3D;
     private float _yaw3D = MathHelper.PiOver4, _pitch3D = 0.85f, _distance3D = 28;
     private BasicEffect? _terrainEffect3D;
+    private Effect? _planetoidDaylightEffect3D;
+    private const int DayNightCycleSeconds3D = 240;
+    // Minimum night brightness and the solar elevations where the transition starts and ends.
+    private static readonly Vector3 PlanetoidDaylightRamp3D = new(0.24f, -0.10f, 0.22f);
+    private bool UsePlanetoidDaylight3D => IsPlanetoid3D && _dayNightCycleEnabled;
+    private Effect TerrainSceneEffect3D => UsePlanetoidDaylight3D ? _planetoidDaylightEffect3D! : _terrainEffect3D!;
     private AlphaTestEffect? _cutoutEffect3D;
+
+    private static void SetTerrainWorld3D(Effect effect, Matrix world)
+    {
+        if (effect is BasicEffect basic)
+            basic.World = world;
+        else
+            effect.Parameters["World"].SetValue(world);
+    }
+
+    private float PlanetoidTileBrightness3D(GridPosition tile, Vector3 sun)
+    {
+        var size = PlanetoidLayout.FaceSize(_world.Width);
+        var face = PlanetoidLayout.FaceAt(tile.X, tile.Y, size);
+        var direction = Framework(PlanetoidLayout.Direction(tile.X + 0.5f, tile.Y + 0.5f, size, face));
+        var ramp = PlanetoidDaylightRamp3D;
+        return MathHelper.SmoothStep(ramp.X, 1, (Vector3.Dot(direction, sun) - ramp.Y) / (ramp.Z - ramp.Y));
+    }
     private readonly List<RenderTarget2D> _atlasPages3D = [];
     private readonly List<VertexPositionColor> _terrainVertices3D = [];
+    private readonly List<VertexPositionColor> _lavaVertices3D = [];
     private readonly List<(Vector3 Position, GridPosition Tile, int Critter, bool Ground)> _cutouts3D = [];
     private const int AtlasSize3D = 2048, AtlasColumns3D = AtlasSize3D / 32;
     private const int AtlasCapacity3D = AtlasColumns3D * AtlasColumns3D;
@@ -657,13 +688,14 @@ public sealed partial class NewtGame
             bottom - top);
     }
 
-    private void DrawWorld3D()
+    private void DrawWorld3D(double elapsedSeconds)
     {
         WrapCamera3D();
         _terrainEffect3D ??= new BasicEffect(GraphicsDevice) { VertexColorEnabled = true };
         _cutoutEffect3D ??= new AlphaTestEffect(GraphicsDevice)
         { VertexColorEnabled = true, AlphaFunction = CompareFunction.Greater, ReferenceAlpha = 100 };
         _terrainVertices3D.Clear();
+        _lavaVertices3D.Clear();
         _cutouts3D.Clear();
         var (view, projection) = Matrices3D();
         var frustum = new BoundingFrustum(view * projection);
@@ -720,7 +752,7 @@ public sealed partial class NewtGame
         var skyUp = IsPlanetoid3D ? Vector3.Normalize(eye) : SurfaceUp3D(_focus3D.X, _focus3D.Y);
         var sunHeight = Vector3.Dot(sunDirection, skyUp);
         // Use solar elevation so the altitude fade to black does not darken daytime terrain.
-        var terrainBrightness = _dayNightCycleEnabled
+        var terrainBrightness = _dayNightCycleEnabled && !UsePlanetoidDaylight3D
             ? MathHelper.SmoothStep(0.34f, 1f, (sunHeight + 0.28f) / 0.50f)
             : 1f;
         var terrainTint = new Vector3(terrainBrightness);
@@ -748,7 +780,9 @@ public sealed partial class NewtGame
                     var slot = i % AtlasCapacity3D;
                     var sx = slot % AtlasColumns3D;
                     var sy = slot / AtlasColumns3D;
-                    if (item.Critter >= 0) DrawCritter(_world.GetCritter(item.Critter), sx, sy, terrainBrightness);
+                    if (item.Critter >= 0)
+                        DrawCritter(_world.GetCritter(item.Critter), sx, sy, UsePlanetoidDaylight3D
+                            ? PlanetoidTileBrightness3D(item.Tile, sunDirection) : terrainBrightness);
                     else if (item.Critter == WhaleFallCutout3D) DrawWhaleFall(sx, sy, item.Tile);
                     else if (item.Ground)
                     {
@@ -781,26 +815,33 @@ public sealed partial class NewtGame
             (localEye.Z < 0 || localEye.Z > _world.Height || localEye.Y < 0);
         var skyBlend = outsideRing ? 1f : ThreeDGeometry.SkyBlackBlend(eyeHeight, _world.Body);
         var sky = Color.Lerp(dayNightSky, Color.Black, skyBlend);
-        GraphicsDevice.Clear(sky);
+        GraphicsDevice.Clear(ClearOptions.Target | ClearOptions.DepthBuffer | ClearOptions.Stencil, sky, 1f, 0);
         var twilight = TwilightStrength3D(sunHeight, skyBlend);
         _terrainEffect3D.DiffuseColor = Vector3.One;
         DrawTwilight3D(view, projection, sky, sunDirection, skyUp, twilight, dawn);
         DrawStars3D(view * projection, sky, sunDirection, skyUp, twilight, dawn);
-        DrawSun3D(view * projection, sunDirection, SunColor3D(sunHeight));
+        DrawSun3D(view * projection, sunDirection, SunColor3D(sunHeight, skyBlend));
         GraphicsDevice.BlendState = BlendState.Opaque;
         GraphicsDevice.DepthStencilState = DepthStencilState.Default;
         GraphicsDevice.RasterizerState = RasterizerState.CullNone;
         _terrainEffect3D.View = view;
         _terrainEffect3D.Projection = projection;
         _terrainEffect3D.DiffuseColor = terrainTint;
+        if (UsePlanetoidDaylight3D)
+        {
+            _planetoidDaylightEffect3D ??= Content.Load<Effect>("PlanetoidDaylight");
+            var parameters = _planetoidDaylightEffect3D.Parameters;
+            parameters["ViewProjection"].SetValue(view * projection);
+            parameters["SunDirection"].SetValue(sunDirection);
+            parameters["DaylightRamp"].SetValue(PlanetoidDaylightRamp3D);
+            parameters["CloudLighting"].SetValue(0f);
+        }
         DrawTerrainChunks3D(static chunk => chunk.Terrain);
-        var vertices = _terrainVertices3D.ToArray();
-        if (vertices.Length > 0)
-            foreach (var pass in _terrainEffect3D.CurrentTechnique.Passes)
-            {
-                pass.Apply();
-                GraphicsDevice.DrawUserPrimitives(PrimitiveType.TriangleList, vertices, 0, vertices.Length / 3);
-            }
+        DrawUnbufferedSurface3D(_terrainVertices3D, TerrainSceneEffect3D);
+        // Lava emits light even on the night side. Draw it at bed height before water.
+        _terrainEffect3D.DiffuseColor = Vector3.One;
+        DrawUnbufferedSurface3D(_lavaVertices3D, _terrainEffect3D);
+        _terrainEffect3D.DiffuseColor = terrainTint;
         _cutoutEffect3D.View = view;
         _cutoutEffect3D.Projection = projection;
         GraphicsDevice.SamplerStates[0] = SamplerState.PointClamp;
@@ -828,7 +869,8 @@ public sealed partial class NewtGame
                 var center = WorldPoint3D(p) + SurfaceUp3D(p.X, p.Z) * (0.5f * scale);
                 var spriteRight = right * scale;
                 var spriteUp = up * scale;
-                var tint = item.Critter >= 0 ? Color.White : spriteTint;
+                var tint = item.Critter >= 0 ? Color.White : UsePlanetoidDaylight3D
+                    ? new Color(new Vector3(PlanetoidTileBrightness3D(item.Tile, sunDirection))) : spriteTint;
                 var a = new VertexPositionColorTexture(center - spriteRight + spriteUp, tint, new Vector2(u, v));
                 var b = new VertexPositionColorTexture(center + spriteRight + spriteUp, tint, new Vector2(u + step, v));
                 var c = new VertexPositionColorTexture(center + spriteRight - spriteUp, tint, new Vector2(u + step, v + step));
@@ -859,13 +901,14 @@ public sealed partial class NewtGame
         }
         DrawPlayerGhost3D(view, projection);
         DrawWaterSurfaces3D();
+        DrawClouds3D(elapsedSeconds, frustum, bounds, terrainBrightness);
         GraphicsDevice.Viewport = originalViewport;
     }
 
     private Color TerrainColumnColor3D(GridPosition tile) =>
         _world.GetSurfaceWater(tile) is SurfaceWaterKind.FreshwaterLake
             ? GetLakeColor(_world.GetWaterDepth(tile), frozen: false)
-            : GetTileColor(tile, UnfrozenBedTerrain(tile), _world.GetBiome(tile), _world.GetTemperatureBand(tile));
+            : GetBedColor(tile, UnfrozenBedTerrain(tile), _world.GetBiome(tile), _world.GetTemperatureBand(tile));
 
     private void CollectTerrainDetails3D(Rectangle bounds, BoundingFrustum frustum, GridPosition? hovered)
     {
@@ -894,11 +937,17 @@ public sealed partial class NewtGame
                 if (drawColumn || hovered == tile)
                 {
                     var color = TerrainColumnColor3D(tile);
-                    if (hovered == tile) color = Color.Lerp(color, Color.White, 0.45f);
-                    AddColumn3D(new GridPosition(x, y), drawColumn ? height : height + 0.003f, color,
+                    if (!drawColumn && hovered == tile) color = Color.Lerp(color, Color.White, 0.45f);
+                    var owner = new GridPosition(x, y);
+                    AddColumn3D(owner, drawColumn ? height : height + 0.003f, color,
                         topOnly: !drawColumn);
                     if (drawColumn)
+                    {
+                        var lava = GetLavaColor(tile);
+                        if (hovered == tile) lava = Color.Lerp(lava, Color.White, 0.45f);
+                        AddColumn3D(owner, height + 0.003f, lava, topOnly: true, vertices: _lavaVertices3D);
                         AddWaterTile3D(tile, x, y, _dynamicWater3D, _dynamicIce3D);
+                    }
                 }
 
                 // Carcasses stay on the bed, including beneath ice and bridge decks.
@@ -938,8 +987,14 @@ public sealed partial class NewtGame
     {
         if (vertices.Count == 0) return;
         CurveWaterVertices3D(vertices);
+        DrawUnbufferedSurface3D(vertices, TerrainSceneEffect3D);
+    }
+
+    private void DrawUnbufferedSurface3D(List<VertexPositionColor> vertices, Effect effect)
+    {
+        if (vertices.Count == 0) return;
         var data = vertices.ToArray();
-        foreach (var pass in _terrainEffect3D!.CurrentTechnique.Passes)
+        foreach (var pass in effect.CurrentTechnique.Passes)
         {
             pass.Apply();
             GraphicsDevice.DrawUserPrimitives(PrimitiveType.TriangleList, data, 0, data.Length / 3);
@@ -957,9 +1012,7 @@ public sealed partial class NewtGame
         var height = ThreeDGeometry.ColumnHeight(surface.Value) + (ice ? 0.035f : 0.005f);
         // Matching the bed's palette avoids shifting its final color:
         // target * alpha + target * (1 - alpha) = target.
-        var waterColor = _world.GetSurfaceWater(tile) is SurfaceWaterKind.FreshwaterLake
-            ? GetLakeColor(_world.GetWaterDepth(tile), frozen: false)
-            : GetTileColor(tile, UnfrozenBedTerrain(tile), _world.GetBiome(tile), _world.GetTemperatureBand(tile));
+        var waterColor = TerrainColumnColor3D(tile);
         var color = ice ? new Color(GetTerrainColor(Terrain.Ice, _world.GetBiome(tile),
             _world.GetTemperatureBand(tile), _world.GetElevation(tile)), 210)
             : new Color(waterColor, WaterSurfaceTintAlpha3D);
@@ -1002,12 +1055,11 @@ public sealed partial class NewtGame
         bool road = false)
     {
         var offset = road ? 0.003f : 0.002f;
+        var owner = new GridPosition(x, y);
         foreach (var segment in ThreeDGeometry.ConnectionSideSegments(connections))
         {
-            if (!ContainsTile3D(x + segment.TargetX, y + segment.TargetY) ||
-                !ContainsTile3D(x + segment.FaceX, y + segment.FaceY)) continue;
-            var target = MapTile3D(x + segment.TargetX, y + segment.TargetY);
-            var adjacent = MapTile3D(x + segment.FaceX, y + segment.FaceY);
+            if (Neighbor(segment.TargetX, segment.TargetY) is not { } target ||
+                Neighbor(segment.FaceX, segment.FaceY) is not { } adjacent) continue;
             // Stop at the receiving surface and clip against the adjacent column.
             var bottom = road
                 ? ThreeDGeometry.RoadSideBottom(TileHeight3D(target), TileHeight3D(adjacent),
@@ -1029,7 +1081,6 @@ public sealed partial class NewtGame
             }
             var c = b with { Y = topHeight };
             var d = a with { Y = topHeight };
-            var owner = new GridPosition(x, y);
             a = WorldPoint3D(a, owner);
             b = WorldPoint3D(b, owner);
             c = WorldPoint3D(c, owner);
@@ -1037,10 +1088,16 @@ public sealed partial class NewtGame
             _terrainVertices3D.AddRange([new(a, color), new(b, color), new(c, color),
                 new(a, color), new(c, color), new(d, color)]);
         }
+
+        GridPosition? Neighbor(int dx, int dy) => road && IsPlanetoid3D
+            ? PlanetoidLayout.Offset(owner, dx, dy, PlanetoidLayout.FaceSize(_world.Width))
+            : ContainsTile3D(x + dx, y + dy) ? MapTile3D(x + dx, y + dy) : null;
     }
 
-    private void AddColumn3D(GridPosition tile, float height, Color color, bool topOnly = false)
+    private void AddColumn3D(GridPosition tile, float height, Color color, bool topOnly = false,
+        List<VertexPositionColor>? vertices = null)
     {
+        vertices ??= _terrainVertices3D;
         float x = tile.X, z = tile.Y;
         void Face(Vector3 a, Vector3 b, Vector3 c, Vector3 d, Color shade)
         {
@@ -1048,7 +1105,7 @@ public sealed partial class NewtGame
             b = WorldPoint3D(b, tile);
             c = WorldPoint3D(c, tile);
             d = WorldPoint3D(d, tile);
-            _terrainVertices3D.AddRange([new(a, shade), new(b, shade), new(c, shade),
+            vertices.AddRange([new(a, shade), new(b, shade), new(c, shade),
                 new(a, shade), new(c, shade), new(d, shade)]);
         }
         Face(new(x, height, z), new(x + 1, height, z), new(x + 1, height, z + 1), new(x, height, z + 1), color);
@@ -1081,6 +1138,8 @@ public sealed partial class NewtGame
         _terrainEffect3D?.Dispose();
         _cutoutEffect3D?.Dispose();
         _ghostEffect3D?.Dispose();
+        ReleaseCloudPatches3D();
+        _cloudDepthStencil3D?.Dispose();
         base.UnloadContent();
     }
 }

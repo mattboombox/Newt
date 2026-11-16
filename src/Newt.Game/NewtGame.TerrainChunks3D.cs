@@ -248,7 +248,7 @@ public sealed partial class NewtGame
 
     private void DrawTerrainChunks3D(Func<TerrainChunk3D, ChunkMesh3D?> select)
     {
-        var effect = _terrainEffect3D!;
+        var effect = TerrainSceneEffect3D;
         foreach (var pass in effect.CurrentTechnique.Passes)
         {
             int? appliedOffset = null;
@@ -262,7 +262,7 @@ public sealed partial class NewtGame
                 if (vertexCount == 0) continue;
                 if (appliedOffset != view.OffsetX)
                 {
-                    effect.World = Matrix.CreateTranslation(view.OffsetX, 0, 0);
+                    SetTerrainWorld3D(effect, Matrix.CreateTranslation(view.OffsetX, 0, 0));
                     pass.Apply();
                     appliedOffset = view.OffsetX;
                 }
@@ -270,7 +270,7 @@ public sealed partial class NewtGame
                 GraphicsDevice.DrawPrimitives(PrimitiveType.TriangleList, firstVertex, vertexCount / 3);
             }
         }
-        effect.World = Matrix.Identity;
+        SetTerrainWorld3D(effect, Matrix.Identity);
         GraphicsDevice.SetVertexBuffer(null);
     }
 }

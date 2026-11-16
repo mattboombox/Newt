@@ -2,7 +2,8 @@ namespace Newt.Simulation;
 
 public sealed partial class SimulationWorld
 {
-    private readonly Dictionary<int, (int Step, int Portal, int NextPortalVisit)> _custodianPatrols = [];
+    private readonly Dictionary<int, (int Step, int Portal, int NextPortalVisit, int NexusArm)> _custodianPatrols = [];
+    private readonly Dictionary<int, (int Goal, bool StopAdjacent, int Current, Queue<int> Steps)> _nexusCustodianRoutes = [];
     private readonly Dictionary<int, long> _custodianCreatedTicks = [];
     private readonly HashSet<int> _destroyedTeleporterTiles = [];
     private int[]? _nexusArmTeleporters;
@@ -204,6 +205,12 @@ public sealed partial class SimulationWorld
                 _energy[index] = maximumEnergy;
                 return null;
             }
+            if (Body is WorldBody.Nexus)
+            {
+                if (NextNexusCustodianStep(index, fabricator, stopAdjacent: true, reservedPrey) is { } next)
+                    MoveCritter(index, GetIndex(next), next, activateTeleporter: false);
+                return null;
+            }
             GridPosition? repairStep = null;
             var bestDistance = int.MaxValue;
             foreach (var direction in MovementDirections)
@@ -230,7 +237,7 @@ public sealed partial class SimulationWorld
         _preyTargets[index] = -1;
         var id = _critterIds[index].Value;
         var state = _custodianPatrols.GetValueOrDefault(id,
-            (Step: 0, Portal: -1, NextPortalVisit: CustodianPortalPatrolSteps));
+            (Step: 0, Portal: -1, NextPortalVisit: CustodianPortalPatrolSteps, NexusArm: -1));
         if (state.Portal >= 0 && (!_teleporters.Contains(state.Portal) ||
             _occupants[state.Portal] >= 0 && _occupants[state.Portal] != index))
             state.Portal = -1;
@@ -282,6 +289,36 @@ public sealed partial class SimulationWorld
             return null;
         }
         var east = id % 2 == 0 ? 1 : -1;
+        if (Body is WorldBody.Nexus)
+        {
+            var patrolGoal = repairSite is null && state.Portal < 0;
+            if (state.NexusArm < 0)
+                state.NexusArm = NexusLayout.ArmIndex(this, current);
+            var waypoint = NexusLayout.ArmPosition(this, state.NexusArm, 0.65f);
+            if (patrolGoal && WrappedManhattanDistance(current, waypoint) <= 1)
+            {
+                state.NexusArm = Mod(state.NexusArm + east, NexusLayout.ArmCount);
+                waypoint = NexusLayout.ArmPosition(this, state.NexusArm, 0.65f);
+            }
+
+            var nexusGoal = repairSite ?? (state.Portal >= 0 ? GetPosition(state.Portal) : waypoint);
+            if (NextNexusCustodianStep(index, nexusGoal, stopAdjacent: repairSite is not null || patrolGoal,
+                reservedPrey) is { } next)
+            {
+                MoveCritter(index, GetIndex(next), next);
+                if (GetIndex(next) == state.Portal && _positions[index] != next)
+                {
+                    state.Portal = -1;
+                    state.NextPortalVisit = state.Step + CustodianPortalPatrolSteps;
+                }
+            }
+            else if (patrolGoal)
+                state.NexusArm = Mod(state.NexusArm + east, NexusLayout.ArmCount);
+            state.Step++;
+            _custodianPatrols[id] = state;
+            return null;
+        }
+
         var phase = 2 * Math.PI * (state.Step / (double)Math.Max(16, Width) + id / 5.0);
         var arcY = (int)Math.Round((Height - 1) * (0.5 + 0.4 * Math.Sin(phase)));
         var goal = repairSite ?? (state.Portal >= 0 ? GetPosition(state.Portal) :
@@ -317,5 +354,32 @@ public sealed partial class SimulationWorld
         state.Step++;
         _custodianPatrols[id] = state;
         return null;
+    }
+
+    private GridPosition? NextNexusCustodianStep(int index, GridPosition goal, bool stopAdjacent,
+        IReadOnlySet<GridPosition>? reservedPrey)
+    {
+        var id = _critterIds[index].Value;
+        var current = GetIndex(_positions[index]);
+        var target = GetIndex(goal);
+        if (!_nexusCustodianRoutes.TryGetValue(id, out var route) || route.Goal != target ||
+            route.StopAdjacent != stopAdjacent || route.Current != current ||
+            !route.Steps.TryPeek(out var next) || IsBlocked(next))
+        {
+            var steps = FindApeSettlerPath(index, current, target, reservedPrey: reservedPrey,
+                pathSpecies: CritterSpecies.Custodian, stopAdjacent: stopAdjacent);
+            if (steps is null || !steps.TryPeek(out next))
+            {
+                _nexusCustodianRoutes.Remove(id);
+                return null;
+            }
+            route = (target, stopAdjacent, current, steps);
+        }
+
+        route.Current = route.Steps.Dequeue();
+        _nexusCustodianRoutes[id] = route;
+        return GetPosition(route.Current);
+
+        bool IsBlocked(int tile) => _occupants[tile] >= 0 || reservedPrey?.Contains(GetPosition(tile)) is true;
     }
 }

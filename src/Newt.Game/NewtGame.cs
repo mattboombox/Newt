@@ -208,7 +208,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         {
             PreferredBackBufferWidth = 960,
             PreferredBackBufferHeight = 640,
-            PreferredDepthStencilFormat = DepthFormat.Depth24,
+            PreferredDepthStencilFormat = DepthFormat.Depth24Stencil8,
         };
         Content.RootDirectory = "Content";
         IsMouseVisible = true;
@@ -387,7 +387,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
 
         if (_view3D)
         {
-            DrawWorld3D();
+            DrawWorld3D(gameTime.TotalGameTime.TotalSeconds);
             _spriteBatch.Begin(samplerState: SamplerState.PointClamp);
             DrawFirstPersonUnderwaterTint();
             DrawInterface();
@@ -419,21 +419,25 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
                 if (MapTile2D(worldX, worldY) is not { } position) continue;
                 if (_world.Body is WorldBody.Nexus && !NexusLayout.Contains(_world, position))
                     continue;
-                var terrain = _world.GetTerrain(position);
                 var biome = _world.GetBiome(position);
                 var temperatureBand = _world.GetTemperatureBand(position);
+                var bed = UnfrozenBedTerrain(position);
+                var tileRectangle = new Rectangle(MapOffsetX + screenX * TileSize, MapOffsetY + screenY * TileSize,
+                    TileSize, TileSize);
                 _spriteBatch.Draw(
                     _pixel,
-                    new Rectangle(
-                        MapOffsetX + screenX * TileSize,
-                        MapOffsetY + screenY * TileSize,
-                        TileSize,
-                        TileSize),
-                    GetTileColor(position, UnfrozenBedTerrain(position), biome, temperatureBand));
+                    tileRectangle,
+                    GetTileColor(position, bed, biome, temperatureBand));
                 var water = _world.GetSurfaceWater(position);
                 if (water is not SurfaceWaterKind.None && !IsIce3D(position))
                 {
                     DrawSurfaceWater(screenX, screenY, position, water);
+                }
+                else if (water is SurfaceWaterKind.None && _world.GetSurfaceCover(position) is SurfaceCover.Lava &&
+                    !IsIce3D(position) && WaterElevation3D(position) is { } surface &&
+                    _world.GetElevation(position) < surface)
+                {
+                    _spriteBatch.Draw(_pixel, tileRectangle, TerrainColumnColor3D(position) * (WaterSurfaceTintAlpha3D / 255f));
                 }
                 DrawWhaleFall(screenX, screenY, position);
                 if (!IsIce3D(position)) DrawTileObjects2D(screenX, screenY, position);
@@ -784,8 +788,13 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
     {
         Texture2D? sprite;
         Texture2D? flashSprite;
-        var colonistInWater = critter.IsColonist && IsWaterTile(critter.Position);
-        if (critter.Species is CritterSpecies.Dog && _world.IsBarbarianApe(critter.Id) &&
+        var walkingOnIce = IsIce3D(critter.Position) &&
+            ThreeDGeometry.StandsOnIce(CritterHabitats.GetHabitat(critter.Species));
+        var inWater = !walkingOnIce && IsWaterTile(critter.Position);
+        var isBarbarian = _world.IsBarbarianApe(critter.Id);
+        var usePirateSprite = isBarbarian && !walkingOnIce && _world.IsApePirate(critter.Id);
+        var colonistInWater = critter.IsColonist && inWater;
+        if (critter.Species is CritterSpecies.Dog && isBarbarian &&
             _barbarianDogSprite is not null)
         {
             sprite = _barbarianDogSprite;
@@ -812,20 +821,20 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
                 ? _apeColonistSailorFlashSprite
                 : _apeColonistFlashSprite;
         }
-        else if (_apeRoyalSprites.TryGetValue((critter.Species, IsWaterTile(critter.Position), critter.IsVeteranWarrior), out var royalSprites) ||
-            _apeRoyalSprites.TryGetValue((critter.Species, IsWaterTile(critter.Position), false), out royalSprites))
+        else if (_apeRoyalSprites.TryGetValue((critter.Species, inWater, critter.IsVeteranWarrior), out var royalSprites) ||
+            _apeRoyalSprites.TryGetValue((critter.Species, inWater, false), out royalSprites))
         {
             (sprite, flashSprite) = royalSprites;
         }
-        else if (critter.Species is CritterSpecies.ApeBomber && IsWaterTile(critter.Position) &&
+        else if (critter.Species is CritterSpecies.ApeBomber && inWater &&
             _apeBomberSailorSprite is not null)
         {
             sprite = _apeBomberSailorSprite;
             flashSprite = _apeBomberSailorFlashSprite;
         }
         else if (_world.UsesMonarchyWarriorAppearance(critter.Id) &&
-            (_apeMonarchyWarSprites.TryGetValue((IsWaterTile(critter.Position), critter.IsVeteranWarrior), out var monarchySprites) ||
-             _apeMonarchyWarSprites.TryGetValue((IsWaterTile(critter.Position), false), out monarchySprites) ||
+            (_apeMonarchyWarSprites.TryGetValue((inWater, critter.IsVeteranWarrior), out var monarchySprites) ||
+             _apeMonarchyWarSprites.TryGetValue((inWater, false), out monarchySprites) ||
              _apeMonarchyWarSprites.TryGetValue((false, critter.IsVeteranWarrior), out monarchySprites) ||
              _apeMonarchyWarSprites.TryGetValue((false, false), out monarchySprites)))
         {
@@ -833,55 +842,55 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         }
         else if (_world.UsesLudditeWarriorAppearance(critter.Id) && _apeGreenWarriorSprite is not null)
         {
-            var sailing = IsWaterTile(critter.Position) && _apeGreenSailorWarriorSprite is not null;
+            var sailing = inWater && _apeGreenSailorWarriorSprite is not null;
             sprite = sailing ? _apeGreenSailorWarriorSprite : _apeGreenWarriorSprite;
             flashSprite = sailing ? _apeGreenSailorWarriorFlashSprite : _apeGreenWarriorFlashSprite;
         }
         else if (critter.Species is CritterSpecies.ApeWarrior &&
-            !_world.IsBarbarianApe(critter.Id) &&
+            !isBarbarian &&
             _world.TryGetApeWarSide(critter.Id, out var attacking) &&
-            (_apeWarTeamSprites.TryGetValue((attacking, IsWaterTile(critter.Position), critter.IsVeteranWarrior), out var teamSprites) ||
-             _apeWarTeamSprites.TryGetValue((attacking, IsWaterTile(critter.Position), false), out teamSprites)))
+            (_apeWarTeamSprites.TryGetValue((attacking, inWater, critter.IsVeteranWarrior), out var teamSprites) ||
+             _apeWarTeamSprites.TryGetValue((attacking, inWater, false), out teamSprites)))
         {
             (sprite, flashSprite) = teamSprites;
         }
-        else if (critter.Species is not CritterSpecies.ApeBomber && critter.IsVeteranWarrior && !_world.IsBarbarianApe(critter.Id) &&
-            IsWaterTile(critter.Position) && _apeSailorWarriorVeteranSprite is not null)
+        else if (critter.Species is not CritterSpecies.ApeBomber && critter.IsVeteranWarrior && !isBarbarian &&
+            inWater && _apeSailorWarriorVeteranSprite is not null)
         {
             sprite = _apeSailorWarriorVeteranSprite;
             flashSprite = _apeSailorWarriorVeteranFlashSprite;
         }
         else if (critter.Species is (CritterSpecies.ApeWarrior or CritterSpecies.ApeChieftain) &&
-            !_world.IsBarbarianApe(critter.Id) && IsWaterTile(critter.Position) &&
+            !isBarbarian && inWater &&
             (critter.Species == CritterSpecies.ApeWarrior ? _apeSailorWarriorSprite : _apeSailorChiefSprite) is not null)
         {
             sprite = critter.Species == CritterSpecies.ApeWarrior ? _apeSailorWarriorSprite : _apeSailorChiefSprite;
             flashSprite = critter.Species == CritterSpecies.ApeWarrior ? _apeSailorWarriorFlashSprite : _apeSailorChiefFlashSprite;
         }
-        else if (critter.Species is not CritterSpecies.ApeBomber && critter.IsVeteranWarrior && !_world.IsBarbarianApe(critter.Id) && _apeWarriorVeteranSprite is not null)
+        else if (critter.Species is not CritterSpecies.ApeBomber && critter.IsVeteranWarrior && !isBarbarian && _apeWarriorVeteranSprite is not null)
         {
             sprite = _apeWarriorVeteranSprite;
             flashSprite = _apeWarriorVeteranFlashSprite;
         }
-        else if (critter.IsVeteranWarrior && _world.IsBarbarianApe(critter.Id) &&
-            (_world.IsApePirate(critter.Id) ? _apePirateVeteranSprite : _apeBarbarianVeteranSprite) is not null)
+        else if (critter.IsVeteranWarrior && isBarbarian &&
+            (usePirateSprite ? _apePirateVeteranSprite : _apeBarbarianVeteranSprite) is not null)
         {
-            sprite = _world.IsApePirate(critter.Id) ? _apePirateVeteranSprite : _apeBarbarianVeteranSprite;
-            flashSprite = _world.IsApePirate(critter.Id) ? _apePirateVeteranFlashSprite : _apeBarbarianVeteranFlashSprite;
+            sprite = usePirateSprite ? _apePirateVeteranSprite : _apeBarbarianVeteranSprite;
+            flashSprite = usePirateSprite ? _apePirateVeteranFlashSprite : _apeBarbarianVeteranFlashSprite;
         }
-        else if (critter.Species is not CritterSpecies.Dog && _world.IsBarbarianApe(critter.Id) &&
+        else if (critter.Species is not CritterSpecies.Dog && isBarbarian &&
             (critter.Species switch
             {
-                CritterSpecies.ApeChieftain when _world.IsApePirate(critter.Id) => _apePirateChiefSprite,
-                _ when _world.IsApePirate(critter.Id) => _apePirateSprite,
+                CritterSpecies.ApeChieftain when usePirateSprite => _apePirateChiefSprite,
+                _ when usePirateSprite => _apePirateSprite,
                 CritterSpecies.ApeChieftain => _apeBarbarianChiefSprite,
                 _ => _apeBarbarianSprite,
             }) is not null)
         {
             (sprite, flashSprite) = critter.Species switch
             {
-                CritterSpecies.ApeChieftain when _world.IsApePirate(critter.Id) => (_apePirateChiefSprite, _apePirateChiefFlashSprite),
-                _ when _world.IsApePirate(critter.Id) => (_apePirateSprite, _apePirateFlashSprite),
+                CritterSpecies.ApeChieftain when usePirateSprite => (_apePirateChiefSprite, _apePirateChiefFlashSprite),
+                _ when usePirateSprite => (_apePirateSprite, _apePirateFlashSprite),
                 CritterSpecies.ApeChieftain => (_apeBarbarianChiefSprite, _apeBarbarianChiefFlashSprite),
                 _ => (_apeBarbarianSprite, _apeBarbarianFlashSprite),
             };
@@ -2445,6 +2454,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         _megaCylinderRenderDistanceLevel3D = 0;
         _megaCylinderFirstPersonDistanceLevel3D = 1;
         _world = WorldGenerator.Generate(new WorldGenerationOptions(_preset, _seed, MapType: _mapType, Shape: _mapShape));
+        ResetClouds3D();
         _focus3D = new Vector2(_world.Width / 2f, _world.Height / 2f);
         if (IsWalkingCamera) PlacePlayerOnMap3D();
         _cameraX = 0;
@@ -2764,6 +2774,8 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         var originY = MapOffsetY + screenY * TileSize;
         if (water is SurfaceWaterKind.FreshwaterLake)
         {
+            if (!_drawing3DAtlas && _world.GetSurfaceCover(worldPosition) is SurfaceCover.Lava)
+                color *= WaterSurfaceTintAlpha3D / 255f;
             _spriteBatch.Draw(_pixel, new Rectangle(originX, originY, TileSize, TileSize), color);
             return;
         }
@@ -3158,19 +3170,24 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         GridPosition position,
         Terrain terrain,
         Biome biome,
-        TemperatureBand temperatureBand)
+        TemperatureBand temperatureBand) =>
+        terrain is not Terrain.MegaWall && _world.GetSurfaceCover(position) is SurfaceCover.Lava
+            ? GetLavaColor(position)
+            : GetBedColor(position, terrain, biome, temperatureBand);
+
+    private Color GetLavaColor(GridPosition position)
+    {
+        var phase = (_world.Tick % 40) * (MathHelper.TwoPi / 40) + position.X * 0.9f + position.Y * 1.4f;
+        return Color.Lerp(new Color(232, 52, 14), new Color(255, 158, 42), 0.5f + 0.5f * MathF.Sin(phase));
+    }
+
+    private Color GetBedColor(GridPosition position, Terrain terrain, Biome biome, TemperatureBand temperatureBand)
     {
         if (terrain is Terrain.MegaWall)
         {
             return new Color(112, 126, 136);
         }
 
-        var cover = _world.GetSurfaceCover(position);
-        if (cover is SurfaceCover.Lava)
-        {
-            var glow = ((_world.Tick + position.X * 3L + position.Y * 5L) / 5) % 2 == 0;
-            return glow ? new Color(245, 72, 20) : new Color(190, 35, 15);
-        }
         var elevation = _world.GetElevation(position);
         var color = LifeSystem.IsStoneBiome(_world, position)
             ? GetStoneColor(terrain)
@@ -3361,7 +3378,8 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         WorldTool.EvolutionChance =>
             $"L +0.5%; R -0.5%   {_world.EvolutionChancePercent:0.0}%",
         WorldTool.Sentience => $"L on; R off   {(_world.SentienceEnabled ? "On" : "Off")}",
-        WorldTool.DayNightCycle => $"L on; R off   {(_dayNightCycleEnabled ? "On" : "Off")} (3D, 2 years)",
+        WorldTool.DayNightCycle => $"L on; R off   {(_dayNightCycleEnabled ? "On" : "Off")} (3D, " +
+            $"{DayNightCycleSeconds3D / 60} sim min)",
         WorldTool.Seasons => _world.IsRingHabitat || _world.Body is WorldBody.Nexus
             ? "Fixed climate"
             : "L on; R off",

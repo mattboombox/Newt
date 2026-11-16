@@ -17,8 +17,7 @@ public static class ClimateSystem
     private const float LakeMoistureReach = 8f;
 
     /// <summary>
-    /// Rebuilds temperature from latitude, elevation, and broad seeded variation.
-    /// This is a static climate normal, not moment-to-moment weather.
+    /// Rebuilds temperature from latitude, elevation, the season, and broad seeded variation.
     /// </summary>
     public static void RebuildTemperature(SimulationWorld world)
     {
@@ -32,13 +31,15 @@ public static class ClimateSystem
                 var position = new GridPosition(x, y);
                 var latitude = world.Body == WorldBody.Planetoid ? SeasonSystem.GetSignedLatitude(world, position) : rowLatitude;
                 var latitudeWarmth = 1 - MathF.Abs(latitude);
+                // A colder polar baseline lets more sea ice survive peak summer.
+                var polarCooling = 0.05f * Math.Max(0, 1 - latitudeWarmth / 0.45f);
                 var elevationCooling = Math.Max(0, world.GetElevation(position)) * 0.48f;
                 var variation = (FractalNoise(world, x, y, world.Seed ^ 0xA0761D6478BD642FUL) - 0.5f) * 0.18f;
                 var baseline = world.Body switch
                 {
                     WorldBody.RingWorld => GetRingTemperatureNormal(world, x),
                     WorldBody.ONeillCylinder => 0.035f + latitudeWarmth * 0.83f,
-                    _ => 0.06f + latitudeWarmth * 0.98f + SeasonSystem.GetTemperatureOffset(world, latitude),
+                    _ => 0.06f + latitudeWarmth * 0.98f - polarCooling + SeasonSystem.GetTemperatureOffset(world, latitude),
                 };
                 var temperature = world.Body is WorldBody.Nexus
                     ? NexusLayout.Climate(world, position).Temperature + variation * 0.15f + world.GlobalTemperatureOffset

@@ -95,7 +95,7 @@ public sealed partial class SimulationWorld
     public const float MaximumGroundElevation = 2f;
     public const float MinimumSeaLevel = -1f;
     public const float MaximumSeaLevel = 1f;
-    public const float MegaWallElevation = MaximumSeaLevel + 0.10f;
+    public const float MegaWallElevation = MaximumSeaLevel + 0.25f;
     public const float MinimumGlobalClimateOffset = -1f;
     public const float MaximumGlobalClimateOffset = 1f;
 
@@ -4761,9 +4761,10 @@ public sealed partial class SimulationWorld
 
     private Queue<int>? FindApeSettlerPath(int apeIndex, int startTile, int targetTile,
         HashSet<int>? sailorGoals = null, IReadOnlySet<GridPosition>? reservedPrey = null,
-        CritterSpecies? pathSpecies = null)
+        CritterSpecies? pathSpecies = null, bool stopAdjacent = false)
     {
         var sailorRoute = sailorGoals is not null;
+        var targetPosition = GetPosition(targetTile);
         var cameFrom = _apePathParents ??= new int[_terrain.Length];
         var stepsFromStart = _apePathSteps ??= new int[_terrain.Length];
         var visits = _apePathVisits ??= new int[_terrain.Length];
@@ -4779,7 +4780,7 @@ public sealed partial class SimulationWorld
         var frontier = _apePathFrontier;
         frontier.Clear();
         var order = 0;
-        frontier.Enqueue((startTile, 0), (!sailorRoute ? GetApeSettlerPathEstimate(startTile, targetTile) : 0, order++));
+        frontier.Enqueue((startTile, 0), (Estimate(startTile), order++));
         var reachedTile = -1;
         while (frontier.TryDequeue(out var node, out _))
         {
@@ -4787,7 +4788,9 @@ public sealed partial class SimulationWorld
             {
                 continue;
             }
-            if (sailorGoals is null ? node.Tile == targetTile : sailorGoals.Contains(node.Tile))
+            if (sailorGoals is null
+                ? node.Tile == targetTile || (stopAdjacent && WrappedManhattanDistance(GetPosition(node.Tile), targetPosition) <= 1)
+                : sailorGoals.Contains(node.Tile))
             {
                 reachedTile = node.Tile;
                 break;
@@ -4808,8 +4811,9 @@ public sealed partial class SimulationWorld
                         CanLiveOn(CritterSpecies.ApeSailor, neighborTile)) ||
                     reservedPrey?.Contains(GetPosition(neighborTile)) is true ||
                     (_occupants[neighborTile] >= 0 && _occupants[neighborTile] != apeIndex &&
-                        !CanShoveMovementBlocker(apeIndex, neighborTile, reservedPrey) &&
-                        !CanSwapPastMovementBlocker(apeIndex, neighborTile, reservedPrey, node.Tile)) ||
+                        (pathSpecies is CritterSpecies.Custodian ||
+                            !CanShoveMovementBlocker(apeIndex, neighborTile, reservedPrey) &&
+                            !CanSwapPastMovementBlocker(apeIndex, neighborTile, reservedPrey, node.Tile))) ||
                     (visits[neighborTile] == generation && nextSteps >= stepsFromStart[neighborTile]))
                 {
                     continue;
@@ -4820,7 +4824,7 @@ public sealed partial class SimulationWorld
                 visits[neighborTile] = generation;
                 frontier.Enqueue(
                     (neighborTile, nextSteps),
-                    (nextSteps + (!sailorRoute ? GetApeSettlerPathEstimate(neighborTile, targetTile) : 0), order++));
+                    (nextSteps + Estimate(neighborTile), order++));
             }
         }
 
@@ -4836,6 +4840,9 @@ public sealed partial class SimulationWorld
             reversePath.Push(tile);
         }
         return new Queue<int>(reversePath);
+
+        int Estimate(int tile) => sailorRoute ? 0
+            : Math.Max(0, GetApeSettlerPathEstimate(tile, targetTile) - (stopAdjacent ? 1 : 0));
     }
 
     private int GetApeSettlerPathEstimate(int firstTile, int secondTile)
@@ -7306,6 +7313,7 @@ public sealed partial class SimulationWorld
         var lastIndex = _count - 1;
         var removedId = _critterIds[critterIndex];
         _custodianPatrols.Remove(removedId.Value);
+        _nexusCustodianRoutes.Remove(removedId.Value);
         _custodianCreatedTicks.Remove(removedId.Value);
         _lichArmy.Remove(removedId.Value);
         _traderJourneys.Remove(removedId.Value);

@@ -5,8 +5,8 @@ public static class SeasonSystem
 {
     public const int CycleSeconds = 1440;
     public const int ClimateRefreshSeconds = 60;
-    public const float EquatorialBand = 0.20f;
-    public const float PolarTemperatureAmplitude = 0.10f;
+    public const float EquatorialBand = 0.17f;
+    public const float PolarTemperatureAmplitude = 0.12f;
     public const int TicksPerYear = CycleSeconds * SimulationWorld.TicksPerSecond;
     // Seasonal temperature changes are gradual; refreshing the whole climate
     // every sixty seconds avoids repeated map-wide work without visible stepping.

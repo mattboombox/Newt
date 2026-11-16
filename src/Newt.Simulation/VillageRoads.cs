@@ -49,19 +49,19 @@ public sealed partial class SimulationWorld
         return CardinalDirections.Any(direction =>
         {
             var waterTiles = 1;
-            var first = FindBank(direction.X, direction.Y, ref waterTiles);
-            var second = FindBank(-direction.X, -direction.Y, ref waterTiles);
+            var first = FindBank(direction, ref waterTiles);
+            var second = FindBank(new(-direction.X, -direction.Y), ref waterTiles);
             return first >= 0 && second >= 0 && first != second;
         });
 
-        int FindBank(int dx, int dy, ref int waterTiles)
+        int FindBank(GridPosition direction, ref int waterTiles)
         {
             var current = tile;
             for (var step = 0; step < 2; step++)
             {
                 var position = GetPosition(current);
-                var next = new GridPosition(Mod(position.X + dx, Width), position.Y + dy);
-                var back = new GridPosition(Mod(position.X - dx, Width), position.Y - dy);
+                var next = OffsetTile(position, direction);
+                var back = OffsetTile(position, new(-direction.X, -direction.Y));
                 if (!Contains(next) || !Contains(back) || next == back ||
                     !_roadLinks.TryGetValue(current, out var links) || links.Count != 2 ||
                     !links.Contains(GetIndex(next)) || !links.Contains(GetIndex(back)))
@@ -69,6 +69,7 @@ public sealed partial class SimulationWorld
                 current = GetIndex(next);
                 if (IsRoadLandTerrain(current)) return current;
                 if (current == tile || !IsBridgeWater(current) || ++waterTiles > 2) return -1;
+                direction = ContinueRoadDirection(position, next, direction);
             }
             return -1;
         }
@@ -112,14 +113,33 @@ public sealed partial class SimulationWorld
             _ => 0,
         });
 
-    private IEnumerable<int> RoadNeighbors(int tile)
+    private GridPosition ContinueRoadDirection(GridPosition from, GridPosition to, GridPosition direction)
+    {
+        if (Body is WorldBody.Planetoid && OffsetTile(to, new(-direction.X, -direction.Y)) != from)
+            foreach (var back in CardinalDirections)
+                if (OffsetTile(to, back) == from)
+                    return new(-back.X, -back.Y);
+        return direction;
+    }
+
+    private IEnumerable<int> RoadNeighbors(int tile) =>
+        RoadNeighborSteps(tile).Select(step => step.Tile);
+
+    private IEnumerable<(int Tile, GridPosition Direction)> RoadNeighborSteps(int tile)
     {
         var position = GetPosition(tile);
+        var faceSize = Body is WorldBody.Planetoid ? PlanetoidLayout.FaceSize(Width) : 0;
+        var face = faceSize > 0 ? PlanetoidLayout.FaceAt(position.X, position.Y, faceSize) : -1;
         foreach (var direction in MovementDirections)
         {
-            var next = new GridPosition(Mod(position.X + direction.X, Width), position.Y + direction.Y);
+            var next = OffsetTile(position, direction);
+            // Cross cube seams through a shared edge. A diagonal across a seam
+            // can have an ambiguous return direction at the corner of three faces.
+            if (face >= 0 && direction.X != 0 && direction.Y != 0 &&
+                PlanetoidLayout.FaceAt(next.X, next.Y, faceSize) != face)
+                continue;
             if (Contains(next) && next != position)
-                yield return GetIndex(next);
+                yield return (GetIndex(next), direction);
         }
     }
 
@@ -199,30 +219,34 @@ public sealed partial class SimulationWorld
     private List<int>? FindRoadPath(IEnumerable<int> origins, HashSet<int> targets) =>
         FindRoadPath(origins, targets, allowBridges: true);
 
-    private IEnumerable<(int Tile, int Bridge, int SecondBridge)> RoadPathSteps(int tile, bool allowBridges)
+    private IEnumerable<(int Tile, int Bridge, int SecondBridge, int StepCost)> RoadPathSteps(int tile, bool allowBridges)
     {
-        foreach (var next in RoadNeighbors(tile))
-            if (IsRoadLandTerrain(next)) yield return (next, -1, -1);
+        foreach (var (next, direction) in RoadNeighborSteps(tile))
+            if (IsRoadLandTerrain(next))
+                yield return (next, -1, -1, direction.X != 0 && direction.Y != 0 ? 14 : 10);
         if (!allowBridges) yield break;
         var position = GetPosition(tile);
-        foreach (var direction in CardinalDirections)
+        foreach (var startDirection in CardinalDirections)
         {
             var bridge = -1;
             var secondBridge = -1;
+            var current = position;
+            var direction = startDirection;
             for (var distance = 1; distance <= 3; distance++)
             {
-                var next = new GridPosition(Mod(position.X + distance * direction.X, Width),
-                    position.Y + distance * direction.Y);
+                var next = OffsetTile(current, direction);
                 if (!Contains(next) || next == position) break;
                 var nextTile = GetIndex(next);
                 if (IsRoadLandTerrain(nextTile))
                 {
-                    if (bridge >= 0) yield return (nextTile, bridge, secondBridge);
+                    if (bridge >= 0) yield return (nextTile, bridge, secondBridge, 10);
                     break;
                 }
                 if (distance == 3 || !IsBridgeWater(nextTile) || _roadLinks.ContainsKey(nextTile)) break;
                 if (distance == 1) bridge = nextTile;
                 else secondBridge = nextTile;
+                direction = ContinueRoadDirection(current, next, direction);
+                current = next;
             }
         }
     }
@@ -257,8 +281,7 @@ public sealed partial class SimulationWorld
                 end = current;
                 break;
             }
-            var origin = GetPosition(current);
-            foreach (var (next, bridge, secondBridge) in RoadPathSteps(current, allowBridges))
+            foreach (var (next, bridge, secondBridge, stepCost) in RoadPathSteps(current, allowBridges))
             {
                 if (!IsRoadTerrain(next) ||
                     (_roadLinks.ContainsKey(next) && !starts.Contains(next) && !targets.Contains(next)) ||
@@ -267,7 +290,7 @@ public sealed partial class SimulationWorld
                     continue;
                 var destination = GetPosition(next);
                 var cost = costs[current] +
-                    (origin.X != destination.X && origin.Y != destination.Y ? 14 : 10) * RoadTerrainCostMultiplier(next) +
+                    stepCost * RoadTerrainCostMultiplier(next) +
                     // Each bridge tile costs only 1.25 ordinary grassland steps.
                     // Charge for its length, without any map-size-dependent penalty.
                     (bridge >= 0 ? 125 * (secondBridge >= 0 ? 2 : 1) : 0);
@@ -456,18 +479,22 @@ public sealed partial class SimulationWorld
         InvalidateTransportNetwork();
         _roadConnections.Clear();
         foreach (var (tile, neighbors) in _roadLinks)
-        foreach (var neighbor in neighbors)
+        foreach (var (neighbor, direction) in RoadNeighborSteps(tile))
         {
-            var first = GetPosition(tile);
-            var second = GetPosition(neighbor);
-            var east = second.X != first.X && second.X == Mod(first.X + 1, Width);
-            var west = second.X != first.X && !east;
-            var direction = second.Y < first.Y
-                ? east ? RiverConnection.NorthEast : west ? RiverConnection.NorthWest : RiverConnection.North
-                : second.Y > first.Y
-                    ? east ? RiverConnection.SouthEast : west ? RiverConnection.SouthWest : RiverConnection.South
-                    : east ? RiverConnection.East : RiverConnection.West;
-            _roadConnections[tile] = _roadConnections.GetValueOrDefault(tile) | direction;
+            if (!neighbors.Contains(neighbor) ||
+                (Width == 2 && Body is not WorldBody.Planetoid && direction.X < 0)) continue;
+            var connection = (direction.X, direction.Y) switch
+            {
+                (0, -1) => RiverConnection.North,
+                (1, -1) => RiverConnection.NorthEast,
+                (1, 0) => RiverConnection.East,
+                (1, 1) => RiverConnection.SouthEast,
+                (0, 1) => RiverConnection.South,
+                (-1, 1) => RiverConnection.SouthWest,
+                (-1, 0) => RiverConnection.West,
+                _ => RiverConnection.NorthWest
+            };
+            _roadConnections[tile] = _roadConnections.GetValueOrDefault(tile) | connection;
         }
 
         var visited = new HashSet<int>();
