@@ -38,7 +38,7 @@ public sealed partial class SimulationWorld
         _lastApeVillageReachabilityTick = Tick;
         _apeVillageReachabilityTicks[id] = Tick + ApeVillageReachabilityIntervalTicks;
         if (!CanApeReachVillage(index, village))
-            DetachApeFromVillage(id);
+            DetachApeFromVillage(id, countedAsResident: true);
     }
 
     private bool CanApeReachVillage(int index, int village)

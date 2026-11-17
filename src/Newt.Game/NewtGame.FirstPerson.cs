@@ -109,7 +109,7 @@ public sealed partial class NewtGame
         _firstPersonMouseReady = true;
         var forward = (keyboard.IsKeyDown(Keys.W) ? 1 : 0) - (keyboard.IsKeyDown(Keys.S) ? 1 : 0);
         var right = (keyboard.IsKeyDown(Keys.D) ? 1 : 0) - (keyboard.IsKeyDown(Keys.A) ? 1 : 0);
-        var running = keyboard.IsKeyDown(Keys.LeftShift) || keyboard.IsKeyDown(Keys.RightShift);
+        var running = keyboard.IsKeyDown(Keys.LeftShift);
         var step = ThreeDGeometry.WalkingStep(_yaw3D, forward, right, seconds, running);
         var previous = _focus3D;
         var previousTile = MapTile3D((int)MathF.Floor(previous.X), (int)MathF.Floor(previous.Y));

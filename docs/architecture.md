@@ -503,8 +503,11 @@ Mountains impassable. They can push through blocking Plankton chains and displac
 into nearby valid habitat, while Mountains,
 Lava, and Mega Walls remain impassable. Colonists are labeled separately
 and use a lighter Ape color until they found and join their new village. Founding
-resets the traveler's energy to ordinary Ape starting energy and creates exactly one
-companion Ape on a neighboring habitable tile; later population growth uses normal reproduction.
+resets the traveler's energy to ordinary Ape starting energy and adds two companions
+on nearby habitable tiles, leaving the first auxiliary building site available.
+A lone civilian in a regular village can build its first food district if a site and resources are available.
+When a village drops to one resident, an eligible survivor takes over an active food district
+immediately and can build one first if the village has the resources and a suitable site.
 The Colonist tool in Events manually sends one from a clicked Village, charging up to one
 hundred food and reducing a poorer village's food to zero. Clicking a valid non-Village
 tile instead dispatches from the nearest Village to found at that exact destination.
@@ -530,7 +533,7 @@ Recruitment preserves existing energy; sailors gain energy by hunting and no lon
 refill remotely from village stores. They keep catches until their own reserve reaches
 28 and carry surplus food home. Metabolism, combat, and plague drain that finite reserve,
 so village supplies cannot automatically cancel plague damage. Ape Sailors never reproduce. If a
-Sailor remains the only village resident for sixty simulated seconds, it becomes a same-ID Ape
+Sailor remains the only village resident for sixty simulated seconds without taking over a food district, it becomes a same-ID Ape
 colonist with normal settler travel energy and departs for a valid distant site. Its former settlement
 becomes ruins immediately. When no destination exists, the Sailor remains and retries after another
 sixty seconds. Sailors
@@ -539,12 +542,14 @@ return their catches through a connected Harbor. Each Harbor supports up to four
 a village can support one Harbor and one Lumber Camp initially, then one additional building
 of each kind per 150 residents.
 
-Every complete group of 50 residents allows one Military District. Like a Harbor, it converts
+A village can build its first Military District at 20 residents, then another at 50 and every
+50 residents after that. Like a Harbor, it converts
 ordinary residents at thirty-second intervals without changing population or stable identity,
 and each district supports four Ape Warriors. The first Warrior supplied by each district is
-free; subsequent Warriors cost two wood. Warriors cannot reproduce, remain land dwellers in peacetime,
-hunt Sea Scorpions, Mega Spiders, Mega Toads, Wolves, Toothed Whales, and Undead Apes, and
-deal three energy damage on each successful combat roll. If either plague infects a Warrior,
+free; subsequent Warriors cost two wood. Warriors without an escort or war assignment form
+village defense squads of up to four. They follow their squad leader and converge on a shared
+target within the village's claim radius, including Wolves and Toothed Whales. Warriors deal
+four energy damage on each successful combat roll. If either plague infects a Warrior,
 it immediately becomes a regular sick Ape while retaining its village membership.
 
 Ordinary Ape Warriors proactively attack barbarian Apes within their existing perception

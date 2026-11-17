@@ -5,11 +5,11 @@ public sealed partial class SimulationWorld
     private readonly Dictionary<int, int> _apeFarmers = [];
     private readonly Dictionary<int, long> _apeFarmerRecruitmentTicks = [];
     private readonly Dictionary<int, long> _apeFoodExpansionTicks = [];
+    private readonly HashSet<int> _apeVillagesWithMultipleResidents = [];
 
     private void TryBuildEmergencyApeFarm(int village)
     {
         if (_apeVillageFood.GetValueOrDefault(village) >= 10 ||
-            GetApeVillageResidentCountByTile(village) < 2 ||
             Tick < _apeFoodExpansionTicks.GetValueOrDefault(village))
             return;
         var available = _apeVillageHomes.Count(pair => pair.Value == village &&
@@ -29,6 +29,44 @@ public sealed partial class SimulationWorld
         _species[index] is CritterSpecies.ApeFarmer &&
         _apeAuxiliaryVillages.TryGetValue(farmTile, out var village) &&
         _apeVillageHomes.TryGetValue(id, out var home) && home == village;
+
+    private void TryAssignLoneApeFarmer(int village)
+    {
+        foreach (var (id, home) in _apeVillageHomes)
+        {
+            if (home != village || !_critterIndicesById.TryGetValue(id, out var index) ||
+                !IsLivingApe(_species[index]) || !CanRecruitApe(index) || _apeSettlerTargets.ContainsKey(id))
+            {
+                continue;
+            }
+
+            if (_apeWorkplaces.TryGetValue(id, out var workplace) && HasApeFarmer(workplace) &&
+                _apeStructures.TryGetValue(workplace, out var kind) && IsApeFoodDistrictActive(workplace, kind))
+            {
+                return;
+            }
+
+            var position = _positions[index];
+            if (!CanLiveOn(CritterSpecies.ApeFarmer, GetIndex(position)))
+                return;
+
+            var farm = FindActiveFarm(position);
+            if (farm < 0 && TryBuildApeFoodDistrict(village))
+                farm = FindActiveFarm(position);
+            if (farm >= 0)
+                AssignApeFarmer(id, farm);
+            return;
+        }
+
+        int FindActiveFarm(GridPosition position) =>
+            _apeAuxiliaryVillages.Where(pair => pair.Value == village &&
+                _apeStructures.TryGetValue(pair.Key, out var kind) && IsApeFoodDistrict(kind) &&
+                IsApeFoodDistrictActive(pair.Key, kind))
+            .OrderBy(pair => WrappedManhattanDistance(position, GetPosition(pair.Key)))
+            .ThenBy(pair => pair.Key)
+            .Select(pair => pair.Key)
+            .FirstOrDefault(-1);
+    }
 
     private void AdvanceApeFarmerRecruitment(int villageTile, int farmTile, ApeStructureKind structure)
     {
@@ -56,8 +94,16 @@ public sealed partial class SimulationWorld
             .ThenBy(pair => pair.Key).Select(pair => pair.Key).FirstOrDefault();
         if (recruitId == 0)
             return;
-        ChangeCritterSpecies(_critterIndicesById[recruitId], CritterSpecies.ApeFarmer,
-            preserveEnergy: true, preserveApeVillage: true);
+        AssignApeFarmer(recruitId, farmTile);
+    }
+
+    private void AssignApeFarmer(int recruitId, int farmTile)
+    {
+        var index = _critterIndicesById[recruitId];
+        if (_species[index] is CritterSpecies.ApeFarmer)
+            DetachApeWorker(recruitId);
+        else
+            ChangeCritterSpecies(index, CritterSpecies.ApeFarmer, preserveEnergy: true, preserveApeVillage: true);
         _apeFarmers[farmTile] = recruitId;
         _apeWorkplaces[recruitId] = farmTile;
         _apeFarmerRecruitmentTicks.Remove(farmTile);

@@ -61,15 +61,9 @@ lowers the elevation of land reached by the wave.
 8x, 16x, and 32x. `P` pauses or resumes simulation time without disabling tools or
 camera controls. The current rate and pause state appear beside the world tick.
 
-Automatic slowdown is enabled by default and can be toggled with `G`. At 2x, 4x, 8x, 16x, or
-32x, worlds with at least 4,000 critters automatically reduce the rate
-directly to 1x after sustained slow updates. Smaller populations never trigger
-the fallback. The guard waits for about one second of slow updates and ignores
-isolated stalls. The HUD marks the fallback as `1x (auto)`; changing speed
-manually clears the marker and restarts the guard. Speed never increases
-automatically. Pausing,
-opening the setup menu, or generating a world resets the slowdown history.
-Rendering quality is unchanged, and no automatic reductions occur at 1x or below.
+The game starts at 1x. Press `G` to toggle auto speed. While enabled, auto speed
+selects 32x below the population limits and caps speed at 1x once the world has
+at least 20,000 critters or 250 non-barbarian apes.
 
 Temperature and Moisture are global climate tools. Left click adds 0.05 and right
 click subtracts 0.05 from the corresponding world-wide climate offset. Each

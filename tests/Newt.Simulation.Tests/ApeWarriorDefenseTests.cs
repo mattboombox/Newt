@@ -5,6 +5,57 @@ namespace Newt.Simulation.Tests;
 public sealed class ApeWarriorDefenseTests
 {
     [Theory]
+    [InlineData(CritterSpecies.Wolf, Terrain.Plains)]
+    [InlineData(CritterSpecies.ToothedWhale, Terrain.Shallows)]
+    public void UnassignedWarriorsFollowTheirSquadLeaderAndHuntVillagePredators(
+        CritterSpecies predator, Terrain predatorTerrain)
+    {
+        var village = new GridPosition(15, 10);
+        var world = new SimulationWorld(35, 20, Terrain.Plains, seed: 1);
+        for (var y = 0; y < world.Height; y++)
+        for (var x = 0; x < world.Width; x++)
+            world.SetBiome(new GridPosition(x, y), Biome.Grassland);
+        Assert.True(world.TrySpawnTestApeVillage(village));
+        Assert.True(world.TryBuildApeStructure(village.Y * world.Width + village.X, ApeStructureKind.ResidentialDistrict));
+        foreach (var resident in Enumerable.Range(0, world.CritterCount).Select(world.GetCritter).ToArray())
+            world.RemoveCritterAt(resident.Position);
+
+        AddResident(CritterSpecies.ApeChieftain, village);
+        var escort = AddResident(CritterSpecies.ApeWarrior, new GridPosition(15, 11));
+        for (var i = 1; i < SimulationWorld.ChieftainEscortSize; i++)
+            AddResident(CritterSpecies.ApeWarrior, new GridPosition(15 + i, 11));
+
+        var leaderPosition = new GridPosition(19, 10);
+        var leader = AddResident(CritterSpecies.ApeWarrior, leaderPosition);
+        var follower = AddResident(CritterSpecies.ApeWarrior, new GridPosition(19, 6));
+        var predatorPosition = new GridPosition(20, 10);
+        world.SetTerrain(predatorPosition, predatorTerrain);
+        var threat = world.AddCritter(predator, predatorPosition);
+
+        Assert.False(world.TryMoveVillageDefenseWarrior(IndexOf(escort), null, out _));
+        Assert.True(world.TryMoveVillageDefenseWarrior(IndexOf(follower), null, out var followerPrey));
+        Assert.Null(followerPrey);
+        Assert.Equal(new GridPosition(19, 7), world.GetCritter(IndexOf(follower)).Position);
+        Assert.True(world.TryMoveVillageDefenseWarrior(IndexOf(leader), null, out var leaderPrey));
+        Assert.Equal(predatorPosition, leaderPrey);
+
+        var energyBefore = world.GetCritter(IndexOf(leader)).Energy + world.GetCritter(IndexOf(threat)).Energy;
+        world.CommitEncounter(leaderPosition, predatorPosition);
+        if (world.TryGetCritter(leader, out var survivingLeader) && world.TryGetCritter(threat, out var survivingThreat))
+            Assert.True(survivingLeader.Energy + survivingThreat.Energy < energyBefore);
+
+        CritterId AddResident(CritterSpecies species, GridPosition position)
+        {
+            var id = world.AddCritter(species, position);
+            Assert.True(world.TryAssignApeToVillage(id, village));
+            return id;
+        }
+
+        int IndexOf(CritterId id) =>
+            Enumerable.Range(0, world.CritterCount).Single(i => world.GetCritter(i).Id == id);
+    }
+
+    [Theory]
     [InlineData(CritterSpecies.Ape)]
     [InlineData(CritterSpecies.ApeWarrior)]
     [InlineData(CritterSpecies.ApeChieftain)]

@@ -6,6 +6,46 @@ namespace Newt.Simulation.Tests;
 public sealed class EmergencyFarmTests
 {
     [Theory]
+    [InlineData(CritterSpecies.Ape, false)]
+    [InlineData(CritterSpecies.ApeWarrior, true)]
+    [InlineData(CritterSpecies.ApeSailor, true)]
+    public void LastResidentTakesOverAFarmImmediately(CritterSpecies species, bool existingFarm)
+    {
+        var world = new SimulationWorld(40, 30, Terrain.Plains, seed: 17) { SeasonsEnabled = false };
+        NaturalEvents.SetEnabled(world, false);
+        for (var y = 0; y < world.Height; y++)
+        for (var x = 0; x < world.Width; x++)
+            world.SetBiome(new(x, y), Biome.Grassland);
+
+        var village = new GridPosition(10, 10);
+        Assert.True(world.TrySpawnTestApeVillage(village));
+        while (world.CritterCount > 0)
+            world.RemoveCritterAt(world.GetCritter(0).Position);
+        if (existingFarm)
+            Assert.True(world.TryBuildApeStructure(village.Y * world.Width + village.X, ApeStructureKind.Farm));
+
+        var survivorPosition = village;
+        if (species is CritterSpecies.ApeSailor)
+        {
+            survivorPosition = new GridPosition(9, 9);
+            world.SetTerrain(survivorPosition, Terrain.Beach);
+        }
+        var survivor = world.AddCritter(species, survivorPosition);
+        Assert.True(world.TryAssignApeToVillage(survivor, village));
+        var neighbor = new GridPosition(11, 11);
+        var lost = world.AddCritter(CritterSpecies.Ape, neighbor);
+        Assert.True(world.TryAssignApeToVillage(lost, village));
+        Assert.True(world.RemoveCritterAt(neighbor));
+
+        world.AdvanceOneTick();
+
+        Assert.Equal(1, world.GetApeVillageResidentCount(village));
+        Assert.Equal(1, world.GetApeVillageFarmCount(village));
+        Assert.True(world.TryGetCritter(survivor, out var farmer));
+        Assert.Equal(CritterSpecies.ApeFarmer, farmer.Species);
+    }
+
+    [Theory]
     [InlineData(0, true)]
     [InlineData(9, true)]
     [InlineData(10, false)]

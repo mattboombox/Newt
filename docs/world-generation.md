@@ -315,7 +315,8 @@ The game starts in Critter Tools with Plankton selected.
   reproduce, hunt all implemented sea life except Plankton and Worms, and return their catches
   to a connected Harbor. A village may
   support one Harbor and one Lumber Camp initially, plus another of each for every 150 residents.
-  Every 50 residents permits one Military District, which converts up to four civilian Apes into
+  Villages can build one Military District at 20 residents and another at each multiple of 50.
+  Each district converts up to four civilian Apes into
   non-reproducing Ape Warriors without changing village population. Warriors hunt the species that
   prey on ordinary Apes and deal three energy damage on a successful combat roll. A Military District
   costs six wood; its first Warrior is free and later Warriors cost two wood. Infection immediately
@@ -347,11 +348,11 @@ The game starts in Critter Tools with Plankton selected.
   habitat; Mountains, Lava, and Ring World
   walls remain impassable. Their label and lighter Ape color persist
   until they found and join a new village. Founding resets the colonist to ordinary Ape
-  starting energy and creates exactly one companion Ape; later growth requires normal
-  reproduction. Clicking a Village with the Colonist tool
+  starting energy and adds two companion Apes. Later growth uses normal reproduction.
+  Clicking a Village with the Colonist tool
   chooses a distant site automatically; clicking a valid non-Village tile sends one
   there from the nearest Village. Inspection shows its destination X and Y coordinates.
-  A Sailor left as a village's only resident for sixty simulated seconds converts into
+  A Sailor left as a village's only resident for sixty simulated seconds without taking over a food district converts into
   a same-ID colonist and seeks a valid distant site, leaving the old settlement as ruins.
   If no destination exists, it remains a Sailor and retries sixty seconds later.
   Terrestrial critters can traverse exposed Lowlands, Canyons, and Trenches.

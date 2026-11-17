@@ -45,9 +45,8 @@ public sealed partial class SimulationWorld
             var position = GetPosition(pair.Key);
             foreach (var direction in MovementDirections)
             {
-                var y = position.Y + direction.Y;
-                if (y < 0 || y >= Height || !owners.TryGetValue(
-                        GetIndex(new GridPosition(Mod(position.X + direction.X, Width), y)), out var neighbor))
+                var adjacent = OffsetTile(position, direction);
+                if (!Contains(adjacent) || !owners.TryGetValue(GetIndex(adjacent), out var neighbor))
                     continue;
                 var first = Root(pair.Value);
                 var second = Root(neighbor);

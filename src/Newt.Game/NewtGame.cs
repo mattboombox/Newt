@@ -82,21 +82,21 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         ", / .  slower / faster simulation",
         "- / =  decrease / increase magnitude",
         "P  pause or resume",
-        "G  toggle auto speed",
+        "G  toggle auto speed; Right Shift  1x / 32x",
         "Tab  2D <-> 3D",
         "V  3D free <-> first person",
         "F  1st <-> 3rd (random ghost on 3rd)",
         "L  3D render distance: Full / 3/4 / 1/2 / 1/4",
-        "1st/3rd: WASD walk; Shift move faster",
+        "1st/3rd: WASD walk; Left Shift move faster",
         "1st/3rd: mouse or arrows look around",
         "Arrows: Left/Right turn; Up/Down look",
         "1st/3rd: Space fly/swim up; Ctrl descend faster",
-        "1st/3rd: Shift + Space/Ctrl boosts ascent/descent",
+        "1st/3rd: Left Shift + Space/Ctrl boosts ascent/descent",
         "1st/3rd: V to free camera; wheel ignored",
         "2D: WASD / arrows pan; wheel zoom",
         "Free 3D: WASD move; arrows rotate",
         "Free 3D: middle mouse rotate; wheel zoom",
-        "Shift + pan  move faster",
+        "Left Shift + pan  move faster",
         "Mouse wheel  zoom toward pointer",
         "Left click  use selected tool",
         "Right click  alternate tool action",
@@ -117,6 +117,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
     private SpriteBatch? _spriteBatch;
     private Texture2D? _pixel;
     private Texture2D? _whaleFallSprite;
+    private Texture2D? _jellyfishGlowSprite;
     private SpriteFont? _hudFont;
     private readonly Dictionary<CritterSpecies, Texture2D> _critterSprites = [];
     private readonly Dictionary<CritterSpecies, Texture2D> _critterFlashSprites = [];
@@ -155,6 +156,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
     private readonly Dictionary<(bool Sailing, bool Veteran), (Texture2D Sprite, Texture2D Flash)> _apeMonarchyWarSprites = [];
     private readonly Dictionary<(CritterSpecies Species, bool Sailing, bool Veteran), (Texture2D Sprite, Texture2D Flash)> _apeRoyalSprites = [];
     private TimeSpan _accumulator;
+    private double _environmentAnimationSeconds;
     private KeyboardState _previousKeyboard;
     private MouseState _previousMouse;
     private bool _waitingForInputRelease = true;
@@ -173,8 +175,8 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
     private int TerrainBrushRadius => 1 + 2 * _terrainMagnitudeIndex;
     private float ElevationBrushStrength => 0.12f + 0.08f * _terrainMagnitudeIndex;
     private float SmoothingBrushStrength => 0.10f + 0.08f * _terrainMagnitudeIndex;
-    private int _simulationRateIndex = 2;
-    private readonly SimulationSpeedGuard _simulationSpeedGuard = new();
+    private int _simulationRateIndex = Array.IndexOf(SimulationRates, 1d);
+    private readonly SimulationSpeedGuard _simulationSpeedGuard = new() { Enabled = false };
     private bool _speedAutomaticallyReduced;
     private bool _lifeEnabled = true;
     private bool _sentienceEnabled = true;
@@ -358,6 +360,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
 
         if (!_paused)
         {
+            _environmentAnimationSeconds += gameTime.ElapsedGameTime.TotalSeconds;
             _accumulator += gameTime.ElapsedGameTime * SimulationRates[_simulationRateIndex];
             while (_accumulator >= SimulationStep)
             {
@@ -387,7 +390,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
 
         if (_view3D)
         {
-            DrawWorld3D(gameTime.TotalGameTime.TotalSeconds);
+            DrawWorld3D(_environmentAnimationSeconds);
             _spriteBatch.Begin(samplerState: SamplerState.PointClamp);
             DrawFirstPersonUnderwaterTint();
             DrawInterface();
@@ -431,7 +434,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
                 var water = _world.GetSurfaceWater(position);
                 if (water is not SurfaceWaterKind.None && !IsIce3D(position))
                 {
-                    DrawSurfaceWater(screenX, screenY, position, water, gameTime.TotalGameTime.TotalSeconds);
+                    DrawSurfaceWater(screenX, screenY, position, water, _environmentAnimationSeconds);
                 }
                 else if (water is SurfaceWaterKind.None && _world.GetSurfaceCover(position) is SurfaceCover.Lava &&
                     !IsIce3D(position) && WaterElevation3D(position) is { } surface &&
@@ -442,7 +445,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
                 DrawWhaleFall(screenX, screenY, position);
                 if (TileSize >= 4)
                 {
-                    DrawWaterSurfaceArt(screenX, screenY, position, gameTime.TotalGameTime.TotalSeconds);
+                    DrawWaterSurfaceArt(screenX, screenY, position, _environmentAnimationSeconds);
                 }
                 if (!IsIce3D(position)) DrawTileObjects2D(screenX, screenY, position);
             }
@@ -544,6 +547,34 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
 
         _critterSprites.Add(species, sprite);
         _critterFlashSprites.Add(species, flashSprite);
+        if (species is CritterSpecies.Jellyfish)
+            _jellyfishGlowSprite = CreateJellyfishGlow(sprite);
+    }
+
+    private Texture2D CreateJellyfishGlow(Texture2D sprite)
+    {
+        var source = new Color[sprite.Width * sprite.Height];
+        var glow = new Color[source.Length];
+        sprite.GetData(source);
+        var core = new Color(252, 188, 244) * 0.86f;
+        var halo = new Color(231, 155, 240) * 0.18f;
+        for (var y = 0; y < sprite.Height; y++)
+        for (var x = 0; x < sprite.Width; x++)
+        {
+            var index = y * sprite.Width + x;
+            if (IsPink(x, y))
+                glow[index] = core;
+            else if (IsPink(x - 1, y) || IsPink(x + 1, y) || IsPink(x, y - 1) || IsPink(x, y + 1))
+                glow[index] = halo;
+        }
+
+        var texture = new Texture2D(GraphicsDevice, sprite.Width, sprite.Height);
+        texture.SetData(glow);
+        return texture;
+
+        bool IsPink(int x, int y) =>
+            x >= 0 && x < sprite.Width && y >= 0 && y < sprite.Height &&
+            source[y * sprite.Width + x] == new Color(164, 191, 233);
     }
 
     private void LoadApeVariantSprites()
@@ -777,8 +808,8 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
 
     private static readonly Point[] CustodianEyePixels =
         [new(6, 3), new(8, 3), new(5, 4), new(9, 4), new(5, 6), new(9, 6)];
-    private static readonly Point[] JellyfishHeadPixels =
-        [new(2, 2), new(5, 3), new(7, 3), new(3, 5), new(5, 5)];
+    private static readonly Point[] MegaSpiderEyePixels =
+        [new(2, 9), new(4, 9), new(1, 10), new(5, 10), new(1, 12), new(5, 12)];
     private static readonly Point[] UndeadApeEyePixels = [new(5, 3), new(7, 3)];
     private static readonly Point[] LichEyePixels = [new(6, 4), new(9, 4)];
     private static readonly Point[] UndeadWarriorEyePixels = [new(6, 2), new(9, 2)];
@@ -918,13 +949,22 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             var destination = new Rectangle(MapOffsetX + screenX * TileSize, MapOffsetY + screenY * TileSize,
                 TileSize, TileSize);
             var color = critter.IsDamageFlashing ? GetDamageFlashColor(critter) : Color.White;
-            _spriteBatch!.Draw(sprite, destination, WithSpriteBrightness(color, brightness));
+            var tint = WithSpriteBrightness(color, brightness);
+            if (critter.Species is CritterSpecies.Jellyfish && !critter.IsDamageFlashing)
+            {
+                _spriteBatch!.Draw(sprite, destination, tint * 0.78f);
+                if (_jellyfishGlowSprite is not null)
+                    _spriteBatch.Draw(_jellyfishGlowSprite, destination, Color.White);
+                return;
+            }
+
+            _spriteBatch!.Draw(sprite, destination, tint);
             if (brightness < 1f && !critter.IsDamageFlashing && sprite.Width == 16 && sprite.Height == 16)
             {
                 var brightPixels = critter.Species switch
                 {
-                    CritterSpecies.Custodian or CritterSpecies.MegaSpider => CustodianEyePixels,
-                    CritterSpecies.Jellyfish => JellyfishHeadPixels,
+                    CritterSpecies.Custodian => CustodianEyePixels,
+                    CritterSpecies.MegaSpider => MegaSpiderEyePixels,
                     CritterSpecies.MegaToad => MegaToadEyePixels,
                     CritterSpecies.UndeadApe or CritterSpecies.Vampire => UndeadApeEyePixels,
                     CritterSpecies.Lich => LichEyePixels,
@@ -933,7 +973,6 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
                 };
                 var offset = critter.Species switch
                 {
-                    CritterSpecies.MegaSpider => new Point(-4, 4),
                     CritterSpecies.Vampire when sprite == _vampireColonistSailorSprite => new Point(0, 3),
                     _ => Point.Zero,
                 };
@@ -1053,6 +1092,15 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             {
                 _simulationRateIndex = Math.Max(0, _simulationRateIndex - 1);
             }
+            ResetSpeedGuard();
+        }
+        else if (WasPressed(keyboard, Keys.RightShift))
+        {
+            _simulationSpeedGuard.Enabled = false;
+            var maximumRateIndex = SimulationRates.Length - 1;
+            _simulationRateIndex = _simulationRateIndex == maximumRateIndex
+                ? Array.IndexOf(SimulationRates, 1d)
+                : maximumRateIndex;
             ResetSpeedGuard();
         }
         else if (WasPressed(keyboard, Keys.OemPeriod))
@@ -1518,7 +1566,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
 
     private void HandleCamera(KeyboardState keyboard, MouseState mouse)
     {
-        var panStep = keyboard.IsKeyDown(Keys.LeftShift) || keyboard.IsKeyDown(Keys.RightShift) ? 4 : 1;
+        var panStep = keyboard.IsKeyDown(Keys.LeftShift) ? 4 : 1;
         if (keyboard.IsKeyDown(Keys.A) || keyboard.IsKeyDown(Keys.Left))
         {
             _cameraX -= panStep;
@@ -3050,15 +3098,19 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             var edge = center + new Vector2(dx, dy) * (size / 2f);
             var inward = Vector2.Normalize(new Vector2(-dx, -dy));
             var sideways = new Vector2(-inward.Y, inward.X);
-            var phase = (tile.X * 0.73 + tile.Y * 0.37 + (int)flag * 0.19) % 1.35;
+            const double burstInterval = 1.45;
+            var phase = (tile.X * 0.73 + tile.Y * 0.37 + (int)flag * 0.19) % (2 * burstInterval);
             for (var drop = 0; drop < 5; drop++)
             {
-                // Stagger the droplets across a fan. They spread and dim as they reach open water.
-                var age = (float)((elapsedSeconds + phase + drop * 0.13) % 1.35);
-                if (age >= 1f)
+                // Each droplet keeps the side of its burst for its whole lifetime.
+                var clock = elapsedSeconds + phase - drop * 0.08;
+                var burst = Math.Floor(clock / burstInterval);
+                var age = (float)(clock - burst * burstInterval);
+                if (burst < 0 || age >= 1f)
                     continue;
 
-                var spread = (drop - 2) * 0.22f;
+                var side = burst % 2 == 0 ? -1f : 1f;
+                var spread = side * (0.14f + drop * 0.12f);
                 var position = edge + size * (inward * (0.07f + age * 0.52f) +
                     sideways * (spread * (0.12f + age * 0.47f)));
                 var fade = MathHelper.Clamp(age * 8f, 0f, 1f) * (1f - age);

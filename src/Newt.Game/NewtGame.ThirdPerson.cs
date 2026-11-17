@@ -59,7 +59,7 @@ public sealed partial class NewtGame
         var cameraX = PlayerCameraX3D;
         var position = WorldPoint3D(new Vector3(cameraX, feet, _focus3D.Y));
         var camera = Matrix.Invert(view);
-        var halfSize = WalkingSpriteScale3D * 0.5f;
+        var halfSize = SpriteScale3D * WalkingSpriteScale3D * 0.5f;
         var center = position + SurfaceUp3D(cameraX, _focus3D.Y) * halfSize;
         var right = camera.Right * halfSize;
         var up = camera.Up * halfSize;

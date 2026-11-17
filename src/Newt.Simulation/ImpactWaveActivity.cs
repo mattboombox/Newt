@@ -18,4 +18,8 @@ internal sealed class ImpactWaveActivity(
     public float Magnitude { get; } = magnitude;
 
     public WaveKind Kind { get; } = kind;
+
+    internal List<(GridPosition Position, float Distance)>? PlanetoidFront { get; set; }
+
+    internal int NextPlanetoidTile { get; set; }
 }

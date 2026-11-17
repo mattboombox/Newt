@@ -1641,11 +1641,13 @@ public sealed class ApeTests
     }
 
     [Theory]
-    [InlineData(49, 0)]
-    [InlineData(50, 1)]
-    [InlineData(99, 1)]
-    [InlineData(100, 2)]
-    public void MilitaryDistrictLimitAddsOnePerFiftyResidents(int population, int expectedLimit)
+    [InlineData(19, 0)]
+    [InlineData(20, 1)]
+    [InlineData(49, 1)]
+    [InlineData(50, 2)]
+    [InlineData(99, 2)]
+    [InlineData(100, 3)]
+    public void MilitaryDistrictLimitStartsAtTwentyAndAddsOnePerFiftyResidents(int population, int expectedLimit)
     {
         Assert.Equal(
             expectedLimit,
@@ -1681,7 +1683,7 @@ public sealed class ApeTests
     [Fact]
     public void MilitaryDistrictRecruitsFourWarriorsWithoutChangingPopulation()
     {
-        var (world, village) = CreateVillageForPlague(50);
+        var (world, village) = CreateVillageForPlague(20);
         NaturalEvents.SetEnabled(world, false);
         Assert.True(world.TryBuildApeStructure(
             village.Y * world.Width + village.X,
@@ -1699,8 +1701,8 @@ public sealed class ApeTests
             world.AdvanceOneTick();
         }
 
-        Assert.Equal(50, world.GetApeVillageResidentCount(village));
-        Assert.Equal(45, world.GetApeVillageCivilianCount(village));
+        Assert.Equal(20, world.GetApeVillageResidentCount(village));
+        Assert.Equal(15, world.GetApeVillageCivilianCount(village));
         Assert.Equal(4, world.GetApeVillageWarriorCount(village));
         Assert.Equal(1, world.GetApeVillageChieftainCount(village));
         Assert.Equal(4, world.GetCritterCount(CritterSpecies.ApeWarrior));
@@ -1886,8 +1888,9 @@ public sealed class ApeTests
             sailor.Energy >= CritterNutritions.Get(CritterSpecies.ApeSailor).ReproductionThreshold,
             sailor.CanReproduce);
 
-        // Leave the sailor assigned to a stocked village, but remove all prey.
+        // Keep the village staffed so the sailor retains its role during the immunity check.
         RemoveAllExcept(world, CritterSpecies.ApeSailor);
+        AddAssignedResidents(world, village, 1);
         world.StoreApeVillageFood(village, world.GetApeVillageFoodCapacity(village));
         AdvancePlagueTicks(world, SimulationWorld.PlagueDrainIntervalTicks);
         Assert.True(world.TryGetCritter(sailor.Id, out var healthy));
@@ -2641,7 +2644,7 @@ public sealed class ApeTests
             world.AdvanceOneTick();
         }
         Assert.Equal(ApeStructureKind.Village, world.GetApeStructure(secondVillage));
-        Assert.Equal(2, world.GetApeVillageResidentCount(secondVillage));
+        Assert.Equal(3, world.GetApeVillageResidentCount(secondVillage));
         Assert.Equal(world.IsBarbarianApe(firstColonist.Id) ? 0 : 20, world.GetApeVillageWood(secondVillage));
         Assert.True(world.TryGetCritter(firstColonist.Id, out var founder));
         Assert.False(founder.IsColonist);
@@ -2693,12 +2696,15 @@ public sealed class ApeTests
     }
 
     [Fact]
-    public void LoneApeSailorLeavesAsColonistAfterGracePeriod()
+    public void LoneApeSailorWithoutAFarmLeavesAsColonistAfterGracePeriod()
     {
         var world = CreateFedApeWorld(hasGrassland: true, width: 81, height: 3);
         NaturalEvents.SetEnabled(world, false);
         AdvanceUntilVillage(world);
         var village = FindStructure(world, ApeStructureKind.Village);
+        var wood = (Dictionary<int, int>)typeof(SimulationWorld).GetField("_apeVillageWood",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(world)!;
+        wood[village.Y * world.Width + village.X] = 0;
         var villageStructures = AllPositions(world)
             .Where(position => world.GetApeStructureVillage(position) == village)
             .ToArray();

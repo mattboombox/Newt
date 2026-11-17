@@ -241,31 +241,13 @@ public static class Impacts
         float previousRadius,
         float currentRadius)
     {
-        var reach = (int)MathF.Ceiling(currentRadius * 1.12f + 1);
-        for (var offsetY = -reach; offsetY <= reach; offsetY++)
+        foreach (var (position, distance) in WaveAnnulus(world, wave, previousRadius, currentRadius))
         {
-            var y = wave.Center.Y + offsetY;
-            if (y < 0 || y >= world.Height)
-            {
-                continue;
-            }
-            for (var offsetX = -reach; offsetX <= reach; offsetX++)
-            {
-                var position = new GridPosition(Mod(wave.Center.X + offsetX, world.Width), y);
-                var distance = DistortedDistance(world, wave.Center, position);
-                if (distance <= previousRadius || distance > currentRadius)
-                {
-                    continue;
-                }
-
-                var power = 0.25f + wave.Magnitude * 0.75f;
-                var normalized = distance / wave.MaximumRadius;
-                var strength = power * Math.Max(0, 1 - normalized * normalized);
-                if (strength >= 0.16f)
-                {
-                    world.RemoveCritterAt(position);
-                }
-            }
+            var power = 0.25f + wave.Magnitude * 0.75f;
+            var normalized = distance / wave.MaximumRadius;
+            var strength = power * Math.Max(0, 1 - normalized * normalized);
+            if (strength >= 0.16f)
+                world.RemoveCritterAt(position);
         }
     }
 
@@ -276,6 +258,42 @@ public static class Impacts
         float currentRadius)
     {
         var changed = false;
+        foreach (var (position, distance) in WaveAnnulus(world, wave, previousRadius, currentRadius))
+        {
+            if (world.GetTerrain(position) is Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows or Terrain.Ice)
+                continue;
+
+            var remainingStrength = Math.Max(0, 1 - distance / wave.MaximumRadius);
+            var erosion = (0.012f + wave.Magnitude * 0.055f) * remainingStrength;
+            if (erosion <= 0)
+                continue;
+
+            world.SetElevation(position, world.GetElevation(position) - erosion);
+            world.RemoveCritterAt(position);
+            world.RemoveWolfDenAt(position);
+            world.RemoveMegaSpiderWebAt(position);
+            world.RemoveTeleporterAt(position);
+            changed = true;
+        }
+
+        if (changed)
+        {
+            TerrainClassifier.RebuildLandforms(world);
+            Hydrology.RebuildFreshwater(world);
+        }
+    }
+
+    private static IEnumerable<(GridPosition Position, float Distance)> WaveAnnulus(
+        SimulationWorld world, ImpactWaveActivity wave, float previousRadius, float currentRadius)
+    {
+        if (world.Body is WorldBody.Planetoid)
+        {
+            var front = wave.PlanetoidFront ??= BuildPlanetoidFront(world, wave);
+            while (wave.NextPlanetoidTile < front.Count && front[wave.NextPlanetoidTile].Distance <= currentRadius)
+                yield return front[wave.NextPlanetoidTile++];
+            yield break;
+        }
+
         var reach = (int)MathF.Ceiling(currentRadius * 1.12f + 1);
         for (var offsetY = -reach; offsetY <= reach; offsetY++)
         {
@@ -288,38 +306,32 @@ public static class Impacts
             {
                 var position = new GridPosition(Mod(wave.Center.X + offsetX, world.Width), y);
                 var distance = DistortedDistance(world, wave.Center, position);
-                if (distance <= previousRadius || distance > currentRadius)
-                {
-                    continue;
-                }
-
-                if (world.GetTerrain(position) is
-                    Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows or Terrain.Ice)
-                {
-                    continue;
-                }
-
-                var remainingStrength = Math.Max(0, 1 - distance / wave.MaximumRadius);
-                var erosion = (0.012f + wave.Magnitude * 0.055f) * remainingStrength;
-                if (erosion <= 0)
-                {
-                    continue;
-                }
-
-                world.SetElevation(position, world.GetElevation(position) - erosion);
-                world.RemoveCritterAt(position);
-                world.RemoveWolfDenAt(position);
-                world.RemoveMegaSpiderWebAt(position);
-                world.RemoveTeleporterAt(position);
-                changed = true;
+                if (distance > previousRadius && distance <= currentRadius)
+                    yield return (position, distance);
             }
         }
+    }
 
-        if (changed)
+    private static List<(GridPosition Position, float Distance)> BuildPlanetoidFront(
+        SimulationWorld world, ImpactWaveActivity wave)
+    {
+        // Prepare the front once, then process only newly reached tiles on each tick.
+        var front = new List<(GridPosition Position, float Distance)>();
+        var origin = world.GetPlanetoidTileDirection(wave.Center);
+        var tileUnitsPerRadian = PlanetoidWaveUnitsPerRadian(world);
+        var minimumDot = MathF.Cos(Math.Min(MathF.PI, wave.MaximumRadius / tileUnitsPerRadian));
+        for (var y = 0; y < world.Height; y++)
+        for (var x = 0; x < world.Width; x++)
         {
-            TerrainClassifier.RebuildLandforms(world);
-            Hydrology.RebuildFreshwater(world);
+            var position = new GridPosition(x, y);
+            if (position == wave.Center)
+                continue;
+            var dot = System.Numerics.Vector3.Dot(origin, world.GetPlanetoidTileDirection(position));
+            if (dot >= minimumDot)
+                front.Add((position, MathF.Acos(Math.Clamp(dot, -1f, 1f)) * tileUnitsPerRadian));
         }
+        front.Sort(static (first, second) => first.Distance.CompareTo(second.Distance));
+        return front;
     }
 
     private static void ClearImpactEntities(SimulationWorld world, GridPosition position)
@@ -336,6 +348,15 @@ public static class Impacts
         GridPosition center,
         GridPosition position)
     {
+        if (world.Body is WorldBody.Planetoid)
+        {
+            if (position == center)
+                return 0f;
+            var dot = System.Numerics.Vector3.Dot(
+                world.GetPlanetoidTileDirection(center), world.GetPlanetoidTileDirection(position));
+            return MathF.Acos(Math.Clamp(dot, -1f, 1f)) * PlanetoidWaveUnitsPerRadian(world);
+        }
+
         var deltaX = Math.Abs(position.X - center.X);
         deltaX = Math.Min(deltaX, world.Width - deltaX);
         var deltaY = position.Y - center.Y;
@@ -346,6 +367,9 @@ public static class Impacts
             position.Y - center.Y) * 0.16f;
         return distance / distortion;
     }
+
+    private static float PlanetoidWaveUnitsPerRadian(SimulationWorld world) =>
+        PlanetoidLayout.FaceSize(world.Width) / (MathF.PI / 2);
 
     private static float HashUnit(ulong seed, int x, int y)
     {

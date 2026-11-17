@@ -148,6 +148,46 @@ public sealed class ImpactTests
     }
 
     [Fact]
+    public void PlanetoidWavesCrossPhysicalFaceSeams()
+    {
+        AssertPlanetoidWaveCrossesSeam(WaveKind.Impact);
+        AssertPlanetoidWaveCrossesSeam(WaveKind.Tsunami);
+    }
+
+    private static void AssertPlanetoidWaveCrossesSeam(WaveKind kind)
+    {
+        const int size = 18;
+        var world = new SimulationWorld(3 * size, 2 * size, Terrain.Plains) { Body = WorldBody.Planetoid };
+        var center = new GridPosition(size / 2, size - 1);
+        var acrossSeam = PlanetoidLayout.Offset(center, 0, 1, size);
+        var acrossAtlasEdge = new GridPosition(center.X, center.Y + 1);
+        Assert.NotEqual(acrossAtlasEdge, acrossSeam);
+        world.SetElevation(acrossSeam, 0.3f);
+        var critter = world.AddCritter(CritterSpecies.Monkey, acrossSeam);
+        if (kind is WaveKind.Tsunami)
+        {
+            world.OceanSeed = center;
+            world.SetElevation(center, -0.3f);
+            world.SetTerrain(center, Terrain.Ocean);
+            Assert.True(Tsunamis.Create(world, center, 0f));
+        }
+        else
+        {
+            Impacts.CreateMeteorImpact(world, center, 0f);
+        }
+
+        var firstFront = world.GetImpactWave(0) with { CurrentRadius = 1f };
+        Assert.True(Impacts.IsOnShockFront(world, acrossSeam, firstFront));
+        Assert.False(Impacts.IsOnShockFront(world, acrossAtlasEdge, firstFront));
+        Assert.True(world.TryGetCritter(critter, out _));
+        for (var tick = 0; tick < 3; tick++)
+            Impacts.Advance(world);
+        Assert.False(world.TryGetCritter(critter, out _));
+        if (kind is WaveKind.Tsunami)
+            Assert.True(world.GetElevation(acrossSeam) < 0.3f);
+    }
+
+    [Fact]
     public void ShockwaveDoesNotStripDistantLandToStone()
     {
         var world = CreateLandWorld();

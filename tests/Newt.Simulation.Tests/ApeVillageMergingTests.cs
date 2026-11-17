@@ -124,6 +124,31 @@ public sealed class ApeVillageMergingTests
     }
 
     [Fact]
+    public void VillagesTouchingAcrossPlanetoidFacesMerge()
+    {
+        const int faceSize = 24;
+        var world = new SimulationWorld(3 * faceSize, 2 * faceSize, Terrain.Plains, seed: 17)
+        {
+            Body = WorldBody.Planetoid,
+        };
+        foreach (var position in Positions(world))
+            world.SetBiome(position, Biome.Grassland);
+
+        var first = new GridPosition(faceSize / 2, 0);
+        var second = PlanetoidLayout.Offset(first, 0, -1, faceSize);
+        Assert.True(Math.Abs(first.X - second.X) + Math.Abs(first.Y - second.Y) > 12);
+        Assert.True(world.TrySpawnTestApeVillage(first));
+        Assert.True(world.TrySpawnTestApeVillage(second));
+
+        world.MergeAdjacentApeVillages();
+
+        Assert.Equal(1, world.ApeVillageCount);
+        Assert.Equal(first, world.GetApeStructureVillage(second));
+        Assert.Equal(ApeStructureKind.ResidentialDistrict, world.GetApeStructure(second));
+        Assert.Equal(4, world.GetApeVillageResidentCount(first));
+    }
+
+    [Fact]
     public void VillageCentersCannotBePlacedInShallows()
     {
         var world = CreateWorld();

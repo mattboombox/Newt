@@ -16,6 +16,8 @@ public sealed partial class NewtGame
     private const int WaterSurfaceTintAlpha3D = 64;
     private const int WhaleFallCutout3D = -2;
     private const int WaterSurfaceArtCutout3D = -3;
+    private const float SpriteScale3D = 0.729f;
+    private const float StructureTileLift3D = 0.015f;
     private const float WalkingSpriteScale3D = 0.8f;
     private bool _dayNightCycleEnabled = true;
     private static readonly (Vector3 Direction, bool Cross)[] Stars3D = CreateStars3D();
@@ -473,7 +475,7 @@ public sealed partial class NewtGame
         if (keyboard.IsKeyDown(Keys.A)) movement -= right;
         if (keyboard.IsKeyDown(Keys.D)) movement += right;
         if (movement.LengthSquared() > 0) movement.Normalize();
-        var speed = keyboard.IsKeyDown(Keys.LeftShift) || keyboard.IsKeyDown(Keys.RightShift) ? 2.5f : 1;
+        var speed = keyboard.IsKeyDown(Keys.LeftShift) ? 2.5f : 1;
         MoveCameraOnMap3D(movement * seconds * _distance3D * 0.65f * speed);
         _distance3D = Math.Clamp(_distance3D * MathF.Pow(0.85f,
             (mouse.ScrollWheelValue - _previousMouse.ScrollWheelValue) / 120f), 6, MaximumDistance3D);
@@ -854,10 +856,12 @@ public sealed partial class NewtGame
         var right = cameraWorld.Right * 0.5f;
         var up = cameraWorld.Up * 0.5f;
         var surfaceArt = new List<(int Page, List<VertexPositionColorTexture> Quads)>();
+        var translucentCritters = new List<(int Page, List<VertexPositionColorTexture> Quads)>();
         for (var page = 0; page < pages; page++)
         {
             var quads = new List<VertexPositionColorTexture>();
             List<VertexPositionColorTexture>? surfaceQuads = null;
+            List<VertexPositionColorTexture>? translucentQuads = null;
             for (var i = 0; i < _cutouts3D.Count; i++)
             {
                 var item = _cutouts3D[i];
@@ -868,12 +872,30 @@ public sealed partial class NewtGame
                 var v = (slot / AtlasColumns3D) / (float)AtlasColumns3D;
                 var step = 1f / AtlasColumns3D;
                 var p = _cutouts3D[i].Position;
+                var critter = item.Critter >= 0 ? _world.GetCritter(item.Critter) : (CritterSnapshot?)null;
+                var structure = critter is null && !item.Ground ? _world.GetApeStructure(item.Tile) : null;
+                var farm = structure is ApeStructureKind.Farm or ApeStructureKind.BlightedFarm or
+                    ApeStructureKind.RicePaddy or ApeStructureKind.Aquaculture;
                 // Screen-aligned sprites stay flat and upright even directly overhead.
-                var scale = IsWalkingCamera ? WalkingSpriteScale3D : 1f;
-                var underWaterCover = item.Critter >= 0 && ShouldFlattenUnderWaterCover3D(_world.GetCritter(item.Critter));
-                var center = WorldPoint3D(p) + SurfaceUp3D(p.X, p.Z) * (0.5f * scale);
+                var spriteScale = (!item.Ground && !farm) || item.Critter == WhaleFallCutout3D ? SpriteScale3D : 1f;
+                var scale = spriteScale * (IsWalkingCamera ? WalkingSpriteScale3D : 1f);
+                var underWaterCover = critter is { } occupant && ShouldFlattenUnderWaterCover3D(occupant);
                 var spriteRight = right * scale;
                 var spriteUp = up * scale;
+                var center = WorldPoint3D(p) + SurfaceUp3D(p.X, p.Z) * (0.5f * scale);
+                if (critter is null && !item.Ground && !farm)
+                {
+                    // Centered building art has padding below the visible base in its atlas cell.
+                    // Anchor that base, rather than the quad's bottom edge, to the tile.
+                    var visibleHeight = _world.IsCustodianFabricator(item.Tile) ? 1f
+                        : structure is not null || _world.HasVampireLair(item.Tile) || _world.HasTeleporter(item.Tile)
+                            ? 0.75f : 0f;
+                    if (visibleHeight > 0f)
+                    {
+                        var basePosition = p with { Y = p.Y - StructureTileLift3D };
+                        center = WorldPoint3D(basePosition) + spriteUp * visibleHeight;
+                    }
+                }
                 var tint = item.Critter >= 0 ? Color.White : UsePlanetoidDaylight3D
                     ? new Color(new Vector3(PlanetoidTileBrightness3D(item.Tile, sunDirection))) : spriteTint;
                 var a = new VertexPositionColorTexture(center - spriteRight + spriteUp, tint, new Vector2(u, v));
@@ -881,42 +903,51 @@ public sealed partial class NewtGame
                 var c = new VertexPositionColorTexture(center + spriteRight - spriteUp, tint, new Vector2(u + step, v + step));
                 var d = new VertexPositionColorTexture(center - spriteRight - spriteUp, tint, new Vector2(u, v + step));
                 // Aquatic critters lie beneath bridge decks and low ice sheets.
-                var flat = underWaterCover || item.Ground || (item.Critter >= 0
-                    ? _world.GetCritter(item.Critter).Species is
+                var flat = underWaterCover || item.Ground || (critter is { } spriteCritter
+                    ? spriteCritter.Species is
                         CritterSpecies.Plankton or CritterSpecies.Trilobite or CritterSpecies.SeaScorpion
-                    : _world.GetApeStructure(item.Tile) is ApeStructureKind.Farm or ApeStructureKind.BlightedFarm or
-                        ApeStructureKind.RicePaddy or ApeStructureKind.Aquaculture ||
+                    : farm ||
                         _world.GetVolcanoState(item.Tile) is { } volcanoState && volcanoState != VolcanoState.Extinct);
                 if (flat)
                 {
-                    var halfSize = IsWalkingCamera && item.Critter >= 0 ? WalkingSpriteScale3D * 0.5f : 0.5f;
+                    var halfSize = spriteScale * 0.5f;
+                    if (IsWalkingCamera && item.Critter >= 0)
+                        halfSize *= WalkingSpriteScale3D;
                     a.Position = WorldPoint3D(p + new Vector3(-halfSize, 0, -halfSize), item.Tile);
                     b.Position = WorldPoint3D(p + new Vector3(halfSize, 0, -halfSize), item.Tile);
                     c.Position = WorldPoint3D(p + new Vector3(halfSize, 0, halfSize), item.Tile);
                     d.Position = WorldPoint3D(p + new Vector3(-halfSize, 0, halfSize), item.Tile);
                 }
-                var target = item.Critter == WaterSurfaceArtCutout3D ? surfaceQuads ??= [] : quads;
+                var target = item.Critter == WaterSurfaceArtCutout3D ? surfaceQuads ??= []
+                    : critter is { Species: CritterSpecies.Jellyfish, IsDamageFlashing: false }
+                        ? translucentQuads ??= [] : quads;
                 target.AddRange([a, b, c, a, c, d]);
             }
             if (surfaceQuads is not null)
                 surfaceArt.Add((page, surfaceQuads));
+            if (translucentQuads is not null)
+                translucentCritters.Add((page, translucentQuads));
             DrawCutoutPage(page, quads);
         }
         DrawPlayerGhost3D(view, projection);
+        DrawBlendedCutouts(translucentCritters);
         DrawWaterSurfaces3D();
-        if (surfaceArt.Count > 0)
+        DrawBlendedCutouts(surfaceArt);
+        DrawClouds3D(elapsedSeconds, frustum, bounds, terrainBrightness);
+        GraphicsDevice.Viewport = originalViewport;
+
+        void DrawBlendedCutouts(List<(int Page, List<VertexPositionColorTexture> Quads)> cutouts)
         {
+            if (cutouts.Count == 0) return;
             GraphicsDevice.BlendState = BlendState.AlphaBlend;
             GraphicsDevice.DepthStencilState = DepthStencilState.DepthRead;
             _cutoutEffect3D.ReferenceAlpha = 0;
-            foreach (var (page, quads) in surfaceArt)
+            foreach (var (page, quads) in cutouts)
                 DrawCutoutPage(page, quads);
             _cutoutEffect3D.ReferenceAlpha = 100;
             GraphicsDevice.BlendState = BlendState.Opaque;
             GraphicsDevice.DepthStencilState = DepthStencilState.Default;
         }
-        DrawClouds3D(elapsedSeconds, frustum, bounds, terrainBrightness);
-        GraphicsDevice.Viewport = originalViewport;
 
         void DrawCutoutPage(int page, List<VertexPositionColorTexture> quads)
         {
@@ -997,7 +1028,8 @@ public sealed partial class NewtGame
                         ThreeDGeometry.RoadHeight(height, waterElevation, _world.HasRoadBridge(tile)),
                         y + 0.5f), tile, -1, true));
                 if (hasStructure)
-                    _cutouts3D.Add((new Vector3(x + 0.5f, IsIce3D(tile) ? top + 0.05f : height + 0.015f, y + 0.5f),
+                    _cutouts3D.Add((new Vector3(x + 0.5f,
+                        (IsIce3D(tile) ? top + 0.035f : height) + StructureTileLift3D, y + 0.5f),
                         tile, -1, false));
             }
     }
@@ -1216,6 +1248,7 @@ public sealed partial class NewtGame
     {
         ReleaseTerrainChunks3D();
         _whaleFallSprite?.Dispose();
+        _jellyfishGlowSprite?.Dispose();
         foreach (var page in _atlasPages3D) page.Dispose();
         _terrainEffect3D?.Dispose();
         _cutoutEffect3D?.Dispose();
