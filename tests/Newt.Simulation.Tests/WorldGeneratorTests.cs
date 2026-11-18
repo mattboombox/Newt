@@ -62,7 +62,8 @@ public sealed class WorldGeneratorTests
     public void MapShapeWorksWithEveryTerrainType(WorldMapShape shape, WorldBody body, int portals)
     {
         WorldMapType[] types = [WorldMapType.Earth, WorldMapType.Moon, WorldMapType.Mars,
-            WorldMapType.Archipelago, WorldMapType.Continents, WorldMapType.Pangaea, WorldMapType.AllOcean];
+            WorldMapType.Archipelago, WorldMapType.Continents, WorldMapType.Pangaea, WorldMapType.AllOcean,
+            WorldMapType.DryWorld];
         var size = shape == WorldMapShape.Planetoid ? WorldPreset.PlanetoidMicro
             : new WorldPreset("Test", 96, shape == WorldMapShape.RingWorld ? 44 : 96);
 
@@ -81,6 +82,34 @@ public sealed class WorldGeneratorTests
             Assert.Equal(portals, world.TeleporterCount);
             if (shape is WorldMapShape.RingWorld or WorldMapShape.ONeillCylinder or WorldMapShape.Nexus)
                 Assert.Equal(Terrain.MegaWall, world.GetTerrain(new(0, 0)));
+        }
+    }
+
+    [Fact]
+    public void DryWorldHasOneSmallOceanAndNoNaturalRiversOnEveryShape()
+    {
+        foreach (var shape in Enum.GetValues<WorldMapShape>())
+        {
+            var size = shape == WorldMapShape.Planetoid ? WorldPreset.PlanetoidMicro
+                : new WorldPreset("Test", 96, shape == WorldMapShape.RingWorld ? 44 : 96);
+            var world = WorldGenerator.Generate(new(size, Seed: 13, MapType: WorldMapType.DryWorld, Shape: shape));
+            var tiles = from y in Enumerable.Range(0, world.Height)
+                        from x in Enumerable.Range(0, world.Width)
+                        select new GridPosition(x, y);
+            var ocean = tiles.Where(tile => world.GetTerrain(tile) is
+                Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows or Terrain.Ice).ToArray();
+            Assert.True(world.HasOceans);
+            Assert.Empty(world.AdditionalOceanSeeds);
+            Assert.Contains(world.OceanSeed, ocean);
+            Assert.InRange(ocean.Length, 2, world.Width * world.Height / 32);
+            Assert.Equal(ocean.Length, tiles.Count(tile => world.GetElevation(tile) <= world.SeaLevel));
+            Assert.Empty(world.SpringSources);
+            Assert.DoesNotContain(tiles, tile => world.GetSurfaceWater(tile) != SurfaceWaterKind.None);
+
+            var land = tiles.First(tile => world.GetTerrain(tile) is Terrain.Plains);
+            Assert.False(Hydrology.ShiftNaturalWatershed(world));
+            Assert.Equal(SpringTermination.InvalidSource, Hydrology.StartSpring(world, land).Termination);
+            Assert.Equal(SpringTermination.Flowing, Hydrology.StartSpring(world, land, SpringOrigin.Player).Termination);
         }
     }
 

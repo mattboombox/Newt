@@ -2012,7 +2012,7 @@ public sealed class ApeTests
         Assert.False(SimulationWorld.CanEat(CritterSpecies.BaleenWhale, CritterSpecies.ApeSailor));
         Assert.False(SimulationWorld.CanEat(CritterSpecies.ApeSailor, CritterSpecies.ToothedWhale));
         Assert.Equal(1, SimulationWorld.GetCombatDamage(CritterSpecies.BaleenWhale));
-        Assert.Equal(6, SimulationWorld.GetCombatDamage(CritterSpecies.ToothedWhale));
+        Assert.Equal(5, SimulationWorld.GetCombatDamage(CritterSpecies.ToothedWhale));
         for (ulong seed = 1; seed <= 20; seed++)
         {
             var world = new SimulationWorld(1, 2, Terrain.Ocean, seed);

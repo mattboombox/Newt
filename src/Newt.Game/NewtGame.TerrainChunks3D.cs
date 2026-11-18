@@ -148,7 +148,7 @@ public sealed partial class NewtGame
             return;
         }
 
-        // A column's sides depend on neighboring heights, including across a wrapping seam.
+        // Column sides and biome colors depend on neighbors, including across wrapping seams.
         var columns = (_world.Width + MeshChunkSize3D - 1) / MeshChunkSize3D;
         var row = tile.Y / MeshChunkSize3D * columns;
         var column = tile.X / MeshChunkSize3D;

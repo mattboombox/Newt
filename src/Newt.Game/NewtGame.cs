@@ -38,9 +38,9 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
     private static readonly WorldMapShape[] MenuMapShapes = Enum.GetValues<WorldMapShape>();
     private static readonly WorldMapType[] PlanetaryMenuMapTypes =
         [WorldMapType.Earth, WorldMapType.Moon, WorldMapType.Mars, WorldMapType.Archipelago,
-            WorldMapType.Continents, WorldMapType.Pangaea, WorldMapType.AllOcean];
+            WorldMapType.Continents, WorldMapType.Pangaea, WorldMapType.AllOcean, WorldMapType.DryWorld];
     private static readonly WorldMapType[] ProceduralMenuMapTypes =
-        [WorldMapType.Archipelago, WorldMapType.Continents, WorldMapType.Pangaea, WorldMapType.AllOcean];
+        [WorldMapType.Archipelago, WorldMapType.Continents, WorldMapType.Pangaea, WorldMapType.AllOcean, WorldMapType.DryWorld];
     private static readonly double[] SimulationRates = [0.25, 0.5, 1, 2, 4, 8, 16, 32];
     private static readonly ToolCategory[] ToolCategoryOrder =
         [ToolCategory.WorldTools, ToolCategory.TerrainTools, ToolCategory.CritterTools,
@@ -58,8 +58,8 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
     private static readonly WorldTool[] CritterToolOrder =
         [WorldTool.Plankton, WorldTool.Jellyfish, WorldTool.Worm, WorldTool.Trilobite,
             WorldTool.SeaScorpion, WorldTool.Nautilus, WorldTool.Squid, WorldTool.SquidEgg,
-            WorldTool.Fish, WorldTool.Newt, WorldTool.Snail, WorldTool.MegaSlug, WorldTool.MegaToad, WorldTool.MegaSpider, WorldTool.Therapsid,
-            WorldTool.Monkey, WorldTool.Ape, WorldTool.Deer, WorldTool.Elk,
+            WorldTool.Fish, WorldTool.Newt, WorldTool.Snail, WorldTool.MegaSlug, WorldTool.MegaToad, WorldTool.MegaSpider,
+            WorldTool.Sandworm, WorldTool.Therapsid, WorldTool.Monkey, WorldTool.Ape, WorldTool.Deer, WorldTool.Elk,
             WorldTool.Gazelle, WorldTool.Wolf, WorldTool.Dog, WorldTool.Crab, WorldTool.ToothedWhale,
             WorldTool.BaleenWhale, WorldTool.Lich];
     private static readonly WorldTool[] BuildingToolOrder =
@@ -202,8 +202,12 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
 
     public NewtGame()
     {
-        var mapTypes = GetMenuMapTypes(_mapShape);
+        // Extreme water coverage and micro sizes are opt-in through the world menu.
+        var mapTypes = GetMenuMapTypes(_mapShape)
+            .Where(type => type is not (WorldMapType.AllOcean or WorldMapType.DryWorld)).ToArray();
         _mapType = mapTypes[Random.Shared.Next(mapTypes.Length)];
+        if (_mapShape is WorldMapShape.Planetoid)
+            _menuRingSizeIndex = 2; // Standard, matching the default size for board worlds.
         _preset = GetSetupPreset(_mapShape);
         _seedText = _seed.ToString(CultureInfo.InvariantCulture);
         _graphics = new GraphicsDeviceManager(this)
@@ -236,6 +240,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         LoadCritterSprite(CritterSpecies.Plankton, "plankton.png");
         LoadCritterSprite(CritterSpecies.Jellyfish, "jellyfish.png");
         LoadCritterSprite(CritterSpecies.Worm, "worm.png");
+        LoadSandwormSprites();
         LoadCritterSprite(CritterSpecies.Trilobite, "trilobite.png");
         LoadCritterSprite(CritterSpecies.SeaScorpion, "sea-scorpion.png");
         LoadCritterSprite(CritterSpecies.MegaSpider, "mega-spider.png");
@@ -436,11 +441,11 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
                 {
                     DrawSurfaceWater(screenX, screenY, position, water, _environmentAnimationSeconds);
                 }
-                else if (water is SurfaceWaterKind.None && _world.GetSurfaceCover(position) is SurfaceCover.Lava &&
+                else if (water is SurfaceWaterKind.None &&
                     !IsIce3D(position) && WaterElevation3D(position) is { } surface &&
                     _world.GetElevation(position) < surface)
                 {
-                    _spriteBatch.Draw(_pixel, tileRectangle, TerrainColumnColor3D(position) * (WaterSurfaceTintAlpha3D / 255f));
+                    _spriteBatch.Draw(_pixel, tileRectangle, OceanWaterColor * (WaterSurfaceTintAlpha3D / 255f));
                 }
                 DrawWhaleFall(screenX, screenY, position);
                 if (TileSize >= 4)
@@ -461,8 +466,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             if (MapTile2D(x, _cameraY + screenY) is not { } position) continue;
             if (_world.Body == WorldBody.Nexus && !NexusLayout.Contains(_world, position)) continue;
             if (!IsIce3D(position)) continue;
-            var ice = GetTerrainColor(Terrain.Ice, _world.GetBiome(position),
-                _world.GetTemperatureBand(position), _world.GetElevation(position));
+            var ice = GetTerrainColor(Terrain.Ice, _world.GetTemperatureBand(position));
             _spriteBatch.Draw(_pixel, new Rectangle(MapOffsetX + screenX * TileSize,
                 MapOffsetY + screenY * TileSize, TileSize, TileSize), ice * (210f / 255));
             DrawTileObjects2D(screenX, screenY, position);
@@ -492,6 +496,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         DrawCustodianFabricator(screenX, screenY, position);
         DrawVolcanoVent(screenX, screenY, position);
         DrawImpactWave(screenX, screenY, position);
+        DrawSandwormSegment(screenX, screenY, position);
     }
 
     private void DrawVisibleCritters2D(int visibleColumns, int visibleRows, bool aboveIce)
@@ -499,6 +504,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         for (var index = 0; index < _world.CritterCount; index++)
         {
             var critter = _world.GetCritter(index);
+            if (critter.Species is CritterSpecies.Sandworm) continue;
             var standsOnIce = IsIce3D(critter.Position) &&
                 ThreeDGeometry.StandsOnIce(CritterHabitats.GetHabitat(critter.Species));
             if (standsOnIce != aboveIce) continue;
@@ -712,16 +718,14 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         out Texture2D sprite,
         out Texture2D flashSprite)
     {
-        var path = Path.Combine(AppContext.BaseDirectory, "Content", "Sprites", "Critters", fileName);
-        if (!File.Exists(path))
+        if (LoadCritterTexture(fileName) is not { } texture)
         {
             sprite = null!;
             flashSprite = null!;
             return false;
         }
 
-        using var stream = File.OpenRead(path);
-        sprite = Texture2D.FromStream(GraphicsDevice, stream);
+        sprite = texture;
 
         var flashPixels = new Color[sprite.Width * sprite.Height];
         sprite.GetData(flashPixels);
@@ -734,6 +738,14 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         flashSprite = new Texture2D(GraphicsDevice, sprite.Width, sprite.Height);
         flashSprite.SetData(flashPixels);
         return true;
+    }
+
+    private Texture2D? LoadCritterTexture(string fileName)
+    {
+        var path = Path.Combine(AppContext.BaseDirectory, "Content", "Sprites", "Critters", fileName);
+        if (!File.Exists(path)) return null;
+        using var stream = File.OpenRead(path);
+        return Texture2D.FromStream(GraphicsDevice, stream);
     }
 
     private void SetWindowIconFromNewtSprite()
@@ -1331,7 +1343,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             case WorldTool.River:
                 Hydrology.RemoveFreshwaterAt(_world, position.Value);
                 break;
-            case WorldTool.Plankton or WorldTool.Jellyfish or WorldTool.Worm or
+            case WorldTool.Plankton or WorldTool.Jellyfish or WorldTool.Worm or WorldTool.Sandworm or
                 WorldTool.Trilobite or WorldTool.SeaScorpion or WorldTool.Nautilus or
                 WorldTool.Squid or WorldTool.SquidEgg or
                 WorldTool.Fish or WorldTool.Newt or WorldTool.Snail or WorldTool.MegaSlug or WorldTool.MegaToad or
@@ -1473,6 +1485,10 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
                 {
                     _inspectedCritterId = inspected.Id;
                 }
+                else if (_world.TryGetSandwormSegment(position.Value, out var sandwormSegment))
+                {
+                    _inspectedCritterId = sandwormSegment.Worm;
+                }
                 break;
             case WorldTool.Inspect:
                 break;
@@ -1492,6 +1508,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         WorldTool.Plankton => CritterSpecies.Plankton,
         WorldTool.Jellyfish => CritterSpecies.Jellyfish,
         WorldTool.Worm => CritterSpecies.Worm,
+        WorldTool.Sandworm => CritterSpecies.Sandworm,
         WorldTool.Trilobite => CritterSpecies.Trilobite,
         WorldTool.SeaScorpion => CritterSpecies.SeaScorpion,
         WorldTool.MegaSpider => CritterSpecies.MegaSpider,
@@ -1970,6 +1987,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
     private static string GetCritterDisplayName(CritterSpecies species) => species switch
     {
         CritterSpecies.SeaScorpion => "Sea Scorpion",
+        CritterSpecies.Sandworm => "Sandworm",
         CritterSpecies.MegaSpider => "Mega Spider",
         CritterSpecies.SquidEgg => "Squid Egg",
         CritterSpecies.MegaToad => "Mega Toad",
@@ -2272,12 +2290,16 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
     [
         following ? "CRITTER (FOLLOWING)" : "CRITTER",
         $"{GetCritterDisplayName(critter)} #{critter.Id.Value}   {critter.Position}",
+        critter.Species is CritterSpecies.Sandworm ? $"Energy {critter.Energy} / {critter.MaximumEnergy} (no upkeep)" :
         critter.MaximumEnergy > 0
             ? $"Energy {critter.Energy} / {critter.MaximumEnergy}   Damage {_world.GetCritterCombatDamage(critter.Id)}"
             : $"Energy None   Damage {_world.GetCritterCombatDamage(critter.Id)}",
-        $"Habitat {CritterHabitats.GetHabitat(critter.Species)}",
+        critter.Species is CritterSpecies.Sandworm ? "Habitat Desert" : $"Habitat {CritterHabitats.GetHabitat(critter.Species)}",
         $"Diet {GetCritterDiet(critter.Species)}",
         $"Behavior {GetCritterBehavior(critter)}",
+        .. _world.TryGetSandwormSegment(critter.Position, out var segment) && segment.Worm == critter.Id
+            ? new[] { $"Length {segment.Length} segments" }
+            : Array.Empty<string>(),
         .. _world.IsCritterCaughtInMegaSpiderWeb(critter.Id)
             ? new[] { "Web status Trapped" }
             : Array.Empty<string>(),
@@ -2339,6 +2361,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         CritterSpecies.Lich or CritterSpecies.UndeadWarrior => "all apes; gains energy on kills",
         CritterSpecies.Plankton => "ambient nutrients",
         CritterSpecies.Worm => "deep-ocean, shallow, and beach detritus",
+        CritterSpecies.Sandworm => "swallows critters on contact, grows after five meals",
         CritterSpecies.Trilobite => "deep-sea detritus",
         CritterSpecies.SeaScorpion => "broad aquatic and shoreline prey; adjacent worms, trilobites, and nautiluses",
         CritterSpecies.MegaSpider => "all other critters; web-caught prey is stored for later",
@@ -2431,6 +2454,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         {
             CritterSpecies.Plankton => "Drifting and feeding",
             CritterSpecies.Worm => "Scavenging while watching for predators",
+            CritterSpecies.Sandworm => "Hunting across connected desert tiles",
             CritterSpecies.Trilobite => "Scavenging while watching for predators",
             CritterSpecies.SeaScorpion => "Patrolling coastal waters",
             CritterSpecies.MegaSpider => "Hunting from its web territory",
@@ -2775,6 +2799,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
     {
         WorldMapType.Pangaea => "Pangea",
         WorldMapType.AllOcean => "Water World",
+        WorldMapType.DryWorld => "Dry World",
         _ => type.ToString(),
     };
 
@@ -2818,17 +2843,14 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             return;
         }
 
-        var color = water is SurfaceWaterKind.FreshwaterLake
-            ? GetLakeColor(
-                _world.GetWaterDepth(worldPosition),
-                _world.GetBiome(worldPosition) is Biome.Arctic)
+        var color = water is SurfaceWaterKind.FreshwaterLake && _world.GetBiome(worldPosition) is Biome.Arctic
+            ? new Color(165, 220, 235)
             : GetSurfaceWaterColor(water);
         var originX = MapOffsetX + screenX * TileSize;
         var originY = MapOffsetY + screenY * TileSize;
         if (water is SurfaceWaterKind.FreshwaterLake)
         {
-            if (!_drawing3DAtlas && _world.GetSurfaceCover(worldPosition) is SurfaceCover.Lava)
-                color *= WaterSurfaceTintAlpha3D / 255f;
+            color *= WaterSurfaceTintAlpha3D / 255f;
             _spriteBatch.Draw(_pixel, new Rectangle(originX, originY, TileSize, TileSize), color);
             return;
         }
@@ -3088,7 +3110,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         var origin = new Point(MapOffsetX + screenX * size, MapOffsetY + screenY * size);
         var bounds = new Rectangle(origin.X, origin.Y, size, size);
         var center = new Vector2(size / 2f);
-        var water = TerrainColumnColor3D(tile);
+        var water = WaterSurfaceColor(tile);
         var spray = new Color(199, 232, 246);
         foreach (var (flag, dx, dy) in ThreeDGeometry.ConnectionDirections)
         {
@@ -3159,7 +3181,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         var size = Math.Max(2, TileSize * 2 / 3);
         var inset = (TileSize - size) / 2;
         var originX = MapOffsetX + screenX * TileSize + inset;
-        var originY = MapOffsetY + screenY * TileSize + inset;
+        var originY = MapOffsetY + (screenY + 1) * TileSize - size;
         _spriteBatch.Draw(_pixel, new Rectangle(originX, originY, size, size), new Color(68, 45, 30));
         var opening = Math.Max(1, size / 2);
         _spriteBatch.Draw(
@@ -3524,26 +3546,131 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         }
 
         var elevation = _world.GetElevation(position);
-        var color = LifeSystem.IsStoneBiome(_world, position)
-            ? GetStoneColor(terrain)
-            : GetTerrainColor(terrain, biome, temperatureBand, elevation);
+        if (_world.GetSurfaceWater(position) is SurfaceWaterKind.FreshwaterLake)
+        {
+            return ShadeLakeBed(_world.GetWaterDepth(position));
+        }
+
+        if (_world.HasOceans && terrain is Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows)
+        {
+            return ShadeOceanBed(_world.SeaLevel - elevation, temperatureBand);
+        }
+
+        if (terrain is Terrain.Mountain)
+        {
+            var snowy = temperatureBand is TemperatureBand.Freezing;
+            var rock = snowy ? new Color(179, 192, 201) : new Color(104, 98, 94);
+            var baseColor = BlendLandBiomeColor(position, rock, mountain: true);
+            var summit = snowy ? new Color(238, 245, 248) : new Color(154, 146, 139);
+            var height = (elevation - TerrainClassifier.MountainElevationThreshold) / 0.60f;
+            return Color.Lerp(baseColor, summit, MathHelper.SmoothStep(0f, 1f, height));
+        }
+
+        var stone = LifeSystem.IsStoneBiome(_world, position);
+        var color = IsBiomeLandTerrain(terrain)
+            ? ShadeLandElevation(stone ? new Color(122, 119, 113) : BlendLandBiomeColor(position, GetBiomeLandColor(biome)),
+                elevation, biome is Biome.Arctic)
+            : stone ? GetStoneColor(terrain) : GetTerrainColor(terrain, temperatureBand);
         return ScaleColor(color, TerrainShading.GetBrightness(terrain, elevation, _world.SeaLevel));
     }
 
-    private static Color GetTerrainColor(
-        Terrain terrain,
-        Biome biome,
-        TemperatureBand temperatureBand,
-        float elevation) => terrain switch
+    private static bool IsBiomeLandTerrain(Terrain terrain) => terrain is
+        Terrain.Plains or Terrain.Lowlands or Terrain.Canyon or Terrain.Trench or Terrain.Hills;
+
+    private Color BlendLandBiomeColor(GridPosition tile, Color center, bool mountain = false)
     {
-        Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows => GetOceanColor(terrain, temperatureBand),
+        var centerWeight = mountain ? 12 : 4;
+        var color = center.ToVector3() * centerWeight;
+        var weight = centerWeight;
+
+        foreach (var (_, dx, dy) in ThreeDGeometry.ConnectionDirections)
+        {
+            if (dx != 0 && dy != 0) continue;
+            var neighbor = _world.Body is WorldBody.Nexus
+                ? new GridPosition(tile.X + dx, tile.Y + dy)
+                : RiverNeighbor(tile, dx, dy);
+            if (!ContainsTile3D(neighbor.X, neighbor.Y) ||
+                _world.GetSurfaceWater(neighbor) is SurfaceWaterKind.FreshwaterLake)
+                continue;
+
+            var neighborTerrain = _world.GetTerrain(neighbor);
+            if (mountain ? neighborTerrain is not (Terrain.Hills or Terrain.Plains) : !IsBiomeLandTerrain(neighborTerrain))
+                continue;
+
+            var neighborBiome = _world.GetBiome(neighbor);
+            if (neighborBiome is Biome.None) continue;
+            color += GetBiomeLandColor(neighborBiome).ToVector3();
+            weight++;
+        }
+
+        return weight == centerWeight ? center : new Color(color / weight);
+    }
+
+    private static Color ShadeLandElevation(Color biomeColor, float elevation, bool snowy)
+    {
+        const float mountainLine = TerrainClassifier.MountainElevationThreshold;
+        var lowland = Color.Lerp(biomeColor, snowy ? new Color(143, 173, 189) : new Color(89, 75, 55), 0.40f);
+        var foothill = Color.Lerp(biomeColor, snowy ? new Color(218, 229, 234) : new Color(152, 132, 108), 0.35f);
+        if (elevation <= 0f)
+            return Color.Lerp(biomeColor, lowland, MathHelper.SmoothStep(0f, 1f, -elevation / 0.50f));
+        return Color.Lerp(biomeColor, foothill, MathHelper.SmoothStep(0f, 1f, elevation / mountainLine));
+    }
+
+    // Depth is measured in elevation units below the water line.
+    private static readonly (float Depth, Color Color)[] OceanBedRamp =
+    [
+        (0.00f, new Color(150, 220, 218)),
+        (0.03f, new Color(96, 194, 222)),
+        (0.10f, new Color(56, 146, 204)),
+        (0.22f, new Color(34, 102, 176)),
+        (0.38f, new Color(22, 68, 136)),
+        (0.58f, new Color(13, 40, 92)),
+    ];
+
+    private static readonly (float Depth, Color Color)[] LakeBedRamp =
+    [
+        (0.00f, new Color(128, 214, 190)),
+        (0.02f, new Color(80, 190, 190)),
+        (0.07f, new Color(48, 150, 180)),
+        (0.14f, new Color(32, 112, 160)),
+        (0.24f, new Color(22, 78, 128)),
+    ];
+
+    private static Color SampleDepthRamp((float Depth, Color Color)[] ramp, float depth)
+    {
+        if (depth <= ramp[0].Depth) return ramp[0].Color;
+        for (var i = 1; i < ramp.Length; i++)
+        {
+            if (depth > ramp[i].Depth) continue;
+            var (startDepth, start) = ramp[i - 1];
+            var (endDepth, end) = ramp[i];
+            var t = MathHelper.SmoothStep(0f, 1f, (depth - startDepth) / (endDepth - startDepth));
+            return Color.Lerp(start, end, t);
+        }
+        return ramp[^1].Color;
+    }
+
+    private static Color ShadeOceanBed(float depth, TemperatureBand band)
+    {
+        var color = SampleDepthRamp(OceanBedRamp, depth);
+        var (tint, amount) = band switch
+        {
+            TemperatureBand.Freezing => (new Color(150, 190, 205), 0.22f),
+            TemperatureBand.Cold => (new Color(120, 185, 205), 0.12f),
+            TemperatureBand.Hot => (new Color(70, 215, 210), 0.14f),
+            _ => (color, 0f),
+        };
+        // Temperature has the strongest effect near the surface.
+        var shallow = 1f - MathHelper.SmoothStep(0f, 1f, Math.Clamp(depth / 0.4f, 0f, 1f));
+        return Color.Lerp(color, tint, amount * (0.4f + 0.6f * shallow));
+    }
+
+    private static Color ShadeLakeBed(float depth) => SampleDepthRamp(LakeBedRamp, depth);
+
+    private static Color GetTerrainColor(Terrain terrain, TemperatureBand temperatureBand) => terrain switch
+    {
+        Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows => GetOceanColor(temperatureBand),
         Terrain.Beach => GetBeachColor(temperatureBand),
-        Terrain.Plains => GetBiomeLandColor(biome),
-        Terrain.Lowlands => ScaleColor(GetBiomeLandColor(biome), 0.92f),
-        Terrain.Canyon => ScaleColor(GetBiomeLandColor(biome), 0.84f),
-        Terrain.Trench => ScaleColor(GetBiomeLandColor(biome), 0.76f),
-        Terrain.Hills => ScaleColor(GetBiomeLandColor(biome), 0.92f),
-        Terrain.Mountain => GetMountainColor(elevation, biome is Biome.Arctic),
         Terrain.Ice => new Color(165, 220, 235),
         Terrain.MegaWall => new Color(112, 126, 136),
         _ => Color.Magenta,
@@ -3552,23 +3679,11 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
     private static Color GetStoneColor(Terrain terrain) => terrain switch
     {
         Terrain.Beach => new Color(132, 129, 122),
-        Terrain.Plains => new Color(122, 119, 113),
-        Terrain.Lowlands or Terrain.Hills => ScaleColor(new Color(122, 119, 113), 0.92f),
-        Terrain.Canyon => ScaleColor(new Color(122, 119, 113), 0.84f),
-        Terrain.Trench => ScaleColor(new Color(122, 119, 113), 0.76f),
         _ => new Color(104, 101, 96),
     };
 
-    private static Color GetOceanColor(Terrain terrain, TemperatureBand temperatureBand)
+    private static Color GetOceanColor(TemperatureBand temperatureBand)
     {
-        var baseColor = terrain switch
-        {
-            Terrain.DeepOcean => new Color(10, 37, 83),
-            Terrain.Ocean => new Color(24, 68, 128),
-            Terrain.Shallows => new Color(66, 145, 180),
-            _ => Color.Magenta,
-        };
-
         var brightness = temperatureBand switch
         {
             TemperatureBand.Freezing => 0.90f,
@@ -3576,7 +3691,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             TemperatureBand.Hot => 1.06f,
             _ => 1f,
         };
-        return ScaleColor(baseColor, brightness);
+        return ScaleColor(OceanWaterColor, brightness);
     }
 
     private static Color GetBeachColor(TemperatureBand temperatureBand) => temperatureBand switch
@@ -3586,23 +3701,6 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         TemperatureBand.Hot => new Color(226, 181, 103),
         _ => new Color(215, 195, 135),
     };
-
-    private static Color GetMountainColor(float elevation, bool snowy)
-    {
-        var elevationShade = Math.Clamp(
-            (elevation - TerrainClassifier.MountainElevationThreshold) /
-                (SimulationWorld.MaximumGroundElevation -
-                    TerrainClassifier.MountainElevationThreshold),
-            0f,
-            1f);
-        var baseColor = snowy
-            ? new Color(210, 222, 225)
-            : new Color(78, 72, 68);
-        var brightness = snowy
-            ? 0.88f + 0.25f * elevationShade
-            : 0.90f + 0.75f * elevationShade;
-        return ScaleColor(baseColor, brightness);
-    }
 
     private static Color GetBiomeLandColor(Biome biome) => biome switch
     {
@@ -3645,6 +3743,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         CritterSpecies.Plankton => new Color(160, 255, 180),
         CritterSpecies.Jellyfish => new Color(180, 160, 240),
         CritterSpecies.Worm => new Color(210, 105, 145),
+        CritterSpecies.Sandworm => new Color(182, 137, 88),
         CritterSpecies.Trilobite => new Color(135, 92, 55),
         CritterSpecies.SeaScorpion => new Color(190, 145, 105),
         CritterSpecies.MegaSpider => new Color(80, 55, 45),
@@ -3684,23 +3783,19 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         _ => Color.Magenta,
     };
 
+    private static readonly Color OceanWaterColor = new(34, 104, 176);
+
+    private Color WaterSurfaceColor(GridPosition tile) =>
+        _world.GetSurfaceWater(tile) is SurfaceWaterKind.FreshwaterLake
+            ? GetSurfaceWaterColor(SurfaceWaterKind.FreshwaterLake)
+            : OceanWaterColor;
+
     private static Color GetSurfaceWaterColor(SurfaceWaterKind water) => water switch
     {
-        SurfaceWaterKind.River => new Color(52, 140, 188),
-        SurfaceWaterKind.FreshwaterLake => new Color(40, 108, 164),
+        SurfaceWaterKind.River => new Color(60, 150, 196),
+        SurfaceWaterKind.FreshwaterLake => new Color(44, 150, 176),
         _ => Color.Magenta,
     };
-
-    private static Color GetLakeColor(float depth, bool frozen)
-    {
-        if (frozen)
-        {
-            return new Color(165, 220, 235);
-        }
-
-        var depthShade = Math.Clamp(depth / 0.20f, 0f, 1f);
-        return ScaleColor(new Color(50, 135, 205), 0.8f - 0.25f * depthShade);
-    }
 
     private string GetToolHint(WorldTool tool) => tool switch
     {
@@ -3737,6 +3832,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         WorldTool.Jellyfish => "L spawn: water",
         WorldTool.Fish => "L spawn: water",
         WorldTool.Worm => "L spawn: ocean / shallows",
+        WorldTool.Sandworm => "L spawn: two adjacent empty desert tiles",
         WorldTool.Trilobite => "L spawn: ocean / shallows",
         WorldTool.SeaScorpion => "L spawn: water / beach",
         WorldTool.MegaSpider => "L spawn: land / shallows",
@@ -3903,5 +3999,6 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         CivilWar,
         LudditeCulture,
         MonarchyCulture,
+        Sandworm,
     }
 }

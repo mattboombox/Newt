@@ -100,6 +100,8 @@ public static class CritterNutritions
         CritterSpecies.Fish => Fish,
         CritterSpecies.Newt or CritterSpecies.Snail => Newt,
         CritterSpecies.MegaToad => MegaToad,
+        CritterSpecies.Sandworm => new(CritterBodySize.Huge, CritterFeedingStrategy.Hunter, 12,
+            CanReproduce: false, HasMetabolism: false, HuntsWhenFull: true),
         CritterSpecies.Crab => Crab,
         CritterSpecies.Squid => Squid,
         CritterSpecies.SquidEgg => SquidEgg,

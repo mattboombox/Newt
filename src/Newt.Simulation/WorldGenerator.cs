@@ -32,7 +32,8 @@ public static partial class WorldGenerator
         if (isNexus && options.Shape is null)
             return GenerateNexus(options);
 
-        if (options.MapType is WorldMapType.Earth || options.Preset == WorldPreset.Earth)
+        if (options.MapType is WorldMapType.Earth ||
+            (options.Preset == WorldPreset.Earth && options.MapType is not WorldMapType.DryWorld))
         {
             return GenerateEarth(options);
         }
@@ -93,6 +94,12 @@ public static partial class WorldGenerator
             var firstRow = (generationHeight - preset.Height) / 2;
             Array.Copy(elevation, firstRow * preset.Width, strip, 0, strip.Length);
             elevation = strip;
+        }
+
+        if (options.MapType is WorldMapType.DryWorld)
+        {
+            FinishDryWorld(world, elevation);
+            return world;
         }
 
         var threshold = FindLandThreshold(elevation, LandFractionFor(options));
@@ -233,12 +240,45 @@ public static partial class WorldGenerator
         if (seedVolcanoes)
         {
             SeedNaturalVolcanoes(world, world.Seed);
-            StartNaturalSprings(world, world.Seed);
+            if (world.NaturalSpringsEnabled)
+                StartNaturalSprings(world, world.Seed);
         }
         if (nexus)
             world.SeedNexusCustodians(world.Width >= WorldPreset.NexusMega.Width);
         else
             world.SeedRingWorldCustodians();
+    }
+
+    private static void FinishDryWorld(SimulationWorld world, double[] elevations)
+    {
+        var random = new GeneratorRandom(world.Seed ^ 0xF1357AEA2E62A9C5UL);
+        var faceSize = PlanetoidLayout.FaceSize(world.Width);
+        var face = random.NextInt(4);
+        var center = world.Body switch
+        {
+            WorldBody.Nexus => NexusLayout.ArmPosition(world, arm: 7, distance: 0.42f),
+            WorldBody.Planetoid => new GridPosition(face % 3 * faceSize + faceSize / 2,
+                face / 3 * faceSize + faceSize / 2),
+            _ => new GridPosition(random.NextInt(world.Width), world.Height / 2),
+        };
+        var radius = Math.Max(1, Math.Min(world.Width, world.Height) *
+            (world.Body == WorldBody.Nexus ? 0.055 : 0.08));
+        var radiusSquared = radius * radius;
+        for (var y = 0; y < world.Height; y++)
+        for (var x = 0; x < world.Width; x++)
+        {
+            var tile = new GridPosition(x, y);
+            var distance = WrappedDistanceSquared(world, tile, center) / radiusSquared;
+            var land = Math.Max(0.025, 0.08 + elevations[y * world.Width + x] * 0.7);
+            // Keep the relief above sea level except in the single basin.
+            var height = distance <= 1
+                ? -0.26 * (1 - distance)
+                : Lerp(0.02, land, Smooth(Math.Clamp((distance - 1) / 1.25, 0, 1)));
+            world.SetElevation(tile, (float)height);
+        }
+
+        world.NaturalSpringsEnabled = false;
+        FinishGeneratedTerrain(world, includeLargeSecondaryBasins: false, seedVolcanoes: true);
     }
 
     /// <summary>

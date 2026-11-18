@@ -85,7 +85,7 @@ public static class Hydrology
         SpringOrigin origin = SpringOrigin.Natural)
     {
         ArgumentNullException.ThrowIfNull(world);
-        if (!IsValidSource(world, source))
+        if ((origin is SpringOrigin.Natural && !world.NaturalSpringsEnabled) || !IsValidSource(world, source))
         {
             var invalid = new SpringResult(SpringTermination.InvalidSource, 0, source);
             world.LastCompletedSpring = invalid;
@@ -166,6 +166,7 @@ public static class Hydrology
     public static bool ShiftNaturalWatershed(SimulationWorld world)
     {
         ArgumentNullException.ThrowIfNull(world);
+        if (!world.NaturalSpringsEnabled) return false;
         var naturalSources = world.SpringSources
             .Where(source => source.Origin is SpringOrigin.Natural)
             .ToArray();

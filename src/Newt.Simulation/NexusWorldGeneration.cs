@@ -14,6 +14,12 @@ public static partial class WorldGenerator
             ? GenerateProceduralElevations(world.Width, world.Height, options.MapType, options.Seed)
             : GenerateNexusElevations(world, options.Seed);
 
+        if (options.MapType is WorldMapType.DryWorld)
+        {
+            FinishDryWorld(world, elevations);
+            return world;
+        }
+
         // The petals and the ring around the central opening contribute to land coverage.
         var petalElevations = new List<double>();
         for (var y = 0; y < world.Height; y++)

@@ -247,7 +247,7 @@ public static class Impacts
             var normalized = distance / wave.MaximumRadius;
             var strength = power * Math.Max(0, 1 - normalized * normalized);
             if (strength >= 0.16f)
-                world.RemoveCritterAt(position);
+                RemoveCrittersHitByImpact(world, position);
         }
     }
 
@@ -269,7 +269,7 @@ public static class Impacts
                 continue;
 
             world.SetElevation(position, world.GetElevation(position) - erosion);
-            world.RemoveCritterAt(position);
+            RemoveCrittersHitByImpact(world, position);
             world.RemoveWolfDenAt(position);
             world.RemoveMegaSpiderWebAt(position);
             world.RemoveTeleporterAt(position);
@@ -336,11 +336,17 @@ public static class Impacts
 
     private static void ClearImpactEntities(SimulationWorld world, GridPosition position)
     {
-        world.RemoveCritterAt(position);
+        RemoveCrittersHitByImpact(world, position);
         world.RemoveWolfDenAt(position);
         world.RemoveMegaSpiderWebAt(position);
         world.RemoveTeleporterAt(position);
         Volcanism.RemoveVolcanoAt(world, position);
+    }
+
+    private static void RemoveCrittersHitByImpact(SimulationWorld world, GridPosition position)
+    {
+        world.KillSandwormAt(position);
+        world.RemoveCritterAt(position);
     }
 
     private static float DistortedDistance(

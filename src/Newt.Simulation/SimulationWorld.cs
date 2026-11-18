@@ -285,6 +285,8 @@ public sealed partial class SimulationWorld
 
     public bool NaturalEventsEnabled { get; internal set; } = true;
 
+    public bool NaturalSpringsEnabled { get; internal set; } = true;
+
     public bool LifeEnabled { get; internal set; } = true;
 
     public int EvolutionChanceSteps { get; private set; } = CritterEvolution.DefaultChanceSteps;
@@ -529,6 +531,9 @@ public sealed partial class SimulationWorld
 
     public int GetWhaleFallNutrition(GridPosition position) =>
         _whaleFallNutrition[GetIndex(position)];
+
+    private void DepositWhaleFall(int tile) =>
+        _whaleFallNutrition[tile] = (byte)Math.Min(byte.MaxValue, _whaleFallNutrition[tile] + 10);
 
     internal bool TryAssignApeToVillage(CritterId apeId, GridPosition villagePosition)
     {
@@ -847,6 +852,8 @@ public sealed partial class SimulationWorld
 
         if (cover is SurfaceCover.Lava or SurfaceCover.Stone)
         {
+            if (cover is SurfaceCover.Lava)
+                KillSandwormAt(position);
             RemoveWolfDenAt(position);
             RemoveMegaSpiderWebAt(position);
             RemoveTeleporterAt(position);
@@ -1310,6 +1317,12 @@ public sealed partial class SimulationWorld
         {
             throw new InvalidOperationException("Life is disabled in this world.");
         }
+        if (species is CritterSpecies.Sandworm)
+        {
+            if (TrySpawnSandworm(position, out var sandworm))
+                return sandworm;
+            throw new InvalidOperationException("A sandworm needs two adjacent empty desert tiles.");
+        }
         var tileIndex = GetIndex(position);
         if (_occupants[tileIndex] >= 0)
         {
@@ -1358,6 +1371,8 @@ public sealed partial class SimulationWorld
         {
             return false;
         }
+        if (species is CritterSpecies.Sandworm)
+            return TrySpawnSandworm(position, out _);
 
         var index = GetIndex(position);
         if (_occupants[index] >= 0 || !CanLiveOn(species, index))
@@ -1380,6 +1395,8 @@ public sealed partial class SimulationWorld
         {
             return false;
         }
+        if (species is CritterSpecies.Sandworm)
+            return TrySpawnSandworm(position, out _);
 
         var tileIndex = GetIndex(position);
         if (_occupants[tileIndex] >= 0 || !CanOccupyMegaWall(species, tileIndex))
@@ -1573,6 +1590,8 @@ public sealed partial class SimulationWorld
         HashSet<GridPosition>? reservedPrey = null;
         for (var index = 0; index < _count; index++)
         {
+            if (_species[index] is CritterSpecies.Sandworm)
+                continue;
             if (_lethallyDisplacedCritterIds.Contains(_critterIds[index].Value))
             {
                 continue;
@@ -1590,6 +1609,8 @@ public sealed partial class SimulationWorld
                 _nextMovementTicks[index] = Tick + GetCritterMovementIntervalTicks(index);
                 continue;
             }
+            if (_species[index] is CritterSpecies.Worm && TryConvertDesertWorm(index))
+                continue;
 
             var isStranded = !CanCritterRemainOnTile(index, GetIndex(_positions[index]));
             _nextMovementTicks[index] += GetCritterMovementIntervalTicks(index) *
@@ -1685,6 +1706,7 @@ public sealed partial class SimulationWorld
                 CommitEncounter(predation.Predator, predation.Prey);
         }
         _villageDefenseSquads = null;
+        AdvanceSandworms();
         ValidateVillageRoads();
     }
 
@@ -6153,7 +6175,7 @@ public sealed partial class SimulationWorld
             CritterSpecies.Jellyfish => 1,
             CritterSpecies.SeaScorpion or CritterSpecies.Squid => 3,
             CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack => 2,
-            CritterSpecies.ToothedWhale => 6,
+            CritterSpecies.ToothedWhale => 5,
             CritterSpecies.Dog => 3,
             CritterSpecies.ApeWarrior => 4,
             CritterSpecies.ApeRoyalGuard => 5,
@@ -6234,8 +6256,9 @@ public sealed partial class SimulationWorld
                     prey is CritterSpecies.Trilobite or CritterSpecies.Nautilus));
 
     internal static bool CanDisplace(CritterSpecies mover, CritterSpecies blocker) =>
-        (mover is CritterSpecies.Lich && blocker is CritterSpecies.UndeadApe or CritterSpecies.UndeadWarrior) ||
-        CanDisplaceOrdinaryCritter(mover, blocker);
+        blocker is not CritterSpecies.Sandworm &&
+        ((mover is CritterSpecies.Lich && blocker is CritterSpecies.UndeadApe or CritterSpecies.UndeadWarrior) ||
+            CanDisplaceOrdinaryCritter(mover, blocker));
 
     private static bool CanDisplaceOrdinaryCritter(CritterSpecies mover, CritterSpecies blocker) =>
         mover is CritterSpecies.ApeTrader or CritterSpecies.ApeTraderSailor
@@ -6296,7 +6319,7 @@ public sealed partial class SimulationWorld
             return !IsReservedVillageDog(index);
         if (species is CritterSpecies.Ape or CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack)
             return ShouldApeHunt(index) && _energy[index] < CritterNutritions.Get(species).MaximumEnergy;
-        return species is CritterSpecies.Custodian or CritterSpecies.UndeadApe or CritterSpecies.Lich or
+        return species is CritterSpecies.Custodian or CritterSpecies.Sandworm or CritterSpecies.UndeadApe or CritterSpecies.Lich or
             CritterSpecies.UndeadWarrior or CritterSpecies.ApeSailor or CritterSpecies.ApeWarrior or
             CritterSpecies.ApeRoyalGuard or CritterSpecies.ApeBomber or CritterSpecies.ApeChieftain or
             CritterSpecies.ApeKing or CritterSpecies.ApeQueen;
@@ -7166,7 +7189,7 @@ public sealed partial class SimulationWorld
 
         var sourceTile = GetIndex(position);
         var critterIndex = _occupants[sourceTile];
-        if (critterIndex < 0 || !_teleporters.Contains(sourceTile))
+        if (critterIndex < 0 || _species[critterIndex] is CritterSpecies.Sandworm || !_teleporters.Contains(sourceTile))
         {
             return false;
         }
@@ -7393,6 +7416,7 @@ public sealed partial class SimulationWorld
         var tileIndex = GetIndex(_positions[critterIndex]);
         var lastIndex = _count - 1;
         var removedId = _critterIds[critterIndex];
+        RemoveSandworm(removedId.Value);
         _custodianPatrols.Remove(removedId.Value);
         _nexusCustodianRoutes.Remove(removedId.Value);
         _custodianCreatedTicks.Remove(removedId.Value);
@@ -7405,8 +7429,7 @@ public sealed partial class SimulationWorld
         _toothedWhaleHunts.Remove(removedId.Value);
         var removedSpecies = _species[critterIndex];
         if (IsWhaleSpecies(removedSpecies) && !IsWhaleMountain(removedSpecies, tileIndex))
-            _whaleFallNutrition[tileIndex] =
-                (byte)Math.Min(byte.MaxValue, _whaleFallNutrition[tileIndex] + 10);
+            DepositWhaleFall(tileIndex);
         _critterIndicesById.Remove(removedId.Value);
         _plagues.Remove(removedId.Value);
         _plagueImmunityRemainders.Remove(removedId.Value);
@@ -7510,6 +7533,7 @@ public sealed partial class SimulationWorld
         _terrain[tileIndex] is not Terrain.MegaWall || species is CritterSpecies.Custodian;
 
     private bool CanLiveOn(CritterSpecies species, int tileIndex) =>
+        species is CritterSpecies.Sandworm ? IsSandwormHabitat(GetPosition(tileIndex)) :
         CanOccupyMegaWall(species, tileIndex) &&
         (Body is not WorldBody.Nexus || NexusLayout.Contains(this, GetPosition(tileIndex))) &&
         (species is CritterSpecies.Custodian ||
@@ -7654,6 +7678,7 @@ public sealed partial class SimulationWorld
         CritterSpecies.Plankton => PlanktonMovementIntervalTicks,
         CritterSpecies.Jellyfish => 5 * TicksPerSecond,
         CritterSpecies.Worm => 7 * TicksPerSecond,
+        CritterSpecies.Sandworm => TicksPerSecond / 2,
         CritterSpecies.Trilobite => 6 * TicksPerSecond,
         CritterSpecies.SeaScorpion => 4 * TicksPerSecond,
         CritterSpecies.MegaSpider => 4 * TicksPerSecond,

@@ -12,10 +12,11 @@ public sealed partial class NewtGame
     private int _megaCylinderRenderDistanceLevel3D;
     private int _megaCylinderFirstPersonDistanceLevel3D = 1;
     private bool _drawing3DAtlas;
-    // Tint submerged objects while blending unchanged water tiles back to their 2D palette.
+    // Tint submerged objects and let the bed color show through the water.
     private const int WaterSurfaceTintAlpha3D = 64;
     private const int WhaleFallCutout3D = -2;
     private const int WaterSurfaceArtCutout3D = -3;
+    private const int SandwormCutout3D = -4;
     private const float SpriteScale3D = 0.729f;
     private const float StructureTileLift3D = 0.015f;
     private const float WalkingSpriteScale3D = 0.8f;
@@ -710,6 +711,7 @@ public sealed partial class NewtGame
         for (var i = 0; i < _world.CritterCount; i++)
         {
             var critter = _world.GetCritter(i);
+            if (critter.Species is CritterSpecies.Sandworm) continue;
             var tile = critter.Position;
             if (!ContainsTile3D(tile.X, tile.Y) || tile.Y < bounds.Top || tile.Y >= bounds.Bottom) continue;
             var height = TileHeight3D(tile);
@@ -789,6 +791,8 @@ public sealed partial class NewtGame
                     else if (item.Critter == WhaleFallCutout3D) DrawWhaleFall(sx, sy, item.Tile);
                     else if (item.Critter == WaterSurfaceArtCutout3D)
                         DrawWaterSurfaceArt(sx, sy, item.Tile, elapsedSeconds);
+                    else if (item.Critter == SandwormCutout3D)
+                        DrawSandwormSegment(sx, sy, item.Tile);
                     else if (item.Ground)
                     {
                         var water = _world.GetSurfaceWater(item.Tile);
@@ -887,7 +891,8 @@ public sealed partial class NewtGame
                 {
                     // Centered building art has padding below the visible base in its atlas cell.
                     // Anchor that base, rather than the quad's bottom edge, to the tile.
-                    var visibleHeight = _world.IsCustodianFabricator(item.Tile) ? 1f
+                    var visibleHeight = _world.IsCustodianFabricator(item.Tile) ||
+                        _world.GetWolfDenCharges(item.Tile) is not null ? 1f
                         : structure is not null || _world.HasVampireLair(item.Tile) || _world.HasTeleporter(item.Tile)
                             ? 0.75f : 0f;
                     if (visibleHeight > 0f)
@@ -963,9 +968,7 @@ public sealed partial class NewtGame
     }
 
     private Color TerrainColumnColor3D(GridPosition tile) =>
-        _world.GetSurfaceWater(tile) is SurfaceWaterKind.FreshwaterLake
-            ? GetLakeColor(_world.GetWaterDepth(tile), frozen: false)
-            : GetBedColor(tile, UnfrozenBedTerrain(tile), _world.GetBiome(tile), _world.GetTemperatureBand(tile));
+        GetBedColor(tile, UnfrozenBedTerrain(tile), _world.GetBiome(tile), _world.GetTemperatureBand(tile));
 
     private void CollectTerrainDetails3D(
         Rectangle bounds, BoundingFrustum frustum, GridPosition? hovered, double elapsedSeconds)
@@ -988,7 +991,9 @@ public sealed partial class NewtGame
                 var drawColumn = _world.GetSurfaceCover(tile) is SurfaceCover.Lava;
                 var hasWaterSurfaceArt = !river &&
                     (GetRiverMouths(tile) != RiverConnection.None || BeachwardDirection(tile) != Vector2.Zero);
-                if (!drawColumn && hovered != tile && !whaleFall && !hasGroundArt && !hasStructure && !hasWaterSurfaceArt)
+                var hasSandworm = _world.TryGetSandwormSegment(tile, out _);
+                if (!drawColumn && hovered != tile && !whaleFall && !hasGroundArt && !hasStructure &&
+                    !hasWaterSurfaceArt && !hasSandworm)
                     continue;
 
                 var height = TileHeight3D(tile);
@@ -1016,6 +1021,8 @@ public sealed partial class NewtGame
                     _cutouts3D.Add((new Vector3(x + 0.5f, height + 0.012f, y + 0.5f), tile, WhaleFallCutout3D, true));
                 if (hasWaterSurfaceArt)
                     _cutouts3D.Add((new Vector3(x + 0.5f, top + 0.012f, y + 0.5f), tile, WaterSurfaceArtCutout3D, true));
+                if (hasSandworm)
+                    _cutouts3D.Add((new Vector3(x + 0.5f, top + 0.03f, y + 0.5f), tile, SandwormCutout3D, true));
                 if (river)
                     AddConnectionSides3D(x, y, height + 0.01f, _world.GetRiverConnections(tile),
                         GetSurfaceWaterColor(water), outflows: _world.GetRiverOutflows(tile), elapsedSeconds: elapsedSeconds);
@@ -1075,12 +1082,8 @@ public sealed partial class NewtGame
         if (surface is null || _world.GetElevation(tile) >= surface.Value) return;
         var ice = IsIce3D(tile);
         var height = ThreeDGeometry.ColumnHeight(surface.Value) + (ice ? 0.035f : 0.005f);
-        // Matching the bed's palette avoids shifting its final color:
-        // target * alpha + target * (1 - alpha) = target.
-        var waterColor = TerrainColumnColor3D(tile);
-        var color = ice ? new Color(GetTerrainColor(Terrain.Ice, _world.GetBiome(tile),
-            _world.GetTemperatureBand(tile), _world.GetElevation(tile)), 210)
-            : new Color(waterColor, WaterSurfaceTintAlpha3D);
+        var color = ice ? new Color(GetTerrainColor(Terrain.Ice, _world.GetTemperatureBand(tile)), 210)
+            : new Color(WaterSurfaceColor(tile), WaterSurfaceTintAlpha3D);
         var waterStart = vertices.Count;
         var iceStart = iceVertices.Count;
         var a = new VertexPositionColor(new Vector3(x, height, y), color);

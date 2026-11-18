@@ -13,4 +13,5 @@ public enum WorldMapType
     Moon,
     Mars,
     ONeillCylinder,
+    DryWorld,
 }

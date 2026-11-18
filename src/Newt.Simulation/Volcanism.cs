@@ -318,7 +318,7 @@ public static class Volcanism
 
     internal static bool DepositLava(SimulationWorld world, GridPosition position, float elevationGain)
     {
-        if (world.IsOccupied(position))
+        if (world.IsOccupied(position) && !world.TryGetSandwormSegment(position, out _))
         {
             return false;
         }

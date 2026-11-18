@@ -17,6 +17,7 @@ public static class CritterHabitats
     public static CritterHabitat GetHabitat(CritterSpecies species) => species switch
     {
         CritterSpecies.Custodian => CritterHabitat.Flier,
+        CritterSpecies.Sandworm => CritterHabitat.LandDweller,
         CritterSpecies.ApeLudditePriest or CritterSpecies.ApeBishop or CritterSpecies.ApeBomber => CritterHabitat.LandDweller,
         CritterSpecies.Lich or CritterSpecies.UndeadWarrior => CritterHabitat.LandAndWaterDweller,
         CritterSpecies.Plankton or CritterSpecies.Jellyfish or CritterSpecies.Worm or

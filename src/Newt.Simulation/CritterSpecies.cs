@@ -47,4 +47,5 @@ public enum CritterSpecies : byte
     Snail,
     MegaSlug,
     Custodian,
+    Sandworm,
 }
