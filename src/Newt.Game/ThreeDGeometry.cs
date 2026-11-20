@@ -5,6 +5,19 @@ namespace Newt.Game;
 /// <summary>Shared finite-map geometry, independent of the graphics device.</summary>
 internal static class ThreeDGeometry
 {
+    internal const float CritterSpriteScale = 0.729f;
+
+    internal static (float X, float Z) CritterOffset(CritterId id)
+    {
+        // Reserve a gap at tile edges even when adjacent critters lean together.
+        var limit = MathF.Min(0.11f, (1f - CritterSpriteScale) * 0.5f);
+        var hash = unchecked((uint)id.Value * 747796405u + 2891336453u);
+        hash = unchecked(((hash >> (int)((hash >> 28) + 4)) ^ hash) * 277803737u);
+        hash = (hash >> 22) ^ hash;
+        return (((hash & 0xffff) / 65535f * 2f - 1f) * limit,
+            ((hash >> 16) / 65535f * 2f - 1f) * limit);
+    }
+
     private const float GroundRunSpeed = 24f;
     private const float VerticalSpeedBoost = 4f;
 

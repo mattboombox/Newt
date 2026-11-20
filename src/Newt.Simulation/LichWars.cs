@@ -73,7 +73,8 @@ public sealed partial class SimulationWorld
         var distances = BuildWarDistances(GetIndex(_positions[leader]));
         if (distances[village] < 0 || GetApeVillageResidentCountByTile(village) == 0)
             return false;
-        var war = new ApeWar(village, -lich, distances, true) { LichId = lich, LichAttacking = lichAttacking };
+        var war = new ApeWar(village, -lich, distances, true)
+            { Id = _nextApeWarId++, LichId = lich, LichAttacking = lichAttacking };
         if (!_barbarianVillageTiles.Contains(village))
         {
             var unemployed = _apeVillageHomes.Where(pair => pair.Value == village &&
@@ -90,6 +91,8 @@ public sealed partial class SimulationWorld
             .Select(pair => pair.Key));
         _apeWars[village] = _lichWars[lich] = war;
         RecruitApeCultureBombers(war, village);
+        war.StartingTargetPopulation = LichWarVillage(war).Count();
+        war.StartingLichArmy = LichWarArmy(war).Count();
         RefreshLichWarRoutes(war);
         return true;
     }

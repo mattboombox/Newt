@@ -5,6 +5,22 @@ namespace Newt.Simulation.Tests;
 
 public sealed class ThreeDGeometryTests
 {
+    [Fact]
+    public void CritterOffsetsVaryAndKeepEntireFootprintsInsideTiles()
+    {
+        var offsets = Enumerable.Range(1, 10000)
+            .Select(id => ThreeDGeometry.CritterOffset(new CritterId(id))).ToArray();
+        var halfSize = ThreeDGeometry.CritterSpriteScale / 2;
+        Assert.All(offsets, offset =>
+        {
+            Assert.True(MathF.Abs(offset.X) + halfSize < 0.5f);
+            Assert.True(MathF.Abs(offset.Z) + halfSize < 0.5f);
+        });
+        Assert.True(offsets.Min(p => p.X) < -0.1f && offsets.Max(p => p.X) > 0.1f);
+        Assert.True(offsets.Min(p => p.Z) < -0.1f && offsets.Max(p => p.Z) > 0.1f);
+        Assert.Equal(offsets[123], ThreeDGeometry.CritterOffset(new CritterId(124)));
+    }
+
     [Theory]
     [InlineData(WorldBody.Terrarium)]
     [InlineData(WorldBody.Nexus)]

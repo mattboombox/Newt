@@ -5,6 +5,33 @@ namespace Newt.Simulation.Tests;
 
 public sealed class LichWarTests
 {
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void WarStatusPlacesLichArmyOnTheCorrectSide(bool lichAttacking)
+    {
+        var world = CreateWorld(false);
+        Assert.True(world.TryGetCritterAt(LichTile, out var lich));
+        var population = Enumerable.Range(0, world.CritterCount)
+            .Count(i => world.GetApeHomeVillage(world.GetCritter(i).Id) == Village);
+        Assert.True(lichAttacking ? world.TryStartApeWar(LichTile, Village) : world.TryStartApeWar(Village, LichTile));
+        var status = world.GetApeWarStatus(lich.Id)!;
+        var active = Assert.Single(world.GetActiveApeWars());
+        Assert.Equal(status, active.Armies);
+        Assert.Equal($"Lich #{lich.Id.Value}", lichAttacking ? active.Attacker : active.Defender);
+        Assert.Equal($"Village #{world.GetApeVillageId(Village)}", lichAttacking ? active.Defender : active.Attacker);
+        var undead = lichAttacking ? status.Attacking : status.Defending;
+        var village = lichAttacking ? status.Defending : status.Attacking;
+        Assert.True(undead.Undead);
+        Assert.True(undead.Fighters > 0);
+        Assert.Equal(undead.Fighters, undead.StartingFighters);
+        Assert.True(village.PopulationTarget);
+        Assert.Equal(population, village.Fighters);
+        Assert.Equal(population, village.StartingFighters);
+        Assert.Equal(0, undead.StopAt);
+        Assert.Equal(0, village.StopAt);
+    }
+
     private const BindingFlags Private = BindingFlags.Instance | BindingFlags.NonPublic;
     private static readonly GridPosition Village = new(10, 10), LichTile = new(35, 10);
     private static int Index(SimulationWorld world, CritterId id) =>

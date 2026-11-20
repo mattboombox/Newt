@@ -4,7 +4,7 @@ public sealed partial class SimulationWorld
 {
     private bool CanMoverDisplace(int mover, int blocker) =>
         CanDisplace(_apeSettlerTargets.ContainsKey(_critterIds[mover].Value)
-            ? CritterSpecies.ApeTrader : _species[mover], _species[blocker]);
+            ? CritterSpecies.ApeTrader : _species[mover], _species[blocker]) || IsDefenseSquadLeaderOf(mover, blocker);
 
     private bool CanBeShovedOnto(int blocker, int tile) =>
         CanOccupyMegaWall(_species[blocker], tile) &&

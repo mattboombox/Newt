@@ -4,6 +4,7 @@ public sealed partial class SimulationWorld
 {
     private const int ApeDefenseSquadSize = ApeWarriorsPerMilitaryDistrict;
     private const int ApeDefenseFormationDistance = 2;
+    private const int ApeDefensePatrolDistance = 6;
 
     private sealed class ApeDefenseSquad(int leaderId)
     {
@@ -18,7 +19,7 @@ public sealed partial class SimulationWorld
     {
         var escorts = GetChieftainEscort(GetPosition(village));
         var squads = new Dictionary<int, ApeDefenseSquad>();
-        ApeDefenseSquad? squad = null;
+        var warriors = new List<int>();
         foreach (var (id, _) in _apeVillageHomes.Where(pair => pair.Value == village).OrderBy(pair => pair.Key))
         {
             if (!_critterIndicesById.TryGetValue(id, out var index) ||
@@ -28,10 +29,15 @@ public sealed partial class SimulationWorld
                 continue;
             }
 
-            if (squads.Count % ApeDefenseSquadSize == 0)
-                squad = new ApeDefenseSquad(id);
-            squads.Add(id, squad!);
+            warriors.Add(id);
         }
+        // Give each squad a veteran before assigning a second veteran to any squad.
+        var ordered = warriors.OrderByDescending(id => IsVeteranWarrior(_critterIndicesById[id]))
+            .ThenBy(id => id).ToArray();
+        var leaders = ordered.Take((ordered.Length + ApeDefenseSquadSize - 1) / ApeDefenseSquadSize)
+            .Select(id => new ApeDefenseSquad(id)).ToArray();
+        for (var i = 0; i < ordered.Length; i++)
+            squads.Add(ordered[i], leaders[i % leaders.Length]);
         return squads;
     }
 
@@ -60,6 +66,15 @@ public sealed partial class SimulationWorld
         _species[whale] is CritterSpecies.ToothedWhale &&
         TryGetVillageDefenseSquad(warrior, out var village, out _) &&
         WrappedManhattanDistance(GetPosition(village), _positions[whale]) <= ApeDefenderPerceptionRadius;
+
+    private bool IsDefenseSquadLeaderOf(int mover, int blocker) =>
+        _species[mover] is CritterSpecies.ApeWarrior && _species[blocker] is CritterSpecies.ApeWarrior &&
+        TryGetVillageDefenseSquad(mover, out _, out var squad) && squad.LeaderId == _critterIds[mover].Value &&
+        TryGetVillageDefenseSquad(blocker, out _, out var followerSquad) && followerSquad.LeaderId == squad.LeaderId;
+
+    private bool CanSquadLeaderSwap(int mover, int destination, IReadOnlySet<GridPosition>? reserved) =>
+        _occupants[destination] is var blocker && blocker >= 0 && IsDefenseSquadLeaderOf(mover, blocker) &&
+        CanSwapPastMovementBlocker(mover, destination, reserved);
 
     internal bool TryMoveVillageDefenseWarrior(
         int index, IReadOnlySet<GridPosition>? reservedPrey, out GridPosition? prey)
@@ -98,7 +113,7 @@ public sealed partial class SimulationWorld
                 return true;
             }
 
-            if (WrappedManhattanDistance(current, _positions[leader]) <= ApeDefenseFormationDistance)
+            if (index == leader)
             {
                 TryMoveTowardApeStructure(index, targetTile, reservedPrey);
                 return true;
@@ -107,14 +122,16 @@ public sealed partial class SimulationWorld
         else
         {
             prey = FindHunterPrey(index, CritterSpecies.ApeWarrior, 1, reservedPrey, defenseCenter: home);
-            if (prey is not null || TryPrioritizeApeReproduction(index, reservedPrey))
+            if (prey is not null)
                 return true;
         }
 
         if (index == leader)
         {
-            if (WrappedManhattanDistance(current, home) > ApeDefenseFormationDistance)
+            if (WrappedManhattanDistance(current, home) > ApeDefensePatrolDistance)
                 TryMoveTowardApeStructure(index, village, reservedPrey);
+            else
+                prey = TryMove(index, reservedPrey, allowPredation: false);
         }
         else if (WrappedManhattanDistance(current, _positions[leader]) > ApeDefenseFormationDistance)
         {

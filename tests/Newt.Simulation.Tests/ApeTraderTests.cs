@@ -513,7 +513,7 @@ public sealed class ApeTraderTests
     public void TradersCanShoveEverySpeciesExceptMilitaryApes(CritterSpecies trader)
     {
         foreach (var blocker in Enum.GetValues<CritterSpecies>())
-            Assert.Equal(blocker is not (CritterSpecies.ApeWarrior or CritterSpecies.ApeBomber or CritterSpecies.ApeChieftain or CritterSpecies.ApeKing or CritterSpecies.ApeQueen or CritterSpecies.ApeRoyalGuard),
+            Assert.Equal(blocker is not (CritterSpecies.Sandworm or CritterSpecies.ApeWarrior or CritterSpecies.ApeBomber or CritterSpecies.ApeChieftain or CritterSpecies.ApeKing or CritterSpecies.ApeQueen or CritterSpecies.ApeRoyalGuard),
                 SimulationWorld.CanDisplace(trader, blocker));
     }
 

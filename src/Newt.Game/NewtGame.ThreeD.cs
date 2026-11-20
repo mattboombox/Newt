@@ -17,7 +17,7 @@ public sealed partial class NewtGame
     private const int WhaleFallCutout3D = -2;
     private const int WaterSurfaceArtCutout3D = -3;
     private const int SandwormCutout3D = -4;
-    private const float SpriteScale3D = 0.729f;
+    private const float SpriteScale3D = ThreeDGeometry.CritterSpriteScale;
     private const float StructureTileLift3D = 0.015f;
     private const float WalkingSpriteScale3D = 0.8f;
     private bool _dayNightCycleEnabled = true;
@@ -877,6 +877,11 @@ public sealed partial class NewtGame
                 var step = 1f / AtlasColumns3D;
                 var p = _cutouts3D[i].Position;
                 var critter = item.Critter >= 0 ? _world.GetCritter(item.Critter) : (CritterSnapshot?)null;
+                if (critter is { } offsetCritter)
+                {
+                    var offset = ThreeDGeometry.CritterOffset(offsetCritter.Id);
+                    p += new Vector3(offset.X, 0, offset.Z);
+                }
                 var structure = critter is null && !item.Ground ? _world.GetApeStructure(item.Tile) : null;
                 var farm = structure is ApeStructureKind.Farm or ApeStructureKind.BlightedFarm or
                     ApeStructureKind.RicePaddy or ApeStructureKind.Aquaculture;

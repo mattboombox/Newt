@@ -20,6 +20,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
     private string _colonistToolStatus = "L village/lair: auto; tile: target";
     private string _cultureToolStatus = "L village: assign Luddite culture (any population)";
     private string _monarchyToolStatus = "L village: assign Monarchy culture (any population)";
+    private string _anarchyToolStatus = "L village: unemployed apes form camps of 11; dogs join";
     private const int HudHeight = 156;
     private const int HudPadding = 12;
     private const double ToolRepeatDelaySeconds = 0.25;
@@ -52,7 +53,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
     private static readonly WorldTool[] EventToolOrder =
         [WorldTool.Meteor, WorldTool.Tsunami, WorldTool.WatershedShift,
             WorldTool.Evolve, WorldTool.NaturalEvents, WorldTool.Colonist,
-            WorldTool.Feast, WorldTool.War, WorldTool.BloodWar, WorldTool.CivilWar];
+            WorldTool.Feast, WorldTool.War, WorldTool.BloodWar, WorldTool.CivilWar, WorldTool.Anarchy];
     private static readonly WorldTool[] PlagueToolOrder =
         [WorldTool.Plague, WorldTool.ZombiePlague, WorldTool.VampirePlague, WorldTool.Blight];
     private static readonly WorldTool[] CritterToolOrder =
@@ -345,9 +346,14 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             if (WasPressed(keyboard, Keys.V)) ToggleWalkingCamera();
             if (WasPressed(keyboard, Keys.F)) TogglePlayerPerspective();
             if (_view3D && WasPressed(keyboard, Keys.L)) CycleRenderDistance3D();
-            if (_view3D) HandleCamera3D(keyboard, mouse, (float)gameTime.ElapsedGameTime.TotalSeconds);
-            else HandleCamera(keyboard, mouse);
-            HandleActiveTool(mouse, gameTime.ElapsedGameTime.TotalSeconds);
+            if (IsPointerOverWarCharts(mouse))
+                ScrollWarCharts(mouse);
+            else
+            {
+                if (_view3D) HandleCamera3D(keyboard, mouse, (float)gameTime.ElapsedGameTime.TotalSeconds);
+                else HandleCamera(keyboard, mouse);
+                HandleActiveTool(mouse, gameTime.ElapsedGameTime.TotalSeconds);
+            }
         }
 
         if (!_paused && IsActive)
@@ -378,6 +384,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             }
         }
 
+        UpdateWarCharts();
         UpdateInspectedCritterFollow();
 
         _previousKeyboard = keyboard;
@@ -533,6 +540,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         {
             DrawPopulationWindow();
         }
+        DrawWarCharts();
         if (_controlsWindowOpen)
         {
             DrawControlsWindow();
@@ -1331,6 +1339,12 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             case WorldTool.NaturalEvents:
                 NaturalEvents.SetEnabled(_world, false);
                 break;
+            case WorldTool.Anarchy when primaryActivated:
+                var camps = _world.TriggerAnarchy(position.Value);
+                _anarchyToolStatus = camps > 0
+                    ? $"Created {camps} camps; {camps * SimulationWorld.AnarchyCampSize} apes and village dogs recruited"
+                    : "Select a village with 11+ unemployed apes and room for camps";
+                break;
             case WorldTool.River when primaryActivated:
                 var riverSourceTerrain = _world.GetTerrain(position.Value);
                 if (riverSourceTerrain is not (Terrain.Mountain or Terrain.Hills or
@@ -1421,7 +1435,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
                         _warAttacker = warVillage;
                         _warAttackerLich = _world.TryGetCritterAt(warVillage, out var selected) &&
                             selected.Species is CritterSpecies.Lich ? selected.Id : null;
-                        _warToolStatus = "L select village or lich opponent / participant at war: stop / R cancel";
+                        _warToolStatus = "L select village, camp or lich opponent / at war: stop / R cancel";
                     }
                     else if (_world.TryStartApeWar(
                         _warAttackerLich is { } selectedLich
@@ -1733,10 +1747,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             position is null
                 ? ["TILE", "Move the pointer over the map"]
                 : GetTileInspectionLines(position.Value));
-        DrawHudLines(critterX + HudPadding, hudY + 8,
-            position is null
-                ? ["CRITTER", "None"]
-                : GetCritterInspectionLines(position.Value));
+        DrawCritterInspection(critterX + HudPadding, hudY + 8, position);
         DrawHudLines(buildingX + HudPadding, hudY + 8,
             position is null
                 ? ["BUILDING", "None"]
@@ -2128,12 +2139,12 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         _ => terrain.ToString(),
     };
 
-    private string[] GetCritterInspectionLines(GridPosition position)
+    private CritterSnapshot? GetInspectedCritter(GridPosition position)
     {
         if (_inspectedCritterId.IsValid &&
             _world.TryGetCritter(_inspectedCritterId, out var followedCritter))
         {
-            return GetCritterInspectionLines(followedCritter, following: true);
+            return followedCritter;
         }
 
         for (var index = 0; index < _world.CritterCount; index++)
@@ -2141,11 +2152,23 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             var critter = _world.GetCritter(index);
             if (critter.Position == position)
             {
-                return GetCritterInspectionLines(critter, following: false);
+                return critter;
             }
         }
 
-        return ["CRITTER", "None"];
+        return null;
+    }
+
+    private void DrawCritterInspection(int x, int y, GridPosition? position)
+    {
+        var critter = position is { } tile ? GetInspectedCritter(tile) : null;
+        if (critter is not { } inspected)
+        {
+            DrawHudLines(x, y, "CRITTER", "None");
+            return;
+        }
+        var lines = GetCritterInspectionLines(inspected, _inspectedCritterId == inspected.Id);
+        DrawHudLines(x, y, lines);
     }
 
     private GridPosition GetBuildingInspectionPosition(GridPosition pointerPosition) =>
@@ -2294,8 +2317,6 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         critter.MaximumEnergy > 0
             ? $"Energy {critter.Energy} / {critter.MaximumEnergy}   Damage {_world.GetCritterCombatDamage(critter.Id)}"
             : $"Energy None   Damage {_world.GetCritterCombatDamage(critter.Id)}",
-        critter.Species is CritterSpecies.Sandworm ? "Habitat Desert" : $"Habitat {CritterHabitats.GetHabitat(critter.Species)}",
-        $"Diet {GetCritterDiet(critter.Species)}",
         $"Behavior {GetCritterBehavior(critter)}",
         .. _world.TryGetSandwormSegment(critter.Position, out var segment) && segment.Worm == critter.Id
             ? new[] { $"Length {segment.Length} segments" }
@@ -2530,6 +2551,9 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         _megaCylinderRenderDistanceLevel3D = 0;
         _megaCylinderFirstPersonDistanceLevel3D = 1;
         _world = WorldGenerator.Generate(new WorldGenerationOptions(_preset, _seed, MapType: _mapType, Shape: _mapShape));
+        _warCharts.Clear();
+        _activeWars = [];
+        _warChartScroll = 0;
         ResetClouds3D();
         _focus3D = new Vector2(_world.Width / 2f, _world.Height / 2f);
         if (IsWalkingCamera) PlacePlayerOnMap3D();
@@ -3827,6 +3851,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         WorldTool.VampirePlague => "L infect ape (non-contagious; vampire on death)",
         WorldTool.Feast => "L village: feast using up to 80% of stored food",
         WorldTool.NaturalEvents => "L on; R off",
+        WorldTool.Anarchy => _anarchyToolStatus,
         WorldTool.River => "L add; R remove",
         WorldTool.Plankton => "L spawn: ocean",
         WorldTool.Jellyfish => "L spawn: water",
@@ -3886,6 +3911,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         WorldTool.War => "War",
         WorldTool.BloodWar => "Blood War",
         WorldTool.CivilWar => "Civil War",
+        WorldTool.Anarchy => "Anarchy",
         WorldTool.ApeVillage => "Ape Village",
         WorldTool.LumberCamp => "Lumber Camp",
         WorldTool.ResidentialDistrict => "Residential District",
@@ -3997,6 +4023,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         War,
         BloodWar,
         CivilWar,
+        Anarchy,
         LudditeCulture,
         MonarchyCulture,
         Sandworm,
