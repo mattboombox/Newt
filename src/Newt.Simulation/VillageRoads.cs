@@ -128,18 +128,10 @@ public sealed partial class SimulationWorld
     private IEnumerable<(int Tile, GridPosition Direction)> RoadNeighborSteps(int tile)
     {
         var position = GetPosition(tile);
-        var faceSize = Body is WorldBody.Planetoid ? PlanetoidLayout.FaceSize(Width) : 0;
-        var face = faceSize > 0 ? PlanetoidLayout.FaceAt(position.X, position.Y, faceSize) : -1;
         foreach (var direction in MovementDirections)
         {
-            var next = OffsetTile(position, direction);
-            // Cross cube seams through a shared edge. A diagonal across a seam
-            // can have an ambiguous return direction at the corner of three faces.
-            if (face >= 0 && direction.X != 0 && direction.Y != 0 &&
-                PlanetoidLayout.FaceAt(next.X, next.Y, faceSize) != face)
-                continue;
-            if (Contains(next) && next != position)
-                yield return (GetIndex(next), direction);
+            if (TryGetPathNeighbor(position, direction, out var neighbor))
+                yield return (neighbor, direction);
         }
     }
 

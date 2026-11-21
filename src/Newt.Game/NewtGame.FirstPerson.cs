@@ -12,6 +12,7 @@ public sealed partial class NewtGame
     private bool IsWalkingCamera => _playerView is not PlayerView.FreeCamera;
     private bool _firstPersonMouseReady;
     private float _firstPersonEyeHeight;
+    private float _firstPersonFallVelocity;
     private bool _firstPersonUnderIce;
     private bool _firstPersonFlying;
     private bool _firstPersonCrossing;
@@ -50,6 +51,7 @@ public sealed partial class NewtGame
     {
         _firstPersonUnderIce = false;
         _firstPersonFlying = false;
+        _firstPersonFallVelocity = 0;
         _firstPersonCrossing = false;
         _ringCameraTurnRemaining = 0;
         return Math.Max(WalkingSurfaceHeight(position) + FirstPersonEyeOffset,
@@ -149,7 +151,6 @@ public sealed partial class NewtGame
             ? ThreeDGeometry.ColumnHeight(iceSurface) - 0.06f : null;
         var waterSurface = FirstPersonWaterSurface(_focus3D);
         var rising = keyboard.IsKeyDown(Keys.Space);
-        var fastSink = keyboard.IsKeyDown(Keys.LeftControl) || keyboard.IsKeyDown(Keys.RightControl);
         if (!rising)
             _firstPersonCrossing = false;
         var flightCeiling = IsRing3D
@@ -157,10 +158,21 @@ public sealed partial class NewtGame
             : IsPlanetoid3D ? FirstPersonMaximumFlightHeight * 8
             : Math.Max(FirstPersonMaximumFlightHeight, ThreeDGeometry.BlackSkyHeight);
         var previousHeight = _firstPersonEyeHeight;
+        float? fallingDistance = null;
+        var landingHeight = Math.Max(ground + FirstPersonEyeOffset,
+            waterSurface is { } water ? water + FirstPersonEyeOffset * 0.75f : float.MinValue);
+        if (!rising && ceiling is null && previousHeight > landingHeight + 0.001f)
+        {
+            var fall = ThreeDGeometry.AdvancePlayerFall(_firstPersonFallVelocity, seconds);
+            fallingDistance = fall.Distance;
+            _firstPersonFallVelocity = fall.Velocity;
+        }
+        else _firstPersonFallVelocity = 0;
         (_firstPersonEyeHeight, _firstPersonFlying) = ThreeDGeometry.FirstPersonFlightHeight(
             _firstPersonEyeHeight, ground, waterSurface, _firstPersonFlying,
-            rising && !_firstPersonCrossing, fastSink || (_firstPersonCrossing && _firstPersonFlying),
-            seconds, flightCeiling, FirstPersonEyeOffset, ceiling, boosted: running);
+            rising && !_firstPersonCrossing, _firstPersonCrossing && _firstPersonFlying,
+            seconds, flightCeiling, FirstPersonEyeOffset, ceiling, boosted: running, fallingDistance: fallingDistance);
+        if (!_firstPersonFlying) _firstPersonFallVelocity = 0;
         if (IsRing3D && rising && !_firstPersonCrossing && _firstPersonFlying &&
             ThreeDGeometry.RingFlightCrossing(_focus3D.X, _world.Width, previousHeight,
                 _firstPersonEyeHeight) is { } oppositeX)
@@ -187,7 +199,7 @@ public sealed partial class NewtGame
         if (IsPlanetoid3D)
             chaseOffset += Math.Max(0, _firstPersonEyeHeight - 14f);
         return (Matrix.CreateLookAt(eye, eye + forward, cameraUp),
-            Matrix.CreatePerspectiveFieldOfView(MathHelper.PiOver4, Viewport3D().AspectRatio, 0.03f,
+            Matrix.CreatePerspectiveFieldOfView(ViewFieldOfView3D, Viewport3D().AspectRatio, 0.03f,
                 RenderDistance3D(far, chaseOffset)));
     }
 

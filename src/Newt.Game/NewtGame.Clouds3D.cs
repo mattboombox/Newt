@@ -10,6 +10,7 @@ public sealed partial class NewtGame
     private const float CloudDriftTilesPerSecond = 0.8f;
     private const float CloudWallClearance3D = 0.25f;
     private const float CloudThickness3D = 0.18f;
+    private const float CloudInteriorRise3D = 1.25f;
     private const float NexusCloudElevation3D = SimulationWorld.MaximumSeaLevel + 0.10f;
     private const float NexusCloudWallGap3D = 0.02f;
     private const float CloudCellSize3D = 0.65f;
@@ -28,7 +29,7 @@ public sealed partial class NewtGame
     [Flags]
     private enum CloudEdges3D { None = 0, North = 1, East = 2, South = 4, West = 8 }
 
-    private readonly record struct NexusCloudCell3D(int X, int Y, CloudEdges3D Edges);
+    private readonly record struct NexusCloudCell3D(int X, int Y, CloudEdges3D Edges, bool Raining);
 
     private sealed class CloudPatch3D(Rectangle cells, int face)
     {
@@ -43,11 +44,13 @@ public sealed partial class NewtGame
 
     private readonly List<CloudPatch3D> _clouds3D = [];
     private readonly Dictionary<(int X, int Y, int Face), float> _cloudNoiseSamples3D = [];
+    private readonly Dictionary<(int X, int Y, int Face), float> _cloudMoistureSamples3D = [];
     private readonly List<VertexPositionColor> _cloudMeshScratch3D = [];
     private readonly List<NexusCloudCell3D> _nexusCloudCellsScratch3D = [];
     private VertexPositionColor[] _cloudClippedVertices3D = [];
     private bool[] _nexusCloudFootprint3D = [];
     private DepthStencilState? _cloudDepthStencil3D;
+    private BlendState? _cloudDepthOnlyBlend3D;
     private int _cloudColumns3D;
     private int _cloudRows3D;
     private int _cloudFaceSize3D;
@@ -58,8 +61,14 @@ public sealed partial class NewtGame
 
     private void ResetClouds3D()
     {
+        _weatherDrops3D.Clear();
+        _weatherStreams3D.Clear();
+        _nextWeatherCleanup3D = 0;
+        _weatherSourceStep3D = -1;
+        _weatherSourceCells3D.Clear();
         ReleaseCloudPatches3D();
         _cloudNoiseSamples3D.Clear();
+        _cloudMoistureSamples3D.Clear();
         _cloudWeatherStep3D = -1;
         if (_world.Body is WorldBody.Nexus)
         {
@@ -115,8 +124,14 @@ public sealed partial class NewtGame
 
     // The outermost tile on each side of a ring belongs to the Mega Wall.
     private float CloudWallInset3D => IsRing3D ? 1f : 0f;
+    private float CloudBaseHeight3D => ThreeDGeometry.ColumnHeight(_world.Body is WorldBody.Nexus
+        ? NexusCloudElevation3D : SimulationWorld.MegaWallElevation) -
+        (_world.Body is WorldBody.Nexus ? 0 : CloudWallClearance3D) - CloudThickness3D;
 
-    private float CloudDensity3D(int x, int y, int face)
+    private float CloudDensity3D(int x, int y, int face) => CloudField3D(x, y, face, moisture: false);
+    private float CloudMoisture3D(int x, int y, int face) => CloudField3D(x, y, face, moisture: true);
+
+    private float CloudField3D(int x, int y, int face, bool moisture)
     {
         var faceX = face < 0 ? 0 : face % 3 * _cloudFaceSize3D;
         var faceY = face < 0 ? 0 : face / 3 * _cloudFaceSize3D;
@@ -124,11 +139,18 @@ public sealed partial class NewtGame
         var y0 = faceY + (y - faceY) / CloudNoiseStride3D * CloudNoiseStride3D;
         var x1 = Math.Min(x0 + CloudNoiseStride3D, face < 0 ? _cloudColumns3D : faceX + _cloudFaceSize3D);
         var y1 = Math.Min(y0 + CloudNoiseStride3D, face < 0 ? _cloudRows3D : faceY + _cloudFaceSize3D);
-        var tx = (x + 0.5f - x0) / (x1 - x0);
-        var ty = (y + 0.5f - y0) / (y1 - y0);
+        var tx = x1 == x0 ? 0 : (x + 0.5f - x0) / (x1 - x0);
+        var ty = y1 == y0 ? 0 : (y + 0.5f - y0) / (y1 - y0);
         return MathHelper.Lerp(
-            MathHelper.Lerp(CloudNoiseSample3D(x0, y0, face), CloudNoiseSample3D(x1, y0, face), tx),
-            MathHelper.Lerp(CloudNoiseSample3D(x0, y1, face), CloudNoiseSample3D(x1, y1, face), tx), ty);
+            MathHelper.Lerp(Sample(x0, y0), Sample(x1, y0), tx),
+            MathHelper.Lerp(Sample(x0, y1), Sample(x1, y1), tx), ty);
+
+        float Sample(int sx, int sy)
+        {
+            var density = CloudNoiseSample3D(sx, sy, face);
+            if (face < 0 && sx == _cloudColumns3D) sx = 0;
+            return moisture ? _cloudMoistureSamples3D[(sx, sy, face)] : density;
+        }
     }
 
     private float CloudNoiseSample3D(int x, int y, int face)
@@ -160,6 +182,7 @@ public sealed partial class NewtGame
             0.29f * CloudValueNoise3D(point * 2.1f + new Vector3(13)) +
             0.11f * CloudValueNoise3D(point * 4.3f + new Vector3(29));
         _cloudNoiseSamples3D.Add(key, density);
+        _cloudMoistureSamples3D.Add(key, CloudValueNoise3D(point * 0.8f + new Vector3(113, 47, 89)));
         return density;
     }
 
@@ -192,18 +215,19 @@ public sealed partial class NewtGame
         }
     }
 
-    private bool IsCloudCell3D(int x, int y, int face, int dx = 0, int dy = 0)
+    private CloudKind CloudKind3D(int x, int y, int face, int dx = 0, int dy = 0)
     {
         if (face >= 0)
         {
             var tile = PlanetoidLayout.Offset(new GridPosition(x, y), dx, dy, _cloudFaceSize3D);
-            return CloudDensity3D(tile.X, tile.Y, PlanetoidLayout.FaceAt(tile.X, tile.Y, _cloudFaceSize3D)) >
-                CloudDensityThreshold3D;
+            var nextFace = PlanetoidLayout.FaceAt(tile.X, tile.Y, _cloudFaceSize3D);
+            return WeatherVisuals.CloudBank(CloudDensity3D(tile.X, tile.Y, nextFace), CloudMoisture3D(tile.X, tile.Y, nextFace));
         }
 
         var row = y + dy;
-        return row >= 0 && row < _cloudRows3D &&
-            CloudDensity3D(ThreeDGeometry.WrapTile(x + dx, _cloudColumns3D), row, -1) > CloudDensityThreshold3D;
+        if (row < 0 || row >= _cloudRows3D) return CloudKind.None;
+        var column = ThreeDGeometry.WrapTile(x + dx, _cloudColumns3D);
+        return WeatherVisuals.CloudBank(CloudDensity3D(column, row, -1), CloudMoisture3D(column, row, -1));
     }
 
     private void BuildCloudPatch3D(CloudPatch3D patch, float height, bool isNexus)
@@ -214,14 +238,14 @@ public sealed partial class NewtGame
         var low = height - CloudThickness3D;
         // Cache the one-cell border too, so shared sides are emitted only at exposed edges.
         var stride = cells.Width + 2;
-        Span<bool> occupied = stackalloc bool[stride * (cells.Height + 2)];
+        Span<CloudKind> occupied = stackalloc CloudKind[stride * (cells.Height + 2)];
         for (var y = -1; y <= cells.Height; y++)
         for (var x = -1; x <= cells.Width; x++)
         {
             if ((x < 0 || x == cells.Width) && (y < 0 || y == cells.Height)) continue;
             var localX = Math.Clamp(x, 0, cells.Width - 1);
             var localY = Math.Clamp(y, 0, cells.Height - 1);
-            occupied[(y + 1) * stride + x + 1] = IsCloudCell3D(cells.X + localX, cells.Y + localY,
+            occupied[(y + 1) * stride + x + 1] = CloudKind3D(cells.X + localX, cells.Y + localY,
                 patch.Face, x - localX, y - localY);
         }
 
@@ -229,29 +253,31 @@ public sealed partial class NewtGame
         for (var x = 0; x < cells.Width; x++)
         {
             var index = (y + 1) * stride + x + 1;
-            if (!occupied[index]) continue;
+            var kind = occupied[index];
+            if (kind is CloudKind.None) continue;
             var left = x + cells.X;
             var top = y + cells.Y;
+            var raining = kind is CloudKind.Moist;
             var edges = CloudEdges3D.None;
-            if (!occupied[index - stride]) edges |= CloudEdges3D.North;
-            if (!occupied[index + 1]) edges |= CloudEdges3D.East;
-            if (!occupied[index + stride]) edges |= CloudEdges3D.South;
-            if (!occupied[index - 1]) edges |= CloudEdges3D.West;
+            if (occupied[index - stride] != kind) edges |= CloudEdges3D.North;
+            if (occupied[index + 1] != kind) edges |= CloudEdges3D.East;
+            if (occupied[index + stride] != kind) edges |= CloudEdges3D.South;
+            if (occupied[index - 1] != kind) edges |= CloudEdges3D.West;
             if (isNexus)
             {
-                _nexusCloudCellsScratch3D.Add(new(left, top, edges));
+                _nexusCloudCellsScratch3D.Add(new(left, top, edges, raining));
                 continue;
             }
 
-            var a = CloudPatchPoint3D(left, top, height, patch.Face);
-            var b = CloudPatchPoint3D(left + 1, top, height, patch.Face);
-            var c = CloudPatchPoint3D(left + 1, top + 1, height, patch.Face);
-            var d = CloudPatchPoint3D(left, top + 1, height, patch.Face);
+            var a = CloudPatchPoint3D(left, top, CloudTopHeight3D(left, top, patch.Face, height), patch.Face);
+            var b = CloudPatchPoint3D(left + 1, top, CloudTopHeight3D(left + 1, top, patch.Face, height), patch.Face);
+            var c = CloudPatchPoint3D(left + 1, top + 1, CloudTopHeight3D(left + 1, top + 1, patch.Face, height), patch.Face);
+            var d = CloudPatchPoint3D(left, top + 1, CloudTopHeight3D(left, top + 1, patch.Face, height), patch.Face);
             var e = CloudPatchPoint3D(left, top, low, patch.Face);
             var f = CloudPatchPoint3D(left + 1, top, low, patch.Face);
             var g = CloudPatchPoint3D(left + 1, top + 1, low, patch.Face);
             var h = CloudPatchPoint3D(left, top + 1, low, patch.Face);
-            AddCloudSlab3D(a, b, c, d, e, f, g, h, edges);
+            AddCloudSlab3D(a, b, c, d, e, f, g, h, edges, raining);
         }
 
         if (isNexus)
@@ -259,6 +285,21 @@ public sealed partial class NewtGame
         else
             patch.Vertices = _cloudMeshScratch3D.ToArray();
         patch.WeatherStep = _cloudWeatherStep3D;
+    }
+
+    private float CloudTopHeight3D(float x, float y, int face, float baseHeight)
+    {
+        // Shared corner samples keep neighboring cells and cube faces joined.
+        var density = CloudDensity3D((int)MathF.Round(x), (int)MathF.Round(y), face);
+        var interior = MathHelper.SmoothStep(0, 1,
+            Math.Clamp((density - CloudDensityThreshold3D) / 0.35f, 0, 1));
+        interior *= MathHelper.SmoothStep(0, 1, Math.Clamp(
+            (Math.Abs(CloudMoisture3D((int)MathF.Round(x), (int)MathF.Round(y), face)) - 0.10f) / 0.18f, 0, 1));
+        var point = CloudPatchPoint3D(x, y, 0, face);
+        var broad = CloudValueNoise3D(point * 0.15f + new Vector3(97, 31, 53));
+        var detail = CloudValueNoise3D(point * 0.43f + new Vector3(19, 73, 41));
+        var noise = (0.7f * broad + 0.3f * detail + 1) * 0.5f;
+        return baseHeight + interior * CloudInteriorRise3D * (0.28f + 0.72f * noise);
     }
 
     private Vector3 CloudPatchPoint3D(float x, float y, float height, int face)
@@ -270,20 +311,21 @@ public sealed partial class NewtGame
         return IsRing3D ? WorldPoint3D(point) : point;
     }
 
-    private void DrawClouds3D(double elapsedSeconds, BoundingFrustum frustum, Rectangle bounds, float daylight)
+    private void DrawClouds3D(double elapsedSeconds, BoundingFrustum frustum, Rectangle bounds, float daylight,
+        Matrix view, Matrix projection)
     {
+        _precipitationEmitters3D.Clear();
         var isNexus = _world.Body is WorldBody.Nexus;
         var curved = IsPlanetoid3D || IsRing3D;
-        if (!curved && !isNexus && bounds.IsEmpty) return;
         var weatherStep = (long)(elapsedSeconds / CloudWeatherStepSeconds3D);
         if (weatherStep != _cloudWeatherStep3D)
         {
             _cloudWeatherStep3D = weatherStep;
             _cloudNoiseSamples3D.Clear();
+            _cloudMoistureSamples3D.Clear();
         }
 
-        var height = ThreeDGeometry.ColumnHeight(isNexus ? NexusCloudElevation3D : SimulationWorld.MegaWallElevation) -
-            (isNexus ? 0 : CloudWallClearance3D);
+        var height = CloudBaseHeight3D + CloudThickness3D;
         var circumference = IsPlanetoid3D ? MathHelper.TwoPi * PlanetoidGeometry.Radius(_world.Width) : _world.Width;
         var drift = (float)(elapsedSeconds * CloudDriftTilesPerSecond % circumference);
         var angle = MathHelper.TwoPi * drift / circumference;
@@ -295,13 +337,16 @@ public sealed partial class NewtGame
             var axis = new Vector3(0, RingGeometry.Radius(_world.Width), 0);
             rotation = Matrix.CreateTranslation(-axis) * Matrix.CreateRotationZ(angle) * Matrix.CreateTranslation(axis);
         }
+        CollectPrecipitationEmitters3D(height - CloudThickness3D, rotation, drift, view);
 
-        GraphicsDevice.BlendState = BlendState.NonPremultiplied;
-        // Only the first cloud fragment that passes the scene's depth test blends at each pixel.
-        GraphicsDevice.DepthStencilState = _cloudDepthStencil3D ??= new DepthStencilState
+        // First find the nearest cloud surface without writing color. The color pass
+        // then blends that surface exactly once, independent of patch or face order.
+        _cloudDepthOnlyBlend3D ??= new BlendState { ColorWriteChannels = ColorWriteChannels.None };
+        _cloudDepthStencil3D ??= new DepthStencilState
         {
             DepthBufferEnable = true,
             DepthBufferWriteEnable = false,
+            DepthBufferFunction = CompareFunction.Equal,
             StencilEnable = true,
             StencilMask = 1,
             StencilWriteMask = 1,
@@ -316,9 +361,16 @@ public sealed partial class NewtGame
         else
             effect.Parameters["CloudLighting"].SetValue(1f);
 
-        var clipLeft = isNexus ? 0 : bounds.Left;
-        var clipRight = isNexus ? _world.Width : bounds.Right;
+        var cameraTileX = (int)LocalPoint3D(Matrix.Invert(view).Translation).X;
+        var clipLeft = isNexus ? 0 : bounds.IsEmpty ? cameraTileX - 48 : bounds.Left;
+        var clipRight = isNexus ? _world.Width : bounds.IsEmpty ? cameraTileX + 48 : bounds.Right;
         var cloudRebuildTimeMs = 0.0;
+        var depthOnly = true;
+        for (var cloudPass = 0; cloudPass < 2; cloudPass++)
+        {
+        depthOnly = cloudPass == 0;
+        GraphicsDevice.BlendState = depthOnly ? _cloudDepthOnlyBlend3D : BlendState.NonPremultiplied;
+        GraphicsDevice.DepthStencilState = depthOnly ? DepthStencilState.Default : _cloudDepthStencil3D;
         foreach (var patch in _clouds3D)
         {
             var cells = patch.Cells;
@@ -328,7 +380,7 @@ public sealed partial class NewtGame
             if (curved)
             {
                 if (IsPlanetoid3D) radius *= 1.15f * (1 + height / PlanetoidGeometry.Radius(_world.Width));
-                if (frustum.Intersects(new BoundingSphere(Vector3.Transform(midpoint, rotation), radius + 1)))
+                if (frustum.Intersects(new BoundingSphere(Vector3.Transform(midpoint, rotation), radius + CloudInteriorRise3D + 1)))
                     DrawPatch(patch, rotation);
                 continue;
             }
@@ -341,12 +393,13 @@ public sealed partial class NewtGame
                 var shift = drift + copy * _world.Width;
                 var center = midpoint + new Vector3(shift, 0, 0);
                 if (isNexus) center.Y += NexusLift3D(center.X, center.Z);
-                if (!frustum.Intersects(new BoundingSphere(center, radius * (isNexus ? 2 : 1) + 1))) continue;
+                if (!frustum.Intersects(new BoundingSphere(center, radius * (isNexus ? 2 : 1) + CloudInteriorRise3D + 1))) continue;
                 if (isNexus || left + shift < clipLeft || right + shift > clipRight)
                     DrawPatch(patch, Matrix.Identity, shift);
                 else
                     DrawPatch(patch, Matrix.CreateTranslation(shift, 0, 0));
             }
+        }
         }
 
         SetTerrainWorld3D(effect, Matrix.Identity);
@@ -354,11 +407,12 @@ public sealed partial class NewtGame
         GraphicsDevice.BlendState = BlendState.Opaque;
         GraphicsDevice.DepthStencilState = DepthStencilState.Default;
         GraphicsDevice.RasterizerState = RasterizerState.CullNone;
+        DrawPrecipitation3D(elapsedSeconds, height - CloudThickness3D, daylight, view, projection);
 
         void DrawPatch(CloudPatch3D patch, Matrix transform, float? clippedShift = null)
         {
             // Keep drawing the last mesh while visible patches catch up with the new weather sample.
-            if (patch.WeatherStep != _cloudWeatherStep3D && cloudRebuildTimeMs < CloudRebuildBudgetMs3D)
+            if (depthOnly && patch.WeatherStep != _cloudWeatherStep3D && cloudRebuildTimeMs < CloudRebuildBudgetMs3D)
             {
                 var start = Stopwatch.GetTimestamp();
                 BuildCloudPatch3D(patch, height, isNexus);
@@ -446,7 +500,7 @@ public sealed partial class NewtGame
             if (left > firstX && right < lastX + 1 && top > firstY && bottom < lastY + 1 &&
                 Inside(firstX, firstY) && Inside(lastX, firstY) && Inside(firstX, lastY) && Inside(lastX, lastY))
             {
-                AddSlab(left, top, right, bottom, cell.Edges);
+                AddSlab(left, top, right, bottom, cell.Edges, cell.Raining);
                 continue;
             }
 
@@ -485,7 +539,7 @@ public sealed partial class NewtGame
                     edges |= CloudEdges3D.West;
                 }
                 if (west < east && north < south)
-                    AddSlab(west, north, east, south, edges);
+                    AddSlab(west, north, east, south, edges, cell.Raining);
             }
         }
         var count = _cloudMeshScratch3D.Count;
@@ -497,28 +551,34 @@ public sealed partial class NewtGame
         bool Inside(int x, int y) => (uint)x < (uint)_world.Width && (uint)y < (uint)_world.Height &&
             _nexusCloudFootprint3D[y * _world.Width + x];
 
-        void AddSlab(float left, float top, float right, float bottom, CloudEdges3D edges)
+        void AddSlab(float left, float top, float right, float bottom, CloudEdges3D edges, bool raining)
         {
             var a = PointAtTop(left, top);
             var b = PointAtTop(right, top);
             var c = PointAtTop(right, bottom);
             var d = PointAtTop(left, bottom);
-            var thickness = Vector3.Up * CloudThickness3D;
-            AddCloudSlab3D(a, b, c, d, a - thickness, b - thickness, c - thickness, d - thickness, edges);
+            var e = PointAtBottom(left, top);
+            var f = PointAtBottom(right, top);
+            var g = PointAtBottom(right, bottom);
+            var h = PointAtBottom(left, bottom);
+            AddCloudSlab3D(a, b, c, d, e, f, g, h, edges, raining);
 
-            Vector3 PointAtTop(float x, float z) => new(x, height + NexusLift3D(x, z), z);
+            Vector3 PointAtTop(float x, float z) => new(x,
+                CloudTopHeight3D((x - shift) / _cloudCellWidth3D, z / _cloudCellHeight3D, -1, height) + NexusLift3D(x, z), z);
+            Vector3 PointAtBottom(float x, float z) => new(x, height - CloudThickness3D + NexusLift3D(x, z), z);
         }
     }
 
     private void AddCloudSlab3D(Vector3 a, Vector3 b, Vector3 c, Vector3 d,
-        Vector3 e, Vector3 f, Vector3 g, Vector3 h, CloudEdges3D edges)
+        Vector3 e, Vector3 f, Vector3 g, Vector3 h, CloudEdges3D edges, bool raining = false)
     {
-        AddCloudFace3D(a, b, c, d, CloudTop3D);
-        AddCloudFace3D(e, h, g, f, CloudBottom3D);
-        if ((edges & CloudEdges3D.North) != 0) AddCloudFace3D(e, f, b, a, CloudNorth3D);
-        if ((edges & CloudEdges3D.East) != 0) AddCloudFace3D(f, g, c, b, CloudEast3D);
-        if ((edges & CloudEdges3D.South) != 0) AddCloudFace3D(g, h, d, c, CloudSouth3D);
-        if ((edges & CloudEdges3D.West) != 0) AddCloudFace3D(h, e, a, d, CloudWest3D);
+        Color Shade(Color color) => raining ? Color.Lerp(color, new Color(52, 63, 80, 210), 0.82f) : color;
+        AddCloudFace3D(a, b, c, d, Shade(CloudTop3D));
+        AddCloudFace3D(e, h, g, f, Shade(CloudBottom3D));
+        if ((edges & CloudEdges3D.North) != 0) AddCloudFace3D(e, f, b, a, Shade(CloudNorth3D));
+        if ((edges & CloudEdges3D.East) != 0) AddCloudFace3D(f, g, c, b, Shade(CloudEast3D));
+        if ((edges & CloudEdges3D.South) != 0) AddCloudFace3D(g, h, d, c, Shade(CloudSouth3D));
+        if ((edges & CloudEdges3D.West) != 0) AddCloudFace3D(h, e, a, d, Shade(CloudWest3D));
     }
 
     private void AddCloudFace3D(Vector3 a, Vector3 b, Vector3 c, Vector3 d, Color color)

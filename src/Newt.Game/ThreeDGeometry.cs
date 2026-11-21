@@ -6,6 +6,17 @@ namespace Newt.Game;
 internal static class ThreeDGeometry
 {
     internal const float CritterSpriteScale = 0.729f;
+    internal const float PlayerFallAcceleration = 40f;
+    internal const float PlayerTerminalFallSpeed = 24f;
+
+    internal static (float Distance, float Velocity) AdvancePlayerFall(float velocity, float seconds)
+    {
+        velocity = Math.Clamp(velocity, 0, PlayerTerminalFallSpeed);
+        var acceleratingTime = Math.Min(seconds, (PlayerTerminalFallSpeed - velocity) / PlayerFallAcceleration);
+        var distance = velocity * acceleratingTime + 0.5f * PlayerFallAcceleration * acceleratingTime * acceleratingTime;
+        return (distance + PlayerTerminalFallSpeed * (seconds - acceleratingTime),
+            Math.Min(PlayerTerminalFallSpeed, velocity + PlayerFallAcceleration * seconds));
+    }
 
     internal static (float X, float Z) CritterOffset(CritterId id)
     {
@@ -96,14 +107,15 @@ internal static class ThreeDGeometry
 
     internal static (float Height, bool Flying) FirstPersonFlightHeight(float current, float ground,
         float? waterSurface, bool flying, bool rising, bool fastSink, float seconds, float maximumHeight,
-        float eyeOffset = 1.2f, float? iceCeiling = null, bool boosted = false)
+        float eyeOffset = 1.2f, float? iceCeiling = null, bool boosted = false, float? fallingDistance = null)
     {
         var standing = ground + eyeOffset;
         var landingHeight = waterSurface is { } water
             ? Math.Max(standing, water + eyeOffset * 0.75f)
             : standing;
         if (iceCeiling is not null ||
-            (!flying && (!rising || waterSurface is not null && current < landingHeight)))
+            (!flying && (!rising || waterSurface is not null && current < landingHeight) &&
+                !(fallingDistance is not null && current > landingHeight + 0.001f)))
         {
             return (FirstPersonSwimmingHeight(current, ground, waterSurface, rising, seconds,
                 eyeOffset, iceCeiling, fastSink, boosted), false);
@@ -111,7 +123,8 @@ internal static class ThreeDGeometry
 
         var speed = rising ? (boosted ? GroundRunSpeed : 6f) : fastSink ? -6f : -2f;
         if (boosted && fastSink && !rising) speed *= VerticalSpeedBoost;
-        var height = Math.Clamp(current + speed * seconds,
+        var change = !rising && fallingDistance is { } fall ? -fall : speed * seconds;
+        var height = Math.Clamp(current + change,
             landingHeight, Math.Max(landingHeight, maximumHeight));
         return (height, height > landingHeight);
     }

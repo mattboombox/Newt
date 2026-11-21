@@ -355,7 +355,8 @@ public sealed class VillageRoadTests
     [Fact]
     public void PlanetoidRoadConnectsTheCorrectEdgesOfRotatedFaces()
     {
-        var world = new SimulationWorld(48, 32, Terrain.Plains) { Body = WorldBody.Planetoid };
+        // Seed neighboring villages before enabling surface spacing restrictions.
+        var world = new SimulationWorld(48, 32, Terrain.Plains);
         foreach (var tile in Positions(world))
             world.SetBiome(tile, Biome.Grassland);
         var first = new GridPosition(21, 0);
@@ -363,6 +364,7 @@ public sealed class VillageRoadTests
         Assert.True(world.TrySpawnTestApeVillage(first));
         Assert.True(world.TrySpawnTestApeVillage(second));
 
+        world.Body = WorldBody.Planetoid;
         Assert.True(world.TryPlaceVillageRoad(first));
         Assert.Equal(1, world.VillageRoadCount);
         Assert.Equal(RiverConnection.North, world.GetRoadConnections(first));
@@ -373,7 +375,7 @@ public sealed class VillageRoadTests
     [Fact]
     public void PlanetoidBridgeFollowsAndSurvivesValidationAcrossRotatedFaces()
     {
-        var world = new SimulationWorld(48, 32, Terrain.Plains) { Body = WorldBody.Planetoid };
+        var world = new SimulationWorld(48, 32, Terrain.Plains);
         foreach (var tile in Positions(world))
             world.SetBiome(tile, Biome.Grassland);
         var first = new GridPosition(21, 1);
@@ -382,6 +384,7 @@ public sealed class VillageRoadTests
         var second = new GridPosition(30, 26);
         Assert.True(world.TrySpawnTestApeVillage(first));
         Assert.True(world.TrySpawnTestApeVillage(second));
+        world.Body = WorldBody.Planetoid;
         world.SetTerrain(firstWater, Terrain.Shallows);
         world.SetTerrain(secondWater, Terrain.Shallows);
 

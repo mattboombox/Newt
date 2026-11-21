@@ -68,7 +68,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             WorldTool.Farm, WorldTool.LumberCamp, WorldTool.Harbor, WorldTool.ResidentialDistrict,
             WorldTool.MilitaryDistrict, WorldTool.Library, WorldTool.Market, WorldTool.Road];
     private static readonly WorldTool[] OtherToolOrder =
-        [WorldTool.JumpStart, WorldTool.Inspect, WorldTool.Teleport];
+        [WorldTool.JumpStart, WorldTool.Inspect, WorldTool.Teleport, WorldTool.AntiMaterielRifle];
     private static readonly WorldTool[] CultureToolOrder = [WorldTool.LudditeCulture, WorldTool.MonarchyCulture];
     private static readonly string[] ControlLines =
     [
@@ -85,14 +85,16 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         "P  pause or resume",
         "G  toggle auto speed; Right Shift  1x / 32x",
         "Tab  2D <-> 3D",
+        "Z  all 3D views: zoom 2x, 4x, normal",
         "V  3D free <-> first person",
         "F  1st <-> 3rd (random ghost on 3rd)",
         "L  3D render distance: Full / 3/4 / 1/2 / 1/4",
         "1st/3rd: WASD walk; Left Shift move faster",
         "1st/3rd: mouse or arrows look around",
         "Arrows: Left/Right turn; Up/Down look",
-        "1st/3rd: Space fly/swim up; Ctrl descend faster",
-        "1st/3rd: Left Shift + Space/Ctrl boosts ascent/descent",
+        "1st/3rd: Space fly/swim up; Shift boosts ascent",
+        "1st/3rd: release Space to fall; fixed terminal speed",
+        "1st/3rd: Ctrl ignored; Shift does not boost falling",
         "1st/3rd: V to free camera; wheel ignored",
         "2D: WASD / arrows pan; wheel zoom",
         "Free 3D: WASD move; arrows rotate",
@@ -293,6 +295,8 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             _whaleFallSprite = Texture2D.FromStream(GraphicsDevice, whaleFallStream);
         }
         SetWindowIconFromNewtSprite();
+        LoadZoomSounds();
+        LoadRifleSound();
     }
 
     protected override void OnDeactivated(object sender, EventArgs args)
@@ -345,6 +349,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             if (WasPressed(keyboard, Keys.Tab)) Toggle3DView();
             if (WasPressed(keyboard, Keys.V)) ToggleWalkingCamera();
             if (WasPressed(keyboard, Keys.F)) TogglePlayerPerspective();
+            if (WasPressed(keyboard, Keys.Z)) CycleViewZoom3D();
             if (_view3D && WasPressed(keyboard, Keys.L)) CycleRenderDistance3D();
             if (IsPointerOverWarCharts(mouse))
                 ScrollWarCharts(mouse);
@@ -355,6 +360,8 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
                 HandleActiveTool(mouse, gameTime.ElapsedGameTime.TotalSeconds);
             }
         }
+
+        if (IsActive) AdvanceRifleShots((float)gameTime.ElapsedGameTime.TotalSeconds);
 
         if (!_paused && IsActive)
         {
@@ -479,6 +486,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             DrawTileObjects2D(screenX, screenY, position);
         }
         DrawVisibleCritters2D(visibleColumns, visibleRows, aboveIce: true);
+        DrawRifleShots2D();
 
         DrawInterface();
         _spriteBatch.End();
@@ -1228,6 +1236,9 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
 
         switch (CurrentTool)
         {
+            case WorldTool.AntiMaterielRifle when primaryActivated:
+                FireAntiMaterielRifle(position.Value);
+                break;
             case WorldTool.Teleport when primaryActivated:
                 TeleportCameraToTile(position.Value);
                 break;
@@ -2254,7 +2265,8 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             return village is { } owner
                 ? [
                     "BUILDING",
-                    GetApeStructureDisplayName(apeStructure),
+                    _world.GetApeMilitaryDistrictNumber(position) is { } districtNumber
+                        ? $"Military District #{districtNumber}" : GetApeStructureDisplayName(apeStructure),
                     villageId.HasValue ? $"Village #{villageId.Value}" : "Village",
                     $"Residents {_world.GetApeVillageResidentCount(owner)} / {_world.GetApeVillagePopulationCapacity(owner)}",
                     .. GetApeStructureProductionLines(position, apeStructure),
@@ -2344,7 +2356,8 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             {
                 _world.IsBarbarianVillage(village)
                     ? $"Village Barbarian Camp #{_world.GetApeVillageId(village)}"
-                    : $"Village Ape Village #{_world.GetApeVillageId(village)}",
+                    : $"Village Ape Village #{_world.GetApeVillageId(village)}" +
+                        (_world.GetApeWarriorSquadNumber(critter.Id) is { } squadNumber ? $"   Squad #{squadNumber}" : ""),
             }
             : Array.Empty<string>(),
     ];
@@ -2555,6 +2568,8 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         _activeWars = [];
         _warChartScroll = 0;
         ResetClouds3D();
+        _rifleShots.Clear();
+        _rifleCooldownRemaining = 0;
         _focus3D = new Vector2(_world.Width / 2f, _world.Height / 2f);
         if (IsWalkingCamera) PlacePlayerOnMap3D();
         _cameraX = 0;
@@ -3463,14 +3478,8 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             return;
         }
 
-        for (var index = 0; index < _world.ActiveImpactWaveCount; index++)
+        if (TryGetVisibleImpactWave(position, out var wave))
         {
-            var wave = _world.GetImpactWave(index);
-            if (!Impacts.IsOnShockFront(_world, position, wave))
-            {
-                continue;
-            }
-
             var inset = Math.Max(0, TileSize / 5);
             _spriteBatch.Draw(
                 _pixel,
@@ -3886,6 +3895,8 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         WorldTool.Stone => "L place; R clear",
         WorldTool.Lava => "L add; R clear",
         WorldTool.JumpStart => "L seed plankton",
+        WorldTool.AntiMaterielRifle => _rifleCooldownRemaining > 0
+            ? $"Reloading {_rifleCooldownRemaining:0.0}s" : "L fire: tiny impact on tracer arrival",
         WorldTool.Teleport => IsWalkingCamera ? "L teleport to crosshair tile" : "L teleport to tile",
         WorldTool.Colonist => _colonistToolStatus,
         WorldTool.LudditeCulture => _cultureToolStatus,
@@ -3918,6 +3929,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         WorldTool.MilitaryDistrict => "Military District",
         WorldTool.BarbarianApeVillage => "Barbarian Ape Village",
         WorldTool.JumpStart => "Jump Start",
+        WorldTool.AntiMaterielRifle => "Anti-Materiel Rifle",
         WorldTool.ZombiePlague => "Zombie Plague",
         WorldTool.VampirePlague => "Vampire Plague",
         WorldTool.LudditeCulture => "Luddite Culture",
@@ -4015,6 +4027,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         Road,
         Inspect,
         Teleport,
+        AntiMaterielRifle,
         Plague,
         ZombiePlague,
         VampirePlague,

@@ -77,7 +77,6 @@ public sealed class ApeTrafficTests
         => Assert.True(SimulationWorld.CanDisplace(CritterSpecies.ApeWarrior, civilian));
 
     [Theory]
-    [InlineData(CritterSpecies.ApeWarrior, CritterSpecies.ApeWarrior)]
     [InlineData(CritterSpecies.ApeWarrior, CritterSpecies.ApeChieftain)]
     [InlineData(CritterSpecies.ApeTrader, CritterSpecies.ApeWarrior)]
     [InlineData(CritterSpecies.ApeTrader, CritterSpecies.ApeChieftain)]

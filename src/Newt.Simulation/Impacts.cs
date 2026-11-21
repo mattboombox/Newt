@@ -6,6 +6,10 @@ public static class Impacts
     private const float MinimumMagnitude = 0f;
     private const float MaximumMagnitude = 1f;
 
+    /// <summary>The meteor tool at a scale confined to the immediate surface neighborhood.</summary>
+    public static MeteorImpactResult CreateRifleImpact(SimulationWorld world, GridPosition center) =>
+        CreateMeteorImpact(world, center, 0, 2f, rifleSized: true);
+
     public static MeteorImpactResult CreateMeteorImpact(
         SimulationWorld world,
         GridPosition center,
@@ -21,7 +25,8 @@ public static class Impacts
         SimulationWorld world,
         GridPosition center,
         float magnitude,
-        float maximumMagnitude)
+        float maximumMagnitude,
+        bool rifleSized = false)
     {
         ArgumentNullException.ThrowIfNull(world);
         if (!world.Contains(center))
@@ -39,8 +44,9 @@ public static class Impacts
         var minimumDimension = Math.Min(world.Width, world.Height);
         var craterRadius = 2 + (int)MathF.Round(minimumDimension * 0.18f * MathF.Pow(magnitude, 1.7f));
         craterRadius = (int)MathF.Round(craterRadius * sizeMultiplier);
-        var shockRadius = craterRadius * 3;
-        ApplyCrater(world, center, craterRadius, magnitude);
+        if (rifleSized) craterRadius = 1;
+        var shockRadius = rifleSized ? 1 : craterRadius * 3;
+        ApplyCrater(world, center, craterRadius, magnitude, rifleSized);
 
         var fragmentCount = (int)MathF.Round(magnitude * 10f);
         if (magnitude >= 0.2f)
@@ -63,11 +69,22 @@ public static class Impacts
 
         TerrainClassifier.RebuildLandforms(world);
         Hydrology.RebuildFreshwater(world);
-        world.ImpactWaves.Add(new ImpactWaveActivity(
+        var wave = new ImpactWaveActivity(
             center,
             shockRadius,
-            0.65f + magnitude * 1.35f,
-            magnitude));
+            (0.65f + magnitude * 1.35f) * (rifleSized ? 0.16f : 1),
+            magnitude);
+        if (rifleSized)
+        {
+            wave.LimitedTiles = [];
+            for (var dy = -1; dy <= 1; dy++)
+            for (var dx = -1; dx <= 1; dx++)
+            {
+                var tile = world.OffsetTile(center, new(dx, dy));
+                if (world.Contains(tile)) wave.LimitedTiles.Add(tile);
+            }
+        }
+        world.ImpactWaves.Add(wave);
         return new MeteorImpactResult(center, requestedMagnitude, craterRadius, shockRadius, fragmentCount);
     }
 
@@ -100,6 +117,14 @@ public static class Impacts
         float thickness = 0.85f)
     {
         ArgumentNullException.ThrowIfNull(world);
+        if (wave.Kind is WaveKind.Impact && wave.MaximumRadius <= 1)
+        {
+            var nearby = false;
+            for (var dy = -1; dy <= 1 && !nearby; dy++)
+            for (var dx = -1; dx <= 1; dx++)
+                if (world.OffsetTile(wave.Center, new(dx, dy)) == position) { nearby = true; break; }
+            if (!nearby) return false;
+        }
         var distance = DistortedDistance(world, wave.Center, position);
         return Math.Abs(distance - wave.CurrentRadius) <= thickness;
     }
@@ -108,16 +133,17 @@ public static class Impacts
         SimulationWorld world,
         GridPosition center,
         int radius,
-        float magnitude)
+        float magnitude,
+        bool rifleSized = false)
     {
-        var reach = Math.Max(radius + 1, (int)MathF.Ceiling(radius * 2.3f));
+        var reach = rifleSized ? 1 : Math.Max(radius + 1, (int)MathF.Ceiling(radius * 2.3f));
         var depth = 0.10f + magnitude * 0.55f;
         var rimHeight = 0.04f + magnitude * 0.20f;
         var complex = magnitude >= 0.5f;
         for (var offsetY = -reach; offsetY <= reach; offsetY++)
         {
             var y = center.Y + offsetY;
-            if (y < 0 || y >= world.Height)
+            if (!rifleSized && (y < 0 || y >= world.Height))
             {
                 continue;
             }
@@ -125,9 +151,10 @@ public static class Impacts
             for (var offsetX = -reach; offsetX <= reach; offsetX++)
             {
                 var x = Mod(center.X + offsetX, world.Width);
-                var position = new GridPosition(x, y);
+                var position = rifleSized ? world.OffsetTile(center, new(offsetX, offsetY)) : new GridPosition(x, y);
+                if (!world.Contains(position)) continue;
                 var distance = MathF.Sqrt(offsetX * offsetX + offsetY * offsetY);
-                var irregularity = 0.92f + HashUnit(world.Seed ^ 0xD6E8FEB86659FD93UL, x, y) * 0.16f;
+                var irregularity = 0.92f + HashUnit(world.Seed ^ 0xD6E8FEB86659FD93UL, position.X, position.Y) * 0.16f;
                 var normalized = distance / (radius * irregularity);
                 if (normalized > 2.3f)
                 {
@@ -286,6 +313,15 @@ public static class Impacts
     private static IEnumerable<(GridPosition Position, float Distance)> WaveAnnulus(
         SimulationWorld world, ImpactWaveActivity wave, float previousRadius, float currentRadius)
     {
+        if (wave.LimitedTiles is { } tiles)
+        {
+            foreach (var tile in tiles)
+            {
+                var distance = DistortedDistance(world, wave.Center, tile);
+                if (distance > previousRadius && distance <= currentRadius) yield return (tile, distance);
+            }
+            yield break;
+        }
         if (world.Body is WorldBody.Planetoid)
         {
             var front = wave.PlanetoidFront ??= BuildPlanetoidFront(world, wave);

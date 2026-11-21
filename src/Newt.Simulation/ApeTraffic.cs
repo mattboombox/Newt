@@ -2,9 +2,13 @@ namespace Newt.Simulation;
 
 public sealed partial class SimulationWorld
 {
+    private bool AreFriendlyMilitary(int first, int second) =>
+        IsApeMilitary(_species[first]) && IsApeMilitary(_species[second]) &&
+        !AreWarEnemies(first, second) && !AreRivalApeFactions(first, second);
+
     private bool CanMoverDisplace(int mover, int blocker) =>
         CanDisplace(_apeSettlerTargets.ContainsKey(_critterIds[mover].Value)
-            ? CritterSpecies.ApeTrader : _species[mover], _species[blocker]) || IsDefenseSquadLeaderOf(mover, blocker);
+            ? CritterSpecies.ApeTrader : _species[mover], _species[blocker]) || AreFriendlyMilitary(mover, blocker);
 
     private bool CanBeShovedOnto(int blocker, int tile) =>
         CanOccupyMegaWall(_species[blocker], tile) &&
@@ -52,6 +56,7 @@ public sealed partial class SimulationWorld
         if ((!_apeSettlerTargets.ContainsKey(_critterIds[mover].Value) &&
                 _species[mover] is not (CritterSpecies.ApeWarrior or CritterSpecies.ApeRoyalGuard or CritterSpecies.ApeBomber or CritterSpecies.ApeTrader or CritterSpecies.ApeTraderSailor)) ||
             blocker < 0 || blocker == mover ||
+            (fromTile is null && !ArePathNeighbors(origin, destination)) ||
             _species[blocker] is CritterSpecies.ApeTrader or CritterSpecies.ApeTraderSailor ||
             !CanMoverDisplace(mover, blocker) ||
             IsCaughtInMegaSpiderWeb(mover) || IsCaughtInMegaSpiderWeb(blocker) ||

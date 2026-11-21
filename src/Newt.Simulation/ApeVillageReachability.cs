@@ -50,13 +50,8 @@ public sealed partial class SimulationWorld
         foreach (var structure in EnumerateConnectedApeStructureTiles(village))
         {
             goals.Add(structure);
-            var position = GetPosition(structure);
-            foreach (var direction in MovementDirections)
-            {
-                var y = position.Y + direction.Y;
-                if (y >= 0 && y < Height)
-                    goals.Add(GetIndex(new GridPosition(Mod(position.X + direction.X, Width), y)));
-            }
+            foreach (var neighbor in RoadNeighbors(structure))
+                goals.Add(neighbor);
         }
 
         var visits = _apeReachabilityVisits ??= new int[_terrain.Length];
@@ -74,13 +69,8 @@ public sealed partial class SimulationWorld
         {
             if (goals.Contains(tile))
                 return true;
-            var position = GetPosition(tile);
-            foreach (var direction in MovementDirections)
+            foreach (var neighbor in RoadNeighbors(tile))
             {
-                var y = position.Y + direction.Y;
-                if (y < 0 || y >= Height)
-                    continue;
-                var neighbor = GetIndex(new GridPosition(Mod(position.X + direction.X, Width), y));
                 // Occupants are temporary obstacles; habitat restrictions determine stranding.
                 if (visits[neighbor] == generation || !CanCritterLiveOn(index, neighbor))
                     continue;

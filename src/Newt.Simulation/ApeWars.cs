@@ -315,7 +315,7 @@ public sealed partial class SimulationWorld
 
     private int[] BuildWarDistances(int target) => BuildWarDistances([target]);
 
-    private int[] BuildWarDistances(IEnumerable<int> targets)
+    private int[] BuildWarDistances(IEnumerable<int> targets, int maxDistance = int.MaxValue)
     {
         var distances = new int[_terrain.Length];
         Array.Fill(distances, -1);
@@ -326,12 +326,15 @@ public sealed partial class SimulationWorld
             queue.Enqueue(target);
         }
         while (queue.TryDequeue(out var tile))
+        {
+            if (distances[tile] >= maxDistance) continue;
             foreach (var next in RoadNeighbors(tile))
                 if (distances[next] < 0 && IsWarTransitTile(next))
                 {
                     distances[next] = distances[tile] + 1;
                     queue.Enqueue(next);
                 }
+        }
         return distances;
     }
 
@@ -388,7 +391,9 @@ public sealed partial class SimulationWorld
                 if (war.CivilWar && Tick % TicksPerSecond == 0)
                     RefreshCivilWarRoutes(war);
                 else if (!war.CivilWar && Tick % ((war.BloodWar ? 1 : 30) * TicksPerSecond) == 0)
+                {
                     war.Distances = war.BloodWar ? BuildWarDistances(GetBloodWarTargets(war)) : BuildWarDistances(war.Defender);
+                }
                 continue;
             }
             // Simultaneous defeat ends in a draw; there is no victor to receive spoils.
@@ -527,7 +532,7 @@ public sealed partial class SimulationWorld
         for (var dy = -6; dy <= 6; dy++)
             for (var dx = -6; dx <= 6; dx++)
             {
-                var candidate = new GridPosition(Mod(position.X + dx, Width), position.Y + dy);
+                var candidate = OffsetTile(position, new(dx, dy));
                 if (!Contains(candidate)) continue;
                 var tile = GetIndex(candidate);
                 var enemy = _occupants[tile];
@@ -543,7 +548,12 @@ public sealed partial class SimulationWorld
             TryPatrolWarVillage(index, war.Defender, reserved);
             return null;
         }
-        int Distance(int tile) => target >= 0 ? WrappedManhattanDistance(GetPosition(tile), GetPosition(target)) :
+        // Flat atlas distances jump at cube seams; intercept along surface routes.
+        var targetDistances = target >= 0 && Body == WorldBody.Planetoid
+            ? BuildWarDistances([target], 16) : null;
+        int Distance(int tile) => targetDistances is not null
+            ? targetDistances[tile] < 0 ? int.MaxValue : targetDistances[tile]
+            : target >= 0 ? WrappedManhattanDistance(GetPosition(tile), GetPosition(target)) :
             distances[tile] < 0 ? int.MaxValue : distances[tile];
         var best = neighbors.Where(tile => CanCritterLiveOn(index, tile) && _occupants[tile] < 0 &&
                 reserved?.Contains(GetPosition(tile)) is not true && Distance(tile) < Distance(current))
@@ -555,6 +565,7 @@ public sealed partial class SimulationWorld
             {
                 var blocker = _occupants[tile];
                 if (blocker < 0 || AreWarEnemies(index, blocker)) continue;
+                if (AreFriendlyMilitary(index, blocker) && TrySwapPastMovementBlocker(index, tile, reserved)) return null;
                 if (TryShoveMovementBlocker(index, tile, reserved))
                 {
                     best = tile;
@@ -574,18 +585,7 @@ public sealed partial class SimulationWorld
 
     private void TryPatrolWarVillage(int index, int village, IReadOnlySet<GridPosition>? reserved)
     {
-        const int patrolRadius = 4;
-        var home = GetPosition(village);
-        var current = GetIndex(_positions[index]);
-        var currentDistance = WrappedManhattanDistance(_positions[index], home);
-        var candidates = RoadNeighbors(current).Where(tile => _occupants[tile] < 0 &&
-            CanCritterLiveOn(index, tile) && reserved?.Contains(GetPosition(tile)) is not true &&
-            (currentDistance > patrolRadius
-                ? WrappedManhattanDistance(GetPosition(tile), home) < currentDistance
-                : WrappedManhattanDistance(GetPosition(tile), home) <= patrolRadius)).ToArray();
-        if (candidates.Length == 0) return;
-        var next = candidates[NextInt(candidates.Length)];
-        MoveCritter(index, next, GetPosition(next), activateTeleporter: false);
+        MoveVillagePerimeterPatrol(index, village, GetApeWarriorSquadNumber(_critterIds[index]) ?? 1, reserved);
     }
 
     private int FindWarSidestep(int index, int current, Func<int, int> distance,

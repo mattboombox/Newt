@@ -61,7 +61,7 @@ public sealed class ApeOptimizationTests
         world.AddCritter(CritterSpecies.Ape, new(2, 2));
         var find = typeof(SimulationWorld).GetMethod("FindApeSettlerPath", PrivateInstance)!;
         Queue<int>? Search(int destination) => (Queue<int>?)find.Invoke(world,
-            [0, 42, destination, null, null, CritterSpecies.Ape]);
+            [0, 42, destination, null, null, CritterSpecies.Ape, false]);
         var first = Search(46)!.ToArray();
         Assert.Equal(4, first.Length);
         Assert.Equal(46, first[^1]);
@@ -80,7 +80,7 @@ public sealed class ApeOptimizationTests
         var world = new SimulationWorld(320, 192, Terrain.Plains, seed: 1);
         world.AddCritter(CritterSpecies.Ape, new(2, 2));
         var find = typeof(SimulationWorld).GetMethod("FindApeSettlerPath", PrivateInstance)!;
-        object?[] args = [0, 642, 646, null, null, CritterSpecies.Ape];
+        object?[] args = [0, 642, 646, null, null, CritterSpecies.Ape, false];
         for (var i = 0; i < 20; i++) find.Invoke(world, args);
         var before = GC.GetAllocatedBytesForCurrentThread();
         for (var i = 0; i < 100; i++) find.Invoke(world, args);

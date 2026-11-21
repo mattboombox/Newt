@@ -16,7 +16,7 @@ public sealed partial class SimulationWorld
             if (Math.Max(Math.Abs(dx), Math.Abs(dy)) != radius ||
                 origin.Y + dy < 0 || origin.Y + dy >= Height)
                 continue;
-            var position = new GridPosition(Mod(origin.X + dx, Width), origin.Y + dy);
+            var position = OffsetTile(origin, new(dx, dy));
             var tile = GetIndex(position);
             if (!CanLiveOn(CritterSpecies.UndeadWarrior, tile))
                 continue;

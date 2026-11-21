@@ -165,7 +165,7 @@ public sealed partial class SimulationWorld
             {
                 if (Math.Max(Math.Abs(dx), Math.Abs(dy)) != radius)
                     continue;
-                var position = new GridPosition(Mod(fabricator.X + dx, Width), fabricator.Y + dy);
+                var position = OffsetTile(fabricator, new(dx, dy));
                 if (!Contains(position) || IsCustodianFabricator(position) ||
                     Body is WorldBody.Nexus && !NexusLayout.Contains(this, position))
                     continue;
@@ -205,7 +205,7 @@ public sealed partial class SimulationWorld
                 _energy[index] = maximumEnergy;
                 return null;
             }
-            if (Body is WorldBody.Nexus)
+            if (Body is WorldBody.Nexus or WorldBody.Planetoid)
             {
                 if (NextNexusCustodianStep(index, fabricator, stopAdjacent: true, reservedPrey) is { } next)
                     MoveCritter(index, GetIndex(next), next, activateTeleporter: false);
@@ -215,7 +215,7 @@ public sealed partial class SimulationWorld
             var bestDistance = int.MaxValue;
             foreach (var direction in MovementDirections)
             {
-                var candidate = new GridPosition(Mod(damagedPosition.X + direction.X, Width), damagedPosition.Y + direction.Y);
+                var candidate = OffsetTile(damagedPosition, direction);
                 if (!Contains(candidate) || !CanLiveOn(CritterSpecies.Custodian, GetIndex(candidate)) || _occupants[GetIndex(candidate)] >= 0 ||
                     reservedPrey?.Contains(candidate) is true)
                     continue;
@@ -324,11 +324,27 @@ public sealed partial class SimulationWorld
         var goal = repairSite ?? (state.Portal >= 0 ? GetPosition(state.Portal) :
             new GridPosition(Mod(current.X + east, Width), arcY));
 
+        if (Body == WorldBody.Planetoid)
+        {
+            if (NextNexusCustodianStep(index, goal, repairSite is not null, reservedPrey) is { } step)
+            {
+                MoveCritter(index, GetIndex(step), step);
+                if (GetIndex(step) == state.Portal && _positions[index] != step)
+                {
+                    state.Portal = -1;
+                    state.NextPortalVisit = state.Step + CustodianPortalPatrolSteps;
+                }
+            }
+            state.Step++;
+            _custodianPatrols[id] = state;
+            return null;
+        }
+
         GridPosition? best = null;
         var bestScore = int.MaxValue;
         foreach (var direction in MovementDirections)
         {
-            var candidate = new GridPosition(Mod(current.X + direction.X, Width), current.Y + direction.Y);
+            var candidate = OffsetTile(current, direction);
             if (candidate.Y < 0 || candidate.Y >= Height ||
                 !CanLiveOn(CritterSpecies.Custodian, GetIndex(candidate)) ||
                 candidate == repairSite ||
@@ -364,7 +380,7 @@ public sealed partial class SimulationWorld
         var target = GetIndex(goal);
         if (!_nexusCustodianRoutes.TryGetValue(id, out var route) || route.Goal != target ||
             route.StopAdjacent != stopAdjacent || route.Current != current ||
-            !route.Steps.TryPeek(out var next) || IsBlocked(next))
+            !route.Steps.TryPeek(out var next) || !ArePathNeighbors(current, next) || IsBlocked(next))
         {
             var steps = FindApeSettlerPath(index, current, target, reservedPrey: reservedPrey,
                 pathSpecies: CritterSpecies.Custodian, stopAdjacent: stopAdjacent);

@@ -679,10 +679,10 @@ public sealed partial class SimulationWorld
             var current = GetPosition(_lakeInspectionTiles[cursor]);
             foreach (var direction in CardinalDirections)
             {
-                var y = current.Y + direction.Y;
+                var y = OffsetTile(current, direction).Y;
                 if (y >= 0 && y < Height)
                 {
-                    Visit(y * Width + Mod(current.X + direction.X, Width));
+                    Visit(GetIndex(OffsetTile(current, direction)));
                 }
             }
         }
@@ -2161,14 +2161,14 @@ public sealed partial class SimulationWorld
         for (var offsetY = -ApeVillageSearchRadius; offsetY <= ApeVillageSearchRadius; offsetY++)
         {
             var y = current.Y + offsetY;
-            if (y < 0 || y >= Height)
+            if (Body != WorldBody.Planetoid && (y < 0 || y >= Height))
             {
                 continue;
             }
             var horizontalReach = ApeVillageSearchRadius - Math.Abs(offsetY);
             for (var offsetX = -horizontalReach; offsetX <= horizontalReach; offsetX++)
             {
-                var candidate = new GridPosition(Mod(current.X + offsetX, Width), y);
+                var candidate = OffsetTile(current, new(offsetX, offsetY));
                 var villageTile = GetIndex(candidate);
                 if (!TryGetApeVillageAuxiliarySite(
                         apeIndex,
@@ -2230,12 +2230,12 @@ public sealed partial class SimulationWorld
                 ? MovementDirections : CardinalDirections;
             foreach (var direction in directions)
             {
-                var y = village.Y + direction.Y;
+                var y = OffsetTile(village, direction).Y;
                 if (y < 0 || y >= Height)
                 {
                     continue;
                 }
-                var candidate = new GridPosition(Mod(village.X + direction.X, Width), y);
+                var candidate = OffsetTile(village, direction);
                 var candidateTile = GetIndex(candidate);
                 if (_occupants[candidateTile] >= 0 || HasBlockingApeStructure(candidateTile) ||
                     _teleporters.Contains(candidateTile) ||
@@ -2764,9 +2764,9 @@ public sealed partial class SimulationWorld
         var village = GetPosition(villageTile);
         return MovementDirections.Any(direction =>
         {
-            var y = village.Y + direction.Y;
+            var y = OffsetTile(village, direction).Y;
             return y >= 0 && y < Height &&
-                _terrain[GetIndex(new GridPosition(Mod(village.X + direction.X, Width), y))] is Terrain.Shallows;
+                _terrain[GetIndex(OffsetTile(village, direction))] is Terrain.Shallows;
         });
     }
 
@@ -2876,13 +2876,13 @@ public sealed partial class SimulationWorld
             var structure = GetPosition(structureTile);
             foreach (var direction in MovementDirections)
             {
-                var y = structure.Y + direction.Y;
+                var y = OffsetTile(structure, direction).Y;
                 if (y < 0 || y >= Height)
                 {
                     continue;
                 }
 
-                var tileIndex = GetIndex(new GridPosition(Mod(structure.X + direction.X, Width), y));
+                var tileIndex = GetIndex(OffsetTile(structure, direction));
                 if (_occupants[tileIndex] < 0 && !_apeStructures.ContainsKey(tileIndex) &&
                     CanLiveOn(CritterSpecies.Ape, tileIndex))
                 {
@@ -3061,12 +3061,12 @@ public sealed partial class SimulationWorld
                 ? MovementDirections : CardinalDirections;
             foreach (var direction in directions)
             {
-                var y = structurePosition.Y + direction.Y;
+                var y = OffsetTile(structurePosition, direction).Y;
                 if (y < 0 || y >= Height)
                 {
                     continue;
                 }
-                var candidate = new GridPosition(Mod(structurePosition.X + direction.X, Width), y);
+                var candidate = OffsetTile(structurePosition, direction);
                 var candidateTile = GetIndex(candidate);
                 if (_occupants[candidateTile] < 0 && !HasBlockingApeStructure(candidateTile) &&
                     !_teleporters.Contains(candidateTile) &&
@@ -3573,14 +3573,14 @@ public sealed partial class SimulationWorld
         for (var offsetY = -WolfDenSearchRadius; offsetY <= WolfDenSearchRadius; offsetY++)
         {
             var y = current.Y + offsetY;
-            if (y < 0 || y >= Height)
+            if (Body != WorldBody.Planetoid && (y < 0 || y >= Height))
             {
                 continue;
             }
             var horizontalReach = WolfDenSearchRadius - Math.Abs(offsetY);
             for (var offsetX = -horizontalReach; offsetX <= horizontalReach; offsetX++)
             {
-                var candidate = new GridPosition(Mod(current.X + offsetX, Width), y);
+                var candidate = OffsetTile(current, new(offsetX, offsetY));
                 var tileIndex = GetIndex(candidate);
                 var occupant = _occupants[tileIndex];
                 if ((occupant >= 0 && occupant != wolfIndex) ||
@@ -3749,7 +3749,7 @@ public sealed partial class SimulationWorld
         for (var offsetY = -SquidEggHatchRadius; offsetY <= SquidEggHatchRadius; offsetY++)
         {
             var y = eggPosition.Y + offsetY;
-            if (y < 0 || y >= Height)
+            if (Body != WorldBody.Planetoid && (y < 0 || y >= Height))
             {
                 continue;
             }
@@ -3762,7 +3762,7 @@ public sealed partial class SimulationWorld
                     continue;
                 }
 
-                var occupant = _occupants[y * Width + Mod(eggPosition.X + offsetX, Width)];
+                var occupant = _occupants[GetIndex(OffsetTile(eggPosition, new(offsetX, offsetY)))];
                 if (occupant >= 0 && CanPursuePreyAtDistance(
                     CritterSpecies.Squid,
                     _species[occupant],
@@ -3967,7 +3967,7 @@ public sealed partial class SimulationWorld
         for (var offsetY = -searchRadius; offsetY <= searchRadius; offsetY++)
         {
             var y = origin.Y + offsetY;
-            if (y < 0 || y >= Height)
+            if (Body != WorldBody.Planetoid && (y < 0 || y >= Height))
             {
                 continue;
             }
@@ -3978,7 +3978,7 @@ public sealed partial class SimulationWorld
                 {
                     continue;
                 }
-                var candidate = new GridPosition(Mod(origin.X + offsetX, Width), y);
+                var candidate = OffsetTile(origin, new(offsetX, offsetY));
                 var candidateIndex = GetIndex(candidate);
                 if (_occupants[candidateIndex] >= 0 || !CanLiveOn(species, candidateIndex))
                 {
@@ -4359,7 +4359,7 @@ public sealed partial class SimulationWorld
         for (var offsetY = -perceptionRadius; offsetY <= perceptionRadius; offsetY++)
         {
             var y = current.Y + offsetY;
-            if (y < 0 || y >= Height)
+            if (Body != WorldBody.Planetoid && (y < 0 || y >= Height))
             {
                 continue;
             }
@@ -4372,7 +4372,7 @@ public sealed partial class SimulationWorld
                     continue;
                 }
 
-                var candidate = new GridPosition(Mod(current.X + offsetX, Width), y);
+                var candidate = OffsetTile(current, new(offsetX, offsetY));
                 var candidateIndex = GetIndex(candidate);
                 if (_occupants[candidateIndex] >= 0 ||
                     !CanFeedFromEnvironment(species, candidateIndex))
@@ -4748,7 +4748,7 @@ public sealed partial class SimulationWorld
         var apeId = _critterIds[apeIndex].Value;
         var currentTile = GetIndex(_positions[apeIndex]);
         if (!_apeWorkerPaths.TryGetValue(apeId, out var route) || route.TargetTile != targetTile ||
-            route.Tiles.Count == 0 || GetApeSettlerPathEstimate(currentTile, route.Tiles.Peek()) != 1 ||
+            route.Tiles.Count == 0 || !ArePathNeighbors(currentTile, route.Tiles.Peek()) ||
             !CanLiveOn(_species[apeIndex], route.Tiles.Peek()))
         {
             var path = FindApeSettlerPath(apeIndex, currentTile, targetTile, pathSpecies: _species[apeIndex]);
@@ -4762,6 +4762,8 @@ public sealed partial class SimulationWorld
         }
 
         var nextTile = route.Tiles.Peek();
+        if (reservedPrey?.Contains(GetPosition(nextTile)) is true)
+            return null;
         if (_occupants[nextTile] >= 0 && !TryShoveMovementBlocker(apeIndex, nextTile, reservedPrey))
         {
             _apeWorkerPaths.Remove(apeId);
@@ -4839,7 +4841,7 @@ public sealed partial class SimulationWorld
         var currentTile = GetIndex(_positions[apeIndex]);
         if (!_apeSettlerPaths.TryGetValue(apeId, out var route) ||
             route.TargetVillageTile != targetVillageTile || route.Tiles.Count == 0 ||
-            GetApeSettlerPathEstimate(currentTile, route.Tiles.Peek()) != 1 ||
+            !ArePathNeighbors(currentTile, route.Tiles.Peek()) ||
             !IsApeSettlerTransitTile(apeIndex, route.Tiles.Peek()))
         {
             // An occupied center can be founded from a neighboring tile.
@@ -4913,12 +4915,7 @@ public sealed partial class SimulationWorld
             var position = GetPosition(node.Tile);
             foreach (var direction in MovementDirections)
             {
-                var y = position.Y + direction.Y;
-                if (y < 0 || y >= Height)
-                {
-                    continue;
-                }
-                var neighborTile = GetIndex(new GridPosition(Mod(position.X + direction.X, Width), y));
+                if (!TryGetPathNeighbor(position, direction, out var neighborTile)) continue;
                 var nextSteps = node.Steps + 1;
                 if (!(pathSpecies is { } species ? CanLiveOn(species, neighborTile) :
                         !sailorRoute ? IsApeSettlerTransitTile(apeIndex, neighborTile) :
@@ -4955,12 +4952,16 @@ public sealed partial class SimulationWorld
         }
         return new Queue<int>(reversePath);
 
-        int Estimate(int tile) => sailorRoute ? 0
-            : Math.Max(0, GetApeSettlerPathEstimate(tile, targetTile) - (stopAdjacent ? 1 : 0));
+        int Estimate(int tile) => sailorRoute ? 0 : Math.Max(0,
+            (Body == WorldBody.Planetoid ? SurfacePathLowerBound(tile, targetTile)
+                : GetApeSettlerPathEstimate(tile, targetTile)) - (stopAdjacent ? 1 : 0));
     }
 
     private int GetApeSettlerPathEstimate(int firstTile, int secondTile)
     {
+        if (Body == WorldBody.Planetoid)
+            return firstTile == secondTile ? 0 : ArePathNeighbors(firstTile, secondTile) ? 1
+                : Math.Max(2, WrappedManhattanDistance(GetPosition(firstTile), GetPosition(secondTile)));
         var first = GetPosition(firstTile);
         var second = GetPosition(secondTile);
         var horizontal = Math.Abs(first.X - second.X);
@@ -5009,13 +5010,13 @@ public sealed partial class SimulationWorld
         var hasAdjacentFoliage = false;
         foreach (var direction in MovementDirections)
         {
-            var y = current.Y + direction.Y;
+            var y = OffsetTile(current, direction).Y;
             if (y < 0 || y >= Height)
             {
                 continue;
             }
 
-            var tileIndex = y * Width + Mod(current.X + direction.X, Width);
+            var tileIndex = GetIndex(OffsetTile(current, direction));
             if (CanCritterLiveOn(critterIndex, tileIndex) &&
                 IsApeFoliageTile(tileIndex) && HasNaturalTileNutrition(tileIndex))
             {
@@ -5115,12 +5116,12 @@ public sealed partial class SimulationWorld
             var position = GetPosition(structureTile);
             foreach (var direction in CardinalDirections.Append(new GridPosition(0, 0)))
             {
-                var y = position.Y + direction.Y;
+                var y = OffsetTile(position, direction).Y;
                 if (y < 0 || y >= Height)
                 {
                     continue;
                 }
-                var tile = GetIndex(new GridPosition(Mod(position.X + direction.X, Width), y));
+                var tile = GetIndex(OffsetTile(position, direction));
                 if (CanLiveOn(CritterSpecies.ApeSailor, tile))
                 {
                     goals.Add(tile);
@@ -5136,7 +5137,7 @@ public sealed partial class SimulationWorld
         if (!_apeSailorReturnPaths.TryGetValue(sailorId.Value, out var route) ||
             route.VillageTile != villageTile || route.Tiles.Count == 0 ||
             !goals.Contains(route.Tiles.Last()) ||
-            GetApeSettlerPathEstimate(current, route.Tiles.Peek()) != 1 ||
+            !ArePathNeighbors(current, route.Tiles.Peek()) ||
             !CanLiveOn(CritterSpecies.ApeSailor, route.Tiles.Peek()) ||
             reservedPrey?.Contains(GetPosition(route.Tiles.Peek())) is true ||
             (_occupants[route.Tiles.Peek()] >= 0 &&
@@ -5256,6 +5257,8 @@ public sealed partial class SimulationWorld
         int structureTile,
         IReadOnlySet<GridPosition>? reservedPrey)
     {
+        if (Body == WorldBody.Planetoid)
+            return TryMoveAlongSurfacePath(critterIndex, structureTile, reservedPrey);
         var current = _positions[critterIndex];
         var target = new GridPosition(structureTile % Width, structureTile / Width);
         var bestDistance = WrappedManhattanDistance(current, target);
@@ -5304,6 +5307,8 @@ public sealed partial class SimulationWorld
         int denTile,
         IReadOnlySet<GridPosition>? reservedPrey)
     {
+        if (Body == WorldBody.Planetoid)
+            return TryMoveAlongSurfacePath(critterIndex, denTile, reservedPrey);
         var current = _positions[critterIndex];
         var target = new GridPosition(denTile % Width, denTile / Width);
         var bestDistance = WrappedManhattanDistance(current, target);
@@ -5390,7 +5395,7 @@ public sealed partial class SimulationWorld
             offsetY++)
         {
             var y = current.Y + offsetY;
-            if (y < 0 || y >= Height)
+            if (Body != WorldBody.Planetoid && (y < 0 || y >= Height))
             {
                 continue;
             }
@@ -5403,7 +5408,7 @@ public sealed partial class SimulationWorld
                     continue;
                 }
 
-                var position = new GridPosition(Mod(current.X + offsetX, Width), y);
+                var position = OffsetTile(current, new(offsetX, offsetY));
                 var occupant = _occupants[GetIndex(position)];
                 if (occupant >= 0 &&
                     CanEatInCurrentContext(occupant, critterIndex) &&
@@ -5499,7 +5504,7 @@ public sealed partial class SimulationWorld
             offsetY++)
         {
             var y = current.Y + offsetY;
-            if (y < 0 || y >= Height)
+            if (Body != WorldBody.Planetoid && (y < 0 || y >= Height))
             {
                 continue;
             }
@@ -5512,7 +5517,7 @@ public sealed partial class SimulationWorld
                     continue;
                 }
 
-                var position = new GridPosition(Mod(current.X + offsetX, Width), y);
+                var position = OffsetTile(current, new(offsetX, offsetY));
                 var occupant = _occupants[GetIndex(position)];
                 if (occupant >= 0 && _species[occupant] is CritterSpecies.MegaToad)
                 {
@@ -5599,7 +5604,7 @@ public sealed partial class SimulationWorld
             offsetY++)
         {
             var y = current.Y + offsetY;
-            if (y < 0 || y >= Height)
+            if (Body != WorldBody.Planetoid && (y < 0 || y >= Height))
             {
                 continue;
             }
@@ -5607,7 +5612,7 @@ public sealed partial class SimulationWorld
             var horizontalReach = NewtFreshwaterPerceptionRadius - Math.Abs(offsetY);
             for (var offsetX = -horizontalReach; offsetX <= horizontalReach; offsetX++)
             {
-                var candidate = new GridPosition(Mod(current.X + offsetX, Width), y);
+                var candidate = OffsetTile(current, new(offsetX, offsetY));
                 if (!CanFeedFromEnvironment(_species[critterIndex], GetIndex(candidate)))
                 {
                     continue;
@@ -5715,7 +5720,7 @@ public sealed partial class SimulationWorld
         for (var offsetY = -perceptionRadius; offsetY <= perceptionRadius; offsetY++)
         {
             var y = current.Y + offsetY;
-            if (y < 0 || y >= Height)
+            if (Body != WorldBody.Planetoid && (y < 0 || y >= Height))
             {
                 continue;
             }
@@ -5726,7 +5731,7 @@ public sealed partial class SimulationWorld
                 {
                     continue;
                 }
-                var candidate = new GridPosition(Mod(current.X + offsetX, Width), y);
+                var candidate = OffsetTile(current, new(offsetX, offsetY));
                 if (reservedPrey?.Contains(candidate) is true)
                 {
                     continue;
@@ -6257,6 +6262,9 @@ public sealed partial class SimulationWorld
     {
         var predator = _positions[predatorIndex];
         var prey = _positions[preyIndex];
+        if (Body == WorldBody.Planetoid)
+            return ArePathNeighbors(GetIndex(predator), GetIndex(prey)) ? 1
+                : WrappedManhattanDistance(predator, prey);
         var dx = Math.Abs(predator.X - prey.X);
         dx = Math.Min(dx, Width - dx);
         var dy = Math.Abs(predator.Y - prey.Y);
@@ -6418,6 +6426,8 @@ public sealed partial class SimulationWorld
 
         var predator = _positions[predatorIndex];
         var prey = _positions[preyIndex];
+        if (Body == WorldBody.Planetoid)
+            return ArePathNeighbors(GetIndex(predator), GetIndex(prey));
         var horizontal = Math.Abs(predator.X - prey.X);
         horizontal = Math.Min(horizontal, Width - horizontal);
         return Math.Max(horizontal, Math.Abs(predator.Y - prey.Y)) == 1;
@@ -6562,12 +6572,12 @@ public sealed partial class SimulationWorld
         var position = new GridPosition(tileIndex % Width, tileIndex / Width);
         foreach (var direction in CardinalDirections)
         {
-            var y = position.Y + direction.Y;
+            var y = OffsetTile(position, direction).Y;
             if (y < 0 || y >= Height)
             {
                 continue;
             }
-            var candidateTile = y * Width + Mod(position.X + direction.X, Width);
+            var candidateTile = GetIndex(OffsetTile(position, direction));
             if (_terrain[candidateTile] is not Terrain.Beach &&
                 IsNewtFeedingTile(candidateTile) &&
                 (!IsFreshwaterTile(candidateTile) || CanFeedInFreshwater(species)) &&
@@ -6783,6 +6793,17 @@ public sealed partial class SimulationWorld
 
     private int WrappedManhattanDistance(GridPosition first, GridPosition second)
     {
+        if (Body == WorldBody.Planetoid)
+        {
+            if (first == second) return 0;
+            foreach (var direction in CardinalDirections)
+                if (OffsetTile(first, direction) == second) return 1;
+            // Surface proximity for ranking and perception, independent of the atlas.
+            // Route searches use the neighbor graph rather than this approximation.
+            var dot = System.Numerics.Vector3.Dot(GetPlanetoidTileDirection(first), GetPlanetoidTileDirection(second));
+            return Math.Max(2, (int)MathF.Ceiling(MathF.Acos(Math.Clamp(dot, -1f, 1f)) *
+                PlanetoidLayout.FaceSize(Width) / (MathF.PI / 2)));
+        }
         var horizontal = Math.Abs(first.X - second.X);
         horizontal = Math.Min(horizontal, Width - horizontal);
         return horizontal + Math.Abs(first.Y - second.Y);
@@ -7281,13 +7302,13 @@ public sealed partial class SimulationWorld
             var arrivals = new List<int>();
             foreach (var direction in MovementDirections)
             {
-                var y = portal.Y + direction.Y;
+                var y = OffsetTile(portal, direction).Y;
                 if (y < 0 || y >= Height)
                 {
                     continue;
                 }
 
-                var candidate = new GridPosition(Mod(portal.X + direction.X, Width), y);
+                var candidate = OffsetTile(portal, direction);
                 var candidateTile = GetIndex(candidate);
                 if (_occupants[candidateTile] < 0 && !_teleporters.Contains(candidateTile) &&
                     _terrain[candidateTile] is not Terrain.MegaWall &&
@@ -7338,12 +7359,12 @@ public sealed partial class SimulationWorld
             var direction = directionIndex == MovementDirections.Length
                 ? new GridPosition(0, 0)
                 : MovementDirections[directionIndex];
-            var y = center.Y + direction.Y;
+            var y = OffsetTile(center, direction).Y;
             if (y < 0 || y >= Height)
             {
                 continue;
             }
-            var denPosition = new GridPosition(Mod(center.X + direction.X, Width), y);
+            var denPosition = OffsetTile(center, direction);
             var denTile = GetIndex(denPosition);
             if (!_wolfDenCharges.TryGetValue(denTile, out var charges) || charges <= 0)
             {
@@ -7377,12 +7398,12 @@ public sealed partial class SimulationWorld
         for (var offset = 0; offset < MovementDirections.Length; offset++)
         {
             var direction = MovementDirections[(startDirection + offset) % MovementDirections.Length];
-            var y = denPosition.Y + direction.Y;
+            var y = OffsetTile(denPosition, direction).Y;
             if (y < 0 || y >= Height)
             {
                 continue;
             }
-            var candidate = new GridPosition(Mod(denPosition.X + direction.X, Width), y);
+            var candidate = OffsetTile(denPosition, direction);
             var tileIndex = GetIndex(candidate);
             if (_occupants[tileIndex] < 0 && CanLiveOn(CritterSpecies.Wolf, tileIndex))
             {
@@ -7449,6 +7470,8 @@ public sealed partial class SimulationWorld
         RemoveSandworm(removedId.Value);
         _custodianPatrols.Remove(removedId.Value);
         _nexusCustodianRoutes.Remove(removedId.Value);
+        _surfacePaths.Remove(removedId.Value);
+        _warriorPatrolTargets.Remove(removedId.Value);
         _custodianCreatedTicks.Remove(removedId.Value);
         _lichArmy.Remove(removedId.Value);
         _traderJourneys.Remove(removedId.Value);
@@ -7686,13 +7709,13 @@ public sealed partial class SimulationWorld
         var position = new GridPosition(tileIndex % Width, tileIndex / Width);
         foreach (var direction in CardinalDirections)
         {
-            var y = position.Y + direction.Y;
+            var y = OffsetTile(position, direction).Y;
             if (y < 0 || y >= Height)
             {
                 continue;
             }
 
-            var neighborIndex = y * Width + Mod(position.X + direction.X, Width);
+            var neighborIndex = GetIndex(OffsetTile(position, direction));
             if (IsNewtFeedingTile(neighborIndex))
             {
                 return true;

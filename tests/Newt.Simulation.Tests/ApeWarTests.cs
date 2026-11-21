@@ -6,6 +6,35 @@ namespace Newt.Simulation.Tests;
 public sealed class ApeWarTests
 {
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void WarriorInterceptsEnemyAcrossPlanetoidSeam(bool defending)
+    {
+        const int size = 24;
+        var world = new SimulationWorld(3 * size, 2 * size, Terrain.Plains, seed: 17)
+        { Body = WorldBody.Planetoid, ApeVillageMergingEnabled = false };
+        for (var y = 0; y < world.Height; y++)
+        for (var x = 0; x < world.Width; x++) world.SetBiome(new(x, y), Biome.Grassland);
+        var first = new GridPosition(12, 10);
+        var second = new GridPosition(36, 10);
+        Assert.True(world.TrySpawnTestApeVillage(first));
+        Assert.True(world.TrySpawnTestApeVillage(second));
+        var start = new GridPosition(12, 0);
+        var across = PlanetoidLayout.Offset(start, 0, -1, size);
+        var enemyPosition = new GridPosition(across.X, across.Y - 2);
+        var warrior = world.AddCritter(CritterSpecies.ApeWarrior, start);
+        var enemy = world.AddCritter(CritterSpecies.ApeWarrior, enemyPosition);
+        Assert.True(world.TryAssignApeToVillage(warrior, defending ? second : first));
+        Assert.True(world.TryAssignApeToVillage(enemy, defending ? first : second));
+        Assert.True(world.TryStartApeWar(first, second));
+        var index = Enumerable.Range(0, world.CritterCount).Single(i => world.GetCritter(i).Id == warrior);
+        typeof(SimulationWorld).GetMethod("TryMoveWarApe", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(world, [index, null]);
+        Assert.True(world.TryGetCritter(warrior, out var moved));
+        Assert.Equal(across, moved.Position);
+    }
+
+    [Theory]
     [InlineData(false, false)]
     [InlineData(true, false)]
     [InlineData(true, true)]
@@ -20,7 +49,11 @@ public sealed class ApeWarTests
         {
             Assert.Null(mover.Invoke(world, [IndexOf(defender), null]));
             Assert.True(world.TryGetCritter(defender, out var snapshot));
-            Assert.InRange(Math.Abs(snapshot.Position.X - Second.X) + Math.Abs(snapshot.Position.Y - Second.Y), 0, 4);
+            var nearestBuilding = Enumerable.Range(0, world.Width * world.Height)
+                .Select(tile => new GridPosition(tile % world.Width, tile / world.Width))
+                .Where(p => world.GetApeStructureVillage(p) == Second)
+                .Min(p => Math.Abs(snapshot.Position.X - p.X) + Math.Abs(snapshot.Position.Y - p.Y));
+            Assert.InRange(nearestBuilding, 0, 4);
             visited.Add(snapshot.Position);
         }
         Assert.True(visited.Count > 1);
@@ -493,7 +526,14 @@ public sealed class ApeWarTests
         {
             Assert.Null(mover.Invoke(world, [indices[id.Value], reserved]));
             Assert.True(world.TryGetCritter(id, out var moved));
-            if (obstruction != 0)
+            if (species == CritterSpecies.ApeWarrior)
+            {
+                Assert.True(moved.Position.X > start.X, "Warriors should swap through friendly lines.");
+                Assert.DoesNotContain(moved.Position, reserved);
+                Assert.True(world.TryGetCritterAt(moved.Position, out var occupant));
+                Assert.Equal(id, occupant.Id);
+            }
+            else if (obstruction != 0)
                 Assert.Equal(start, moved.Position);
             else
             {
@@ -505,7 +545,8 @@ public sealed class ApeWarTests
         for (var i = 0; i < allies.Count; i++)
         {
             Assert.True(world.TryGetCritter(allies[i], out var ally));
-            Assert.Equal(new GridPosition(16, 9 + i), ally.Position);
+            Assert.True(world.TryGetCritterAt(ally.Position, out var occupant));
+            Assert.Equal(allies[i], occupant.Id);
         }
     }
 

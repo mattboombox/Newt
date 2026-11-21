@@ -103,10 +103,10 @@ public sealed partial class SimulationWorld
             for (var dy = -VampireColonyVillageRadius; dy <= VampireColonyVillageRadius; dy++)
             for (var dx = -VampireColonyVillageRadius; dx <= VampireColonyVillageRadius; dx++)
             {
-                var y = center.Y + dy;
-                if (y < 0 || y >= Height)
+                var position = OffsetTile(center, new(dx, dy));
+                if (!Contains(position))
                     continue;
-                var tile = GetIndex(new GridPosition(Mod(center.X + dx, Width), y));
+                var tile = GetIndex(position);
                 if (IsVampireColonySite(index, home, tile) && IsDifferentVampireHuntingArea(home, tile, huntingVillage))
                     sites.Add(tile);
             }

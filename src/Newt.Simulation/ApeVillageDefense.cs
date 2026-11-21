@@ -4,18 +4,21 @@ public sealed partial class SimulationWorld
 {
     private const int ApeDefenseSquadSize = ApeWarriorsPerMilitaryDistrict;
     private const int ApeDefenseFormationDistance = 2;
-    private const int ApeDefensePatrolDistance = 6;
 
-    private sealed class ApeDefenseSquad(int leaderId)
+    private sealed class ApeDefenseSquad(int leaderId, int number)
     {
         public int LeaderId { get; } = leaderId;
+        public int Number { get; } = number;
         public CritterId Target { get; set; }
         public bool SearchedForTarget { get; set; }
     }
 
     private Dictionary<int, Dictionary<int, ApeDefenseSquad>>? _villageDefenseSquads;
 
-    private Dictionary<int, ApeDefenseSquad> BuildVillageDefenseSquads(int village)
+    private Dictionary<int, ApeDefenseSquad> BuildVillageDefenseSquads(int village) =>
+        CreateVillageSquadRoster(village, includeWar: false);
+
+    private Dictionary<int, ApeDefenseSquad> CreateVillageSquadRoster(int village, bool includeWar)
     {
         var escorts = GetChieftainEscort(GetPosition(village));
         var squads = new Dictionary<int, ApeDefenseSquad>();
@@ -23,7 +26,7 @@ public sealed partial class SimulationWorld
         foreach (var (id, _) in _apeVillageHomes.Where(pair => pair.Value == village).OrderBy(pair => pair.Key))
         {
             if (!_critterIndicesById.TryGetValue(id, out var index) ||
-                _species[index] is not CritterSpecies.ApeWarrior || TryGetApeWar(index, out _) ||
+                _species[index] is not CritterSpecies.ApeWarrior || (!includeWar && TryGetApeWar(index, out _)) ||
                 Array.Exists(escorts, escort => escort.Value == id))
             {
                 continue;
@@ -35,7 +38,7 @@ public sealed partial class SimulationWorld
         var ordered = warriors.OrderByDescending(id => IsVeteranWarrior(_critterIndicesById[id]))
             .ThenBy(id => id).ToArray();
         var leaders = ordered.Take((ordered.Length + ApeDefenseSquadSize - 1) / ApeDefenseSquadSize)
-            .Select(id => new ApeDefenseSquad(id)).ToArray();
+            .Select((id, i) => new ApeDefenseSquad(id, i + 1)).ToArray();
         for (var i = 0; i < ordered.Length; i++)
             squads.Add(ordered[i], leaders[i % leaders.Length]);
         return squads;
@@ -128,14 +131,11 @@ public sealed partial class SimulationWorld
 
         if (index == leader)
         {
-            if (WrappedManhattanDistance(current, home) > ApeDefensePatrolDistance)
-                TryMoveTowardApeStructure(index, village, reservedPrey);
-            else
-                prey = TryMove(index, reservedPrey, allowPredation: false);
+            MoveVillagePerimeterPatrol(index, village, squad.Number, reservedPrey);
         }
         else if (WrappedManhattanDistance(current, _positions[leader]) > ApeDefenseFormationDistance)
         {
-            TryMoveTowardApeStructure(index, GetIndex(_positions[leader]), reservedPrey);
+            TryMoveAlongSurfacePath(index, GetIndex(_positions[leader]), reservedPrey, stopAdjacent: true);
         }
         return true;
     }

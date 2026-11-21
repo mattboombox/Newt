@@ -22,4 +22,5 @@ internal sealed class ImpactWaveActivity(
     internal List<(GridPosition Position, float Distance)>? PlanetoidFront { get; set; }
 
     internal int NextPlanetoidTile { get; set; }
+    internal HashSet<GridPosition>? LimitedTiles { get; set; }
 }

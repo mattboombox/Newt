@@ -380,6 +380,7 @@ public sealed partial class NewtGame
     {
         if (IsWalkingCamera) ToggleWalkingCamera();
         _view3D = !_view3D;
+        _viewZoomStep3D = 0;
         ResetToolRepeat();
         if (_view3D)
         {
@@ -563,7 +564,7 @@ public sealed partial class NewtGame
             MathF.Cos(_pitch3D), -MathF.Cos(_yaw3D) * MathF.Sin(_pitch3D));
         var far = ThreeDGeometry.FarClipDistance(_distance3D);
         return (Matrix.CreateLookAt(eye, target, cameraUp),
-            Matrix.CreatePerspectiveFieldOfView(MathHelper.PiOver4, Viewport3D().AspectRatio, 0.1f,
+            Matrix.CreatePerspectiveFieldOfView(ViewFieldOfView3D, Viewport3D().AspectRatio, 0.1f,
                 RenderDistance3D(far, cameraDistance)));
     }
 
@@ -943,7 +944,9 @@ public sealed partial class NewtGame
         DrawBlendedCutouts(translucentCritters);
         DrawWaterSurfaces3D();
         DrawBlendedCutouts(surfaceArt);
-        DrawClouds3D(elapsedSeconds, frustum, bounds, terrainBrightness);
+        DrawRifleShots3D(view, projection, depthMaskOnly: true);
+        DrawClouds3D(elapsedSeconds, frustum, bounds, terrainBrightness, view, projection);
+        DrawRifleShots3D(view, projection);
         GraphicsDevice.Viewport = originalViewport;
 
         void DrawBlendedCutouts(List<(int Page, List<VertexPositionColorTexture> Quads)> cutouts)
@@ -978,7 +981,7 @@ public sealed partial class NewtGame
     private void CollectTerrainDetails3D(
         Rectangle bounds, BoundingFrustum frustum, GridPosition? hovered, double elapsedSeconds)
     {
-        var hasImpactWave = _world.ActiveImpactWaveCount > 0;
+        var hasImpactWave = HasVisibleImpactWave;
         for (var y = bounds.Top; y < bounds.Bottom; y++)
             for (var x = bounds.Left; x < bounds.Right; x++)
             {
@@ -1180,13 +1183,12 @@ public sealed partial class NewtGame
         var mist = new Color(215, 240, 251);
         for (var drop = 0; drop < 6; drop++)
         {
-            var age = (float)((elapsedSeconds * 0.92 + phase + drop / 6.0) % 1);
+            var age = WeatherVisuals.WaterfallDropAge(elapsedSeconds, phase, drop);
             var center = Vector3.Lerp(left, right, 0.19f + drop % 3 * 0.31f) + outward * 0.008f;
             var falling = age < 0.73f;
             if (falling)
             {
-                var fall = age / 0.73f;
-                center.Y += dropHeight * (1f - fall * fall);
+                center.Y += dropHeight * (1f - WeatherVisuals.WaterfallFall(age));
             }
             else
             {
@@ -1254,6 +1256,12 @@ public sealed partial class NewtGame
 
     protected override void UnloadContent()
     {
+        _zoomInSound?.Dispose();
+        _zoomOutSound?.Dispose();
+        _rifleSound?.Dispose();
+        _rifleTerrainMask3D?.Dispose();
+        _rifleCloudOverlay3D?.Dispose();
+        _rifleDepthOnlyBlend3D?.Dispose();
         ReleaseTerrainChunks3D();
         _whaleFallSprite?.Dispose();
         _jellyfishGlowSprite?.Dispose();
@@ -1263,6 +1271,7 @@ public sealed partial class NewtGame
         _ghostEffect3D?.Dispose();
         ReleaseCloudPatches3D();
         _cloudDepthStencil3D?.Dispose();
+        _cloudDepthOnlyBlend3D?.Dispose();
         base.UnloadContent();
     }
 }

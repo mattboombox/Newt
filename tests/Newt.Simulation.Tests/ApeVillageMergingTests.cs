@@ -137,8 +137,11 @@ public sealed class ApeVillageMergingTests
         var first = new GridPosition(faceSize / 2, 0);
         var second = PlanetoidLayout.Offset(first, 0, -1, faceSize);
         Assert.True(Math.Abs(first.X - second.X) + Math.Abs(first.Y - second.Y) > 12);
+        // Force an adjacent pair for the merge check, bypassing natural spacing.
+        world.Body = WorldBody.Terrarium;
         Assert.True(world.TrySpawnTestApeVillage(first));
         Assert.True(world.TrySpawnTestApeVillage(second));
+        world.Body = WorldBody.Planetoid;
 
         world.MergeAdjacentApeVillages();
 

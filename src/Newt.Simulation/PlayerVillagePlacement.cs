@@ -62,7 +62,7 @@ public sealed partial class SimulationWorld
             foreach (var direction in MovementDirections)
             {
                 var origin = GetPosition(current);
-                var neighbor = new GridPosition(Mod(origin.X + direction.X, Width), origin.Y + direction.Y);
+                var neighbor = OffsetTile(origin, direction);
                 if (!Contains(neighbor))
                     continue;
                 var tile = GetIndex(neighbor);
@@ -82,6 +82,10 @@ public sealed partial class SimulationWorld
     {
         var first = GetPosition(existing);
         var second = GetPosition(candidate);
+        if (Body == WorldBody.Planetoid)
+            return CardinalDirections.Any(direction => OffsetTile(first, direction) == second) ||
+                ((kind is ApeStructureKind.NavalDistrict || _apeStructures[existing] is ApeStructureKind.NavalDistrict) &&
+                    ArePathNeighbors(existing, candidate));
         var dx = Math.Abs(first.X - second.X);
         dx = Math.Min(dx, Width - dx);
         var dy = Math.Abs(first.Y - second.Y);

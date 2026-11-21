@@ -27,6 +27,8 @@
     <Compile Include="..\..\src\Newt.Game\SimulationSpeedGuard.cs" Link="SimulationSpeedGuard.cs" />
     <Compile Include="..\..\src\Newt.Game\TerrainShading.cs" Link="TerrainShading.cs" />
     <Compile Include="..\..\src\Newt.Game\PopulationCounts.cs" Link="PopulationCounts.cs" />
+    <Compile Include="..\..\src\Newt.Game\WeatherVisuals.cs" Link="WeatherVisuals.cs" />
+    <Compile Include="..\..\src\Newt.Game\RifleShotTiming.cs" Link="RifleShotTiming.cs" />
   </ItemGroup>
 
 </Project>

@@ -21,7 +21,7 @@ public sealed partial class SimulationWorld
             var reach = MegaSpiderPerceptionRadius - Math.Abs(dy);
             for (var dx = -reach; dx <= reach; dx++)
             {
-                var position = new GridPosition(Mod(current.X + dx, Width), current.Y + dy);
+                var position = OffsetTile(current, new(dx, dy));
                 var tile = GetIndex(position);
                 var prey = _occupants[tile];
                 if (prey >= 0 && _species[prey] is not CritterSpecies.MegaSpider &&
@@ -159,9 +159,7 @@ public sealed partial class SimulationWorld
         for (var index = 0; index < MovementDirections.Length; index++)
         {
             var direction = MovementDirections[index];
-            candidates[index + 1] = new GridPosition(
-                Mod(current.X + direction.X, Width),
-                current.Y + direction.Y);
+            candidates[index + 1] = OffsetTile(current, direction);
         }
 
         foreach (var candidate in candidates)
@@ -280,6 +278,8 @@ public sealed partial class SimulationWorld
         int webTile,
         IReadOnlySet<GridPosition>? reservedPrey)
     {
+        if (Body == WorldBody.Planetoid)
+            return TryMoveAlongSurfacePath(spiderIndex, webTile, reservedPrey);
         var current = _positions[spiderIndex];
         var target = GetPosition(webTile);
         var bestDistance = WrappedManhattanDistance(current, target);
@@ -288,7 +288,7 @@ public sealed partial class SimulationWorld
         for (var offset = 0; offset < MovementDirections.Length; offset++)
         {
             var direction = MovementDirections[(startDirection + offset) % MovementDirections.Length];
-            var candidate = new GridPosition(Mod(current.X + direction.X, Width), current.Y + direction.Y);
+            var candidate = OffsetTile(current, direction);
             if (candidate.Y < 0 || candidate.Y >= Height)
             {
                 continue;

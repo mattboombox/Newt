@@ -85,8 +85,7 @@ public sealed partial class SimulationWorld
         {
             var position = _positions[target];
             _preyTargets[index] = GetIndex(position);
-            if (MovementDirections.Any(direction => new GridPosition(
-                Mod(_positions[index].X + direction.X, Width), _positions[index].Y + direction.Y) == position))
+            if (ArePathNeighbors(GetIndex(_positions[index]), GetIndex(position)))
             {
                 if (reservedPrey?.Contains(position) is not true)
                     prey = position;
