@@ -69,7 +69,8 @@ public static class Volcanism
             if (!world.Contains(tile) || !visited.Add(tile) || world.GetTerrain(tile) is Terrain.MegaWall) continue;
             world.KillSandwormAt(tile);
             world.RemoveCritterAt(tile);
-            if (DepositLava(world, tile, 0.006f * (power + 1))) melted++;
+            // The laser melts existing ground; its lava is a cover, not new rock.
+            if (DepositLava(world, tile, -0.006f * (power + 1))) melted++;
         }
         world.VolcanicTerrainRefreshPending |= melted > 0;
         return melted;

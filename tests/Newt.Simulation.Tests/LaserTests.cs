@@ -22,9 +22,27 @@ public sealed class LaserTests
         for (var x = 0; x < world.Width; x++)
             if (world.GetSurfaceCover(new(x, y)) is SurfaceCover.Lava) count++;
         Assert.Equal(expected, count);
-        Assert.True(world.GetElevation(center) > before);
+        Assert.True(world.GetElevation(center) < before);
         Assert.Equal(0, world.ActiveImpactWaveCount);
         Assert.True(world.VolcanicTerrainRefreshPending);
+    }
+
+    [Fact]
+    public void RepeatedLaserPulsesExcavateInsteadOfBuildingAMound()
+    {
+        var world = new SimulationWorld(24, 16, Terrain.Plains);
+        var center = new GridPosition(12, 8);
+        world.SetElevation(center, 0.8f);
+        var previous = world.GetElevation(center);
+        for (var pulse = 0; pulse < 12; pulse++)
+        {
+            Volcanism.MeltWithLaser(world, center, 4);
+            var current = world.GetElevation(center);
+            Assert.True(current < previous);
+            Assert.Equal(SurfaceCover.Lava, world.GetSurfaceCover(center));
+            previous = current;
+        }
+        Assert.InRange(previous, 0.439f, 0.441f);
     }
 
     [Fact]
