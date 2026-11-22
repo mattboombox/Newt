@@ -6,6 +6,24 @@ namespace Newt.Simulation.Tests;
 public sealed class WeatherVisualTests
 {
     [Fact]
+    public void RoughlyHalfOfNewCloudBanksAreEligibleForPrecipitation()
+    {
+        var rainy = Enumerable.Range(0, 4096).Count(seed => WeatherVisuals.CloudBankCanRain((uint)seed));
+        Assert.InRange(rainy, 1843, 2253);
+    }
+
+    [Fact]
+    public void DryCloudBanksStayWhiteEvenWhenTheyAreLargeEnoughToRain()
+    {
+        var threshold = WeatherVisuals.RainCloudCellCount;
+        foreach (var size in new[] { 1, threshold - 1, threshold, threshold * 10, threshold })
+            Assert.Equal(CloudKind.White, WeatherVisuals.CloudBank(size, rainEligible: false));
+        Assert.Equal(CloudKind.None, WeatherVisuals.CloudBank(0, rainEligible: false));
+        Assert.Equal(CloudKind.Moist, WeatherVisuals.CloudBank(threshold, rainEligible: true));
+        Assert.Equal(0f, WeatherVisuals.CloudWetness(1, false, WeatherVisuals.CloudColorFadeSeconds));
+    }
+
+    [Fact]
     public void NewlyLoadedRainAndSnowAlreadyFillTheirFallColumnAtAnyWorldTime()
     {
         foreach (var kind in new[] { PrecipitationKind.Rain, PrecipitationKind.Snow })
@@ -27,18 +45,42 @@ public sealed class WeatherVisualTests
     }
 
     [Fact]
-    public void WhiteAndMoistCloudBanksHaveAClearGapAndKeepTheirOwnColorAtDifferentDensities()
+    public void EntireCloudBanksBecomeWetOnlyAtTheCriticalCellCountAndDryAgainBelowIt()
+    {
+        var threshold = WeatherVisuals.RainCloudCellCount;
+        foreach (var count in new[] { 1, threshold - 1, threshold, threshold * 2, threshold - 1, 1 })
+            Assert.Equal(count >= threshold ? CloudKind.Moist : CloudKind.White,
+                WeatherVisuals.CloudBank(count));
+        Assert.Equal(CloudKind.None, WeatherVisuals.CloudBank(0));
+    }
+
+    [Fact]
+    public void CloudColorFadesOverTimeAndReversesFromItsCurrentColor()
+    {
+        var duration = WeatherVisuals.CloudColorFadeSeconds;
+        Assert.Equal(0f, WeatherVisuals.CloudWetness(0, true, 0));
+        Assert.Equal(0.5f, WeatherVisuals.CloudWetness(0, true, duration / 2));
+        Assert.Equal(1f, WeatherVisuals.CloudWetness(0, true, duration));
+        Assert.Equal(1f, WeatherVisuals.CloudWetness(0, true, duration * 3));
+        Assert.Equal(1f, WeatherVisuals.CloudWetness(1, false, 0));
+        Assert.Equal(0.5f, WeatherVisuals.CloudWetness(1, false, duration / 2));
+        Assert.Equal(0f, WeatherVisuals.CloudWetness(1, false, duration));
+        var midway = WeatherVisuals.CloudWetness(0, true, duration / 2);
+        Assert.Equal(midway, WeatherVisuals.CloudWetness(midway, false, 0));
+        Assert.InRange(WeatherVisuals.CloudWetness(midway, false, duration / 2), 0f, midway);
+        Assert.Equal(0f, WeatherVisuals.CloudWetness(midway, false, duration));
+    }
+    [Fact]
+    public void CloudShapeDoesNotAssignPermanentWetAndDryTypes()
     {
         foreach (var density in new[] { 0.15f, 0.3f, 0.6f })
         {
-            Assert.Equal(CloudKind.White, WeatherVisuals.CloudBank(density, -0.4f));
-            Assert.Equal(CloudKind.Moist, WeatherVisuals.CloudBank(density, 0.4f));
-            foreach (var gap in new[] { -0.1f, -0.05f, 0, 0.05f, 0.1f })
-                Assert.Equal(CloudKind.None, WeatherVisuals.CloudBank(density, gap));
+            Assert.True(WeatherVisuals.HasCloud(density, -0.4f));
+            Assert.True(WeatherVisuals.HasCloud(density, 0.4f));
+            Assert.False(WeatherVisuals.HasCloud(density, 0));
         }
-        Assert.Equal(CloudKind.None, WeatherVisuals.CloudBank(0, 0.8f));
+        Assert.False(WeatherVisuals.HasCloud(0, 0.8f));
     }
-
     [Theory]
     [InlineData(0.2f, MoistureBand.Wet, TemperatureBand.Temperate, PrecipitationKind.None)]
     [InlineData(0.4f, MoistureBand.Dry, TemperatureBand.Hot, PrecipitationKind.None)]

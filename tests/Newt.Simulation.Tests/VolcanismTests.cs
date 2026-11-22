@@ -4,6 +4,46 @@ namespace Newt.Simulation.Tests;
 
 public sealed class VolcanismTests
 {
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(4)]
+    [InlineData(5)]
+    public void LavaCrossesEveryPlanetFaceEdgeAndContinuesOntoTheNextFace(int face)
+    {
+        const int size = 16;
+        var directions = new[] { new GridPosition(1, 0), new(0, 1), new(-1, 0), new(0, -1) };
+        foreach (var direction in directions)
+        {
+            var world = new SimulationWorld(size * 3, size * 2, Terrain.Plains, seed: 37)
+                { Body = WorldBody.Planetoid, SeasonsEnabled = false };
+            NaturalEvents.SetEnabled(world, false);
+            for (var y = 0; y < world.Height; y++)
+            for (var x = 0; x < world.Width; x++) world.SetElevation(new(x, y), 0.9f);
+            var localX = direction.X > 0 ? size - 1 : direction.X < 0 ? 0 : size / 2;
+            var localY = direction.Y > 0 ? size - 1 : direction.Y < 0 ? 0 : size / 2;
+            var vent = new GridPosition(face % 3 * size + localX, face / 3 * size + localY);
+            var across = PlanetoidLayout.Offset(vent, direction.X, direction.Y, size);
+            Assert.NotEqual(face, PlanetoidLayout.FaceAt(across.X, across.Y, size));
+            var back = Assert.Single(directions, d =>
+                PlanetoidLayout.Offset(across, d.X, d.Y, size) == vent);
+            var onward = PlanetoidLayout.Offset(across, -back.X, -back.Y, size);
+            world.SetElevation(vent, 0.3f);
+            world.SetElevation(across, 0.2f);
+            world.SetElevation(onward, 0.1f);
+            var directionIndex = direction.X > 0 ? 0 : direction.Y > 0 ? 2 : direction.X < 0 ? 4 : 6;
+            var flow = new LavaFlowActivity(vent, directionIndex, 3, world.Tick + 5) { Vent = vent };
+            world.LavaFlows.Add(flow);
+            for (var tick = 0; tick < 5; tick++) world.AdvanceOneTick();
+            Assert.Equal(across, flow.Position);
+            Assert.Equal(SurfaceCover.Lava, world.GetSurfaceCover(across));
+            for (var tick = 0; tick < 5; tick++) world.AdvanceOneTick();
+            Assert.Equal(onward, flow.Position);
+            Assert.Equal(SurfaceCover.Lava, world.GetSurfaceCover(onward));
+        }
+    }
     [Fact]
     public void FlowBuildsMoreElevationAwayFromTheVent()
     {

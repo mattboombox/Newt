@@ -9,12 +9,25 @@ internal static class WeatherVisuals
 {
     internal const float RainCloudDensity = 0.28f;
 
-    internal static CloudKind CloudBank(float density, float moisture)
-    {
-        if (density <= 0.11f || Math.Abs(moisture) <= 0.10f) return CloudKind.None;
-        return moisture > 0 ? CloudKind.Moist : CloudKind.White;
-    }
+    // A bank must cover roughly 865 square world tiles before producing precipitation.
+    internal const int RainCloudCellCount = 2048;
 
+    internal static bool HasCloud(float density, float shape) =>
+        density > 0.11f && Math.Abs(shape) > 0.10f;
+
+    internal static bool CloudBankCanRain(uint weatherSeed) => (Hash(weatherSeed) & 1) == 0;
+
+    internal static CloudKind CloudBank(int cellCount, bool rainEligible = true) => cellCount <= 0 ? CloudKind.None
+        : rainEligible && cellCount >= RainCloudCellCount ? CloudKind.Moist : CloudKind.White;
+
+    internal const double CloudColorFadeSeconds = 2;
+
+    internal static float CloudWetness(float from, bool wet, double secondsSinceChange)
+    {
+        var t = (float)Math.Clamp(secondsSinceChange / CloudColorFadeSeconds, 0, 1);
+        t = t * t * (3 - 2 * t);
+        return from + ((wet ? 1f : 0f) - from) * t;
+    }
     internal static (float CellSize, float Opacity, bool Detailed) SnowAppearance(float worldUnitsPerPixel)
     {
         // Let nearby flakes visibly grow, up to a nine-pixel-wide cross. Distant

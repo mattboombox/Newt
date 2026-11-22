@@ -53,6 +53,28 @@ public static class Volcanism
         return true;
     }
 
+    /// <summary>Melts a progressively larger patch without rebuilding global terrain on every laser pulse.</summary>
+    public static int MeltWithLaser(SimulationWorld world, GridPosition center, int power)
+    {
+        ArgumentNullException.ThrowIfNull(world);
+        if (!world.Contains(center)) throw new ArgumentOutOfRangeException(nameof(center));
+        if (power < 0 || power > 4) throw new ArgumentOutOfRangeException(nameof(power));
+        var melted = 0;
+        var visited = new HashSet<GridPosition>();
+        for (var dy = -power; dy <= power; dy++)
+        for (var dx = -power; dx <= power; dx++)
+        {
+            if (dx * dx + dy * dy > power * power) continue;
+            var tile = world.OffsetTile(center, new(dx, dy));
+            if (!world.Contains(tile) || !visited.Add(tile) || world.GetTerrain(tile) is Terrain.MegaWall) continue;
+            world.KillSandwormAt(tile);
+            world.RemoveCritterAt(tile);
+            if (DepositLava(world, tile, 0.006f * (power + 1))) melted++;
+        }
+        world.VolcanicTerrainRefreshPending |= melted > 0;
+        return melted;
+    }
+
     public static bool ClearGeologicalCover(SimulationWorld world, GridPosition position)
     {
         ArgumentNullException.ThrowIfNull(world);
@@ -231,8 +253,8 @@ public static class Volcanism
             var scatter = Directions[world.NextInt(Directions.Length)];
             var target = GetPosition(
                 world,
-                volcano.Position.X + direction.X * distance + scatter.X * world.NextInt(2),
-                volcano.Position.Y + direction.Y * distance + scatter.Y * world.NextInt(2));
+                volcano.Position, direction.X * distance + scatter.X * world.NextInt(2),
+                direction.Y * distance + scatter.Y * world.NextInt(2));
             if (target is not null)
             {
                 changed |= DepositLava(world, target.Value, FlowElevationGain(world));
@@ -293,7 +315,7 @@ public static class Volcanism
         {
             var directionIndex = Mod(flow.Direction + offset, Directions.Length);
             var direction = Directions[directionIndex];
-            var candidate = GetPosition(world, flow.Position.X + direction.X, flow.Position.Y + direction.Y);
+            var candidate = GetPosition(world, flow.Position, direction.X, direction.Y);
             if (candidate is null)
             {
                 continue;
@@ -304,7 +326,7 @@ public static class Volcanism
             var score = world.GetElevation(candidate.Value) + turnPenalty + randomJitter;
             if (score < bestScore)
             {
-                best = (candidate.Value, directionIndex);
+                best = (candidate.Value, FlowDirectionAfterStep(world, flow.Position, candidate.Value, directionIndex));
                 bestScore = score;
             }
         }
@@ -379,8 +401,8 @@ public static class Volcanism
             var direction = Directions[directionIndex];
             var candidate = GetPosition(
                 world,
-                parent.Position.X + direction.X,
-                parent.Position.Y + direction.Y);
+                parent.Position, direction.X,
+                direction.Y);
             if (candidate is null || world.Volcanoes.Any(volcano => volcano.Position == candidate.Value))
             {
                 continue;
@@ -400,7 +422,7 @@ public static class Volcanism
 
         foreach (var direction in Directions)
         {
-            var neighbor = GetPosition(world, position.X + direction.X, position.Y + direction.Y);
+            var neighbor = GetPosition(world, position, direction.X, direction.Y);
             if (neighbor is not null && world.GetSurfaceWater(neighbor.Value) is SurfaceWaterKind.River)
             {
                 return true;
@@ -425,15 +447,26 @@ public static class Volcanism
         world.LastVolcanicTerrainRefreshTick = world.Tick;
     }
 
-    private static GridPosition? GetPosition(SimulationWorld world, int x, int y)
+    private static GridPosition? GetPosition(SimulationWorld world, GridPosition origin, int dx, int dy)
     {
-        if (y < 0 || y >= world.Height)
-        {
-            return null;
-        }
-        return new GridPosition(Mod(x, world.Width), y);
+        var position = world.OffsetTile(origin, new(dx, dy));
+        return world.Contains(position) ? position : null;
     }
 
+    private static int FlowDirectionAfterStep(SimulationWorld world, GridPosition from,
+        GridPosition to, int direction)
+    {
+        if (world.Body is not WorldBody.Planetoid) return direction;
+        var size = PlanetoidLayout.FaceSize(world.Width);
+        if (PlanetoidLayout.FaceAt(from.X, from.Y, size) == PlanetoidLayout.FaceAt(to.X, to.Y, size))
+            return direction;
+        // The destination face can have a rotated coordinate frame. Continue away
+        // from the incoming edge instead of reusing the source face's direction.
+        for (var back = 0; back < Directions.Length; back++)
+            if (world.OffsetTile(to, Directions[back]) == from)
+                return Mod(back + Directions.Length / 2, Directions.Length);
+        return direction;
+    }
     private static int RandomRange(SimulationWorld world, int minimum, int exclusiveMaximum) =>
         minimum + world.NextInt(exclusiveMaximum - minimum);
 

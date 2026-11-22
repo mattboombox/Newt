@@ -195,7 +195,7 @@ public sealed partial class NewtGame
             south * (MathF.Cos(_yaw3D) * MathF.Sin(_pitch3D));
         var far = IsRing3D ? Math.Max(396, RingGeometry.Radius(_world.Width) * 2.2f)
             : FirstPersonRenderDistance;
-        var chaseOffset = _playerView is PlayerView.ThirdPerson ? ThirdPersonDistance : 0f;
+        var chaseOffset = _playerView is PlayerView.ThirdPerson ? _thirdPersonDistance : 0f;
         if (IsPlanetoid3D)
             chaseOffset += Math.Max(0, _firstPersonEyeHeight - 14f);
         return (Matrix.CreateLookAt(eye, eye + forward, cameraUp),

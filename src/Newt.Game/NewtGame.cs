@@ -45,7 +45,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
     private static readonly double[] SimulationRates = [0.25, 0.5, 1, 2, 4, 8, 16, 32];
     private static readonly ToolCategory[] ToolCategoryOrder =
         [ToolCategory.WorldTools, ToolCategory.TerrainTools, ToolCategory.CritterTools,
-            ToolCategory.BuildingTools, ToolCategory.Culture, ToolCategory.Plagues, ToolCategory.Events, ToolCategory.Other];
+            ToolCategory.BuildingTools, ToolCategory.Culture, ToolCategory.Plagues, ToolCategory.Events, ToolCategory.Weapons, ToolCategory.Other];
     private static readonly WorldTool[] WorldToolOrder =
         [WorldTool.SeaLevel, WorldTool.OceanSeed, WorldTool.Temperature,
             WorldTool.Moisture, WorldTool.EvolutionChance, WorldTool.Sentience, WorldTool.Seasons,
@@ -68,7 +68,9 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             WorldTool.Farm, WorldTool.LumberCamp, WorldTool.Harbor, WorldTool.ResidentialDistrict,
             WorldTool.MilitaryDistrict, WorldTool.Library, WorldTool.Market, WorldTool.Road];
     private static readonly WorldTool[] OtherToolOrder =
-        [WorldTool.JumpStart, WorldTool.Inspect, WorldTool.Teleport, WorldTool.AntiMaterielRifle];
+        [WorldTool.JumpStart, WorldTool.Inspect, WorldTool.Teleport];
+    private static readonly WorldTool[] WeaponToolOrder =
+        [WorldTool.AntiMaterielRifle, WorldTool.GuidedMissiles, WorldTool.RocketPod, WorldTool.Laser];
     private static readonly WorldTool[] CultureToolOrder = [WorldTool.LudditeCulture, WorldTool.MonarchyCulture];
     private static readonly string[] ControlLines =
     [
@@ -80,6 +82,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         "N  generate next seed",
         "Q / E  previous / next tool",
         "R  next tool category",
+        "T  previous tool category",
         ", / .  slower / faster simulation",
         "- / =  decrease / increase magnitude",
         "P  pause or resume",
@@ -361,7 +364,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             }
         }
 
-        if (IsActive) AdvanceRifleShots((float)gameTime.ElapsedGameTime.TotalSeconds);
+        if (IsActive && !_paused) AdvanceRifleShots((float)gameTime.ElapsedGameTime.TotalSeconds);
 
         if (!_paused && IsActive)
         {
@@ -1098,6 +1101,10 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         {
             CycleToolCategory(1);
         }
+        else if (WasPressed(keyboard, Keys.T))
+        {
+            CycleToolCategory(-1);
+        }
         else if (WasPressed(keyboard, Keys.N))
         {
             _seed++;
@@ -1164,7 +1171,8 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             _previousMouse.LeftButton is ButtonState.Released;
         var secondaryPressed = mouse.RightButton is ButtonState.Pressed &&
             _previousMouse.RightButton is ButtonState.Released;
-        var primaryActivated = primaryPressed;
+        var primaryActivated = primaryPressed || (CurrentTool is (WorldTool.GuidedMissiles or WorldTool.RocketPod or WorldTool.Laser) &&
+            mouse.LeftButton is ButtonState.Pressed && mouse.RightButton is ButtonState.Released);
         var secondaryActivated = secondaryPressed;
         if (IsContinuousTool(CurrentTool))
         {
@@ -1202,6 +1210,18 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             ResetToolRepeat();
         }
 
+        if (CurrentTool is WorldTool.Laser && secondaryPressed)
+        {
+            ChangeLaserPower(1);
+            return;
+        }
+
+        if (CurrentTool is WorldTool.GuidedMissiles && secondaryPressed)
+        {
+            _guidedMissileFollowsCursor = !_guidedMissileFollowsCursor;
+            return;
+        }
+
         if (!primaryActivated && !secondaryActivated)
         {
             return;
@@ -1236,6 +1256,15 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
 
         switch (CurrentTool)
         {
+            case WorldTool.Laser when primaryActivated:
+                FireLaser(position.Value);
+                break;
+            case WorldTool.RocketPod when primaryActivated:
+                FireMissile(position.Value, rocketPod: true);
+                break;
+            case WorldTool.GuidedMissiles when primaryActivated:
+                FireMissile(position.Value);
+                break;
             case WorldTool.AntiMaterielRifle when primaryActivated:
                 FireAntiMaterielRifle(position.Value);
                 break;
@@ -1328,7 +1357,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
                 Volcanism.SpawnVolcano(_world, position.Value);
                 break;
             case WorldTool.Meteor when primaryActivated:
-                Impacts.CreateToolMeteorImpact(_world, position.Value, _meteorMagnitudeIndex / 10f);
+                LaunchMeteor(position.Value, _meteorMagnitudeIndex / 10f);
                 break;
             case WorldTool.Tsunami when primaryActivated:
                 Tsunamis.Create(_world, position.Value, _eventMagnitudeIndex / 10f);
@@ -1602,6 +1631,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         ToolCategory.Culture => CultureToolOrder,
         ToolCategory.Plagues => PlagueToolOrder,
         ToolCategory.Events => EventToolOrder,
+        ToolCategory.Weapons => WeaponToolOrder,
         ToolCategory.Other => OtherToolOrder,
         _ => throw new ArgumentOutOfRangeException(nameof(category)),
     };
@@ -1749,7 +1779,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             GetToolName(CurrentTool),
             GetToolHint(CurrentTool),
             "Q / E  cycle tools",
-            "R  cycle categories",
+            "R/T  next/previous category",
             "< / >  speed   P  pause",
             $"M menu   G auto speed {(_simulationSpeedGuard.Enabled ? "ON" : "OFF")}   ? key for help");
 
@@ -2570,6 +2600,10 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         ResetClouds3D();
         _rifleShots.Clear();
         _rifleCooldownRemaining = 0;
+        _missileCooldownRemaining = 0;
+        _rocketPodCooldownRemaining = 0;
+        _laserCooldownRemaining = 0;
+        _missileLaunchSequence = 0;
         _focus3D = new Vector2(_world.Width / 2f, _world.Height / 2f);
         if (IsWalkingCamera) PlacePlayerOnMap3D();
         _cameraX = 0;
@@ -3478,6 +3512,10 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             return;
         }
 
+        if (TryGetVisibleImpactWave(position, out _, impactOnly: true))
+            _spriteBatch.Draw(_pixel, new Rectangle(MapOffsetX + screenX * TileSize,
+                MapOffsetY + screenY * TileSize, TileSize, TileSize), new Color(255, 222, 145, 105));
+
         if (TryGetVisibleImpactWave(position, out var wave))
         {
             var inset = Math.Max(0, TileSize / 5);
@@ -3850,7 +3888,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             ? "L on; R barren"
             : "L restore; R off",
         WorldTool.Volcano => "L spawn vent",
-        WorldTool.Meteor => $"L strike; -/= {_meteorMagnitudeIndex / 10f:0.0}",
+        WorldTool.Meteor => $"L launch meteor; -/= {_meteorMagnitudeIndex / 10f:0.0}",
         WorldTool.Tsunami => $"L ocean; -/= {_eventMagnitudeIndex / 10f:0.0}",
         WorldTool.WatershedShift => "L reroute river",
         WorldTool.Evolve => "L evolve; R devolve",
@@ -3895,8 +3933,13 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         WorldTool.Stone => "L place; R clear",
         WorldTool.Lava => "L add; R clear",
         WorldTool.JumpStart => "L seed plankton",
+        WorldTool.Laser => $"{LaserModes[_laserPowerIndex].Name} | Hold L: melt | R: cycle mode",
+        WorldTool.RocketPod => "Hold L: rapid unguided rockets (10/sec)",
+        WorldTool.GuidedMissiles => _guidedMissileFollowsCursor
+            ? "Cursor follow | Hold L: fire | R: tile lock"
+            : "Clicked tile lock | Hold L: fire | R: cursor follow",
         WorldTool.AntiMaterielRifle => _rifleCooldownRemaining > 0
-            ? $"Reloading {_rifleCooldownRemaining:0.0}s" : "L fire: tiny impact on tracer arrival",
+            ? $"Reloading {_rifleCooldownRemaining:0.0}s" : "L fire: single-tile hit, no shockwave",
         WorldTool.Teleport => IsWalkingCamera ? "L teleport to crosshair tile" : "L teleport to tile",
         WorldTool.Colonist => _colonistToolStatus,
         WorldTool.LudditeCulture => _cultureToolStatus,
@@ -3929,6 +3972,9 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         WorldTool.MilitaryDistrict => "Military District",
         WorldTool.BarbarianApeVillage => "Barbarian Ape Village",
         WorldTool.JumpStart => "Jump Start",
+        WorldTool.Laser => "Laser",
+        WorldTool.RocketPod => "Rocket Pod",
+        WorldTool.GuidedMissiles => "Guided Missiles",
         WorldTool.AntiMaterielRifle => "Anti-Materiel Rifle",
         WorldTool.ZombiePlague => "Zombie Plague",
         WorldTool.VampirePlague => "Vampire Plague",
@@ -3946,6 +3992,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         ToolCategory.Culture => "CULTURE",
         ToolCategory.Plagues => "PLAGUES",
         ToolCategory.Events => "EVENTS",
+        ToolCategory.Weapons => "WEAPONS",
         ToolCategory.Other => "OTHER",
         _ => category.ToString().ToUpperInvariant(),
     };
@@ -3960,6 +4007,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         Other,
         Culture,
         Plagues,
+        Weapons,
     }
 
     private enum WorldTool
@@ -4028,6 +4076,9 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         Inspect,
         Teleport,
         AntiMaterielRifle,
+        GuidedMissiles,
+        RocketPod,
+        Laser,
         Plague,
         ZombiePlague,
         VampirePlague,

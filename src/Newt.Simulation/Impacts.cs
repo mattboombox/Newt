@@ -6,8 +6,21 @@ public static class Impacts
     private const float MinimumMagnitude = 0f;
     private const float MaximumMagnitude = 1f;
 
-    /// <summary>The meteor tool at a scale confined to the immediate surface neighborhood.</summary>
-    public static MeteorImpactResult CreateRifleImpact(SimulationWorld world, GridPosition center) =>
+    /// <summary>A single-tile rifle strike without fragments, lava, or a shockwave.</summary>
+    public static MeteorImpactResult CreateRifleImpact(SimulationWorld world, GridPosition center)
+    {
+        ArgumentNullException.ThrowIfNull(world);
+        if (!world.Contains(center)) throw new ArgumentOutOfRangeException(nameof(center));
+        world.SetElevation(center, world.GetElevation(center) - 0.04f);
+        ClearImpactEntities(world, center);
+        world.SetSurfaceCover(center, SurfaceCover.Stone, world.Tick + 18 * SimulationWorld.TicksPerSecond);
+        TerrainClassifier.RebuildLandforms(world);
+        Hydrology.RebuildFreshwater(world);
+        return new MeteorImpactResult(center, 0, 0, 0, 0);
+    }
+
+    /// <summary>A missile blast confined to the target's immediate surface neighborhood.</summary>
+    public static MeteorImpactResult CreateMissileImpact(SimulationWorld world, GridPosition center) =>
         CreateMeteorImpact(world, center, 0, 2f, rifleSized: true);
 
     public static MeteorImpactResult CreateMeteorImpact(

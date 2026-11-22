@@ -8,7 +8,9 @@ public sealed partial class NewtGame
 {
     private AlphaTestEffect? _ghostEffect3D;
     private CritterSpecies _playerGhostSpecies = CritterSpecies.Ape;
-    private const float ThirdPersonDistance = 4f;
+    private float _thirdPersonDistance = 4f;
+    private const float MinimumThirdPersonDistance = 1f;
+    private const float MaximumThirdPersonDistance = 40f;
 
     private void RandomizePlayerGhostSprite()
     {
@@ -30,7 +32,7 @@ public sealed partial class NewtGame
         var targetHeight = Math.Max(_firstPersonEyeHeight - 0.45f, WalkingSurfaceHeight(_focus3D) + 0.15f);
         var target = WorldPoint3D(new Vector3(cameraX, targetHeight, _focus3D.Y));
         return Framework(ThreeDGeometry.ThirdPersonCameraPosition(Numerics(target),
-            Numerics(CameraLookDirection3D(east, up, south)), ThirdPersonDistance, point =>
+            Numerics(CameraLookDirection3D(east, up, south)), _thirdPersonDistance, point =>
             {
                 var local = LocalPoint3D(Framework(point));
                 var x = (int)MathF.Floor(local.X);
@@ -48,19 +50,25 @@ public sealed partial class NewtGame
             }));
     }
 
+    private Vector3 PlayerGhostCenter3D()
+    {
+        var feet = Math.Max(WalkingSurfaceHeight(_focus3D) + 0.025f,
+            _firstPersonEyeHeight - FirstPersonEyeOffset + 0.025f);
+        var cameraX = PlayerCameraX3D;
+        var position = WorldPoint3D(new Vector3(cameraX, feet, _focus3D.Y));
+        var halfSize = SpriteScale3D * WalkingSpriteScale3D * 0.5f;
+        return position + SurfaceUp3D(cameraX, _focus3D.Y) * halfSize;
+    }
+
     private void DrawPlayerGhost3D(Matrix view, Matrix projection)
     {
         if (_playerView is not PlayerView.ThirdPerson ||
             !_critterSprites.TryGetValue(_playerGhostSpecies, out var sprite)) return;
         // This is visual camera state only: it never occupies a simulation tile
         // or participates in collision, hunger, combat, or critter movement.
-        var feet = Math.Max(WalkingSurfaceHeight(_focus3D) + 0.025f,
-            _firstPersonEyeHeight - FirstPersonEyeOffset + 0.025f);
-        var cameraX = PlayerCameraX3D;
-        var position = WorldPoint3D(new Vector3(cameraX, feet, _focus3D.Y));
         var camera = Matrix.Invert(view);
         var halfSize = SpriteScale3D * WalkingSpriteScale3D * 0.5f;
-        var center = position + SurfaceUp3D(cameraX, _focus3D.Y) * halfSize;
+        var center = PlayerGhostCenter3D();
         var right = camera.Right * halfSize;
         var up = camera.Up * halfSize;
         // Fade when an obstruction pushes the chase camera into the avatar.

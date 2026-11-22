@@ -351,6 +351,7 @@ public sealed partial class NewtGame
     private readonly List<RenderTarget2D> _atlasPages3D = [];
     private readonly List<VertexPositionColor> _terrainVertices3D = [];
     private readonly List<VertexPositionColor> _lavaVertices3D = [];
+    private readonly List<VertexPositionColor> _shockwaveLightVertices3D = [];
     private readonly List<(Vector3 Position, GridPosition Tile, int Critter, bool Ground)> _cutouts3D = [];
     private const int AtlasSize3D = 2048, AtlasColumns3D = AtlasSize3D / 32;
     private const int AtlasCapacity3D = AtlasColumns3D * AtlasColumns3D;
@@ -453,6 +454,10 @@ public sealed partial class NewtGame
     {
         if (IsWalkingCamera)
         {
+            if (_playerView is PlayerView.ThirdPerson)
+                _thirdPersonDistance = Math.Clamp(_thirdPersonDistance * MathF.Pow(0.85f,
+                    (mouse.ScrollWheelValue - _previousMouse.ScrollWheelValue) / 120f),
+                    MinimumThirdPersonDistance, MaximumThirdPersonDistance);
             HandleFirstPerson(keyboard, mouse, seconds);
             return;
         }
@@ -701,6 +706,7 @@ public sealed partial class NewtGame
         { VertexColorEnabled = true, AlphaFunction = CompareFunction.Greater, ReferenceAlpha = 100 };
         _terrainVertices3D.Clear();
         _lavaVertices3D.Clear();
+        _shockwaveLightVertices3D.Clear();
         _cutouts3D.Clear();
         var (view, projection) = Matrices3D();
         var frustum = new BoundingFrustum(view * projection);
@@ -940,11 +946,15 @@ public sealed partial class NewtGame
                 translucentCritters.Add((page, translucentQuads));
             DrawCutoutPage(page, quads);
         }
+        // Preserve terrain occlusion while allowing tracers to show through the translucent avatar.
+        DrawRifleShots3D(view, projection, depthMaskOnly: true);
         DrawPlayerGhost3D(view, projection);
         DrawBlendedCutouts(translucentCritters);
         DrawWaterSurfaces3D();
         DrawBlendedCutouts(surfaceArt);
-        DrawRifleShots3D(view, projection, depthMaskOnly: true);
+
+        DrawShockwaveLighting3D(view, projection);
+
         DrawClouds3D(elapsedSeconds, frustum, bounds, terrainBrightness, view, projection);
         DrawRifleShots3D(view, projection);
         GraphicsDevice.Viewport = originalViewport;
@@ -1008,6 +1018,9 @@ public sealed partial class NewtGame
                 var waterElevation = WaterElevation3D(tile);
                 var top = Math.Max(height, ThreeDGeometry.ColumnHeight(waterElevation ?? _world.GetElevation(tile)));
                 if (!frustum.Intersects(TileBounds3D(x, y, top + 2))) continue;
+                if (hasImpactWave && TryGetVisibleImpactWave(tile, out _, impactOnly: true))
+                    AddColumn3D(new GridPosition(x, y), top + (IsIce3D(tile) ? 0.045f : 0.012f),
+                        new Color(115, 96, 64), vertices: _shockwaveLightVertices3D);
                 if (drawColumn || hovered == tile)
                 {
                     var color = TerrainColumnColor3D(tile);
@@ -1047,6 +1060,25 @@ public sealed partial class NewtGame
                         (IsIce3D(tile) ? top + 0.035f : height) + StructureTileLift3D, y + 0.5f),
                         tile, -1, false));
             }
+    }
+
+    private void DrawShockwaveLighting3D(Matrix view, Matrix projection)
+    {
+        if (_shockwaveLightVertices3D.Count == 0) return;
+        // Add light after water/cutouts using the unlit effect, so night-side
+        // terrain and planetary daylight shaders cannot dim the blast flash.
+        GraphicsDevice.SetVertexBuffer(null);
+        GraphicsDevice.BlendState = BlendState.Additive;
+        GraphicsDevice.DepthStencilState = DepthStencilState.DepthRead;
+        GraphicsDevice.RasterizerState = RasterizerState.CullNone;
+        _projectileEffect3D ??= new BasicEffect(GraphicsDevice) { VertexColorEnabled = true };
+        _projectileEffect3D.World = Matrix.Identity;
+        _projectileEffect3D.View = view;
+        _projectileEffect3D.Projection = projection;
+        _projectileEffect3D.DiffuseColor = Vector3.One;
+        DrawUnbufferedSurface3D(_shockwaveLightVertices3D, _projectileEffect3D);
+        GraphicsDevice.BlendState = BlendState.Opaque;
+        GraphicsDevice.DepthStencilState = DepthStencilState.Default;
     }
 
     private void DrawWaterSurfaces3D()
@@ -1259,6 +1291,7 @@ public sealed partial class NewtGame
         _zoomInSound?.Dispose();
         _zoomOutSound?.Dispose();
         _rifleSound?.Dispose();
+        _projectileEffect3D?.Dispose();
         _rifleTerrainMask3D?.Dispose();
         _rifleCloudOverlay3D?.Dispose();
         _rifleDepthOnlyBlend3D?.Dispose();

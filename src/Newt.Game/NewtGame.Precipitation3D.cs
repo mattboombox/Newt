@@ -75,7 +75,8 @@ public sealed partial class NewtGame
             while (_weatherSourceCandidates3D.TryDequeue(out var cell, out _)) _weatherSourceCells3D.Add(cell);
         }
         foreach (var cell in _weatherSourceCells3D)
-            _precipitationEmitters3D.Add((Source(cell), WeatherVisuals.CellSeed(cell.X, cell.Y, cell.Face, cell.Copy)));
+            if (!_cloudPerforations3D.Contains((cell.X, cell.Y, cell.Face)))
+                _precipitationEmitters3D.Add((Source(cell), WeatherVisuals.CellSeed(cell.X, cell.Y, cell.Face, cell.Copy)));
 
         void AddPatch(CloudPatch3D patch, int copy)
         {
@@ -137,8 +138,9 @@ public sealed partial class NewtGame
             if (local.Z < 0 || local.Z >= _world.Height) continue;
             var tile = MapTile3D((int)MathF.Floor(local.X), (int)MathF.Floor(local.Z));
             if (_world.Body is WorldBody.Nexus && !_nexusCloudFootprint3D[tile.Y * _world.Width + tile.X]) continue;
+            if (_world.GetBiome(tile) is Biome.Desert) continue;
             var kind = WeatherVisuals.Precipitation(WeatherVisuals.RainCloudDensity,
-                _world.GetMoistureBand(tile), _world.GetTemperatureBand(tile));
+                MoistureBand.Normal, _world.GetTemperatureBand(tile));
             if (kind is PrecipitationKind.None) continue;
             var surfaceHeight = Math.Max(TileHeight3D(tile),
                 ThreeDGeometry.ColumnHeight(WaterElevation3D(tile) ?? _world.GetElevation(tile))) + 0.025f;
@@ -189,8 +191,8 @@ public sealed partial class NewtGame
                     var pastLocal = LocalPoint3D(emissionSource);
                     if (!ContainsTile3D((int)MathF.Floor(pastLocal.X), (int)MathF.Floor(pastLocal.Z))) return;
                     var pastTile = MapTile3D((int)MathF.Floor(pastLocal.X), (int)MathF.Floor(pastLocal.Z));
-                    if (_world.GetMoistureBand(pastTile) is MoistureBand.Dry ||
-                        _world.Body is WorldBody.Nexus && !_nexusCloudFootprint3D[pastTile.Y * _world.Width + pastTile.X]) return;
+                    if (_world.Body is WorldBody.Nexus && !_nexusCloudFootprint3D[pastTile.Y * _world.Width + pastTile.X]) return;
+                    if (_world.GetBiome(pastTile) is Biome.Desert) return;
                     var pastHeight = Math.Max(TileHeight3D(pastTile),
                         ThreeDGeometry.ColumnHeight(WaterElevation3D(pastTile) ?? _world.GetElevation(pastTile))) + 0.025f;
                     if (pastHeight >= cloudHeight) return;
@@ -199,6 +201,11 @@ public sealed partial class NewtGame
                 }
                 var offset = emissionFrame.East * ((WeatherVisuals.RandomFraction(dropSeed) - 0.5f) * 0.65f) +
                     emissionFrame.South * ((WeatherVisuals.RandomFraction(dropSeed + 1) - 0.5f) * 0.65f);
+                // Jitter can cross a biome boundary; check the actual landing tile too.
+                var landing = LocalPoint3D(emissionGround + offset);
+                if (!ContainsTile3D((int)MathF.Floor(landing.X), (int)MathF.Floor(landing.Z))) return;
+                var landingTile = MapTile3D((int)MathF.Floor(landing.X), (int)MathF.Floor(landing.Z));
+                if (_world.GetBiome(landingTile) is Biome.Desert) return;
                 _weatherDrops3D.Add(new(emissionSource + offset, emissionGround + offset,
                     emissionFrame.Up, emissionFrame.East, kind, bornAt, dropSeed));
             }
@@ -266,14 +273,26 @@ public sealed partial class NewtGame
         GraphicsDevice.BlendState = BlendState.NonPremultiplied;
         GraphicsDevice.DepthStencilState = DepthStencilState.DepthRead;
         GraphicsDevice.RasterizerState = RasterizerState.CullNone;
-        _terrainEffect3D!.World = Matrix.Identity;
-        _terrainEffect3D.View = view;
-        _terrainEffect3D.Projection = projection;
-        _terrainEffect3D.DiffuseColor = new Vector3(Math.Max(0.3f, daylight));
+        var effect = TerrainSceneEffect3D;
+        SetTerrainWorld3D(effect, Matrix.Identity);
+
+
+        // Match river waterfall droplets, including local night-side shading on planets.
+        if (effect is BasicEffect basic)
+        {
+            basic.View = view;
+            basic.Projection = projection;
+            basic.DiffuseColor = new Vector3(daylight);
+        }
+        else
+        {
+            effect.Parameters["ViewProjection"].SetValue(view * projection);
+            effect.Parameters["CloudLighting"].SetValue(0f);
+        }
         if (_precipitationBuffer3D.Length < _precipitationVertices3D.Count)
             Array.Resize(ref _precipitationBuffer3D, Math.Max(_precipitationVertices3D.Count, _precipitationBuffer3D.Length * 2));
         _precipitationVertices3D.CopyTo(_precipitationBuffer3D);
-        foreach (var pass in _terrainEffect3D.CurrentTechnique.Passes)
+        foreach (var pass in effect.CurrentTechnique.Passes)
         {
             pass.Apply();
             GraphicsDevice.DrawUserPrimitives(PrimitiveType.TriangleList, _precipitationBuffer3D, 0,

@@ -29,6 +29,8 @@
     <Compile Include="..\..\src\Newt.Game\PopulationCounts.cs" Link="PopulationCounts.cs" />
     <Compile Include="..\..\src\Newt.Game\WeatherVisuals.cs" Link="WeatherVisuals.cs" />
     <Compile Include="..\..\src\Newt.Game\RifleShotTiming.cs" Link="RifleShotTiming.cs" />
+    <Compile Include="..\..\src\Newt.Game\GuidedMissileFlight.cs" Link="GuidedMissileFlight.cs" />
+    <Compile Include="..\..\src\Newt.Game\CloudPerforations.cs" Link="CloudPerforations.cs" />
   </ItemGroup>
 
 </Project>

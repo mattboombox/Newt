@@ -5,13 +5,66 @@ namespace Newt.Simulation.Tests;
 
 public sealed class RifleTests
 {
+    [Theory]
+    [InlineData(WorldBody.Earth, 12, 8)]
+    [InlineData(WorldBody.Earth, 0, 0)]
+    [InlineData(WorldBody.Planetoid, 4, 0)]
+    [InlineData(WorldBody.Planetoid, 7, 7)]
+    [InlineData(WorldBody.Planetoid, 15, 10)]
+    public void RifleStrikeAffectsOnlyOneTileWithoutAShockwave(WorldBody body, int x, int y)
+    {
+        var world = new SimulationWorld(24, 16, Terrain.Plains) { Body = body };
+        for (var row = 0; row < world.Height; row++)
+        for (var column = 0; column < world.Width; column++)
+        {
+            var tile = new GridPosition(column, row);
+            world.SetBiome(tile, Biome.Grassland);
+            world.SetElevation(tile, 0.3f);
+            world.AddCritter(CritterSpecies.Wolf, tile);
+        }
+        var center = new GridPosition(x, y);
+        var result = Impacts.CreateRifleImpact(world, center);
+        Assert.Equal(0, result.CraterRadius);
+        Assert.Equal(0, result.ShockRadius);
+        Assert.Equal(0, result.FragmentCount);
+        Assert.Equal(0, world.ActiveImpactWaveCount);
+        Assert.Equal(0, world.ActiveLavaFlowCount);
+        for (var tick = 0; tick < 20; tick++) Impacts.Advance(world);
+        for (var row = 0; row < world.Height; row++)
+        for (var column = 0; column < world.Width; column++)
+        {
+            var tile = new GridPosition(column, row);
+            if (tile == center)
+            {
+                Assert.InRange(world.GetElevation(tile), 0.259f, 0.261f);
+                Assert.False(world.IsOccupied(tile));
+                Assert.Equal(SurfaceCover.Stone, world.GetSurfaceCover(tile));
+            }
+            else
+            {
+                Assert.Equal(0.3f, world.GetElevation(tile));
+                Assert.True(world.IsOccupied(tile));
+                Assert.Equal(SurfaceCover.None, world.GetSurfaceCover(tile));
+            }
+        }
+    }
+
     [Fact]
-    public void VisibleShockwaveOutlastsFastSimulationAndStillExpiresInRealTime()
+    public void RifleTracerNeverDisplaysAShockwave()
+    {
+        var flight = new RifleShotTiming(60);
+        Assert.True(flight.Advance(flight.TravelSeconds));
+        Assert.False(flight.ShockwaveVisible);
+        Assert.True(flight.Opacity > 0);
+    }
+
+    [Fact]
+    public void MissileShockwaveOutlastsFastSimulationAndStillExpiresInRealTime()
     {
         var world = new SimulationWorld(24, 16, Terrain.Plains);
-        var flight = new RifleShotTiming(60);
+        var flight = new RifleShotTiming(60, shockwave: true);
         Assert.True(flight.Advance(flight.TravelSeconds + 0.001f));
-        Impacts.CreateRifleImpact(world, new(12, 8));
+        Impacts.CreateMissileImpact(world, new(12, 8));
         // At fast simulation rates the physical wave can finish within one frame.
         for (var tick = 0; tick < 20; tick++) Impacts.Advance(world);
         Assert.Equal(0, world.ActiveImpactWaveCount);
@@ -51,7 +104,7 @@ public sealed class RifleTests
     [InlineData(WorldBody.Planetoid, 4, 0)]
     [InlineData(WorldBody.Planetoid, 7, 7)]
     [InlineData(WorldBody.Planetoid, 15, 10)]
-    public void RifleImpactAffectsOnlyTargetAndImmediateSurfaceNeighbors(WorldBody body, int x, int y)
+    public void MissileImpactStillAffectsTargetAndImmediateSurfaceNeighbors(WorldBody body, int x, int y)
     {
         var world = new SimulationWorld(24, 16, Terrain.Plains) { Body = body };
         for (var row = 0; row < world.Height; row++)
@@ -70,7 +123,7 @@ public sealed class RifleTests
             var tile = world.OffsetTile(center, new(dx, dy));
             if (world.Contains(tile)) footprint.Add(tile);
         }
-        var result = Impacts.CreateRifleImpact(world, center);
+        var result = Impacts.CreateMissileImpact(world, center);
         Assert.Equal(1, result.CraterRadius);
         Assert.Equal(1, result.ShockRadius);
         Assert.Equal(1, world.ActiveImpactWaveCount);
