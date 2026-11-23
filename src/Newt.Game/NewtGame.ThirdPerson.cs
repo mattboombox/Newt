@@ -37,8 +37,14 @@ public sealed partial class NewtGame
                 var local = LocalPoint3D(Framework(point));
                 var x = (int)MathF.Floor(local.X);
                 var y = (int)MathF.Floor(local.Z);
-                if (!ContainsTile3D(x, y)) return true;
+                if (!ContainsTile3D(x, y))
+                {
+                    // Open Nexus airspace has no terrain to obstruct the chase camera.
+                    return _world.Body != WorldBody.Nexus ||
+                        !NexusLayout.ContainsAirspace(_world, new GridPosition(x, y));
+                }
                 var tile = MapTile3D(x, y);
+                if (ThreeDGeometry.PlayerUsesOpenAirMovement(_world, tile)) return false;
                 const float clearance = 0.15f;
                 if (local.Y < TileHeight3D(tile) + clearance) return true;
                 // Water is transparent; ice and bridge decks obstruct the camera

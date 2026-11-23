@@ -244,16 +244,12 @@ public sealed partial class SimulationWorld
         var war = new ApeWar(attacker, defender, distances, bloodWar) { Id = _nextApeWarId++ };
         if (barbarianDefender)
         {
-            var campPopulation = residents[1].Count(id =>
-                IsLivingApe(_species[_critterIndicesById[id]]) || _species[_critterIndicesById[id]] is CritterSpecies.Dog);
-            var limit = campPopulation * 4;
             var standingArmy = residents[0].Where(id => IsBarbarianWarFighter(_critterIndicesById[id]) || IsApeMilitary(_species[_critterIndicesById[id]]) ||
                 _species[_critterIndicesById[id]] is CritterSpecies.Dog or CritterSpecies.ApeChieftain or
-                    CritterSpecies.ApeKing or CritterSpecies.ApeQueen).Take(limit).ToArray();
+                    CritterSpecies.ApeKing or CritterSpecies.ApeQueen).ToArray();
             var unemployed = residents[0].Where(id => _species[_critterIndicesById[id]] is CritterSpecies.Ape &&
                 CanRecruitApe(_critterIndicesById[id])).ToArray();
-            war.AttackingParticipants = standingArmy.Concat(unemployed.Take(
-                Math.Min(limit - standingArmy.Length, (int)Math.Ceiling(unemployed.Length * 0.9)))).ToHashSet();
+            war.AttackingParticipants = standingArmy.Concat(unemployed).ToHashSet();
         }
         for (var side = 0; side < 2; side++)
         {
@@ -288,8 +284,7 @@ public sealed partial class SimulationWorld
             }
             var unemployed = residents[side].Where(id => _species[_critterIndicesById[id]] is CritterSpecies.Ape && CanRecruitApe(_critterIndicesById[id]) &&
                 (side != 0 || war.AttackingParticipants is null || war.AttackingParticipants.Contains(id))).ToArray();
-            foreach (var id in unemployed.Take(side == 0 && war.AttackingParticipants is not null
-                ? unemployed.Length : (int)Math.Ceiling(unemployed.Length * 0.9)))
+            foreach (var id in unemployed)
             {
                 ChangeCritterSpecies(_critterIndicesById[id], CritterSpecies.ApeWarrior,
                     preserveEnergy: true, preserveApeVillage: true);

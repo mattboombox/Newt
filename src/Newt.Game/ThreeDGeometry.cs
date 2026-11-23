@@ -302,6 +302,15 @@ internal static class ThreeDGeometry
 
     internal static int WrapTile(int coordinate, int size) => (coordinate % size + size) % size;
 
+    internal static bool PlayerCanEnterNexusTile(SimulationWorld world, GridPosition tile) =>
+        NexusLayout.ContainsAirspace(world, tile);
+
+    internal static bool PlayerUsesOpenAirMovement(SimulationWorld world, GridPosition tile) =>
+        world.Contains(tile) && (world.GetTerrain(tile) == Terrain.MegaWall ||
+            world.Body == WorldBody.Nexus && !NexusLayout.Contains(world, tile));
+
+    internal static float PlayerOpenAirHeight(float current, bool rising, float seconds, float maximumHeight, bool boosted) =>
+        rising ? Math.Min(Math.Max(current, maximumHeight), current + (boosted ? GroundRunSpeed : 6f) * seconds) : current;
     internal static System.Numerics.Vector2 PlayerSpawnPosition(SimulationWorld world,
         System.Numerics.Vector2 position)
     {

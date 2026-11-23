@@ -7588,7 +7588,9 @@ public sealed partial class SimulationWorld
     private bool CanLiveOn(CritterSpecies species, int tileIndex) =>
         species is CritterSpecies.Sandworm ? IsSandwormHabitat(GetPosition(tileIndex)) :
         CanOccupyMegaWall(species, tileIndex) &&
-        (Body is not WorldBody.Nexus || NexusLayout.Contains(this, GetPosition(tileIndex))) &&
+        (Body is not WorldBody.Nexus || (species is CritterSpecies.Custodian
+            ? NexusLayout.ContainsAirspace(this, GetPosition(tileIndex))
+            : NexusLayout.Contains(this, GetPosition(tileIndex)))) &&
         (species is CritterSpecies.Custodian ||
         _terrain[tileIndex] is Terrain.Ice &&
             _surfaceCovers[tileIndex] is SurfaceCover.None ||

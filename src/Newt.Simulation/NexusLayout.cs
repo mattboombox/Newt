@@ -22,6 +22,16 @@ public static class NexusLayout
             center.Y + (int)MathF.Round(MathF.Sin(angle) * Radius(world) * distance));
     }
 
+    /// <summary>Airspace over the petals, central opening, and gaps between petals.</summary>
+    public static bool ContainsAirspace(SimulationWorld world, GridPosition position)
+    {
+        if (!world.Contains(position)) return false;
+        var center = Center(world);
+        var dx = position.X - center.X;
+        var dy = position.Y - center.Y;
+        var radius = Radius(world);
+        return dx * dx + dy * dy <= radius * radius;
+    }
     public static bool Contains(SimulationWorld world, GridPosition position)
     {
         if (!world.Contains(position)) return false;

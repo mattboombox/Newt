@@ -337,7 +337,7 @@ public sealed class CustodianTests
             visited.Add(snapshot.Position);
         }
 
-        Assert.All(visited, position => Assert.True(NexusLayout.Contains(world, position)));
+        Assert.All(visited, position => Assert.True(NexusLayout.ContainsAirspace(world, position)));
         Assert.Contains(visited, position => NexusLayout.ArmIndex(world, position) != startArm);
         Assert.True(visited.Count >= 40, $"Patrol only visited {visited.Count} tiles.");
     }

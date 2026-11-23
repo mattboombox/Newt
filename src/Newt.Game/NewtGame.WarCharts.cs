@@ -77,7 +77,7 @@ public sealed partial class NewtGame
             var bounds = new Rectangle(WarChartX, 12 + row * (WarChartHeight + WarChartGap), WarChartWidth, WarChartHeight);
             _spriteBatch.Draw(_pixel, bounds, new Color(76, 91, 102));
             _spriteBatch.Draw(_pixel, new Rectangle(bounds.X + 2, bounds.Y + 2, bounds.Width - 4, bounds.Height - 4),
-                new Color(18, 23, 27, 244));
+                MenuBackgroundColor);
             _spriteBatch.DrawString(_hudFont, $"{war.Attacker} / {war.Defender} / {war.WarType}",
                 new Vector2(bounds.X + 12, bounds.Y + 8), new Color(126, 190, 213));
             var attacking = war.Armies.Attacking;

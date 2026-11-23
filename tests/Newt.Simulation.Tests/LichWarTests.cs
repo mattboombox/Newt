@@ -6,6 +6,36 @@ namespace Newt.Simulation.Tests;
 public sealed class LichWarTests
 {
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void VillageRecruitsEveryUnemployedApeWhenFightingALich(bool lichAttacking)
+    {
+        var world = CreateWorld(false);
+        var homes = (Dictionary<int, int>)typeof(SimulationWorld).GetField("_apeVillageHomes", Private)!.GetValue(world)!;
+        var recruits = new List<CritterId>();
+        for (var i = 0; i < 20; i++)
+        {
+            var id = world.AddCritter(CritterSpecies.Ape, new(15 + i, 20));
+            homes[id.Value] = Village.Y * world.Width + Village.X;
+            recruits.Add(id);
+        }
+        Assert.True(world.TryStartApeWar(lichAttacking ? LichTile : Village, lichAttacking ? Village : LichTile));
+        foreach (var id in recruits)
+        {
+            Assert.True(world.TryGetCritter(id, out var recruit));
+            Assert.Equal(CritterSpecies.ApeWarrior, recruit.Species);
+            Assert.True(world.TryGetApeWarSide(id, out var attacking));
+            Assert.Equal(!lichAttacking, attacking);
+        }
+        Assert.True(world.TryStopApeWar(Village));
+        foreach (var id in recruits)
+        {
+            Assert.True(world.TryGetCritter(id, out var recruit));
+            Assert.Equal(CritterSpecies.Ape, recruit.Species);
+        }
+    }
+
+    [Theory]
     [InlineData(true)]
     [InlineData(false)]
     public void WarStatusPlacesLichArmyOnTheCorrectSide(bool lichAttacking)
@@ -198,7 +228,7 @@ public sealed class LichWarTests
         var villageTile = Village.Y * world.Width + Village.X;
         for (var n = 0; n < 98; n++)
         {
-            var id = world.AddCritter(CritterSpecies.Ape, new(15 + n % 40, 22 + n / 40));
+            var id = world.AddCritter(CritterSpecies.ApeWarrior, new(15 + n % 40, 22 + n / 40));
             homes[id.Value] = villageTile;
         }
         NaturalEvents.SetEnabled(world, true);

@@ -39,6 +39,23 @@ public sealed class PopulationCountsTests
     }
 
     [Fact]
+    public void CondensedChartListsUndeadSeparatelyWithoutCountingThemAsLivingApes()
+    {
+        var world = CreateWorld();
+        world.AddCritter(CritterSpecies.Ape, new(0, 0));
+        world.AddCritter(CritterSpecies.ApeWarrior, new(1, 0));
+        world.AddCritter(CritterSpecies.UndeadApe, new(2, 0));
+        world.AddCritter(CritterSpecies.UndeadWarrior, new(3, 0));
+        Assert.False(PopulationCounts.IsCondensedApe(CritterSpecies.UndeadApe));
+        Assert.False(PopulationCounts.IsCondensedApe(CritterSpecies.UndeadWarrior));
+        Assert.Equal(2, PopulationCounts.CondensedApeTotal(world));
+        var separateRows = Enum.GetValues<CritterSpecies>().Where(species => !PopulationCounts.IsCondensedApe(species))
+            .Sum(world.GetCritterCount);
+        Assert.Equal(world.CritterCount, PopulationCounts.CondensedApeTotal(world) + separateRows);
+        world.RemoveCritterAt(new(0, 0));
+        Assert.Equal(1, PopulationCounts.CondensedApeTotal(world));
+    }
+    [Fact]
     public void EveryApeRoleAndUndeadVariantContributesOnceAndRemovalUpdatesTotal()
     {
         var world = CreateWorld();

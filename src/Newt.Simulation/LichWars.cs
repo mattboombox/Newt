@@ -80,7 +80,7 @@ public sealed partial class SimulationWorld
             var unemployed = _apeVillageHomes.Where(pair => pair.Value == village &&
                 _critterIndicesById.TryGetValue(pair.Key, out var index) && CanRecruitApe(index) && _species[index] is CritterSpecies.Ape)
                 .Select(pair => pair.Key).Order().ToArray();
-            foreach (var id in unemployed.Take((int)Math.Ceiling(unemployed.Length * 0.9)))
+            foreach (var id in unemployed)
             {
                 ChangeCritterSpecies(_critterIndicesById[id], CritterSpecies.ApeWarrior, true, true);
                 war.Levies.Add(id);

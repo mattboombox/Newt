@@ -450,15 +450,15 @@ public sealed partial class NewtGame
             0, Math.Max(0, _world.Height - viewport.Height / TileSize));
     }
 
-    private void HandleCamera3D(KeyboardState keyboard, MouseState mouse, float seconds)
+    private void HandleCamera3D(KeyboardState keyboard, MouseState mouse, float seconds, bool allowMouseInput = true)
     {
         if (IsWalkingCamera)
         {
-            if (_playerView is PlayerView.ThirdPerson)
+            if (allowMouseInput && _playerView is PlayerView.ThirdPerson)
                 _thirdPersonDistance = Math.Clamp(_thirdPersonDistance * MathF.Pow(0.85f,
                     (mouse.ScrollWheelValue - _previousMouse.ScrollWheelValue) / 120f),
                     MinimumThirdPersonDistance, MaximumThirdPersonDistance);
-            HandleFirstPerson(keyboard, mouse, seconds);
+            HandleFirstPerson(keyboard, mouse, seconds, allowMouseInput);
             return;
         }
         seconds = Math.Min(seconds, 0.1f);
@@ -467,6 +467,7 @@ public sealed partial class NewtGame
         if (keyboard.IsKeyDown(Keys.Right)) _yaw3D += rotation;
         if (keyboard.IsKeyDown(Keys.Up)) _pitch3D += rotation;
         if (keyboard.IsKeyDown(Keys.Down)) _pitch3D -= rotation;
+        // Middle-drag rotation stays available while browsing the tool menu.
         if (mouse.MiddleButton == ButtonState.Pressed && _previousMouse.MiddleButton == ButtonState.Pressed)
         {
             _yaw3D -= (mouse.X - _previousMouse.X) * 0.006f;
@@ -484,7 +485,7 @@ public sealed partial class NewtGame
         if (movement.LengthSquared() > 0) movement.Normalize();
         var speed = keyboard.IsKeyDown(Keys.LeftShift) ? 2.5f : 1;
         MoveCameraOnMap3D(movement * seconds * _distance3D * 0.65f * speed);
-        _distance3D = Math.Clamp(_distance3D * MathF.Pow(0.85f,
+        if (allowMouseInput) _distance3D = Math.Clamp(_distance3D * MathF.Pow(0.85f,
             (mouse.ScrollWheelValue - _previousMouse.ScrollWheelValue) / 120f), 6, MaximumDistance3D);
         WrapCamera3D();
     }
@@ -720,7 +721,9 @@ public sealed partial class NewtGame
             var critter = _world.GetCritter(i);
             if (critter.Species is CritterSpecies.Sandworm) continue;
             var tile = critter.Position;
-            if (!ContainsTile3D(tile.X, tile.Y) || tile.Y < bounds.Top || tile.Y >= bounds.Bottom) continue;
+            var inAirspace = _world.Body == WorldBody.Nexus && critter.Species == CritterSpecies.Custodian &&
+                NexusLayout.ContainsAirspace(_world, tile);
+            if ((!ContainsTile3D(tile.X, tile.Y) && !inAirspace) || tile.Y < bounds.Top || tile.Y >= bounds.Bottom) continue;
             var height = TileHeight3D(tile);
             if (_world.HasRoadBridge(tile) &&
                 ThreeDGeometry.StandsOnIce(CritterHabitats.GetHabitat(critter.Species)))

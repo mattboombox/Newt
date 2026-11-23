@@ -29,6 +29,9 @@ public sealed partial class NewtGame
     private float WalkingSurfaceHeight(Vector2 position)
     {
         var tile = MapTile3D((int)MathF.Floor(position.X), (int)MathF.Floor(position.Y));
+        // Walls and open air do not provide a floor or change the player altitude.
+        if (ThreeDGeometry.PlayerUsesOpenAirMovement(_world, tile))
+            return _firstPersonEyeHeight - FirstPersonEyeOffset;
         var ground = TileHeight3D(tile);
         // Solid ice and bridge decks support the walker above the water.
         if (!_firstPersonUnderIce && IsIce3D(tile) && WaterElevation3D(tile) is { } surface)
@@ -41,6 +44,7 @@ public sealed partial class NewtGame
     private float? FirstPersonWaterSurface(Vector2 position)
     {
         var tile = MapTile3D((int)MathF.Floor(position.X), (int)MathF.Floor(position.Y));
+        if (_world.Body == WorldBody.Nexus && !NexusLayout.Contains(_world, tile)) return null;
         if ((IsIce3D(tile) && !_firstPersonUnderIce) || _world.HasRoadBridge(tile) || WaterElevation3D(tile) is not { } water)
             return null;
         var surface = ThreeDGeometry.ColumnHeight(water);
@@ -82,7 +86,7 @@ public sealed partial class NewtGame
         ResetToolRepeat();
     }
 
-    private void HandleFirstPerson(KeyboardState keyboard, MouseState mouse, float seconds)
+    private void HandleFirstPerson(KeyboardState keyboard, MouseState mouse, float seconds, bool allowMouseInput = true)
     {
         if (_setupMenuOpen || _controlsWindowOpen)
         {
@@ -90,12 +94,12 @@ public sealed partial class NewtGame
             _firstPersonMouseReady = false;
             return;
         }
-        IsMouseVisible = false;
+        IsMouseVisible = !allowMouseInput;
         seconds = Math.Clamp(seconds, 0, 0.1f);
         _ringCameraTurnRemaining = Math.Max(0, _ringCameraTurnRemaining - seconds);
         var centerX = GraphicsDevice.Viewport.Width / 2;
         var centerY = MapViewportHeight / 2;
-        if (_firstPersonMouseReady)
+        if (allowMouseInput && _firstPersonMouseReady)
         {
             _yaw3D -= (mouse.X - centerX) * 0.003f;
             _pitch3D += (mouse.Y - centerY) * 0.003f;
@@ -107,8 +111,8 @@ public sealed partial class NewtGame
         if (keyboard.IsKeyDown(Keys.Down)) _pitch3D += rotation;
         _yaw3D = MathHelper.WrapAngle(_yaw3D);
         _pitch3D = Math.Clamp(_pitch3D, -MathHelper.PiOver2 + 0.02f, MathHelper.PiOver2 - 0.02f);
-        Mouse.SetPosition(centerX, centerY);
-        _firstPersonMouseReady = true;
+        if (allowMouseInput) Mouse.SetPosition(centerX, centerY);
+        _firstPersonMouseReady = allowMouseInput;
         var forward = (keyboard.IsKeyDown(Keys.W) ? 1 : 0) - (keyboard.IsKeyDown(Keys.S) ? 1 : 0);
         var right = (keyboard.IsKeyDown(Keys.D) ? 1 : 0) - (keyboard.IsKeyDown(Keys.A) ? 1 : 0);
         var running = keyboard.IsKeyDown(Keys.LeftShift);
@@ -121,7 +125,11 @@ public sealed partial class NewtGame
         var previousYaw = _yaw3D;
         MoveCameraOnMap3D(new Vector2(step.X, step.Y));
         WrapCamera3D();
-        if (!ContainsTile3D((int)MathF.Floor(_focus3D.X), (int)MathF.Floor(_focus3D.Y)))
+        var destination = new GridPosition((int)MathF.Floor(_focus3D.X), (int)MathF.Floor(_focus3D.Y));
+        var canEnter = _world.Body == WorldBody.Nexus
+            ? ThreeDGeometry.PlayerCanEnterNexusTile(_world, destination)
+            : ContainsTile3D(destination.X, destination.Y);
+        if (!canEnter)
             _focus3D = previous;
         var nextTile = MapTile3D((int)MathF.Floor(_focus3D.X), (int)MathF.Floor(_focus3D.Y));
         if (IsIce3D(nextTile) && WaterElevation3D(nextTile) is { } iceWater)
@@ -158,14 +166,24 @@ public sealed partial class NewtGame
             : IsPlanetoid3D ? FirstPersonMaximumFlightHeight * 8
             : Math.Max(FirstPersonMaximumFlightHeight, ThreeDGeometry.BlackSkyHeight);
         var previousHeight = _firstPersonEyeHeight;
-        float? fallingDistance = null;
-        var landingHeight = Math.Max(ground + FirstPersonEyeOffset,
-            waterSurface is { } water ? water + FirstPersonEyeOffset * 0.75f : float.MinValue);
-        if (!rising && ceiling is null && previousHeight > landingHeight + 0.001f)
+        if (ThreeDGeometry.PlayerUsesOpenAirMovement(_world, currentTile))
         {
-            var fall = ThreeDGeometry.AdvancePlayerFall(_firstPersonFallVelocity, seconds);
-            fallingDistance = fall.Distance;
-            _firstPersonFallVelocity = fall.Velocity;
+            _firstPersonEyeHeight = ThreeDGeometry.PlayerOpenAirHeight(_firstPersonEyeHeight, rising,
+                seconds, flightCeiling, running);
+            _firstPersonFlying = true;
+            _firstPersonUnderIce = false;
+            _firstPersonFallVelocity = 0;
+        }
+        else
+        {
+            float? fallingDistance = null;
+            var landingHeight = Math.Max(ground + FirstPersonEyeOffset,
+                waterSurface is { } water ? water + FirstPersonEyeOffset * 0.75f : float.MinValue);
+            if (!rising && ceiling is null && previousHeight > landingHeight + 0.001f)
+            {
+                var fall = ThreeDGeometry.AdvancePlayerFall(_firstPersonFallVelocity, seconds);
+                fallingDistance = fall.Distance;
+                _firstPersonFallVelocity = fall.Velocity;
         }
         else _firstPersonFallVelocity = 0;
         (_firstPersonEyeHeight, _firstPersonFlying) = ThreeDGeometry.FirstPersonFlightHeight(
@@ -173,6 +191,7 @@ public sealed partial class NewtGame
             rising && !_firstPersonCrossing, _firstPersonCrossing && _firstPersonFlying,
             seconds, flightCeiling, FirstPersonEyeOffset, ceiling, boosted: running, fallingDistance: fallingDistance);
         if (!_firstPersonFlying) _firstPersonFallVelocity = 0;
+        }
         if (IsRing3D && rising && !_firstPersonCrossing && _firstPersonFlying &&
             ThreeDGeometry.RingFlightCrossing(_focus3D.X, _world.Width, previousHeight,
                 _firstPersonEyeHeight) is { } oppositeX)

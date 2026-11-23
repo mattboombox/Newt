@@ -21,6 +21,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
     private string _cultureToolStatus = "L village: assign Luddite culture (any population)";
     private string _monarchyToolStatus = "L village: assign Monarchy culture (any population)";
     private string _anarchyToolStatus = "L village: unemployed apes form camps of 11; dogs join";
+    private static readonly Color MenuBackgroundColor = new(23, 30, 36);
     private const int HudHeight = 156;
     private const int HudPadding = 12;
     private const double ToolRepeatDelaySeconds = 0.25;
@@ -58,7 +59,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         [WorldTool.Plague, WorldTool.ZombiePlague, WorldTool.VampirePlague, WorldTool.Blight];
     private static readonly WorldTool[] CritterToolOrder =
         [WorldTool.Plankton, WorldTool.Jellyfish, WorldTool.Worm, WorldTool.Trilobite,
-            WorldTool.SeaScorpion, WorldTool.Nautilus, WorldTool.Squid, WorldTool.SquidEgg,
+            WorldTool.SeaScorpion, WorldTool.Nautilus, WorldTool.Squid,
             WorldTool.Fish, WorldTool.Newt, WorldTool.Snail, WorldTool.MegaSlug, WorldTool.MegaToad, WorldTool.MegaSpider,
             WorldTool.Sandworm, WorldTool.Therapsid, WorldTool.Monkey, WorldTool.Ape, WorldTool.Deer, WorldTool.Elk,
             WorldTool.Gazelle, WorldTool.Wolf, WorldTool.Dog, WorldTool.Crab, WorldTool.ToothedWhale,
@@ -75,14 +76,14 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
     private static readonly string[] ControlLines =
     [
         "/ or ?  open or close controls",
-        "[  population: condensed / detailed / close",
+        "[  population: condensed / detailed / villages / close",
         "Esc  quit",
         "H  hide or show HUD",
         "M  open world menu",
         "N  generate next seed",
-        "Q / E  previous / next tool",
-        "R  next tool category",
-        "T  previous tool category",
+        "Q / E  previous / next tool (hold to scroll)",
+        "R / T  previous / next category (hold)",
+        "Tool keys open the tool menu",
         ", / .  slower / faster simulation",
         "- / =  decrease / increase magnitude",
         "P  pause or resume",
@@ -319,6 +320,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         var acceptInput = IsActive && !_waitingForInputRelease;
         if (!acceptInput)
         {
+            ResetToolMenuKeyRepeat();
             _firstPersonMouseReady = false;
             ResetToolRepeat();
             // Discard background input, wheel changes, and the click used to regain focus.
@@ -332,6 +334,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
 
         if (_setupMenuOpen)
         {
+            ResetToolMenuKeyRepeat();
             if (acceptInput)
                 HandleSetupMenu(keyboard, mouse);
             _previousKeyboard = keyboard;
@@ -348,20 +351,21 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
 
         if (acceptInput)
         {
-            HandleWorldShortcuts(keyboard, mouse);
+            HandleWorldShortcuts(keyboard, mouse, gameTime.ElapsedGameTime.TotalSeconds);
             if (WasPressed(keyboard, Keys.Tab)) Toggle3DView();
             if (WasPressed(keyboard, Keys.V)) ToggleWalkingCamera();
             if (WasPressed(keyboard, Keys.F)) TogglePlayerPerspective();
             if (WasPressed(keyboard, Keys.Z)) CycleViewZoom3D();
             if (_view3D && WasPressed(keyboard, Keys.L)) CycleRenderDistance3D();
-            if (IsPointerOverWarCharts(mouse))
-                ScrollWarCharts(mouse);
+            var pointerBlockedByUi = HandleToolMenuInput(mouse);
+            if (_view3D)
+                HandleCamera3D(keyboard, mouse, (float)gameTime.ElapsedGameTime.TotalSeconds, !pointerBlockedByUi);
             else
-            {
-                if (_view3D) HandleCamera3D(keyboard, mouse, (float)gameTime.ElapsedGameTime.TotalSeconds);
-                else HandleCamera(keyboard, mouse);
+                HandleCamera(keyboard, mouse, !pointerBlockedByUi);
+            if (pointerBlockedByUi)
+                ResetToolRepeat();
+            else
                 HandleActiveTool(mouse, gameTime.ElapsedGameTime.TotalSeconds);
-            }
         }
 
         if (IsActive && !_paused) AdvanceRifleShots((float)gameTime.ElapsedGameTime.TotalSeconds);
@@ -526,7 +530,9 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             var standsOnIce = IsIce3D(critter.Position) &&
                 ThreeDGeometry.StandsOnIce(CritterHabitats.GetHabitat(critter.Species));
             if (standsOnIce != aboveIce) continue;
-            if (_world.Body == WorldBody.Nexus && !NexusLayout.Contains(_world, critter.Position)) continue;
+            if (_world.Body == WorldBody.Nexus && !(critter.Species == CritterSpecies.Custodian
+                ? NexusLayout.ContainsAirspace(_world, critter.Position)
+                : NexusLayout.Contains(_world, critter.Position))) continue;
             var location = MapLocation2D(critter.Position);
             var screenX = WrappedScreenX(location.X);
             var screenY = location.Y - _cameraY;
@@ -552,6 +558,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             DrawPopulationWindow();
         }
         DrawWarCharts();
+        if (!_hudHidden && _toolMenuOpen) DrawToolMenu();
         if (_controlsWindowOpen)
         {
             DrawControlsWindow();
@@ -1044,7 +1051,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
 
     private int GetCritterMarkerInset() => (TileSize - GetCritterMarkerSize()) / 2;
 
-    private void HandleWorldShortcuts(KeyboardState keyboard, MouseState mouse)
+    private void HandleWorldShortcuts(KeyboardState keyboard, MouseState mouse, double elapsedSeconds)
     {
         if (WasPressed(keyboard, Keys.OemQuestion))
         {
@@ -1052,7 +1059,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         }
         else if (WasPressed(keyboard, Keys.OemOpenBrackets))
         {
-            _populationWindowMode = (_populationWindowMode + 1) % 3;
+            _populationWindowMode = (_populationWindowMode + 1) % 4;
         }
         else if (WasPressed(keyboard, Keys.OemMinus))
         {
@@ -1089,21 +1096,9 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             return;
         }
 
-        if (WasPressed(keyboard, Keys.Q))
+        if (HandleToolMenuKeyboard(keyboard, elapsedSeconds))
         {
-            CycleTool(-1);
-        }
-        else if (WasPressed(keyboard, Keys.E))
-        {
-            CycleTool(1);
-        }
-        else if (WasPressed(keyboard, Keys.R))
-        {
-            CycleToolCategory(1);
-        }
-        else if (WasPressed(keyboard, Keys.T))
-        {
-            CycleToolCategory(-1);
+            // Tool navigation takes priority over other world shortcuts.
         }
         else if (WasPressed(keyboard, Keys.N))
         {
@@ -1613,6 +1608,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         ResetRoadToolSelection();
         _toolCategoryIndex = Mod(_toolCategoryIndex + step, ToolCategoryOrder.Length);
         _toolIndex = 0;
+        SyncToolMenuKeyboardSelection();
     }
 
     private void CycleTool(int step)
@@ -1620,6 +1616,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         ResetRoadToolSelection();
         var tools = GetTools(CurrentToolCategory);
         _toolIndex = Mod(_toolIndex + step, tools.Length);
+        SyncToolMenuKeyboardSelection();
     }
 
     private static WorldTool[] GetTools(ToolCategory category) => category switch
@@ -1636,7 +1633,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         _ => throw new ArgumentOutOfRangeException(nameof(category)),
     };
 
-    private void HandleCamera(KeyboardState keyboard, MouseState mouse)
+    private void HandleCamera(KeyboardState keyboard, MouseState mouse, bool allowMouseInput = true)
     {
         var panStep = keyboard.IsKeyDown(Keys.LeftShift) ? 4 : 1;
         if (keyboard.IsKeyDown(Keys.A) || keyboard.IsKeyDown(Keys.Left))
@@ -1656,7 +1653,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             _cameraY += panStep;
         }
 
-        var zoomDirection = Math.Sign(mouse.ScrollWheelValue - _previousMouse.ScrollWheelValue);
+        var zoomDirection = allowMouseInput ? Math.Sign(mouse.ScrollWheelValue - _previousMouse.ScrollWheelValue) : 0;
         var anchor = zoomDirection == 0 ? null : ScreenToWorld(mouse.X, mouse.Y);
         if (anchor is { } tile) anchor = MapLocation2D(tile);
         var previousZoomIndex = _zoomIndex;
@@ -1747,14 +1744,15 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         var mouse = Mouse.GetState();
         var hudY = MapViewportHeight;
         var width = GraphicsDevice.Viewport.Width;
-        _spriteBatch.Draw(_pixel, new Rectangle(0, hudY, width, HudHeight), new Color(16, 19, 22));
-        _spriteBatch.Draw(_pixel, new Rectangle(0, hudY, width, 2), new Color(76, 91, 102));
+        _spriteBatch.Draw(_pixel, new Rectangle(0, hudY, width, HudHeight), MenuBackgroundColor);
+        _spriteBatch.Draw(_pixel, new Rectangle(0, hudY, width, 1), new Color(76, 91, 102));
 
-        var toolX = width / 5;
+        var toolX = 0;
+        var worldX = width / 5;
         var tileX = width * 2 / 5;
         var critterX = width * 3 / 5;
         var buildingX = width * 4 / 5;
-        DrawHudDivider(toolX, hudY);
+        DrawHudDivider(worldX, hudY);
         DrawHudDivider(tileX, hudY);
         DrawHudDivider(critterX, hudY);
         DrawHudDivider(buildingX, hudY);
@@ -1762,7 +1760,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         var distanceLevels = ThreeDGeometry.RenderDistanceLevels;
         var worldName = $"{GetMapShapeName(_mapShape)} / {GetWorldSizeName(_preset)} / {GetMapTypeName(_mapType)}";
         var worldSize = $"{_world.Width} x {_world.Height}";
-        DrawHudLines(HudPadding, hudY + 8,
+        DrawHudLines(worldX + HudPadding, hudY + 8,
             worldName,
             _view3D ? $"{worldSize}  RD {distanceLevels - RenderDistanceLevel3D}/{distanceLevels}" : worldSize,
             $"Seed {_seed}   Tick {_world.Tick}   Year {_world.Year}   {GetSimulationRateText()}",
@@ -1778,8 +1776,8 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             $"TOOL: {GetToolCategoryName(CurrentToolCategory)}",
             GetToolName(CurrentTool),
             GetToolHint(CurrentTool),
-            "Q / E  cycle tools",
-            "R/T  next/previous category",
+            "Click here to choose a tool",
+            "Hover a category to browse",
             "< / >  speed   P  pause",
             $"M menu   G auto speed {(_simulationSpeedGuard.Enabled ? "ON" : "OFF")}   ? key for help");
 
@@ -1789,10 +1787,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
                 ? ["TILE", "Move the pointer over the map"]
                 : GetTileInspectionLines(position.Value));
         DrawCritterInspection(critterX + HudPadding, hudY + 8, position);
-        DrawHudLines(buildingX + HudPadding, hudY + 8,
-            position is null
-                ? ["BUILDING", "None"]
-                : GetBuildingInspectionLines(GetBuildingInspectionPosition(position.Value)));
+        DrawBuildingInspection(buildingX + HudPadding, hudY + 8, position);
     }
 
     private void DrawPopulationWindow()
@@ -1802,30 +1797,36 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             return;
         }
 
+        if (_populationWindowMode == 3)
+        {
+            DrawVillagePopulationWindow();
+            return;
+        }
+
         var barbarians = _world.GetBarbarianPopulationBySpecies();
         var chiefs = barbarians[(int)CritterSpecies.ApeChieftain];
         var warriors = PopulationCounts.BarbarianApeTotal(barbarians) - chiefs;
         var populations = Enum.GetValues<CritterSpecies>()
-            .Where(species => _populationWindowMode == 2 || !PopulationCounts.IsApe(species))
+            .Where(species => _populationWindowMode == 2 || !PopulationCounts.IsCondensedApe(species))
             .Select(species => (Name: GetCritterDisplayName(species),
-                Count: PopulationCounts.DetailedSpeciesTotal(_world, species, barbarians), Color: GetCritterColor(species),
-                History: _populationHistory[species]))
+                Species: species, Count: PopulationCounts.DetailedSpeciesTotal(_world, species, barbarians), Color: GetCritterColor(species),
+                History: _populationHistory[species], Icon: (Texture2D?)null))
             .Where(entry => entry.Count > 0)
             .ToList();
         if (_populationWindowMode == 1)
         {
-            var apes = PopulationCounts.ApeTotal(_world);
+            var apes = PopulationCounts.CondensedApeTotal(_world);
             if (apes > 0)
-                populations.Add(("Apes", apes, GetCritterColor(CritterSpecies.Ape), _combinedApeHistory));
+                populations.Add(("Apes", CritterSpecies.Ape, apes, GetCritterColor(CritterSpecies.Ape), _combinedApeHistory, null));
         }
         if (_populationWindowMode == 2 && warriors > 0)
-            populations.Add(("Ape Barbarian", warriors, new Color(190, 95, 60), _barbarianHistory));
+            populations.Add(("Ape Barbarian", CritterSpecies.ApeWarrior, warriors, new Color(190, 95, 60), _barbarianHistory, _apeBarbarianSprite));
         if (_populationWindowMode == 2 && chiefs > 0)
-            populations.Add(("Ape Barbarian Chief", chiefs, new Color(210, 75, 55), _barbarianChiefHistory));
+            populations.Add(("Ape Barbarian Chief", CritterSpecies.ApeChieftain, chiefs, new Color(210, 75, 55), _barbarianChiefHistory, _apeBarbarianChiefSprite));
         if (_populationWindowMode == 2 && _world.SickApeCount > 0)
         {
-            populations.Add(("Sick Apes", _world.SickApeCount,
-                new Color(205, 195, 55), _sickApeHistory));
+            populations.Add(("Sick Apes", CritterSpecies.Ape, _world.SickApeCount,
+                new Color(205, 195, 55), _sickApeHistory, null));
         }
         populations.Sort(static (left, right) =>
             StringComparer.OrdinalIgnoreCase.Compare(left.Name, right.Name));
@@ -1845,11 +1846,12 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         var windowX = 12;
         var windowY = 12;
         var bounds = new Rectangle(windowX, windowY, windowWidth, windowHeight);
+        _populationUiBounds = bounds;
         _spriteBatch.Draw(_pixel, bounds, new Color(76, 91, 102));
         _spriteBatch.Draw(
             _pixel,
             new Rectangle(bounds.X + 2, bounds.Y + 2, bounds.Width - 4, bounds.Height - 4),
-            new Color(18, 23, 27, 244));
+            MenuBackgroundColor);
 
         _spriteBatch.DrawString(
             _hudFont,
@@ -1880,14 +1882,11 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             var x = bounds.X + padding + column * columnWidth;
             var y = bounds.Y + headerHeight + row * rowHeight;
             var entry = populations[index];
-            _spriteBatch.Draw(
-                _pixel,
-                new Rectangle(x, y + 3, 10, 10),
-                entry.Color);
+            DrawCritterIcon(entry.Species, new Rectangle(x, y, 18, 18), entry.Icon);
             _spriteBatch.DrawString(
                 _hudFont,
                 entry.Name,
-                new Vector2(x + 16, y),
+                new Vector2(x + 24, y),
                 new Color(220, 225, 228));
             var countText = entry.Count.ToString("N0");
             var countWidth = _hudFont.MeasureString(countText).X;
@@ -1923,11 +1922,12 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         var windowX = Math.Max(0, (GraphicsDevice.Viewport.Width - windowWidth) / 2);
         var windowY = Math.Max(0, (MapViewportHeight - windowHeight) / 2);
         var bounds = new Rectangle(windowX, windowY, windowWidth, windowHeight);
+        _controlsUiBounds = bounds;
         _spriteBatch.Draw(_pixel, bounds, new Color(76, 91, 102));
         _spriteBatch.Draw(
             _pixel,
             new Rectangle(bounds.X + 2, bounds.Y + 2, bounds.Width - 4, bounds.Height - 4),
-            new Color(18, 23, 27, 244));
+            MenuBackgroundColor);
         _spriteBatch.DrawString(
             _hudFont,
             "CONTROLS",
@@ -1963,7 +1963,8 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         AppendPopulationSample(_barbarianHistory, PopulationCounts.BarbarianApeTotal(barbarians) - chiefs);
         AppendPopulationSample(_barbarianChiefHistory, chiefs);
         AppendPopulationSample(_sickApeHistory, _world.SickApeCount);
-        AppendPopulationSample(_combinedApeHistory, PopulationCounts.ApeTotal(_world));
+        AppendPopulationSample(_combinedApeHistory, PopulationCounts.CondensedApeTotal(_world));
+        RecordVillagePopulationSamples();
         _nextPopulationSampleTick = _world.Tick + PopulationSampleIntervalTicks;
     }
 
@@ -2209,7 +2210,10 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             return;
         }
         var lines = GetCritterInspectionLines(inspected, _inspectedCritterId == inspected.Id);
-        DrawHudLines(x, y, lines);
+        DrawCritterIcon(inspected.Species, new Rectangle(x, y + 17, 16, 16));
+        DrawHudLines(x, y, lines[0]);
+        for (var i = 1; i < lines.Length; i++)
+            _spriteBatch!.DrawString(_hudFont!, lines[i], new Vector2(x + (i == 1 ? 22 : 0), y + i * 17), new Color(220, 225, 228));
     }
 
     private GridPosition GetBuildingInspectionPosition(GridPosition pointerPosition) =>
@@ -2616,6 +2620,8 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         {
             history.Clear();
         }
+        _villagePopulationHistory.Clear();
+        _villagePopulationScroll = 0;
         _sickApeHistory.Clear();
         _combinedApeHistory.Clear();
         _barbarianHistory.Clear();
@@ -2756,7 +2762,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         var panel = GetSetupMenuBounds();
         var left = panel.X;
         var top = panel.Y;
-        _spriteBatch.Draw(_pixel, panel, new Color(12, 16, 20, 245));
+        _spriteBatch.Draw(_pixel, panel, MenuBackgroundColor);
         _spriteBatch.Draw(_pixel, new Rectangle(left, top, panel.Width, 2), new Color(126, 190, 213));
         _spriteBatch.DrawString(_hudFont, "NEW WORLD", new Vector2(left + 24, top + 20), new Color(126, 190, 213));
 
@@ -3255,6 +3261,12 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         var inset = (TileSize - size) / 2;
         var originX = MapOffsetX + screenX * TileSize + inset;
         var originY = MapOffsetY + (screenY + 1) * TileSize - size;
+        DrawWolfDenSprite(originX, originY, size, charges);
+    }
+
+    private void DrawWolfDenSprite(int originX, int originY, int size, int charges)
+    {
+        if (_spriteBatch is null || _pixel is null) return;
         _spriteBatch.Draw(_pixel, new Rectangle(originX, originY, size, size), new Color(68, 45, 30));
         var opening = Math.Max(1, size / 2);
         _spriteBatch.Draw(
@@ -3322,6 +3334,12 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         var inset = (TileSize - size) / 2;
         var x = MapOffsetX + screenX * TileSize + inset;
         var y = MapOffsetY + screenY * TileSize + inset;
+        DrawTeleporterSprite(x, y, size);
+    }
+
+    private void DrawTeleporterSprite(int x, int y, int size)
+    {
+        if (_spriteBatch is null || _pixel is null) return;
         var capHeight = Math.Max(1, size / 4);
         var beamWidth = Math.Max(1, size / 3);
         var wallGray = new Color(112, 126, 136);
@@ -3364,10 +3382,18 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         var inset = (TileSize - size) / 2;
         var x = MapOffsetX + screenX * TileSize + inset;
         var y = MapOffsetY + screenY * TileSize + inset;
+        DrawApeStructureSprite(structure, x, y, size, _world.IsBarbarianVillage(position),
+            _world.GetBiome(position) is Biome.Arid);
+    }
+
+    private void DrawApeStructureSprite(ApeStructureKind structure, int x, int y, int size,
+        bool barbarianCamp = false, bool aridFarm = false)
+    {
+        if (_spriteBatch is null || _pixel is null) return;
         switch (structure)
         {
             case ApeStructureKind.Village:
-                var barbarianCamp = _world.IsBarbarianVillage(position);
+
                 _spriteBatch.Draw(
                     _pixel,
                     new Rectangle(x, y + size / 3, size, Math.Max(1, size * 2 / 3)),
@@ -3380,7 +3406,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             case ApeStructureKind.Farm:
             case ApeStructureKind.BlightedFarm:
                 var blighted = structure is ApeStructureKind.BlightedFarm;
-                var aridFarm = _world.GetBiome(position) is Biome.Arid;
+
                 var fieldColor = blighted ? new Color(105, 73, 46) : aridFarm
                     ? new Color(178, 126, 52)
                     : new Color(173, 151, 66);

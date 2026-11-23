@@ -19,6 +19,11 @@ internal static class PopulationCounts
     // and sick individuals. Adding faction or sickness subtotals would count twice.
     internal static int ApeTotal(SimulationWorld world) => ApeSpecies.Sum(world.GetCritterCount);
 
+    internal static bool IsCondensedApe(CritterSpecies species) =>
+        IsApe(species) && species is not (CritterSpecies.UndeadApe or CritterSpecies.UndeadWarrior);
+
+    internal static int CondensedApeTotal(SimulationWorld world) =>
+        ApeSpecies.Where(IsCondensedApe).Sum(world.GetCritterCount);
     internal static int BarbarianApeTotal(IReadOnlyList<int> barbarians) =>
         ApeSpecies.Sum(species => barbarians[(int)species]);
 

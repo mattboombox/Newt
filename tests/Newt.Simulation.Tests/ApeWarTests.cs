@@ -177,13 +177,13 @@ public sealed class ApeWarTests
         var active = Assert.Single(world.GetActiveApeWars());
         Assert.Equal(status, active.Armies);
         Assert.Equal(civil ? "Civil War" : blood ? "Blood War" : "War", active.WarType);
-        Assert.Equal(civil ? 5 : 9, status.Attacking.Fighters);
-        Assert.Equal(civil ? 5 : blood ? 10 : 9, status.Defending.Fighters);
+        Assert.Equal(civil ? 5 : 10, status.Attacking.Fighters);
+        Assert.Equal(civil ? 5 : 10, status.Defending.Fighters);
         Assert.Equal(status.Attacking.Fighters, status.Attacking.StartingFighters);
         Assert.Equal(status.Defending.Fighters, status.Defending.StartingFighters);
         Assert.Equal(status.Attacking.StartingFighters / 10, status.Attacking.StopAt);
         Assert.Equal(blood, status.Defending.PopulationTarget);
-        Assert.Equal(0, status.Defending.StopAt);
+        Assert.Equal(civil || blood ? 0 : 1, status.Defending.StopAt);
         var casualty = Residents(world, First).First(c => c.Id != inspected &&
             world.TryGetApeWarSide(c.Id, out var attacking) && attacking && c.Species == CritterSpecies.ApeWarrior);
         world.RemoveCritterAt(casualty.Position);
@@ -211,7 +211,7 @@ public sealed class ApeWarTests
     }
 
     [Fact]
-    public void BarbarianExpeditionCapsAllAttackersAtFourTimesCampPopulationIncludingDogs()
+    public void BarbarianExpeditionRecruitsEveryUnemployedApeIncludingOversizedArmies()
     {
         var world = CreateCampWarWorld(false);
         var homes = (Dictionary<int, int>)typeof(SimulationWorld)
@@ -225,13 +225,14 @@ public sealed class ApeWarTests
             var id = world.AddCritter(CritterSpecies.Ape, new(1 + i % 45, 20 + i / 45));
             homes[id.Value] = First.Y * world.Width + First.X;
         }
-        var limit = Residents(world, Second).Length * 4;
+        var unemployedIds = Residents(world, First).Where(c => c.Species is CritterSpecies.Ape).Select(c => c.Id).ToArray();
         Assert.True(world.TryStartApeWar(First, Second));
         var expedition = Residents(world, First).Where(c => world.TryGetApeWarSide(c.Id, out var attacking) && attacking).ToArray();
-        Assert.Equal(limit, expedition.Length);
+        Assert.All(unemployedIds, id => Assert.Contains(expedition, c => c.Id == id));
+        Assert.True(expedition.Length > Residents(world, Second).Length * 4);
         Assert.Contains(expedition, c => c.Id == attackingDog);
         Assert.All(expedition, c => Assert.Equal($"B Attacking village #{world.GetApeVillageId(Second)}", world.GetApeWarBehavior(c.Id)));
-        Assert.Contains(Residents(world, First), c => c.Species is CritterSpecies.Ape && world.GetApeWarBehavior(c.Id) is null);
+        Assert.DoesNotContain(Residents(world, First), c => c.Species is CritterSpecies.Ape);
         Assert.Equal($"B Defending village #{world.GetApeVillageId(Second)}", world.GetApeWarBehavior(campDog));
     }
 
@@ -476,17 +477,19 @@ public sealed class ApeWarTests
         Assert.Equal(species == CritterSpecies.ApeWarrior, (bool)canLive.Invoke(world, [indices[id.Value], water])!);
     }
 
-    [Fact]
-    public void BothSidesLevyNinetyPercentAndCannotJoinAnotherWar()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void BothSidesLevyEveryUnemployedApeAndCannotJoinAnotherWar(bool blood)
     {
         var world = CreateWorld();
         Assert.False(world.TryStartApeWar(First, First));
-        Assert.True(world.TryStartApeWar(First, Second));
+        Assert.True(world.TryStartApeWar(First, Second, blood));
         foreach (var village in new[] { First, Second })
         {
             Assert.True(world.IsApeVillageAtWar(village));
-            Assert.Equal(9, Residents(world, village).Count(c => c.Species == CritterSpecies.ApeWarrior));
-            Assert.Single(Residents(world, village), c => c.Species == CritterSpecies.Ape);
+            Assert.Equal(10, Residents(world, village).Count(c => c.Species == CritterSpecies.ApeWarrior));
+            Assert.DoesNotContain(Residents(world, village), c => c.Species == CritterSpecies.Ape);
         }
         Assert.False(world.TryStartApeWar(Second, First));
     }
