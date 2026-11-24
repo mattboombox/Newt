@@ -2589,6 +2589,7 @@ public sealed class ApeTests
             .Where(critter => critter.Species is CritterSpecies.Ape)
             .Select(critter => critter.Id)
             .ToHashSet();
+        var colonistProvisions = Math.Min(100, world.GetApeVillageFood(origin));
         Assert.True(world.TrySendApeColonist(origin));
         var colonistId = Enumerable.Range(0, world.CritterCount)
             .Select(world.GetCritter)
@@ -2598,7 +2599,7 @@ public sealed class ApeTests
         Assert.True(world.TryGetCritter(colonistId, out var departingColonist));
         Assert.True(departingColonist.IsColonist);
         Assert.False(departingColonist.CanReproduce);
-        Assert.Equal(100, departingColonist.Energy);
+        Assert.Equal(CritterNutritions.Get(CritterSpecies.Ape).InitialEnergy + colonistProvisions, departingColonist.Energy);
         Assert.NotNull(departingColonist.ColonistDestination);
 
         var enteredTransitTerrain = false;
@@ -2738,7 +2739,7 @@ public sealed class ApeTests
         Assert.Equal(CritterSpecies.Ape, colonist.Species);
         Assert.True(colonist.IsColonist);
         Assert.NotNull(colonist.ColonistDestination);
-        Assert.Equal(100, colonist.Energy);
+        Assert.Equal(CritterNutritions.Get(CritterSpecies.Ape).InitialEnergy, colonist.Energy);
         Assert.Equal(0, world.ApeVillageCount);
         Assert.All(villageStructures, position =>
             Assert.Equal(ApeStructureKind.Ruin, world.GetApeStructure(position)));

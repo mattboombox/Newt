@@ -203,6 +203,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
     private readonly Dictionary<CritterSpecies, List<int>> _populationHistory =
         Enum.GetValues<CritterSpecies>().ToDictionary(species => species, _ => new List<int>());
     private readonly List<int> _sickApeHistory = [];
+    private readonly List<int> _apeColonistHistory = [];
     private readonly List<int> _barbarianHistory = [];
     private readonly List<int> _barbarianChiefHistory = [];
     private long _nextPopulationSampleTick;
@@ -213,8 +214,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         var mapTypes = GetMenuMapTypes(_mapShape)
             .Where(type => type is not (WorldMapType.AllOcean or WorldMapType.DryWorld)).ToArray();
         _mapType = mapTypes[Random.Shared.Next(mapTypes.Length)];
-        if (_mapShape is WorldMapShape.Planetoid)
-            _menuRingSizeIndex = 2; // Standard, matching the default size for board worlds.
+        SetDefaultMenuSize(_mapShape);
         _preset = GetSetupPreset(_mapShape);
         _seedText = _seed.ToString(CultureInfo.InvariantCulture);
         _graphics = new GraphicsDeviceManager(this)
@@ -1792,6 +1792,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
 
     private void DrawPopulationWindow()
     {
+        _populationLinks.Clear();
         if (_spriteBatch is null || _pixel is null || _hudFont is null)
         {
             return;
@@ -1823,6 +1824,9 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             populations.Add(("Ape Barbarian", CritterSpecies.ApeWarrior, warriors, new Color(190, 95, 60), _barbarianHistory, _apeBarbarianSprite));
         if (_populationWindowMode == 2 && chiefs > 0)
             populations.Add(("Ape Barbarian Chief", CritterSpecies.ApeChieftain, chiefs, new Color(210, 75, 55), _barbarianChiefHistory, _apeBarbarianChiefSprite));
+        if (_populationWindowMode == 2 && _world.ApeColonistCount > 0)
+            populations.Add(("Ape Colonist", CritterSpecies.Ape, _world.ApeColonistCount,
+                GetCritterColor(CritterSpecies.Ape), _apeColonistHistory, _apeColonistSprite));
         if (_populationWindowMode == 2 && _world.SickApeCount > 0)
         {
             populations.Add(("Sick Apes", CritterSpecies.Ape, _world.SickApeCount,
@@ -1882,6 +1886,19 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             var x = bounds.X + padding + column * columnWidth;
             var y = bounds.Y + headerHeight + row * rowHeight;
             var entry = populations[index];
+            var selection = entry.Name switch
+            {
+                "Apes" => PopulationCounts.Selection.CondensedApes,
+                "Ape Barbarian" => PopulationCounts.Selection.Barbarians,
+                "Ape Barbarian Chief" => PopulationCounts.Selection.BarbarianChiefs,
+                "Sick Apes" => PopulationCounts.Selection.SickApes,
+                "Ape Colonist" => PopulationCounts.Selection.Colonists,
+                _ => PopulationCounts.Selection.Species,
+            };
+            var linkBounds = new Rectangle(x, y, columnWidth, rowHeight);
+            _populationLinks.Add((linkBounds, entry.Species, selection));
+            if (linkBounds.Contains(Mouse.GetState().Position))
+                _spriteBatch.Draw(_pixel, linkBounds, new Color(48, 83, 102));
             DrawCritterIcon(entry.Species, new Rectangle(x, y, 18, 18), entry.Icon);
             _spriteBatch.DrawString(
                 _hudFont,
@@ -1963,6 +1980,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         AppendPopulationSample(_barbarianHistory, PopulationCounts.BarbarianApeTotal(barbarians) - chiefs);
         AppendPopulationSample(_barbarianChiefHistory, chiefs);
         AppendPopulationSample(_sickApeHistory, _world.SickApeCount);
+        AppendPopulationSample(_apeColonistHistory, _world.ApeColonistCount);
         AppendPopulationSample(_combinedApeHistory, PopulationCounts.CondensedApeTotal(_world));
         RecordVillagePopulationSamples();
         _nextPopulationSampleTick = _world.Tick + PopulationSampleIntervalTicks;
@@ -2623,6 +2641,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         _villagePopulationHistory.Clear();
         _villagePopulationScroll = 0;
         _sickApeHistory.Clear();
+        _apeColonistHistory.Clear();
         _combinedApeHistory.Clear();
         _barbarianHistory.Clear();
         _barbarianChiefHistory.Clear();
@@ -2662,8 +2681,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
                 var shape = MenuMapShapes[_menuMapShapeIndex];
                 if (!GetMenuMapTypes(shape).Contains(_menuMapType))
                     _menuMapType = WorldMapType.Continents;
-                if (GetSpecialMenuSizes(shape) is { } sizes)
-                    _menuRingSizeIndex = Math.Min(_menuRingSizeIndex, sizes.Length - 1);
+                SetDefaultMenuSize(shape);
             }
             else if (_setupRow == 1)
             {
@@ -2736,6 +2754,16 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         WorldMapShape.Planetoid => PlanetoidMenuSizes,
         _ => null,
     };
+
+    private void SetDefaultMenuSize(WorldMapShape shape)
+    {
+        var sizes = GetSpecialMenuSizes(shape) ?? MenuSizes;
+        var standardIndex = Math.Max(0, Array.FindIndex(sizes, size => size.Name == "Standard"));
+        if (GetSpecialMenuSizes(shape) is not null)
+            _menuRingSizeIndex = standardIndex;
+        else
+            _menuSizeIndex = standardIndex;
+    }
 
     private WorldPreset GetSetupPreset(WorldMapShape shape) => GetSpecialMenuSizes(shape) is { } sizes
         ? sizes[_menuRingSizeIndex] : MenuSizes[_menuSizeIndex];
@@ -3189,8 +3217,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         var origin = new Point(MapOffsetX + screenX * size, MapOffsetY + screenY * size);
         var bounds = new Rectangle(origin.X, origin.Y, size, size);
         var center = new Vector2(size / 2f);
-        var water = WaterSurfaceColor(tile);
-        var spray = new Color(199, 232, 246);
+        var spray = Color.White;
         foreach (var (flag, dx, dy) in ThreeDGeometry.ConnectionDirections)
         {
             if ((mouths & flag) == 0)
@@ -3220,7 +3247,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
                     origin.X + (int)MathF.Floor(position.X - diameter / 2f),
                     origin.Y + (int)MathF.Floor(position.Y - diameter / 2f), diameter, diameter));
                 if (patch.Width > 0 && patch.Height > 0)
-                    _spriteBatch.Draw(_pixel, patch, Color.Lerp(water, spray, fade));
+                    _spriteBatch.Draw(_pixel, patch, spray * fade);
             }
         }
     }
@@ -3889,7 +3916,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
 
     private static Color GetSurfaceWaterColor(SurfaceWaterKind water) => water switch
     {
-        SurfaceWaterKind.River => new Color(60, 150, 196),
+        SurfaceWaterKind.River => new Color(44, 158, 180),
         SurfaceWaterKind.FreshwaterLake => new Color(44, 150, 176),
         _ => Color.Magenta,
     };

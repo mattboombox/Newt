@@ -10,9 +10,10 @@ public sealed class BarbarianFoodTests
     [InlineData(CritterSpecies.ApeChieftain)]
     [InlineData(CritterSpecies.ApeSailor)]
     [InlineData(CritterSpecies.Dog)]
-    public void CampResidentsHuntOnlyBelowQuarterCapacity(CritterSpecies species)
+    public void CampResidentsHuntOnlyBelowThreeQuarterCapacity(CritterSpecies species)
     {
         var world = new SimulationWorld(20, 20, Terrain.Beach, seed: 1);
+        NaturalEvents.SetEnabled(world, false);
         for (var y = 0; y < world.Height; y++)
         for (var x = 0; x < world.Width; x++)
             world.SetBiome(new GridPosition(x, y), Biome.Grassland);
@@ -33,12 +34,18 @@ public sealed class BarbarianFoodTests
 
         Assert.Equal(50, world.GetApeVillageFoodCapacity(camp));
         Assert.True(world.ShouldApeHunt(resident));
-        world.StoreApeVillageFood(camp, 12);
-        Assert.Equal(12, world.GetApeVillageFood(camp));
+        world.StoreApeVillageFood(camp, 37);
+        Assert.Equal(37, world.GetApeVillageFood(camp));
         Assert.True(world.ShouldApeHunt(resident));
         world.StoreApeVillageFood(camp, 1);
-        Assert.Equal(13, world.GetApeVillageFood(camp));
+        Assert.Equal(38, world.GetApeVillageFood(camp));
         Assert.False(world.ShouldApeHunt(resident));
+        var prey = world.AddCritter(CritterSpecies.Snail, new(0, 0));
+        var residentIndex = Enumerable.Range(0, world.CritterCount).Single(i => world.GetCritter(i).Id == resident);
+        var preyIndex = Enumerable.Range(0, world.CritterCount).Single(i => world.GetCritter(i).Id == prey);
+        var canEat = typeof(SimulationWorld).GetMethod("CanEatInCurrentContext",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        Assert.Equal(false, canEat.Invoke(world, [residentIndex, preyIndex]));
         world.StoreApeVillageFood(camp, 100);
         Assert.Equal(50, world.GetApeVillageFood(camp));
         Assert.False(world.ShouldApeHunt(resident));

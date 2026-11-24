@@ -5,6 +5,46 @@ namespace Newt.Simulation.Tests;
 public sealed class ImpactTests
 {
     [Fact]
+    public void MeteorCratersCrossEveryPlanetoidFaceEdgeWithoutHittingDistantAtlasNeighbors()
+    {
+        const int size = 24;
+        GridPosition[] directions = [new(0, -1), new(1, 0), new(0, 1), new(-1, 0)];
+        for (var face = 0; face < 6; face++)
+        for (var edge = 0; edge < 4; edge++)
+        {
+            var world = new SimulationWorld(3 * size, 2 * size, Terrain.Plains)
+                { Body = WorldBody.Planetoid, HasOceans = false };
+            for (var y = 0; y < world.Height; y++)
+            for (var x = 0; x < world.Width; x++)
+                world.SetElevation(new(x, y), 0.3f);
+            var local = edge switch
+            {
+                0 => new GridPosition(size / 2, 0),
+                1 => new GridPosition(size - 1, size / 2),
+                2 => new GridPosition(size / 2, size - 1),
+                _ => new GridPosition(0, size / 2),
+            };
+            var center = new GridPosition(face % 3 * size + local.X, face / 3 * size + local.Y);
+            var direction = directions[edge];
+            var neighbor = PlanetoidLayout.Offset(center, direction.X, direction.Y, size);
+            Impacts.CreateMeteorImpact(world, center, 0f);
+            Assert.True(world.GetElevation(neighbor) < 0.3f, $"Crater did not cross face {face}, edge {edge}.");
+            Assert.Equal(SurfaceCover.Stone, world.GetSurfaceCover(neighbor));
+            var originDirection = world.GetPlanetoidTileDirection(center);
+            for (var y = 0; y < world.Height; y++)
+            for (var x = 0; x < world.Width; x++)
+            {
+                var tile = new GridPosition(x, y);
+                var angle = MathF.Acos(Math.Clamp(System.Numerics.Vector3.Dot(originDirection,
+                    world.GetPlanetoidTileDirection(tile)), -1f, 1f));
+                if (angle * size / (MathF.PI / 2) <= 6) continue;
+                Assert.Equal(0.3f, world.GetElevation(tile));
+                Assert.Equal(SurfaceCover.None, world.GetSurfaceCover(tile));
+            }
+        }
+    }
+
+    [Fact]
     public void ToolMeteorAtTwoDoublesMaximumNormalCraterAndShockRadius()
     {
         var center = new GridPosition(30, 30);
@@ -163,7 +203,6 @@ public sealed class ImpactTests
         var acrossAtlasEdge = new GridPosition(center.X, center.Y + 1);
         Assert.NotEqual(acrossAtlasEdge, acrossSeam);
         world.SetElevation(acrossSeam, 0.3f);
-        var critter = world.AddCritter(CritterSpecies.Monkey, acrossSeam);
         if (kind is WaveKind.Tsunami)
         {
             world.OceanSeed = center;
@@ -176,6 +215,10 @@ public sealed class ImpactTests
             Impacts.CreateMeteorImpact(world, center, 0f);
         }
 
+        // Isolate wave propagation from the initial crater, which now correctly
+        // excavates and clears this adjacent tile across the seam.
+        world.SetSurfaceCover(acrossSeam, SurfaceCover.None, 0);
+        var critter = world.AddCritter(CritterSpecies.Monkey, acrossSeam);
         var firstFront = world.GetImpactWave(0) with { CurrentRadius = 1f };
         Assert.True(Impacts.IsOnShockFront(world, acrossSeam, firstFront));
         Assert.False(Impacts.IsOnShockFront(world, acrossAtlasEdge, firstFront));

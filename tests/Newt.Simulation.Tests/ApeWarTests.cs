@@ -149,6 +149,8 @@ public sealed class ApeWarTests
         Assert.NotEqual(wars[0].Id, wars[1].Id);
         Assert.Equal($"Village #{world.GetApeVillageId(First)}", wars[0].Attacker);
         Assert.Equal(wars[0].Attacker, wars[0].Defender);
+        Assert.Equal(First, wars[0].AttackerPosition);
+        Assert.Equal(First, wars[0].DefenderPosition);
         Assert.All(wars, war => Assert.Equal("Civil War", war.WarType));
         Assert.True(world.TryStopApeWar(First));
         Assert.Equal(wars[1].Id, Assert.Single(world.GetActiveApeWars()).Id);
@@ -160,6 +162,8 @@ public sealed class ApeWarTests
         var betweenVillages = Assert.Single(world.GetActiveApeWars());
         Assert.Equal($"Village #{world.GetApeVillageId(First)}", betweenVillages.Attacker);
         Assert.Equal($"Village #{world.GetApeVillageId(Second)}", betweenVillages.Defender);
+        Assert.Equal(First, betweenVillages.AttackerPosition);
+        Assert.Equal(Second, betweenVillages.DefenderPosition);
         Assert.Equal("War", betweenVillages.WarType);
     }
 

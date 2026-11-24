@@ -10,7 +10,7 @@ public sealed partial class SimulationWorld
 
     private bool CanHoldVillageFeast(int tile) =>
         _apeStructures.TryGetValue(tile, out var structure) && structure is ApeStructureKind.Village &&
-        !_barbarianVillageTiles.Contains(tile) && _apeVillageFood.GetValueOrDefault(tile) > 0;
+        _apeVillageFood.GetValueOrDefault(tile) > 0;
 
     public bool TryStartVillageFeast(GridPosition position)
     {

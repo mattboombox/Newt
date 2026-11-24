@@ -119,7 +119,7 @@ public sealed partial class NewtGame
         var down = mouse.LeftButton == ButtonState.Pressed || mouse.RightButton == ButtonState.Pressed || mouse.MiddleButton == ButtonState.Pressed;
         var overHud = !_hudHidden && mouse.Y >= MapViewportHeight;
         var wasOpen = _toolMenuOpen;
-        if (_populationWindowMode == 3 && _populationUiBounds.Contains(mouse.Position))
+        if (_populationWindowMode != 0 && _populationUiBounds.Contains(mouse.Position))
         {
             var coveredByControls = _controlsWindowOpen && _controlsUiBounds.Contains(mouse.Position);
             var coveredByToolMenu = _toolMenuOpen && (ToolCategoryMenuBounds.Contains(mouse.Position) ||
@@ -127,8 +127,11 @@ public sealed partial class NewtGame
             if (!coveredByControls && !coveredByToolMenu)
             {
                 if (clicked && mouse.ScrollWheelValue == _previousMouse.ScrollWheelValue)
-                    HandleVillagePopulationClick(mouse);
-                ScrollVillagePopulation(mouse);
+                {
+                    if (_populationWindowMode == 3) HandleVillagePopulationClick(mouse);
+                    else HandlePopulationClick(mouse);
+                }
+                if (_populationWindowMode == 3) ScrollVillagePopulation(mouse);
             }
         }
         if ((_controlsWindowOpen && _controlsUiBounds.Contains(mouse.Position)) ||
@@ -170,7 +173,12 @@ public sealed partial class NewtGame
         if (overUi && down) _uiMouseCaptured = true;
         var blocked = overUi || _uiMouseCaptured;
         if (!down) _uiMouseCaptured = false;
-        if (IsPointerOverWarCharts(mouse)) ScrollWarCharts(mouse);
+        if (IsPointerOverWarCharts(mouse))
+        {
+            if (clicked && !wasOpen && !_toolMenuOpen && mouse.ScrollWheelValue == _previousMouse.ScrollWheelValue)
+                HandleWarChartClick(mouse);
+            ScrollWarCharts(mouse);
+        }
         return blocked;
     }
 

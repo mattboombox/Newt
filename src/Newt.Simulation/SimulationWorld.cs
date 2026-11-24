@@ -1719,6 +1719,7 @@ public sealed partial class SimulationWorld
     private void AdvanceCritterLifecycles()
     {
         List<CritterId>? deaths = null;
+        List<(CritterId Parent, int Village, int EnergyCost)>? campColonists = null;
         List<(
             CritterSpecies Species,
             GridPosition Position,
@@ -1765,6 +1766,20 @@ public sealed partial class SimulationWorld
 
             if (!isStranded && species is (CritterSpecies.ApeTrader or CritterSpecies.ApeTraderSailor))
                 RefillApeTraderProvisions(index);
+
+            // Forced displacement can leave apes on hazardous terrain even when
+            // their normal movement would never choose it. Keep recovery possible,
+            // but apply exposure damage independently of movement and metabolism.
+            if (Tick % TicksPerSecond == 0 &&
+                (IsLivingApe(species) || species is CritterSpecies.ApeTrader or CritterSpecies.ApeTraderSailor) &&
+                (_terrain[GetIndex(_positions[index])] is Terrain.Mountain &&
+                    _surfaceWater[GetIndex(_positions[index])] is not SurfaceWaterKind.River ||
+                    HasOceans && _terrain[GetIndex(_positions[index])] is (Terrain.Ocean or Terrain.DeepOcean) &&
+                    isStranded))
+            {
+                _energy[index] = Math.Max(0, _energy[index] - 1);
+                SetDamageFlash(index);
+            }
 
             DrainPlagueEnergy(index);
             if (_energy[index] == 0)
@@ -1887,6 +1902,8 @@ public sealed partial class SimulationWorld
                 if (GetApeVillageResidentCountByTile(apeVillage) + reservedVillageBirths >=
                     GetApeVillagePopulationCapacityByTile(apeVillage))
                 {
+                    if (_barbarianVillageTiles.Contains(apeVillage))
+                        (campColonists ??= []).Add((_critterIds[index], apeVillage, nutrition.ReproductionCost));
                     continue;
                 }
                 reservedApeVillageBirths[apeVillage] = reservedVillageBirths + 1;
@@ -1938,6 +1955,20 @@ public sealed partial class SimulationWorld
                 if (added && birth.Species is CritterSpecies.Vampire)
                     _vampireHomes[_critterIds[_occupants[GetIndex(birth.Position)]].Value] = birth.ApeVillage;
             }
+        }
+
+        // Dispatch after ordinary births so newborn colonists never receive a
+        // lifecycle turn immediately and cannot claim another reserved birth tile.
+        if (campColonists is not null)
+        {
+            foreach (var colonist in campColonists)
+                if (_critterIndicesById.TryGetValue(colonist.Parent.Value, out var parentIndex) &&
+                    TryCreateApeSettler(colonist.Village, _apeVillageFood.GetValueOrDefault(colonist.Village),
+                        allowInsufficientFood: false))
+                {
+                    _energy[parentIndex] -= colonist.EnergyCost;
+                    _apeReproductionStalls.Remove(colonist.Parent.Value);
+                }
         }
     }
 
@@ -2044,7 +2075,8 @@ public sealed partial class SimulationWorld
 
         if (hasVillage)
         {
-            return CanApeReproduceAtCurrentPosition(_critterIds[apeIndex], villageTile);
+            return CanApeReproduceAtCurrentPosition(_critterIds[apeIndex], villageTile,
+                ignorePopulationCapacity: _barbarianVillageTiles.Contains(villageTile));
         }
 
         if (!_apeVillageTargets.TryGetValue(apeId, out villageTile) ||
@@ -2076,14 +2108,14 @@ public sealed partial class SimulationWorld
         return false;
     }
 
-    internal bool CanApeReproduceAtCurrentPosition(CritterId apeId, int villageTile)
+    internal bool CanApeReproduceAtCurrentPosition(CritterId apeId, int villageTile, bool ignorePopulationCapacity = false)
     {
         if (!_critterIndicesById.TryGetValue(apeId.Value, out var index) ||
             !IsLivingApe(_species[index]) ||
             !_apeVillageHomes.TryGetValue(apeId.Value, out var home) || home != villageTile ||
             _apeSettlerTargets.ContainsKey(apeId.Value) ||
             _energy[index] < CritterNutritions.Get(_species[index]).ReproductionThreshold ||
-            GetApeVillageResidentCountByTile(villageTile) >=
+            !ignorePopulationCapacity && GetApeVillageResidentCountByTile(villageTile) >=
                 GetApeVillagePopulationCapacityByTile(villageTile))
         {
             _apeReproductionStalls.Remove(apeId.Value);
@@ -2617,12 +2649,13 @@ public sealed partial class SimulationWorld
         if (population < (barbarian ? GetApeVillagePopulationCapacityByTile(villageTile) : ApeSettlerPopulationThreshold) ||
             Tick == 0 || Tick % ApeSettlerCheckIntervalTicks != 0 ||
             NextInt(100) >= ApeSettlerChancePercent ||
-            !_apeVillageFood.TryGetValue(villageTile, out var food) || (!barbarian && food < ApeSettlerFoodCost))
+            !_apeVillageFood.TryGetValue(villageTile, out var food) ||
+            food < (barbarian ? BarbarianVillageFoodCapacity : ApeSettlerFoodCost))
         {
             return;
         }
 
-        TryCreateApeSettler(villageTile, food, allowInsufficientFood: barbarian);
+        TryCreateApeSettler(villageTile, food);
     }
 
     public bool TrySendApeColonist(GridPosition position)
@@ -2836,12 +2869,13 @@ public sealed partial class SimulationWorld
 
         var settler = AddCritter(CritterSpecies.Ape, GetPosition(spawnTile));
         var settlerIndex = _critterIndicesById[settler.Value];
-        _energy[settlerIndex] = ApeSettlerInitialEnergy;
+        var provisions = Math.Min(food, foodCost);
+        _energy[settlerIndex] = CritterNutritions.Get(CritterSpecies.Ape).InitialEnergy + provisions;
         RememberApeColonistTechnologies(settler.Value, villageTile);
         _apeSettlerTargets[settler.Value] = (villageTile, targetVillageTile);
         if (keepDestination)
             _apeFixedSettlerDestinations.Add(settler.Value);
-        _apeVillageFood[villageTile] = Math.Max(0, food - foodCost);
+        _apeVillageFood[villageTile] = food - provisions;
         return true;
     }
 
@@ -3162,7 +3196,7 @@ public sealed partial class SimulationWorld
         var sailorIndex = _critterIndicesById[sailorId];
         RememberApeColonistTechnologies(sailorId, villageTile);
         ChangeCritterSpecies(sailorIndex, CritterSpecies.Ape, preserveEnergy: false);
-        _energy[sailorIndex] = ApeSettlerInitialEnergy;
+        _energy[sailorIndex] = CritterNutritions.Get(CritterSpecies.Ape).InitialEnergy;
         _apeSettlerTargets[sailorId] = (villageTile, targetVillageTile);
         _loneApeSailorSinceTicks.Remove(villageTile);
         return true;
@@ -4917,7 +4951,8 @@ public sealed partial class SimulationWorld
             {
                 if (!TryGetPathNeighbor(position, direction, out var neighborTile)) continue;
                 var nextSteps = node.Steps + 1;
-                if (!(pathSpecies is { } species ? CanLiveOn(species, neighborTile) :
+                if (!(pathSpecies is { } species
+                        ? species == _species[apeIndex] ? CanCritterLiveOn(apeIndex, neighborTile) : CanLiveOn(species, neighborTile) :
                         !sailorRoute ? IsApeSettlerTransitTile(apeIndex, neighborTile) :
                         CanLiveOn(CritterSpecies.ApeSailor, neighborTile)) ||
                     reservedPrey?.Contains(GetPosition(neighborTile)) is true ||
@@ -4975,7 +5010,7 @@ public sealed partial class SimulationWorld
         return !_apeVillageHomes.TryGetValue(apeId, out var villageTile) ||
             !_apeVillageFood.TryGetValue(villageTile, out var villageFood) ||
             (IsBarbarianApe(critterIndex)
-                ? villageFood * 4 < GetApeVillageFoodCapacityByTile(villageTile)
+                ? villageFood * 4 < GetApeVillageFoodCapacityByTile(villageTile) * 3
                 : villageFood < ApeVillageHuntingFoodThreshold);
     }
 
@@ -5087,6 +5122,14 @@ public sealed partial class SimulationWorld
         _preyTargets[critterIndex] = -1;
         if (!IsAtOrAdjacentToConnectedApeStructure(critterIndex, villageTile))
         {
+            if (IsBarbarianApe(critterIndex))
+            {
+                var before = _positions[critterIndex];
+                TryMoveAlongSurfacePath(critterIndex, villageTile, reservedPrey, stopAdjacent: true);
+                if (_positions[critterIndex] == before)
+                    TryMove(critterIndex, reservedPrey, allowPredation: false);
+                return true;
+            }
             if (_species[critterIndex] is CritterSpecies.ApeSailor)
             {
                 MoveApeSailorTowardVillage(_critterIds[critterIndex], villageTile, reservedPrey);
@@ -6132,9 +6175,10 @@ public sealed partial class SimulationWorld
             return CanDefendVillageAgainstWhale(predatorIndex, preyIndex);
         if (IsBarbarianApe(predatorIndex))
         {
-            return !_apeVillageHomes.TryGetValue(_critterIds[preyIndex].Value, out var preyVillage) ||
+            var outsider = !_apeVillageHomes.TryGetValue(_critterIds[preyIndex].Value, out var preyVillage) ||
                 !_apeVillageHomes.TryGetValue(_critterIds[predatorIndex].Value, out var predatorVillage) ||
                 preyVillage != predatorVillage;
+            return outsider && (AreRivalApeFactions(predatorIndex, preyIndex) || ShouldApeHunt(predatorIndex));
         }
         if (AreRivalApeFactions(predatorIndex, preyIndex))
         {
@@ -6205,8 +6249,8 @@ public sealed partial class SimulationWorld
             CritterSpecies.Vampire => 4,
             CritterSpecies.UndeadApe => 1,
             CritterSpecies.Lich => 7,
-            CritterSpecies.UndeadWarrior => 2,
-            CritterSpecies.MegaSpider => 2,
+            CritterSpecies.UndeadWarrior => 3,
+            CritterSpecies.MegaSpider => 3,
             CritterSpecies.Jellyfish => 1,
             CritterSpecies.SeaScorpion or CritterSpecies.Squid => 3,
             CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack => 2,

@@ -5,6 +5,21 @@ namespace Newt.Simulation.Tests;
 
 public sealed class LichTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void UndeadWarriorsSpawnAtSixOfSixEnergy(bool playerSpawn)
+    {
+        var world = CreateWorld();
+        if (playerSpawn)
+            Assert.True(world.TrySpawnCritter(CritterSpecies.UndeadWarrior, new(10, 10)));
+        else
+            world.AddCritter(CritterSpecies.UndeadWarrior, new(10, 10));
+        var warrior = world.GetCritter(0);
+        Assert.Equal(6, warrior.Energy);
+        Assert.Equal(6, warrior.MaximumEnergy);
+    }
+
     private const BindingFlags Private = BindingFlags.NonPublic | BindingFlags.Instance;
     private static SimulationWorld CreateWorld()
     {
@@ -30,10 +45,13 @@ public sealed class LichTests
         else
             world.AddCritter(CritterSpecies.Lich, origin);
         var lich = world.GetCritter(0).Id;
+        Assert.Equal(40, world.GetCritter(0).Energy);
+        Assert.Equal(40, world.GetCritter(0).MaximumEnergy);
         var escort = world.GetLichEscort(lich);
         Assert.Equal(4, escort.Length);
         Assert.Equal(4, world.GetCritterCount(CritterSpecies.UndeadWarrior));
         Assert.All(escort, id => Assert.Equal(CritterSpecies.UndeadWarrior, world.GetCritter(Index(world, id)).Species));
+        Assert.All(escort, id => Assert.Equal(6, world.GetCritter(Index(world, id)).Energy));
         Assert.True(world.RemoveCritterAt(origin));
         Assert.Equal(0, world.GetCritterCount(CritterSpecies.UndeadWarrior));
     }

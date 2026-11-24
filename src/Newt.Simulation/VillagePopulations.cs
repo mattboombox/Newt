@@ -8,6 +8,9 @@ public sealed record VillagePopulationSnapshot(int Id, GridPosition Position, bo
 
 public sealed partial class SimulationWorld
 {
+    public int ApeColonistCount => _apeSettlerTargets.Keys.Count(id =>
+        _critterIndicesById.TryGetValue(id, out var index) && _species[index] is CritterSpecies.Ape);
+
     /// <summary>Groups living residents by home village, regardless of their current location.</summary>
     public IReadOnlyList<VillagePopulationSnapshot> GetVillagePopulations()
     {

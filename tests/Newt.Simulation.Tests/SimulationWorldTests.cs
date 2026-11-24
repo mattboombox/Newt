@@ -2915,9 +2915,9 @@ public sealed class SimulationWorldTests
     }
 
     [Fact]
-    public void MegaSpiderDealsTwoCombatDamage()
+    public void MegaSpiderDealsThreeCombatDamage()
     {
-        Assert.Equal(2, SimulationWorld.GetCombatDamage(CritterSpecies.MegaSpider));
+        Assert.Equal(3, SimulationWorld.GetCombatDamage(CritterSpecies.MegaSpider));
     }
 
     [Fact]

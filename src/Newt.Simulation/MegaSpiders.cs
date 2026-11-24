@@ -137,11 +137,10 @@ public sealed partial class SimulationWorld
 
     private bool IsValidMegaSpiderWebTile(int tileIndex) =>
         tileIndex >= 0 && tileIndex < _terrain.Length &&
-        _surfaceCovers[tileIndex] is SurfaceCover.None &&
-        _surfaceWater[tileIndex] is SurfaceWaterKind.None &&
-        _biomes[tileIndex] is Biome.Swamp or Biome.Jungle or Biome.Forest or Biome.Taiga &&
-        _terrain[tileIndex] is Terrain.Beach or Terrain.Lowlands or
-            Terrain.Canyon or Terrain.Trench or Terrain.Plains or Terrain.Hills;
+        _surfaceCovers[tileIndex] is not SurfaceCover.Lava &&
+        _surfaceWater[tileIndex] is not SurfaceWaterKind.FreshwaterLake &&
+        _terrain[tileIndex] is not (Terrain.Mountain or Terrain.Ice or Terrain.Ocean or
+            Terrain.DeepOcean or Terrain.Shallows or Terrain.MegaWall);
 
     private bool TryCreateMegaSpiderWeb(int spiderIndex)
     {
@@ -187,8 +186,7 @@ public sealed partial class SimulationWorld
 
     private bool IsCaughtInMegaSpiderWeb(int critterIndex)
     {
-        if (_species[critterIndex] is CritterSpecies.Custodian ||
-            IsPredator(_species[critterIndex]) || IsLivingApe(_species[critterIndex]))
+        if (_species[critterIndex] is CritterSpecies.Custodian or CritterSpecies.MegaSpider)
         {
             return false;
         }

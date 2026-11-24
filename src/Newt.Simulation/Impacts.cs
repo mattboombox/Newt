@@ -153,7 +153,13 @@ public static class Impacts
         var depth = 0.10f + magnitude * 0.55f;
         var rimHeight = 0.04f + magnitude * 0.20f;
         var complex = magnitude >= 0.5f;
-        for (var offsetY = -reach; offsetY <= reach; offsetY++)
+        var planetary = world.Body is WorldBody.Planetoid && !rifleSized;
+        var originDirection = planetary ? world.GetPlanetoidTileDirection(center) : default;
+        var unitsPerRadian = planetary ? PlanetoidWaveUnitsPerRadian(world) : 0;
+        // Atlas neighbors need not be physical neighbors. Visit each spherical
+        // tile once and measure the crater along the surface across face seams.
+        for (var offsetY = planetary ? -center.Y : -reach;
+            offsetY <= (planetary ? world.Height - 1 - center.Y : reach); offsetY++)
         {
             var y = center.Y + offsetY;
             if (!rifleSized && (y < 0 || y >= world.Height))
@@ -161,12 +167,16 @@ public static class Impacts
                 continue;
             }
 
-            for (var offsetX = -reach; offsetX <= reach; offsetX++)
+            for (var offsetX = planetary ? -center.X : -reach;
+                offsetX <= (planetary ? world.Width - 1 - center.X : reach); offsetX++)
             {
                 var x = Mod(center.X + offsetX, world.Width);
                 var position = rifleSized ? world.OffsetTile(center, new(offsetX, offsetY)) : new GridPosition(x, y);
                 if (!world.Contains(position)) continue;
-                var distance = MathF.Sqrt(offsetX * offsetX + offsetY * offsetY);
+                var distance = planetary
+                    ? position == center ? 0 : MathF.Acos(Math.Clamp(System.Numerics.Vector3.Dot(
+                        originDirection, world.GetPlanetoidTileDirection(position)), -1f, 1f)) * unitsPerRadian
+                    : MathF.Sqrt(offsetX * offsetX + offsetY * offsetY);
                 var irregularity = 0.92f + HashUnit(world.Seed ^ 0xD6E8FEB86659FD93UL, position.X, position.Y) * 0.16f;
                 var normalized = distance / (radius * irregularity);
                 if (normalized > 2.3f)
@@ -259,20 +269,40 @@ public static class Impacts
             var distance = craterRadius * 2 + world.NextInt(Math.Max(1, shockRadius - craterRadius * 2 + 1));
             var lateral = world.NextInt(craterRadius * 2 + 1) - craterRadius;
             var y = center.Y + direction.Y * distance + perpendicular.Y * lateral;
-            if (y < 0 || y >= world.Height)
+            if (world.Body is not WorldBody.Planetoid && (y < 0 || y >= world.Height))
             {
                 continue;
             }
 
             var x = Mod(center.X + direction.X * distance + perpendicular.X * lateral, world.Width);
+            var fragmentCenter = world.Body is WorldBody.Planetoid
+                ? OffsetOnPlanetoid(world, center, direction.X * distance + perpendicular.X * lateral,
+                    direction.Y * distance + perpendicular.Y * lateral)
+                : new GridPosition(x, y);
             var fragmentRadius = Math.Max(1, (int)MathF.Round(
                 craterRadius * (0.10f + world.NextUnitFloat() * 0.13f)));
             var fragmentMagnitude = Math.Clamp(
                 0.04f + magnitude * (0.08f + world.NextUnitFloat() * 0.12f),
                 0.04f,
                 0.28f);
-            ApplyCrater(world, new GridPosition(x, y), fragmentRadius, fragmentMagnitude);
+            ApplyCrater(world, fragmentCenter, fragmentRadius, fragmentMagnitude);
         }
+    }
+
+    private static GridPosition OffsetOnPlanetoid(SimulationWorld world, GridPosition center, int dx, int dy)
+    {
+        var size = PlanetoidLayout.FaceSize(world.Width);
+        var origin = world.GetPlanetoidTileDirection(center);
+        var faceEast = PlanetoidLayout.East(PlanetoidLayout.FaceAt(center.X, center.Y, size));
+        var east = System.Numerics.Vector3.Normalize(faceEast - origin * System.Numerics.Vector3.Dot(faceEast, origin));
+        var south = System.Numerics.Vector3.Cross(east, origin);
+        var tangent = east * dx + south * dy;
+        var length = tangent.Length();
+        if (length == 0) return center;
+        var angle = length / PlanetoidWaveUnitsPerRadian(world);
+        var direction = origin * MathF.Cos(angle) + tangent / length * MathF.Sin(angle);
+        var atlas = PlanetoidLayout.AtlasPosition(direction, size);
+        return new((int)atlas.X, (int)atlas.Y);
     }
 
     private static void ApplyShockAnnulus(

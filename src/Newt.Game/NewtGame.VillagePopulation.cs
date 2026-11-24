@@ -8,7 +8,9 @@ namespace Newt.Game;
 public sealed partial class NewtGame
 {
     private readonly Dictionary<(int Village, CritterSpecies? Species), List<int>> _villagePopulationHistory = [];
-    private readonly List<(Rectangle Bounds, int VillageId, GridPosition Position)> _villagePopulationLinks = [];
+    private readonly List<(Rectangle Bounds, int VillageId, GridPosition Position, CritterSpecies? Species)> _villagePopulationLinks = [];
+    private readonly List<(Rectangle Bounds, CritterSpecies Species, PopulationCounts.Selection Selection)> _populationLinks = [];
+    private CritterId _lastPopulationTarget;
     private int _villagePopulationScroll;
     private int _villagePopulationMaximumScroll;
     private const int VillagePopulationRowHeight = 24;
@@ -22,9 +24,10 @@ public sealed partial class NewtGame
         foreach (var village in villages)
         {
             Sample((village.Id, null), village.ApeCount);
+            var rows = PopulationCounts.VillageRows(village);
             foreach (var species in Enum.GetValues<CritterSpecies>())
-                if (village.Counts.ContainsKey(species) || _villagePopulationHistory.ContainsKey((village.Id, species)))
-                    Sample((village.Id, species), village.Counts.GetValueOrDefault(species));
+                if (rows.ContainsKey(species) || _villagePopulationHistory.ContainsKey((village.Id, species)))
+                    Sample((village.Id, species), rows.GetValueOrDefault(species));
         }
 
         void Sample((int Village, CritterSpecies? Species) key, int value)
@@ -40,7 +43,24 @@ public sealed partial class NewtGame
         foreach (var link in _villagePopulationLinks)
             if (link.Bounds.Contains(mouse.Position) && _world.GetApeVillageId(link.Position) == link.VillageId)
             {
-                TeleportCameraToTile(link.Position);
+                var target = link.Species is { } species
+                    ? PopulationCounts.FindCritter(_world, species, village: link.Position, previous: _lastPopulationTarget) : null;
+                if (target is { } resident) _lastPopulationTarget = resident.Id;
+                TeleportCameraToTile(target?.Position ?? link.Position);
+                break;
+            }
+    }
+
+    private void HandlePopulationClick(MouseState mouse)
+    {
+        foreach (var link in _populationLinks)
+            if (link.Bounds.Contains(mouse.Position))
+            {
+                if (PopulationCounts.FindCritter(_world, link.Species, link.Selection, previous: _lastPopulationTarget) is { } target)
+                {
+                    _lastPopulationTarget = target.Id;
+                    TeleportCameraToTile(target.Position);
+                }
                 break;
             }
     }
@@ -58,7 +78,7 @@ public sealed partial class NewtGame
         foreach (var village in villages)
         {
             rows.Add((village, null, village.ApeCount));
-            foreach (var entry in village.Counts.Where(entry => entry.Value > 0)
+            foreach (var entry in PopulationCounts.VillageRows(village)
                 .OrderBy(entry => GetCritterDisplayName(entry.Key), StringComparer.OrdinalIgnoreCase))
                 rows.Add((village, entry.Key, entry.Value));
         }
@@ -100,12 +120,14 @@ public sealed partial class NewtGame
             var y = bounds.Y + headerHeight + i * VillagePopulationRowHeight;
             var graph = new Rectangle(bounds.Right - padding - 96, y + 3, 96, 16);
             var header = row.Species is null;
+            var linkBounds = new Rectangle(x, y, bounds.Width - padding * 2, VillagePopulationRowHeight);
+            _villagePopulationLinks.Add((linkBounds, row.Village.Id, row.Village.Position, row.Species));
+            if (!header && linkBounds.Contains(mouse.Position))
+                _spriteBatch.Draw(_pixel!, linkBounds, new Color(48, 83, 102));
             string label;
             var color = titleColor;
             if (header)
             {
-                var linkBounds = new Rectangle(x, y, bounds.Width - padding * 2, VillagePopulationRowHeight);
-                _villagePopulationLinks.Add((linkBounds, row.Village.Id, row.Village.Position));
                 var hovered = linkBounds.Contains(mouse.Position) || row.Village.Id == hoveredVillageId;
                 _spriteBatch.Draw(_pixel!, linkBounds, hovered ? new Color(65, 105, 126) : new Color(48, 83, 102));
                 DrawBuildingMenuIcon(row.Village.Barbarian ? WorldTool.BarbarianApeVillage : WorldTool.ApeVillage,
@@ -122,7 +144,7 @@ public sealed partial class NewtGame
                     {
                         CritterSpecies.Dog => ("Dog", _barbarianDogSprite),
                         CritterSpecies.ApeChieftain => ("Ape Barbarian Chief", _apeBarbarianChiefSprite),
-                        CritterSpecies.ApeSailor => ("Ape Pirate", _apePirateSprite),
+                        CritterSpecies.ApeSailor => ("Ape Barbarian", _apeBarbarianSprite),
                         CritterSpecies.Ape or CritterSpecies.ApeWarrior => ("Ape Barbarian", _apeBarbarianSprite),
                         _ => (label, null),
                     };

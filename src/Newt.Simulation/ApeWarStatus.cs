@@ -5,4 +5,8 @@ public sealed record ApeWarArmyStatus(int Fighters, int StartingFighters, int St
 
 public sealed record ApeWarStatus(ApeWarArmyStatus Attacking, ApeWarArmyStatus Defending);
 
-public sealed record ActiveApeWar(long Id, string Attacker, string Defender, string WarType, ApeWarStatus Armies);
+public sealed record ActiveApeWar(long Id, string Attacker, string Defender, string WarType, ApeWarStatus Armies)
+{
+    public GridPosition? AttackerPosition { get; init; }
+    public GridPosition? DefenderPosition { get; init; }
+}

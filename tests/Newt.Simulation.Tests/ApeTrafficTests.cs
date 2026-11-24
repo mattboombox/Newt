@@ -102,13 +102,13 @@ public sealed class ApeTrafficTests
     }
 
     [Fact]
-    public void SwapPushesLandCivilianIntoOceanWithPenaltyAndPreservesSpecies()
+    public void SwapPushesLandCivilianIntoOceanWhereExposureCanKillIt()
     {
         var world = new SimulationWorld(10, 10, Terrain.Plains, seed: 1);
         world.SetTerrain(new(4, 5), Terrain.Ocean);
         world.SetTerrain(new(5, 5), Terrain.Shallows);
         world.AddCritter(CritterSpecies.ApeTraderSailor, new(4, 5));
-        world.AddCritter(CritterSpecies.ApeFarmer, new(5, 5));
+        var farmer = world.AddCritter(CritterSpecies.ApeFarmer, new(5, 5));
         Assert.True(Swap(world));
         Assert.Equal(new GridPosition(4, 5), world.GetCritter(1).Position);
         Assert.Equal(CritterSpecies.ApeFarmer, world.GetCritter(1).Species);
@@ -118,8 +118,7 @@ public sealed class ApeTrafficTests
         Assert.True(schedules[1] >= world.Tick + delay);
         for (var tick = 0; tick < delay; tick++)
             world.AdvanceOneTick();
-        Assert.Equal(CritterSpecies.ApeFarmer, world.GetCritter(1).Species);
-        Assert.NotEqual(Terrain.Ocean, world.GetTerrain(world.GetCritter(1).Position));
+        Assert.False(world.TryGetCritter(farmer, out _));
     }
 
     [Fact]

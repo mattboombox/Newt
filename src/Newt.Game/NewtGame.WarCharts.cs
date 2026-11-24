@@ -18,6 +18,19 @@ public sealed partial class NewtGame
     private readonly Dictionary<long, WarChartHistory> _warCharts = [];
     private IReadOnlyList<ActiveApeWar> _activeWars = [];
     private int _warChartScroll;
+    private readonly List<(Rectangle Bounds, long WarId, bool Attacking)> _warChartLinks = [];
+
+    private void HandleWarChartClick(MouseState mouse)
+    {
+        foreach (var link in _warChartLinks)
+            if (link.Bounds.Contains(mouse.Position))
+            {
+                var war = _activeWars.FirstOrDefault(war => war.Id == link.WarId);
+                var destination = link.Attacking ? war?.AttackerPosition : war?.DefenderPosition;
+                if (destination is { } tile) TeleportCameraToTile(tile);
+                break;
+            }
+    }
 
     private int VisibleWarChartCount => Math.Max(1, (MapViewportHeight - 42) / (WarChartHeight + WarChartGap));
     private int WarChartWidth => Math.Max(1, Math.Min(380, GraphicsDevice.Viewport.Width - 24));
@@ -68,6 +81,7 @@ public sealed partial class NewtGame
 
     private void DrawWarCharts()
     {
+        _warChartLinks.Clear();
         if (_spriteBatch is null || _pixel is null || _hudFont is null) return;
         var shown = Math.Min(_activeWars.Count - _warChartScroll, VisibleWarChartCount);
         for (var row = 0; row < shown; row++)
@@ -84,8 +98,8 @@ public sealed partial class NewtGame
             var defending = war.Armies.Defending;
             var red = WarArmyColor(attacking, true);
             var blue = WarArmyColor(defending, false);
-            DrawLegend(attacking, "Attack", red, bounds.X + 12);
-            DrawLegend(defending, "Defend", blue, bounds.X + bounds.Width / 2);
+            DrawLegend(attacking, "Attack", red, bounds.X + 12, true);
+            DrawLegend(defending, "Defend", blue, bounds.X + bounds.Width / 2, false);
 
             var graph = new Rectangle(bounds.X + 12, bounds.Y + 46, bounds.Width - 24, 46);
             var maximum = Math.Max(1, new[] { attacking.StartingFighters, defending.StartingFighters,
@@ -102,11 +116,18 @@ public sealed partial class NewtGame
             DrawSeries(history.Attacking, attacking.Fighters, red);
             DrawSeries(history.Defending, defending.Fighters, blue);
 
-            void DrawLegend(ApeWarArmyStatus army, string name, Color color, int x)
+            void DrawLegend(ApeWarArmyStatus army, string name, Color color, int x, bool attackingSide)
             {
+                var text = $"{name} {army.Fighters:N0}{(army.PopulationTarget ? " pop" : "")}";
+                var textSize = _hudFont.MeasureString(text);
+                var linkBounds = Rectangle.Intersect(bounds,
+                    new Rectangle(x, bounds.Y + 25, 16 + (int)MathF.Ceiling(textSize.X),
+                        Math.Max(16, (int)MathF.Ceiling(textSize.Y))));
+                _warChartLinks.Add((linkBounds, war.Id, attackingSide));
                 _spriteBatch.Draw(_pixel, new Rectangle(x, bounds.Y + 29, 10, 10), color);
-                _spriteBatch.DrawString(_hudFont, $"{name} {army.Fighters:N0}{(army.PopulationTarget ? " pop" : "")}",
-                    new Vector2(x + 16, bounds.Y + 26), new Color(220, 225, 228));
+                _spriteBatch.DrawString(_hudFont, text,
+                    new Vector2(x + 16, bounds.Y + 26),
+                    linkBounds.Contains(Mouse.GetState().Position) ? Color.White : new Color(220, 225, 228));
             }
 
             int GraphY(int value) => graph.Bottom - 2 - (int)MathF.Round(value / (float)maximum * (graph.Height - 3));

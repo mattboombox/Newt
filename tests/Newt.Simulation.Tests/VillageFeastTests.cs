@@ -22,13 +22,15 @@ public sealed class VillageFeastTests
 
     private static readonly GridPosition Village = new(10, 10);
 
-    [Fact]
-    public void FillingFoodStoresRollsOnceAndNeverRerollsWhileAlreadyFull()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void FillingFoodStoresRollsOnceAndNeverRerollsWhileAlreadyFull(bool barbarian)
     {
         var triggered = 0;
         for (ulong seed = 1; seed <= 100; seed++)
         {
-            var world = CreateWorld(seed);
+            var world = CreateWorld(seed, barbarian);
             SetResidentEnergy(world, CritterNutritions.Get(CritterSpecies.Ape).ReproductionThreshold);
             NaturalEvents.SetEnabled(world, true);
             var capacity = world.GetApeVillageFoodCapacity(Village);
@@ -60,7 +62,7 @@ public sealed class VillageFeastTests
             Assert.False(world.TryStartNaturalVillageFeast(Village.Y * world.Width + Village.X));
     }
 
-    private static SimulationWorld CreateWorld(ulong seed = 17)
+    private static SimulationWorld CreateWorld(ulong seed = 17, bool barbarian = false)
     {
         var world = new SimulationWorld(40, 30, Terrain.Plains, seed);
         world.SeasonsEnabled = false;
@@ -68,8 +70,27 @@ public sealed class VillageFeastTests
         for (var y = 0; y < world.Height; y++)
         for (var x = 0; x < world.Width; x++)
             world.SetBiome(new(x, y), Biome.Grassland);
-        Assert.True(world.TrySpawnTestApeVillage(Village));
+        Assert.True(barbarian ? world.TrySpawnBarbarianApeVillage(Village) : world.TrySpawnTestApeVillage(Village));
         return world;
+    }
+
+    [Fact]
+    public void CampFeastFeedsSurvivingResidentsToReproductionEnergy()
+    {
+        var world = CreateWorld(barbarian: true);
+        while (world.CritterCount > 2)
+            world.RemoveCritterAt(world.GetCritter(world.CritterCount - 1).Position);
+        SetResidentEnergy(world, 6);
+        world.StoreApeVillageFood(Village, world.GetApeVillageFoodCapacity(Village));
+        Assert.True(world.TryStartVillageFeast(Village));
+        Assert.All(Enumerable.Range(0, world.CritterCount).Select(world.GetCritter), ape =>
+        {
+            Assert.Equal(ape.MaximumEnergy, ape.Energy);
+            Assert.True(ape.CanReproduce);
+        });
+        var before = world.CritterCount;
+        world.AdvanceOneTick();
+        Assert.True(world.CritterCount > before);
     }
 
     private static void SetResidentEnergy(SimulationWorld world, int energy)
@@ -157,7 +178,7 @@ public sealed class VillageFeastTests
         var camp = new GridPosition(30, 20);
         Assert.True(world.TrySpawnBarbarianApeVillage(camp));
         world.StoreApeVillageFood(camp, 5);
-        Assert.False(world.TryStartVillageFeast(camp));
+        Assert.True(world.TryStartVillageFeast(camp));
         SetResidentEnergy(world, 12);
         world.StoreApeVillageFood(Village, 5);
         Assert.True(world.TryStartVillageFeast(Village));

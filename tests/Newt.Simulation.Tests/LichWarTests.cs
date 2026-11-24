@@ -50,6 +50,8 @@ public sealed class LichWarTests
         Assert.Equal(status, active.Armies);
         Assert.Equal($"Lich #{lich.Id.Value}", lichAttacking ? active.Attacker : active.Defender);
         Assert.Equal($"Village #{world.GetApeVillageId(Village)}", lichAttacking ? active.Defender : active.Attacker);
+        Assert.Equal(LichTile, lichAttacking ? active.AttackerPosition : active.DefenderPosition);
+        Assert.Equal(Village, lichAttacking ? active.DefenderPosition : active.AttackerPosition);
         var undead = lichAttacking ? status.Attacking : status.Defending;
         var village = lichAttacking ? status.Defending : status.Attacking;
         Assert.True(undead.Undead);

@@ -29,12 +29,13 @@ public readonly record struct CritterNutrition(
     bool HuntsUntilFull = false,
     bool HuntsWhenFull = false,
     int HungerNumerator = 2,
-    int HungerDenominator = 3)
+    int HungerDenominator = 3,
+    bool StartsAtFullEnergy = false)
 {
     public const int MetabolismIntervalSeconds = 75;
 
     // Whole units: round starting energy down and breeding cost up.
-    public int InitialEnergy => Math.Max(1, MaximumEnergy / 3);
+    public int InitialEnergy => StartsAtFullEnergy ? MaximumEnergy : Math.Max(1, MaximumEnergy / 3);
     public int ReproductionThreshold => MaximumEnergy;
     public int ReproductionCost => (MaximumEnergy + 1) / 2;
     public int MetabolismCost => 1;
@@ -88,9 +89,9 @@ public static class CritterNutritions
         CritterSpecies.Custodian => new(CritterBodySize.Big, CritterFeedingStrategy.Hunter, 30,
             CanReproduce: false, HasMetabolism: false),
         CritterSpecies.Lich => new(CritterBodySize.Large, CritterFeedingStrategy.Hunter, 40,
-            CanReproduce: false, HasMetabolism: false),
+            CanReproduce: false, HasMetabolism: false, StartsAtFullEnergy: true),
         CritterSpecies.UndeadWarrior => new(CritterBodySize.Large, CritterFeedingStrategy.Hunter, 6,
-            CanReproduce: false, HasMetabolism: false),
+            CanReproduce: false, HasMetabolism: false, StartsAtFullEnergy: true),
         CritterSpecies.Plankton => Plankton,
         CritterSpecies.Jellyfish => Jellyfish,
         CritterSpecies.Worm or CritterSpecies.Trilobite => Trilobite,

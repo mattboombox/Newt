@@ -135,9 +135,18 @@ public sealed partial class SimulationWorld
             var attacker = $"Village #{GetApeVillageId(GetPosition(war.Attacker))}";
             var defender = war.LichId is { } lich ? $"Lich #{lich}" :
                 $"Village #{GetApeVillageId(GetPosition(war.Defender))}";
-            if (war.LichAttacking) (attacker, defender) = (defender, attacker);
+            GridPosition? attackerPosition = GetPosition(war.Attacker);
+            GridPosition? defenderPosition = war.LichId is { } leader
+                ? _critterIndicesById.TryGetValue(leader, out var leaderIndex) ? _positions[leaderIndex] : null
+                : GetPosition(war.Defender);
+            if (war.LichAttacking)
+            {
+                (attacker, defender) = (defender, attacker);
+                (attackerPosition, defenderPosition) = (defenderPosition, attackerPosition);
+            }
             return new ActiveApeWar(war.Id, attacker, defender,
-                war.CivilWar ? "Civil War" : war.BloodWar ? "Blood War" : "War", GetApeWarStatus(war));
+                war.CivilWar ? "Civil War" : war.BloodWar ? "Blood War" : "War", GetApeWarStatus(war))
+                { AttackerPosition = attackerPosition, DefenderPosition = defenderPosition };
         }).ToArray();
 
     private ApeWarStatus GetApeWarStatus(ApeWar war)

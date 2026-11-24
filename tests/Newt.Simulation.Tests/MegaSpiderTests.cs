@@ -4,6 +4,65 @@ namespace Newt.Simulation.Tests;
 
 public sealed class MegaSpiderTests
 {
+    [Fact]
+    public void WebPlacementAllowsAllOtherTerrainAndStoneAndRemovesWebWhenTerrainBecomesInvalid()
+    {
+        foreach (var terrain in Enum.GetValues<Terrain>())
+        {
+            var world = new SimulationWorld(2, 1, Terrain.Plains);
+            var owner = world.AddCritter(CritterSpecies.MegaSpider, new(0, 0));
+            var web = new GridPosition(1, 0);
+            world.SetBiome(web, Biome.Desert);
+            world.SetTerrain(web, terrain);
+            world.SetSurfaceCover(web, SurfaceCover.Stone, long.MaxValue);
+            var allowed = terrain is not (Terrain.Mountain or Terrain.Ice or Terrain.Ocean or
+                Terrain.DeepOcean or Terrain.Shallows or Terrain.MegaWall);
+            Assert.Equal(allowed, world.TryCreateMegaSpiderWeb(owner, web));
+            if (!allowed) continue;
+            Assert.Equal(1, world.MegaSpiderWebCount);
+            world.SetTerrain(web, Terrain.Mountain);
+            Assert.Equal(0, world.MegaSpiderWebCount);
+        }
+    }
+
+    [Theory]
+    [InlineData(CritterSpecies.Deer, true)]
+    [InlineData(CritterSpecies.Wolf, true)]
+    [InlineData(CritterSpecies.Dog, true)]
+    [InlineData(CritterSpecies.Ape, true)]
+    [InlineData(CritterSpecies.ApeWarrior, true)]
+    [InlineData(CritterSpecies.ApeTrader, true)]
+    [InlineData(CritterSpecies.UndeadApe, true)]
+    [InlineData(CritterSpecies.MegaSpider, false)]
+    [InlineData(CritterSpecies.Custodian, false)]
+    public void EnteringWebStopsMovementUntilWebIsRemoved(CritterSpecies species, bool caught)
+    {
+        var world = new SimulationWorld(20, 10, Terrain.Plains, seed: 17) { SeasonsEnabled = false };
+        NaturalEvents.SetEnabled(world, false);
+        for (var y = 0; y < world.Height; y++)
+        for (var x = 0; x < world.Width; x++)
+            world.SetBiome(new(x, y), Biome.Forest);
+        var owner = world.AddCritter(CritterSpecies.MegaSpider, new(0, 0));
+        var web = new GridPosition(10, 5);
+        Assert.True(world.TryCreateMegaSpiderWeb(owner, web));
+        var visitor = world.AddCritter(species, new(9, 5));
+        const System.Reflection.BindingFlags flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+        var schedules = (long[])typeof(SimulationWorld).GetField("_nextMovementTicks", flags)!.GetValue(world)!;
+        schedules[0] = long.MaxValue; // Leave the visitor alone while checking the trap.
+        typeof(SimulationWorld).GetMethod("MoveCritter", flags)!.Invoke(world, [1, web.Y * world.Width + web.X, web, true]);
+        Assert.Equal(caught, world.IsCritterCaughtInMegaSpiderWeb(visitor));
+        if (caught)
+        {
+            for (var tick = 0; tick < 2 * SimulationWorld.GetMovementIntervalTicks(species); tick++)
+                world.AdvanceOneTick();
+            Assert.True(world.TryGetCritter(visitor, out var trapped));
+            Assert.Equal(web, trapped.Position);
+            Assert.True(world.IsCritterCaughtInMegaSpiderWeb(visitor));
+        }
+        Assert.True(world.RemoveMegaSpiderWebAt(web));
+        Assert.False(world.IsCritterCaughtInMegaSpiderWeb(visitor));
+    }
+
     [Theory]
     [InlineData(CritterSpecies.Lich, false)]
     [InlineData(CritterSpecies.UndeadWarrior, false)]
@@ -31,7 +90,7 @@ public sealed class MegaSpiderTests
     [InlineData(Biome.Bog)]
     [InlineData(Biome.Tundra)]
     [InlineData(Biome.Arctic)]
-    public void UnsupportedBiomesRemoveAndPreventWebs(Biome biome)
+    public void ChangingBiomePreservesWebsAndIceStillPreventsThem(Biome biome)
     {
         var world = new SimulationWorld(2, 1, Terrain.Plains, seed: 301);
         for (var tile = 0; tile < world.Width * world.Height; tile++)
@@ -40,8 +99,9 @@ public sealed class MegaSpiderTests
         var spider = world.AddCritter(CritterSpecies.MegaSpider, position);
         Assert.True(world.TryCreateMegaSpiderWeb(spider, position));
         world.SetBiome(position, biome);
-        Assert.Equal(0, world.MegaSpiderWebCount);
-        Assert.False(world.TryCreateMegaSpiderWeb(spider, position));
+        Assert.Equal(1, world.MegaSpiderWebCount);
+        Assert.True(world.RemoveMegaSpiderWebAt(position));
+        Assert.True(world.TryCreateMegaSpiderWeb(spider, position));
         world.SetTerrain(new GridPosition(1, 0), Terrain.Ice);
         Assert.False(world.TryCreateMegaSpiderWeb(spider, new GridPosition(1, 0)));
     }
@@ -140,7 +200,7 @@ public sealed class MegaSpiderTests
     }
 
     [Fact]
-    public void WebsCanOnlyBeBuiltOnDryLand()
+    public void WebsAllowRiversButExcludeLakesAndMarineWater()
     {
         var world = new SimulationWorld(5, 1, Terrain.Plains, seed: 204);
         for (var tile = 0; tile < world.Width * world.Height; tile++)
@@ -155,7 +215,8 @@ public sealed class MegaSpiderTests
         Assert.True(world.RemoveMegaSpiderWebAt(new GridPosition(0, 0)));
         Assert.False(world.TryCreateMegaSpiderWeb(spiderId, new GridPosition(1, 0)));
         Assert.False(world.TryCreateMegaSpiderWeb(spiderId, new GridPosition(2, 0)));
-        Assert.False(world.TryCreateMegaSpiderWeb(spiderId, new GridPosition(3, 0)));
+        Assert.True(world.TryCreateMegaSpiderWeb(spiderId, new GridPosition(3, 0)));
+        Assert.True(world.RemoveMegaSpiderWebAt(new GridPosition(3, 0)));
         Assert.False(world.TryCreateMegaSpiderWeb(spiderId, new GridPosition(4, 0)));
     }
 
@@ -216,7 +277,7 @@ public sealed class MegaSpiderTests
     [InlineData(CritterSpecies.Wolf)]
     [InlineData(CritterSpecies.MegaToad)]
     [InlineData(CritterSpecies.Therapsid)]
-    public void LivingApesAreImmuneToMegaSpiderWebs(CritterSpecies species)
+    public void LivingApesAndPredatorsAreCaughtInMegaSpiderWebs(CritterSpecies species)
     {
         var world = new SimulationWorld(2, 1, Terrain.Beach, seed: 2202);
         for (var tile = 0; tile < world.Width * world.Height; tile++)
@@ -227,11 +288,11 @@ public sealed class MegaSpiderTests
 
         var apeId = world.AddCritter(species, web);
 
-        Assert.False(world.IsCritterCaughtInMegaSpiderWeb(apeId));
+        Assert.True(world.IsCritterCaughtInMegaSpiderWeb(apeId));
     }
 
     [Fact]
-    public void UndeadApesAreImmuneToMegaSpiderWebs()
+    public void UndeadApesAreCaughtInMegaSpiderWebs()
     {
         var world = new SimulationWorld(2, 1, Terrain.Beach, seed: 2204);
         for (var tile = 0; tile < world.Width * world.Height; tile++)
@@ -242,7 +303,7 @@ public sealed class MegaSpiderTests
 
         var undeadId = world.AddCritter(CritterSpecies.UndeadApe, web);
 
-        Assert.False(world.IsCritterCaughtInMegaSpiderWeb(undeadId));
+        Assert.True(world.IsCritterCaughtInMegaSpiderWeb(undeadId));
     }
 
     [Fact]

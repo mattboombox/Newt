@@ -4,6 +4,61 @@ namespace Newt.Simulation.Tests;
 
 public sealed class VillageRoadTests
 {
+    [Theory]
+    [InlineData(CritterSpecies.Ape, true)]
+    [InlineData(CritterSpecies.ApeWarrior, true)]
+    [InlineData(CritterSpecies.ApeSailor, true)]
+    [InlineData(CritterSpecies.ApeTrader, true)]
+    [InlineData(CritterSpecies.ApeTraderSailor, true)]
+    [InlineData(CritterSpecies.Deer, false)]
+    [InlineData(CritterSpecies.Dog, false)]
+    [InlineData(CritterSpecies.UndeadWarrior, false)]
+    public void RoadsAndBridgesHalveLivingApeMovementIntervalsOnly(CritterSpecies species, bool faster)
+    {
+        var world = CreateWorld(2, 2);
+        for (var y = 0; y < world.Height; y++)
+        {
+            world.SetSurfaceWater(new(20, y), SurfaceWaterKind.FreshwaterLake);
+            world.SetTerrain(new(60, y), Terrain.Ocean);
+        }
+        Assert.True(world.TryConnectVillageRoad(First, Second, out _));
+        var road = Positions(world).First(tile => world.GetRoadConnections(tile) != RiverConnection.None &&
+            !world.HasRoadBridge(tile) && world.GetApeStructure(tile) is null);
+        var bridge = Positions(world).First(world.HasRoadBridge);
+        var offRoad = Positions(world).First(tile => world.GetRoadConnections(tile) == RiverConnection.None &&
+            world.GetTerrain(tile) == Terrain.Plains && world.GetSurfaceWater(tile) == SurfaceWaterKind.None);
+        foreach (var tile in new[] { road, bridge, offRoad })
+        {
+            world.RemoveCritterAt(tile);
+            Assert.True(world.TrySpawnCritter(species, tile));
+            Assert.True(world.TryGetCritterAt(tile, out var critter));
+            var index = Enumerable.Range(0, world.CritterCount).Single(i => world.GetCritter(i).Id == critter.Id);
+            var expected = SimulationWorld.GetMovementIntervalTicks(species);
+            if (species == CritterSpecies.UndeadWarrior && tile == bridge) expected *= 3;
+            if (faster && tile != offRoad) expected /= 2;
+            Assert.Equal(expected, world.GetCritterMovementIntervalTicks(index));
+            world.RemoveCritterAt(tile);
+        }
+    }
+
+    [Fact]
+    public void ApeOnRoadSchedulesItsNextMoveSooner()
+    {
+        var world = CreateWorld(2, 2);
+        Assert.True(world.TryConnectVillageRoad(First, Second, out _));
+        var road = Positions(world).First(tile => world.GetRoadConnections(tile) != RiverConnection.None &&
+            world.GetApeStructure(tile) is null && !world.IsOccupied(tile));
+        var id = world.AddCritter(CritterSpecies.Ape, road);
+        var index = Enumerable.Range(0, world.CritterCount).Single(i => world.GetCritter(i).Id == id);
+        const System.Reflection.BindingFlags flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+        var schedule = (long[])typeof(SimulationWorld).GetField("_nextMovementTicks", flags)!.GetValue(world)!;
+        Array.Fill(schedule, long.MaxValue);
+        schedule[index] = 1;
+        typeof(SimulationWorld).GetProperty(nameof(SimulationWorld.Tick))!.SetValue(world, 1L);
+        typeof(SimulationWorld).GetMethod("AdvanceCritterMovements", flags)!.Invoke(world, null);
+        Assert.Equal(1L + SimulationWorld.GetMovementIntervalTicks(CritterSpecies.Ape) / 2, schedule[index]);
+    }
+
     [Fact]
     public void ManualRoadConnectsChosenVillagesRatherThanCloserUnselectedVillage()
     {

@@ -54,8 +54,12 @@ public sealed partial class SimulationWorld
         var tile = GetIndex(_positions[index]);
         var inWater = _terrain[tile] is Terrain.Shallows or Terrain.Ocean or Terrain.DeepOcean ||
             (_terrain[tile] is not Terrain.Ice && _surfaceWater[tile] is SurfaceWaterKind.River or SurfaceWaterKind.FreshwaterLake);
-        return GetMovementIntervalTicks(_species[index]) *
+        var interval = GetMovementIntervalTicks(_species[index]) *
             (_species[index] is CritterSpecies.Lich or CritterSpecies.UndeadWarrior && inWater ? 3 : 1);
+        if ((IsLivingApe(_species[index]) || _species[index] is CritterSpecies.ApeTrader or CritterSpecies.ApeTraderSailor) &&
+            _roadConnections.ContainsKey(tile))
+            interval = Math.Max(1, interval / 2);
+        return interval;
     }
     private static bool IsLichUndead(CritterSpecies species) =>
         species is CritterSpecies.Lich or CritterSpecies.UndeadApe or CritterSpecies.UndeadWarrior;
