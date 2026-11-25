@@ -295,7 +295,8 @@ public sealed partial class NewtGame
                     _missileTrailVertices[trail.Trail.Count] = new(head, color);
                     GraphicsDevice.DrawUserPrimitives(PrimitiveType.LineStrip, _missileTrailVertices, 0, trail.Trail.Count);
                 }
-                else GraphicsDevice.DrawUserPrimitives(PrimitiveType.LineList, _rifleLineVertices, 0, 1);
+                else if (shot.MeteorMagnitude is null)
+                    GraphicsDevice.DrawUserPrimitives(PrimitiveType.LineList, _rifleLineVertices, 0, 1);
             }
             var clip = Vector4.Transform(new Vector4(head, 1), view * projection);
             if (clip.W <= 0 || clip.Z < 0 || clip.Z > clip.W) continue;
@@ -349,7 +350,7 @@ public sealed partial class NewtGame
                     Segment(MapPoint(trail.Trail[i - 1]), MapPoint(trail.Trail[i]));
                 Segment(MapPoint(trail.Trail[^1]), to);
             }
-            else Segment(from, to);
+            else if (shot.MeteorMagnitude is null) Segment(from, to);
 
             Vector2 MapPoint(System.Numerics.Vector3 point) => new(
                 MapOffsetX + (point.X - _cameraX) * TileSize,

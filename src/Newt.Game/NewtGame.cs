@@ -232,10 +232,10 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
 
     private int TileSize => _drawing3DAtlas ? 32 : ZoomLevels[_zoomIndex];
 
-    private int MapOffsetX => _drawing3DAtlas ? 0 : Math.Max(0,
+    private int MapOffsetX => _drawing3DAtlas || IsPlanetoid3D ? 0 : Math.Max(0,
         (GraphicsDevice.Viewport.Width - MapWidth2D * TileSize) / 2);
 
-    private int MapOffsetY => _drawing3DAtlas ? 0 : Math.Max(0,
+    private int MapOffsetY => _drawing3DAtlas || IsPlanetoid3D ? 0 : Math.Max(0,
         (MapViewportHeight - MapHeight2D * TileSize) / 2);
 
     protected override void LoadContent()
@@ -314,6 +314,23 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
 
     protected override void Update(GameTime gameTime)
     {
+        if (FoldingPlanetoid)
+        {
+            if (IsActive)
+            {
+                _planetoidFoldAge += (float)gameTime.ElapsedGameTime.TotalSeconds;
+                if (_planetoidFoldAge >= PlanetoidFoldSeconds && _planetoidFoldReversed)
+                {
+                    _view3D = false;
+                    _viewZoomStep3D = 0;
+                }
+            }
+            _previousKeyboard = Keyboard.GetState();
+            _previousMouse = Mouse.GetState();
+            ResetToolRepeat();
+            base.Update(gameTime);
+            return;
+        }
         var keyboard = Keyboard.GetState();
         var mouse = Mouse.GetState();
         var gamePad = GamePad.GetState(PlayerIndex.One);
@@ -353,6 +370,13 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         {
             HandleWorldShortcuts(keyboard, mouse, gameTime.ElapsedGameTime.TotalSeconds);
             if (WasPressed(keyboard, Keys.Tab)) Toggle3DView();
+            if (FoldingPlanetoid)
+            {
+                _previousKeyboard = keyboard;
+                _previousMouse = mouse;
+                base.Update(gameTime);
+                return;
+            }
             if (WasPressed(keyboard, Keys.V)) ToggleWalkingCamera();
             if (WasPressed(keyboard, Keys.F)) TogglePlayerPerspective();
             if (WasPressed(keyboard, Keys.Z)) CycleViewZoom3D();
@@ -416,7 +440,8 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
 
         if (_view3D)
         {
-            DrawWorld3D(_environmentAnimationSeconds);
+            if (FoldingPlanetoid) DrawPlanetoidFold();
+            else DrawWorld3D(_environmentAnimationSeconds);
             _spriteBatch.Begin(samplerState: SamplerState.PointClamp);
             DrawFirstPersonUnderwaterTint();
             DrawInterface();
@@ -1656,6 +1681,9 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         var zoomDirection = allowMouseInput ? Math.Sign(mouse.ScrollWheelValue - _previousMouse.ScrollWheelValue) : 0;
         var anchor = zoomDirection == 0 ? null : ScreenToWorld(mouse.X, mouse.Y);
         if (anchor is { } tile) anchor = MapLocation2D(tile);
+        if (zoomDirection != 0 && IsPlanetoid3D && mouse.Y >= 0 && mouse.Y < MapViewportHeight)
+            anchor = new GridPosition(_cameraX + FloorDiv(mouse.X - MapOffsetX, TileSize),
+                _cameraY + FloorDiv(mouse.Y - MapOffsetY, TileSize));
         var previousZoomIndex = _zoomIndex;
         if (zoomDirection > 0)
         {
@@ -1674,8 +1702,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         }
 
         _cameraX = ConstrainCameraX(_cameraX);
-        var visibleRows = Math.Max(1, MapViewportHeight / TileSize);
-        _cameraY = Math.Clamp(_cameraY, 0, Math.Max(0, MapHeight2D - visibleRows));
+        _cameraY = ConstrainCameraY(_cameraY);
     }
 
     private void TeleportCameraToTile(GridPosition tile)
@@ -1693,9 +1720,8 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         var location = MapLocation2D(tile);
         _cameraX = ConstrainCameraX((int)MathF.Round(location.X + 0.5f -
             (GraphicsDevice.Viewport.Width / 2f - MapOffsetX) / TileSize));
-        _cameraY = Math.Clamp((int)MathF.Round(location.Y + 0.5f -
-            (MapViewportHeight / 2f - MapOffsetY) / TileSize),
-            0, Math.Max(0, MapHeight2D - MapViewportHeight / TileSize));
+        _cameraY = ConstrainCameraY((int)MathF.Round(location.Y + 0.5f -
+            (MapViewportHeight / 2f - MapOffsetY) / TileSize));
     }
 
     private void UpdateInspectedCritterFollow()
@@ -1720,19 +1746,22 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         var visibleRows = Math.Max(1, MapViewportHeight / TileSize);
         var location = MapLocation2D(critter.Position);
         _cameraX = ConstrainCameraX(location.X - visibleColumns / 2);
-        _cameraY = Math.Clamp(
-            location.Y - visibleRows / 2,
-            0,
-            Math.Max(0, MapHeight2D - visibleRows));
+        _cameraY = ConstrainCameraY(location.Y - visibleRows / 2);
     }
 
     private int MapViewportHeight => _hudHidden
         ? GraphicsDevice.Viewport.Height
         : Math.Max(1, GraphicsDevice.Viewport.Height - HudHeight);
 
-    private int ConstrainCameraX(int x) => !WrapsMapX
+    private int ConstrainCameraX(int x) => IsPlanetoid3D
+        ? PlanetoidCameraLimits.Constrain(x, MapWidth2D, GraphicsDevice.Viewport.Width / TileSize)
+        : !WrapsMapX
         ? Math.Clamp(x, 0, Math.Max(0, MapWidth2D - Math.Max(1, GraphicsDevice.Viewport.Width / TileSize)))
         : Mod(x, MapWidth2D);
+
+    private int ConstrainCameraY(int y) => IsPlanetoid3D
+        ? PlanetoidCameraLimits.Constrain(y, MapHeight2D, MapViewportHeight / TileSize)
+        : Math.Clamp(y, 0, Math.Max(0, MapHeight2D - Math.Max(1, MapViewportHeight / TileSize)));
 
     private void DrawHud()
     {
@@ -2587,14 +2616,14 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
 
         var mapX = screenX - MapOffsetX;
         var mapY = screenY - MapOffsetY;
-        if (mapY < 0 || mapY >= MapHeight2D * TileSize ||
-            (MapOffsetX > 0 && (mapX < 0 || mapX >= MapWidth2D * TileSize)))
+        if (!IsPlanetoid3D && (mapY < 0 || mapY >= MapHeight2D * TileSize ||
+            (MapOffsetX > 0 && (mapX < 0 || mapX >= MapWidth2D * TileSize))))
         {
             return null;
         }
 
         var y = _cameraY + mapY / TileSize;
-        if (y >= MapHeight2D)
+        if (y < 0 || y >= MapHeight2D)
         {
             return null;
         }
@@ -2616,6 +2645,8 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         _megaCylinderRenderDistanceLevel3D = 0;
         _megaCylinderFirstPersonDistanceLevel3D = 1;
         _world = WorldGenerator.Generate(new WorldGenerationOptions(_preset, _seed, MapType: _mapType, Shape: _mapShape));
+        _planetoidFoldAge = PlanetoidFoldSeconds;
+        _world.NaturalMeteorLauncher = LaunchMeteor;
         _warCharts.Clear();
         _activeWars = [];
         _warChartScroll = 0;

@@ -23,7 +23,7 @@ public sealed class BaleenWhaleTests
         for (var tick = 0; tick < SimulationWorld.GetMovementIntervalTicks(CritterSpecies.BaleenWhale); tick++)
             world.AdvanceOneTick();
         Assert.True(world.TryGetCritter(whale, out var fed));
-        Assert.Equal(CritterNutritions.Get(CritterSpecies.BaleenWhale).InitialEnergy + 2, fed.Energy);
+        Assert.Equal(CritterNutritions.Get(CritterSpecies.BaleenWhale).InitialEnergy + 1, fed.Energy);
         Assert.True(world.GetCritterCount(CritterSpecies.Plankton) < before);
     }
 

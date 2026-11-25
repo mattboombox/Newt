@@ -378,7 +378,7 @@ The game starts in Critter Tools with Plankton selected.
   Jellyfish, Plankton, Worms, Squid Eggs, or smaller land animals.
   Baleen Whales evolve from Toothed Whales with the same body size, energy,
   metabolism, reproduction, movement timing, and saltwater habitat. They eat only
-  Plankton, gaining two energy per meal, and search twenty-four tiles away.
+  Plankton, gaining one energy per meal, and search twenty-four tiles away.
   Building Tools can be cycled like Critter Tools; the Wolf Den entry places a
   den with one charge on left click and removes one with right click.
   Other / Jump Start enables life and fills every unoccupied Deep Ocean tile with

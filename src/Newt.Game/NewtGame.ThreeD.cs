@@ -380,6 +380,13 @@ public sealed partial class NewtGame
     private void Toggle3DView()
     {
         if (IsWalkingCamera) ToggleWalkingCamera();
+        if (_view3D && IsPlanetoid3D)
+        {
+            Match2DCameraTo3D();
+            StartPlanetoidFold(reversed: true);
+            ResetToolRepeat();
+            return;
+        }
         _view3D = !_view3D;
         _viewZoomStep3D = 0;
         ResetToolRepeat();
@@ -400,6 +407,7 @@ public sealed partial class NewtGame
             _distance3D = Math.Clamp(distance,
                 6, MaximumDistance3D);
             WrapCamera3D();
+            if (IsPlanetoid3D) StartPlanetoidFold();
         }
         else
         {
@@ -1291,6 +1299,7 @@ public sealed partial class NewtGame
 
     protected override void UnloadContent()
     {
+        _planetoidFoldEffect?.Dispose();
         _zoomInSound?.Dispose();
         _zoomOutSound?.Dispose();
         _rifleSound?.Dispose();

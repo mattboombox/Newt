@@ -30,7 +30,8 @@ public readonly record struct CritterNutrition(
     bool HuntsWhenFull = false,
     int HungerNumerator = 2,
     int HungerDenominator = 3,
-    bool StartsAtFullEnergy = false)
+    bool StartsAtFullEnergy = false,
+    int MetabolismIntervalMultiplier = 1)
 {
     public const int MetabolismIntervalSeconds = 75;
 
@@ -40,7 +41,7 @@ public readonly record struct CritterNutrition(
     public int ReproductionCost => (MaximumEnergy + 1) / 2;
     public int MetabolismCost => 1;
     public int MetabolismIntervalTicks => HasMetabolism
-        ? MetabolismIntervalSeconds * SimulationWorld.TicksPerSecond : 0;
+        ? MetabolismIntervalSeconds * MetabolismIntervalMultiplier * SimulationWorld.TicksPerSecond : 0;
     public int HungryThreshold => (int)(((long)HungerNumerator * MaximumEnergy - 1) / HungerDenominator);
 
     /// <summary>Strictly below the species' hunger fraction of maximum energy, without rounding.</summary>
@@ -69,7 +70,8 @@ public static class CritterNutritions
     private static readonly CritterNutrition Nautilus = new(CritterBodySize.Big, CritterFeedingStrategy.TerrainFirst, 7);
     private static readonly CritterNutrition Fish = new(CritterBodySize.Big, CritterFeedingStrategy.TerrainFirst, 7);
     private static readonly CritterNutrition Newt = new(CritterBodySize.Medium, CritterFeedingStrategy.TerrainOnly, 7);
-    private static readonly CritterNutrition MegaToad = new(CritterBodySize.Huge, CritterFeedingStrategy.Hunter, 11);
+    private static readonly CritterNutrition MegaToad = new(CritterBodySize.Huge, CritterFeedingStrategy.Hunter, 11,
+        MetabolismIntervalMultiplier: 2);
     private static readonly CritterNutrition Crab = new(CritterBodySize.Big, CritterFeedingStrategy.TerrainOnly, 6);
     private static readonly CritterNutrition Squid = new(CritterBodySize.Large, CritterFeedingStrategy.Hunter, 10);
     private static readonly CritterNutrition SquidEgg = new(CritterBodySize.Tiny, CritterFeedingStrategy.Hunter, 1,

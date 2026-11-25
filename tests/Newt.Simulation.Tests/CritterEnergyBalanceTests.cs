@@ -10,11 +10,13 @@ public sealed class CritterEnergyBalanceTests
         foreach (var species in Enum.GetValues<CritterSpecies>())
         {
             var nutrition = CritterNutritions.Get(species);
-            Assert.Equal(Math.Max(1, nutrition.MaximumEnergy / 3), nutrition.InitialEnergy);
+            Assert.Equal(nutrition.StartsAtFullEnergy ? nutrition.MaximumEnergy :
+                Math.Max(1, nutrition.MaximumEnergy / 3), nutrition.InitialEnergy);
             Assert.Equal(nutrition.MaximumEnergy, nutrition.ReproductionThreshold);
             Assert.Equal((nutrition.MaximumEnergy + 1) / 2, nutrition.ReproductionCost);
             Assert.Equal(1, nutrition.MetabolismCost);
-            Assert.Equal(nutrition.HasMetabolism ? 75 * SimulationWorld.TicksPerSecond : 0,
+            var intervalSeconds = species == CritterSpecies.MegaToad ? 150 : 75;
+            Assert.Equal(nutrition.HasMetabolism ? intervalSeconds * SimulationWorld.TicksPerSecond : 0,
                 nutrition.MetabolismIntervalTicks);
         }
     }
@@ -57,6 +59,37 @@ public sealed class CritterEnergyBalanceTests
         Assert.Equal(nutrition.InitialEnergy, world.GetCritter(1).Energy);
         Assert.Equal(due[0] + nutrition.MetabolismIntervalTicks, schedule[0]);
         Assert.Equal(due[1], schedule[1]);
+    }
+
+    [Fact]
+    public void MegaToadLosesEnergyAtHalfTheOrdinaryRate()
+    {
+        const System.Reflection.BindingFlags flags = System.Reflection.BindingFlags.Instance |
+            System.Reflection.BindingFlags.NonPublic;
+        var world = new SimulationWorld(1, 1, Terrain.Plains, seed: 17);
+        world.SeasonsEnabled = false;
+        NaturalEvents.SetEnabled(world, false);
+        world.AddCritter(CritterSpecies.MegaToad, new(0, 0));
+        var nutrition = CritterNutritions.Get(CritterSpecies.MegaToad);
+        var lifecycle = typeof(SimulationWorld).GetMethod("AdvanceCritterLifecycles", flags)!;
+        var tick = typeof(SimulationWorld).GetProperty("Tick")!;
+        var ordinaryInterval = 75 * SimulationWorld.TicksPerSecond;
+
+        tick.SetValue(world, ordinaryInterval);
+        lifecycle.Invoke(world, null);
+        Assert.Equal(nutrition.InitialEnergy, world.GetCritter(0).Energy);
+
+        tick.SetValue(world, ordinaryInterval * 2);
+        lifecycle.Invoke(world, null);
+        Assert.Equal(nutrition.InitialEnergy - 1, world.GetCritter(0).Energy);
+
+        tick.SetValue(world, ordinaryInterval * 3);
+        lifecycle.Invoke(world, null);
+        Assert.Equal(nutrition.InitialEnergy - 1, world.GetCritter(0).Energy);
+
+        tick.SetValue(world, ordinaryInterval * 4);
+        lifecycle.Invoke(world, null);
+        Assert.Equal(nutrition.InitialEnergy - 2, world.GetCritter(0).Energy);
     }
 
     [Fact]

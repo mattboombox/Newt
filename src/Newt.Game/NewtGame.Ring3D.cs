@@ -182,7 +182,6 @@ public sealed partial class NewtGame
         _zoomIndex = ThreeDGeometry.NearestZoomIndex(MathF.Sqrt(Math.Abs(east.X * south.Y - east.Y * south.X)), ZoomLevels);
         var location = MapLocation2D(tile);
         _cameraX = ConstrainCameraX((int)MathF.Round(location.X + 0.5f - (viewport.Width / 2f - MapOffsetX) / TileSize));
-        _cameraY = Math.Clamp((int)MathF.Round(location.Y + 0.5f - (viewport.Height / 2f - MapOffsetY) / TileSize),
-            0, Math.Max(0, MapHeight2D - viewport.Height / TileSize));
+        _cameraY = ConstrainCameraY((int)MathF.Round(location.Y + 0.5f - (viewport.Height / 2f - MapOffsetY) / TileSize));
     }
 }

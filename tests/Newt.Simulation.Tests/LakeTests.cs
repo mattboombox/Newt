@@ -569,6 +569,38 @@ public sealed class LakeTests
         Assert.Equal(0, world.GetLakeTileCount(sink));
     }
 
+    [Theory]
+    [InlineData(1_500, false)]
+    [InlineData(1_501, true)]
+    [InlineData(1_800, true)]
+    public void SlopingTerminalBasinOnRingWorldPromotesItsCompleteBelowSeaLevelFootprint(
+        int basinSize, bool converts)
+    {
+        var (world, sink, _) = CreateOceanConversionWorld(basinSize: basinSize);
+        world.Body = WorldBody.RingWorld;
+        for (var tile = 0; tile < basinSize; tile++)
+            world.SetElevation(new GridPosition(5 + tile % 50, 5 + tile / 50),
+                -0.6f + tile * 0.0003f);
+        TerrainClassifier.RebuildAll(world);
+
+        var result = Hydrology.FillBasin(world, sink, searchBudget: 1);
+
+        if (converts)
+        {
+            Assert.Equal(sink, result.OceanSeed);
+            Assert.Contains(sink, world.AdditionalOceanSeeds);
+            AssertOcean(world, new GridPosition(5 + (basinSize - 1) % 50, 5 + (basinSize - 1) / 50));
+            Assert.Equal(0, world.GetLakeTileCount(sink));
+        }
+        else
+        {
+            Assert.Null(result.OceanSeed);
+            Assert.True(result.Created);
+            Assert.InRange(result.LakeTileCount, 1, 128);
+            Assert.Single(world.AdditionalOceanSeeds);
+        }
+    }
+
     [Fact]
     public void ExistingFrozenLakeConversionDoesNotFollowRiversAndRemovesOldAboveSeaLevelWater()
     {

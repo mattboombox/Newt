@@ -110,7 +110,9 @@ tiles. Overflowing lakes may cover up to 1,500 tiles, inclusive. If filling to
 the spill elevation would exceed that cap, the complete connected lake footprint
 is surveyed for its lowest point. If that point is at or below sea level, a new
 ocean seed is added there, preserving existing seeds. This also applies to oversized
-terminal basins. Tied lowest points use the smallest row-major tile index. The old
+terminal basins. Terminal checks survey at least the connected sea-level footprint,
+so a sloping basin is not hidden by the small terminal fill budget.
+Tied lowest points use the smallest row-major tile index. The old
 freshwater overlay is cleared, and saltwater floods to global sea level, not to the
 former lake surface; higher shoreline tiles can become dry land. Active rivers
 continue routing against the new coastline without recursively rebuilding their

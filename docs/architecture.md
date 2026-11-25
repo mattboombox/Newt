@@ -121,7 +121,8 @@ therefore needs 80 seconds per unit, slightly longer than the shared 75-second
 metabolism, so a continent packed tile-for-tile cannot support the population forever.
 Every species starts with one-third of its maximum energy, rounded down with a
 minimum of one. Breeding requires full energy and costs half the maximum, rounded
-up. Metabolizing critters lose one energy every 75 seconds. Their first metabolism
+up. Metabolizing critters lose one energy every 75 seconds, except Mega Toads,
+whose slow metabolism loses one energy every 150 seconds. Their first metabolism
 ticks are staggered across one second by stable critter ID to spread mass-spawn
 work without changing random outcomes. Non-breeding and non-metabolizing species
 retain explicit exemptions.
@@ -383,7 +384,7 @@ behavior without separate hunting or reproduction status fields. Village feeding
 retain their separate rules.
 Baleen Whales evolve from Toothed Whales and reuse their saltwater habitat, huge
 body size, energy economy, and four-second movement interval. Their perception
-radius is twenty-four tiles. Their diet contains only Plankton, which give them two energy each.
+radius is twenty-four tiles. Their diet contains only Plankton, which give them one energy each.
 The winner of a mutual-predator combat roll deals its combat damage, limited only
 by the loser's remaining energy; newborn starting energy does not cap hits.
 The loser exposes a deterministic half-second damage-flash state. The presentation renders that critter white for

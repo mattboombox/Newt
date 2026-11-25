@@ -285,6 +285,9 @@ public sealed partial class SimulationWorld
 
     public bool NaturalEventsEnabled { get; internal set; } = true;
 
+    /// <summary>Optional presentation hook; the launcher applies the impact when the meteor arrives.</summary>
+    public Action<GridPosition, float>? NaturalMeteorLauncher { get; set; }
+
     public bool NaturalSpringsEnabled { get; internal set; } = true;
 
     public bool LifeEnabled { get; internal set; } = true;
@@ -6016,8 +6019,6 @@ public sealed partial class SimulationWorld
         if (preySpecies is CritterSpecies.Wolf)
             TryRecruitDogFromWolfKill(predatorIndex);
         var foodEnergy = CritterNutritions.Get(preySpecies).FoodEnergy;
-        if (predatorSpecies is CritterSpecies.BaleenWhale && preySpecies is CritterSpecies.Plankton)
-            foodEnergy = 2;
         var personalFood = foodEnergy;
         var settlementFood = 0;
         var apeId = _critterIds[predatorIndex].Value;

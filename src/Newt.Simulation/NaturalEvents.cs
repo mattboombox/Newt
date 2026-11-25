@@ -34,7 +34,10 @@ public static class NaturalEvents
         if (eventType == 0)
         {
             var magnitude = 0.08f + world.NextUnitFloat() * 0.57f;
-            Impacts.CreateMeteorImpact(world, position, magnitude);
+            if (world.NaturalMeteorLauncher is { } launch)
+                launch(position, magnitude);
+            else
+                Impacts.CreateMeteorImpact(world, position, magnitude);
             return true;
         }
 

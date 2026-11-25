@@ -668,7 +668,11 @@ public static class Hydrology
         int tileBudget)
     {
         var surface = FindTerminalLakeSurface(world, sink, tileBudget);
-        var oceanSeed = TryPromoteOversizedBasin(world, sink, surface, blocked: null);
+        // A small terminal fill can stop far below sea level in a sloping basin.
+        // Survey at least the possible ocean footprint before applying its cap.
+        // Include ground exactly at sea level despite the fill's strict cutoff.
+        var surveySurface = Math.Max(surface, world.SeaLevel + ElevationTolerance * 2);
+        var oceanSeed = TryPromoteOversizedBasin(world, sink, surveySurface, blocked: null);
         if (oceanSeed is not null)
         {
             return OceanConversionResult(world, oceanSeed.Value);
