@@ -8,6 +8,53 @@ public sealed class ApeWarTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    public void InterVillageWarsRecruitEveryUnemployedApeOnBothSides(bool blood)
+    {
+        var world = CreateWorld();
+        var homes = (Dictionary<int, int>)typeof(SimulationWorld).GetField("_apeVillageHomes",
+            BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(world)!;
+        for (var side = 0; side < 2; side++)
+        for (var i = 0; i < 260; i++)
+        {
+            var id = world.AddCritter(CritterSpecies.Ape, new(1 + i % 45, 16 + side * 7 + i / 45));
+            var home = side == 0 ? First : Second;
+            homes[id.Value] = home.Y * world.Width + home.X;
+        }
+        var recruits = Residents(world, First).Concat(Residents(world, Second))
+            .Where(critter => critter.Species == CritterSpecies.Ape).Select(critter => critter.Id).ToArray();
+        Assert.True(world.TryStartApeWar(First, Second, blood));
+        foreach (var id in recruits)
+        {
+            Assert.True(world.TryGetCritter(id, out var soldier));
+            Assert.Equal(CritterSpecies.ApeWarrior, soldier.Species);
+            Assert.True(world.TryGetApeWarSide(id, out _));
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void OngoingInterVillageWarDraftsNewUnemployedResidentsAndRestoresThemOnPeace(bool camp)
+    {
+        var world = camp ? CreateCampWarWorld(false) : CreateWorld();
+        Assert.True(world.TryStartApeWar(First, Second));
+        var homes = (Dictionary<int, int>)typeof(SimulationWorld).GetField("_apeVillageHomes",
+            BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(world)!;
+        var recruit = world.AddCritter(CritterSpecies.Ape, new(40, 26));
+        homes[recruit.Value] = First.Y * world.Width + First.X;
+        world.AdvanceApeWars();
+        Assert.True(world.TryGetCritter(recruit, out var soldier));
+        Assert.Equal(CritterSpecies.ApeWarrior, soldier.Species);
+        Assert.True(world.TryGetApeWarSide(recruit, out var attacking));
+        Assert.True(attacking);
+        Assert.True(world.TryStopApeWar(First));
+        Assert.True(world.TryGetCritter(recruit, out var civilian));
+        Assert.Equal(CritterSpecies.Ape, civilian.Species);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public void WarriorInterceptsEnemyAcrossPlanetoidSeam(bool defending)
     {
         const int size = 24;

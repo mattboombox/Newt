@@ -142,7 +142,7 @@ public sealed partial class SimulationWorld
             var tile = FindCultureRecruitmentTiles(building).FirstOrDefault(-1);
             if (tile < 0) return false;
             var id = AddCritter(leader, GetPosition(tile));
-            _apeVillageHomes[id.Value] = village;
+            SetApeVillageHome(id.Value, village);
         }
         return true;
     }

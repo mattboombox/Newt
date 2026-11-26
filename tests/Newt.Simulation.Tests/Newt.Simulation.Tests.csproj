@@ -28,6 +28,7 @@
     <!-- Test host timing policy without loading MonoGame or a graphics device. -->
     <Compile Include="..\..\src\Newt.Game\SimulationSpeedGuard.cs" Link="SimulationSpeedGuard.cs" />
     <Compile Include="..\..\src\Newt.Game\TerrainShading.cs" Link="TerrainShading.cs" />
+    <Compile Include="..\..\src\Newt.Game\RemainsOrientation.cs" Link="RemainsOrientation.cs" />
     <Compile Include="..\..\src\Newt.Game\PopulationCounts.cs" Link="PopulationCounts.cs" />
     <Compile Include="..\..\src\Newt.Game\WeatherVisuals.cs" Link="WeatherVisuals.cs" />
     <Compile Include="..\..\src\Newt.Game\RifleShotTiming.cs" Link="RifleShotTiming.cs" />

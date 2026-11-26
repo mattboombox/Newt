@@ -184,8 +184,8 @@ public sealed class FarmBlightTests
 
     [Theory]
     [InlineData(9, true)]
-    [InlineData(10, false)]
-    [InlineData(11, false)]
+    [InlineData(12, true)]
+    [InlineData(13, false)]
     public void SettledApesForageOnlyWhenVillageFoodIsLow(int storedFood, bool shouldFeed)
     {
         var world = CreateWorld();

@@ -57,7 +57,7 @@ public sealed partial class SimulationWorld
             (hasVillage ? FindVillageDogBirthPosition(village, reservedBirthTiles) : null);
         if (position is not { } spawn || !TryAddCritter(CritterSpecies.Dog, spawn))
             return;
-        if (hasVillage) _apeVillageHomes[_critterIds[_occupants[GetIndex(spawn)]].Value] = village;
+        if (hasVillage) SetApeVillageHome(_critterIds[_occupants[GetIndex(spawn)]].Value, village);
     }
 
     private GridPosition? FindVillageDogBirthPosition(int village, IReadOnlySet<GridPosition> reservedBirthTiles) =>

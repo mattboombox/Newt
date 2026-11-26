@@ -1,0 +1,6 @@
+  Newt.Simulation -> C:\Users\1Matt\Desktop\Newt\src\Newt.Simulation\bin\Debug\net10.0\Newt.Simulation.dll
+  Newt.Simulation.Tests -> C:\Users\1Matt\Desktop\Newt\tests\Newt.Simulation.Tests\bin\Debug\net10.0\Newt.Simulation.Tests.dll
+Test run for C:\Users\1Matt\Desktop\Newt\tests\Newt.Simulation.Tests\bin\Debug\net10.0\Newt.Simulation.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+
+Passed!  - Failed:     0, Passed:  2333, Skipped:     0, Total:  2333, Duration: 12 s - Newt.Simulation.Tests.dll (net10.0)

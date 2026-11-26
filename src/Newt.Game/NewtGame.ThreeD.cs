@@ -17,6 +17,7 @@ public sealed partial class NewtGame
     private const int WhaleFallCutout3D = -2;
     private const int WaterSurfaceArtCutout3D = -3;
     private const int SandwormCutout3D = -4;
+    private const int ShipwreckCutout3D = -5;
     private const float SpriteScale3D = ThreeDGeometry.CritterSpriteScale;
     private const float StructureTileLift3D = 0.015f;
     private const float WalkingSpriteScale3D = 0.8f;
@@ -807,6 +808,7 @@ public sealed partial class NewtGame
                         DrawCritter(_world.GetCritter(item.Critter), sx, sy, UsePlanetoidDaylight3D
                             ? PlanetoidTileBrightness3D(item.Tile, sunDirection) : terrainBrightness);
                     else if (item.Critter == WhaleFallCutout3D) DrawWhaleFall(sx, sy, item.Tile);
+                    else if (item.Critter == ShipwreckCutout3D) DrawShipwreck(sx, sy, item.Tile);
                     else if (item.Critter == WaterSurfaceArtCutout3D)
                         DrawWaterSurfaceArt(sx, sy, item.Tile, elapsedSeconds);
                     else if (item.Critter == SandwormCutout3D)
@@ -1012,6 +1014,7 @@ public sealed partial class NewtGame
                 var river = water is not (SurfaceWaterKind.None or SurfaceWaterKind.FreshwaterLake);
                 var roads = _world.GetRoadConnections(tile);
                 var whaleFall = _world.GetWhaleFallNutrition(tile) > 0;
+                var shipwreck = _world.GetShipwreck(tile) is not null;
                 var hasGroundArt = river || roads != RiverConnection.None || hasImpactWave;
                 var hasStructure = _world.GetApeStructure(tile) is not null || _world.HasVampireLair(tile) ||
                     _world.GetWolfDenCharges(tile) is not null || _world.GetMegaSpiderWebFood(tile) is not null ||
@@ -1022,7 +1025,7 @@ public sealed partial class NewtGame
                     (GetRiverMouths(tile) != RiverConnection.None || BeachwardDirection(tile) != Vector2.Zero);
                 var hasSandworm = _world.TryGetSandwormSegment(tile, out _);
                 if (!drawColumn && hovered != tile && !whaleFall && !hasGroundArt && !hasStructure &&
-                    !hasWaterSurfaceArt && !hasSandworm)
+                    !hasWaterSurfaceArt && !hasSandworm && !shipwreck)
                     continue;
 
                 var height = TileHeight3D(tile);
@@ -1051,6 +1054,8 @@ public sealed partial class NewtGame
                 // Carcasses stay on the bed, including beneath ice and bridge decks.
                 if (whaleFall)
                     _cutouts3D.Add((new Vector3(x + 0.5f, height + 0.012f, y + 0.5f), tile, WhaleFallCutout3D, true));
+                if (shipwreck)
+                    _cutouts3D.Add((new Vector3(x + 0.5f, height + 0.012f, y + 0.5f), tile, ShipwreckCutout3D, true));
                 if (hasWaterSurfaceArt)
                     _cutouts3D.Add((new Vector3(x + 0.5f, top + 0.012f, y + 0.5f), tile, WaterSurfaceArtCutout3D, true));
                 if (hasSandworm)
@@ -1300,6 +1305,9 @@ public sealed partial class NewtGame
     protected override void UnloadContent()
     {
         _planetoidFoldEffect?.Dispose();
+        _shipwreckSprite?.Dispose();
+        _pirateShipwreckSprite?.Dispose();
+        _planetoidFoldCritterEffect?.Dispose();
         _zoomInSound?.Dispose();
         _zoomOutSound?.Dispose();
         _rifleSound?.Dispose();

@@ -1,0 +1,142 @@
+  Newt.Simulation -> C:\Users\1Matt\Desktop\Newt\src\Newt.Simulation\bin\Debug\net10.0\Newt.Simulation.dll
+  Newt.Simulation.Tests -> C:\Users\1Matt\Desktop\Newt\tests\Newt.Simulation.Tests\bin\Debug\net10.0\Newt.Simulation.Tests.dll
+Test run for C:\Users\1Matt\Desktop\Newt\tests\Newt.Simulation.Tests\bin\Debug\net10.0\Newt.Simulation.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+[xUnit.net 00:00:00.58]     Newt.Simulation.Tests.CustodianTests.NoSpeciesCanHuntOrEatCustodians [FAIL]
+  Failed Newt.Simulation.Tests.CustodianTests.NoSpeciesCanHuntOrEatCustodians [1 ms]
+  Error Message:
+   Assert.True() Failure
+Expected: True
+Actual:   False
+  Stack Trace:
+     at Newt.Simulation.Tests.CustodianTests.NoSpeciesCanHuntOrEatCustodians() in C:\Users\1Matt\Desktop\Newt\tests\Newt.Simulation.Tests\CustodianTests.cs:line 120
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+[xUnit.net 00:00:00.64]     Newt.Simulation.Tests.CombatProtectionTests.TradersDealOneDamageAndMustBeDefeatedInCombat(species: ApeTraderSailor) [FAIL]
+[xUnit.net 00:00:00.64]     Newt.Simulation.Tests.CombatProtectionTests.TradersDealOneDamageAndMustBeDefeatedInCombat(species: ApeTrader) [FAIL]
+  Failed Newt.Simulation.Tests.CombatProtectionTests.TradersDealOneDamageAndMustBeDefeatedInCombat(species: ApeTraderSailor) [2 ms]
+  Error Message:
+   Assert.Equal() Failure: Values differ
+Expected: 24
+Actual:   23
+  Stack Trace:
+     at Newt.Simulation.Tests.CombatProtectionTests.TradersDealOneDamageAndMustBeDefeatedInCombat(CritterSpecies species) in C:\Users\1Matt\Desktop\Newt\tests\Newt.Simulation.Tests\CombatProtectionTests.cs:line 266
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+  Failed Newt.Simulation.Tests.CombatProtectionTests.TradersDealOneDamageAndMustBeDefeatedInCombat(species: ApeTrader) [< 1 ms]
+  Error Message:
+   Assert.Equal() Failure: Values differ
+Expected: 24
+Actual:   23
+  Stack Trace:
+     at Newt.Simulation.Tests.CombatProtectionTests.TradersDealOneDamageAndMustBeDefeatedInCombat(CritterSpecies species) in C:\Users\1Matt\Desktop\Newt\tests\Newt.Simulation.Tests\CombatProtectionTests.cs:line 266
+   at InvokeStub_CombatProtectionTests.TradersDealOneDamageAndMustBeDefeatedInCombat(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+[xUnit.net 00:00:00.67]     Newt.Simulation.Tests.CrossHabitatEvolutionTests.EveryEvolutionAndDevolutionIgnoresCurrentHabitat(terrain: Plains, evolve: True) [FAIL]
+[xUnit.net 00:00:00.67]     Newt.Simulation.Tests.CrossHabitatEvolutionTests.EveryEvolutionAndDevolutionIgnoresCurrentHabitat(terrain: Ocean, evolve: False) [FAIL]
+[xUnit.net 00:00:00.67]     Newt.Simulation.Tests.CrossHabitatEvolutionTests.EveryEvolutionAndDevolutionIgnoresCurrentHabitat(terrain: Ocean, evolve: True) [FAIL]
+  Failed Newt.Simulation.Tests.CrossHabitatEvolutionTests.EveryEvolutionAndDevolutionIgnoresCurrentHabitat(terrain: Plains, evolve: True) [< 1 ms]
+  Error Message:
+   Assert.True() Failure
+Expected: True
+Actual:   False
+  Stack Trace:
+     at Newt.Simulation.Tests.CrossHabitatEvolutionTests.EveryEvolutionAndDevolutionIgnoresCurrentHabitat(Terrain terrain, Boolean evolve) in C:\Users\1Matt\Desktop\Newt\tests\Newt.Simulation.Tests\CrossHabitatEvolutionTests.cs:line 35
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+  Failed Newt.Simulation.Tests.CrossHabitatEvolutionTests.EveryEvolutionAndDevolutionIgnoresCurrentHabitat(terrain: Ocean, evolve: False) [< 1 ms]
+  Error Message:
+   Assert.True() Failure
+Expected: True
+Actual:   False
+  Stack Trace:
+     at Newt.Simulation.Tests.CrossHabitatEvolutionTests.EveryEvolutionAndDevolutionIgnoresCurrentHabitat(Terrain terrain, Boolean evolve) in C:\Users\1Matt\Desktop\Newt\tests\Newt.Simulation.Tests\CrossHabitatEvolutionTests.cs:line 35
+   at InvokeStub_CrossHabitatEvolutionTests.EveryEvolutionAndDevolutionIgnoresCurrentHabitat(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+  Failed Newt.Simulation.Tests.CrossHabitatEvolutionTests.EveryEvolutionAndDevolutionIgnoresCurrentHabitat(terrain: Ocean, evolve: True) [< 1 ms]
+  Error Message:
+   Assert.True() Failure
+Expected: True
+Actual:   False
+  Stack Trace:
+     at Newt.Simulation.Tests.CrossHabitatEvolutionTests.EveryEvolutionAndDevolutionIgnoresCurrentHabitat(Terrain terrain, Boolean evolve) in C:\Users\1Matt\Desktop\Newt\tests\Newt.Simulation.Tests\CrossHabitatEvolutionTests.cs:line 35
+   at InvokeStub_CrossHabitatEvolutionTests.EveryEvolutionAndDevolutionIgnoresCurrentHabitat(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+[xUnit.net 00:00:00.67]     Newt.Simulation.Tests.CrossHabitatEvolutionTests.EveryEvolutionAndDevolutionIgnoresCurrentHabitat(terrain: Plains, evolve: False) [FAIL]
+  Failed Newt.Simulation.Tests.CrossHabitatEvolutionTests.EveryEvolutionAndDevolutionIgnoresCurrentHabitat(terrain: Plains, evolve: False) [< 1 ms]
+  Error Message:
+   Assert.True() Failure
+Expected: True
+Actual:   False
+  Stack Trace:
+     at Newt.Simulation.Tests.CrossHabitatEvolutionTests.EveryEvolutionAndDevolutionIgnoresCurrentHabitat(Terrain terrain, Boolean evolve) in C:\Users\1Matt\Desktop\Newt\tests\Newt.Simulation.Tests\CrossHabitatEvolutionTests.cs:line 35
+   at InvokeStub_CrossHabitatEvolutionTests.EveryEvolutionAndDevolutionIgnoresCurrentHabitat(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+[xUnit.net 00:00:00.69]     Newt.Simulation.Tests.CombatProtectionTests.EverySpeciesEitherIgnoresTraderOrResolvesCombat(traderSpecies: ApeTraderSailor) [FAIL]
+  Failed Newt.Simulation.Tests.CombatProtectionTests.EverySpeciesEitherIgnoresTraderOrResolvesCombat(traderSpecies: ApeTraderSailor) [7 ms]
+  Error Message:
+   System.InvalidOperationException : A sandworm needs two adjacent empty desert tiles.
+  Stack Trace:
+     at Newt.Simulation.SimulationWorld.AddCritter(CritterSpecies species, GridPosition position) in C:\Users\1Matt\Desktop\Newt\src\Newt.Simulation\SimulationWorld.cs:line 1331
+   at Newt.Simulation.Tests.CombatProtectionTests.EverySpeciesEitherIgnoresTraderOrResolvesCombat(CritterSpecies traderSpecies) in C:\Users\1Matt\Desktop\Newt\tests\Newt.Simulation.Tests\CombatProtectionTests.cs:line 145
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+[xUnit.net 00:00:00.69]     Newt.Simulation.Tests.CombatProtectionTests.EverySpeciesEitherIgnoresTraderOrResolvesCombat(traderSpecies: ApeTrader) [FAIL]
+  Failed Newt.Simulation.Tests.CombatProtectionTests.EverySpeciesEitherIgnoresTraderOrResolvesCombat(traderSpecies: ApeTrader) [7 ms]
+  Error Message:
+   System.InvalidOperationException : A sandworm needs two adjacent empty desert tiles.
+  Stack Trace:
+     at Newt.Simulation.SimulationWorld.AddCritter(CritterSpecies species, GridPosition position) in C:\Users\1Matt\Desktop\Newt\src\Newt.Simulation\SimulationWorld.cs:line 1331
+   at Newt.Simulation.Tests.CombatProtectionTests.EverySpeciesEitherIgnoresTraderOrResolvesCombat(CritterSpecies traderSpecies) in C:\Users\1Matt\Desktop\Newt\tests\Newt.Simulation.Tests\CombatProtectionTests.cs:line 145
+   at InvokeStub_CombatProtectionTests.EverySpeciesEitherIgnoresTraderOrResolvesCombat(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+[xUnit.net 00:00:00.72]     Newt.Simulation.Tests.CombatProtectionTests.CombatCapablePreyTakesCombatDamageFromEveryEligibleSpecies [FAIL]
+  Failed Newt.Simulation.Tests.CombatProtectionTests.CombatCapablePreyTakesCombatDamageFromEveryEligibleSpecies [2 ms]
+  Error Message:
+   System.InvalidOperationException : A sandworm needs two adjacent empty desert tiles.
+  Stack Trace:
+     at Newt.Simulation.SimulationWorld.AddCritter(CritterSpecies species, GridPosition position) in C:\Users\1Matt\Desktop\Newt\src\Newt.Simulation\SimulationWorld.cs:line 1331
+   at Newt.Simulation.Tests.CombatProtectionTests.CombatCapablePreyTakesCombatDamageFromEveryEligibleSpecies() in C:\Users\1Matt\Desktop\Newt\tests\Newt.Simulation.Tests\CombatProtectionTests.cs:line 302
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+[xUnit.net 00:00:00.99]     Newt.Simulation.Tests.SimulationWorldTests.ClosedMegaToadPopulationCannotSustainItselfThroughCannibalism [FAIL]
+  Failed Newt.Simulation.Tests.SimulationWorldTests.ClosedMegaToadPopulationCannotSustainItselfThroughCannibalism [36 ms]
+  Error Message:
+   CritterSnapshot { Id = CritterId { Value = 1, IsValid = True }, Species = MegaToad, Position = GridPosition { X = 1, Y = 0 }, Energy = 1, MaximumEnergy = 11, IsHungry = True, CanReproduce = False, IsDamageFlashing = False, Plague = None, IsColonist = False, ColonistDestination = , IsVeteranWarrior = False, CombatKills = 0, IsAncientCustodian = False, IsHunting = True, IsSicknessDamageFlashing = False, IsPlagueImmune = False }
+  Stack Trace:
+     at Newt.Simulation.Tests.SimulationWorldTests.ClosedMegaToadPopulationCannotSustainItselfThroughCannibalism() in C:\Users\1Matt\Desktop\Newt\tests\Newt.Simulation.Tests\SimulationWorldTests.cs:line 2666
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+[xUnit.net 00:00:01.02]     Newt.Simulation.Tests.SimulationWorldTests.EveryCritterSpeciesCanOccupyAnIceSheet [FAIL]
+  Failed Newt.Simulation.Tests.SimulationWorldTests.EveryCritterSpeciesCanOccupyAnIceSheet [< 1 ms]
+  Error Message:
+   Sandworm
+  Stack Trace:
+     at Newt.Simulation.Tests.SimulationWorldTests.EveryCritterSpeciesCanOccupyAnIceSheet() in C:\Users\1Matt\Desktop\Newt\tests\Newt.Simulation.Tests\SimulationWorldTests.cs:line 3737
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+[xUnit.net 00:00:05.46]     Newt.Simulation.Tests.WorldGeneratorTests.RingWorldIsLongWithoutScalingItsLocalFeaturesByFullWidth [FAIL]
+  Failed Newt.Simulation.Tests.WorldGeneratorTests.RingWorldIsLongWithoutScalingItsLocalFeaturesByFullWidth [116 ms]
+  Error Message:
+   Assert.InRange() Failure: Value not in range
+Range:  (0.00999999978 - 0.150000006)
+Actual: 0.25
+  Stack Trace:
+     at Newt.Simulation.Tests.WorldGeneratorTests.RingWorldIsLongWithoutScalingItsLocalFeaturesByFullWidth() in C:\Users\1Matt\Desktop\Newt\tests\Newt.Simulation.Tests\WorldGeneratorTests.cs:line 454
+   at System.RuntimeMethodHandle.InvokeMethod(ObjectHandleOnStack target, Void** arguments, ObjectHandleOnStack sig, BOOL isConstructor, ObjectHandleOnStack result)
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+[xUnit.net 00:00:12.35]     Newt.Simulation.Tests.WorldGeneratorTests.DefaultGameWorldSeedsItsLargestBelowSeaLevelBasin [FAIL]
+  Failed Newt.Simulation.Tests.WorldGeneratorTests.DefaultGameWorldSeedsItsLargestBelowSeaLevelBasin [106 ms]
+  Error Message:
+   Assert.True() Failure
+Expected: True
+Actual:   False
+  Stack Trace:
+     at Newt.Simulation.Tests.WorldGeneratorTests.DefaultGameWorldSeedsItsLargestBelowSeaLevelBasin() in C:\Users\1Matt\Desktop\Newt\tests\Newt.Simulation.Tests\WorldGeneratorTests.cs:line 184
+   at System.RuntimeMethodHandle.InvokeMethod(ObjectHandleOnStack target, Void** arguments, ObjectHandleOnStack sig, BOOL isConstructor, ObjectHandleOnStack result)
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+Results File: C:\Users\1Matt\Desktop\Newt\tests\Newt.Simulation.Tests\TestResults\current-failures.trx
+
+Failed!  - Failed:    14, Passed:  2304, Skipped:     0, Total:  2318, Duration: 12 s - Newt.Simulation.Tests.dll (net10.0)

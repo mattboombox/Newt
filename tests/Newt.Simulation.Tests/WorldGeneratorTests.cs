@@ -182,7 +182,8 @@ public sealed class WorldGeneratorTests
         var world = WorldGenerator.Generate(new WorldGenerationOptions(WorldPreset.Standard, Seed: 20260806));
 
         Assert.True(world.GetTerrain(world.OceanSeed) is
-            Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows or Terrain.Ice);
+            Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows or Terrain.Ice,
+            $"Seed {world.OceanSeed}: {world.GetTerrain(world.OceanSeed)}, elevation {world.GetElevation(world.OceanSeed)}, water {world.GetSurfaceWater(world.OceanSeed)}");
         Assert.Equal(
             LargestBelowSeaLevelComponentSize(world),
             BelowSeaLevelComponentSize(world, world.OceanSeed));
@@ -234,7 +235,7 @@ public sealed class WorldGeneratorTests
             Assert.Equal(preset.Height, world.Height);
             if (preset != WorldPreset.Earth)
             {
-                Assert.InRange(world.ActiveSpringCount, 1, 48);
+                Assert.InRange(world.ActiveSpringCount, 1, 96);
             }
         }
     }
@@ -451,7 +452,7 @@ public sealed class WorldGeneratorTests
             var x = world.Width * (index * 2 + 1) / 8;
             Assert.True(world.HasTeleporter(new GridPosition(x, world.Height / 2)));
         }
-        Assert.InRange(SimulationWorld.MegaWallElevation - SimulationWorld.MaximumSeaLevel, 0.01f, 0.15f);
+        Assert.Equal(0.25f, SimulationWorld.MegaWallElevation - SimulationWorld.MaximumSeaLevel, precision: 5);
         Assert.True(SimulationWorld.MegaWallElevation < SimulationWorld.MaximumGroundElevation);
         Assert.Contains(AllPositions(world), position => world.GetTerrain(position) is Terrain.Mountain &&
             world.GetElevation(position) > SimulationWorld.MegaWallElevation);
@@ -577,12 +578,29 @@ public sealed class WorldGeneratorTests
         }
     }
 
+    [Fact]
+    public void SpringSelectionDoesNotTurnSeaIceOrBelowSeaLevelGroundIntoHills()
+    {
+        var world = new SimulationWorld(8, 3, Terrain.Plains, seed: 42);
+        for (var y = 0; y < world.Height; y++)
+        for (var x = 0; x < world.Width; x++) world.SetElevation(new(x, y), -0.2f);
+        world.SetTerrain(new(0, 0), Terrain.Ice);
+        world.OceanSeed = new(0, 0);
+        typeof(WorldGenerator).GetMethod("StartNaturalSprings",
+            System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!
+            .Invoke(null, [world, world.Seed]);
+        Assert.Equal(Terrain.Ice, world.GetTerrain(world.OceanSeed));
+        Assert.Equal(0, world.ActiveSpringCount);
+        Assert.All(AllPositions(world).Where(tile => tile != world.OceanSeed),
+            tile => Assert.Equal(Terrain.Plains, world.GetTerrain(tile)));
+    }
+
     [Theory]
-    [InlineData(80, 48, 12)]
-    [InlineData(160, 96, 28)]
-    [InlineData(320, 192, 48)]
-    [InlineData(640, 311, 48)]
-    [InlineData(1280, 642, 48)]
+    [InlineData(80, 48, 24)]
+    [InlineData(160, 96, 56)]
+    [InlineData(320, 192, 96)]
+    [InlineData(640, 311, 96)]
+    [InlineData(1280, 642, 96)]
     public void NaturalRiverTargetsAreDoubledForEveryMapSize(
         int width,
         int height,

@@ -82,6 +82,7 @@ public sealed partial class SimulationWorld
 
     private void MergeApeVillageInto(int source, int destination)
     {
+        InvalidateApeBuildingCounts();
         RemoveRoadsForVillage(source);
         var food = _apeVillageFood.GetValueOrDefault(source) + _apeVillageFood.GetValueOrDefault(destination);
         var wood = _apeVillageWood.GetValueOrDefault(source) + _apeVillageWood.GetValueOrDefault(destination);
@@ -112,7 +113,7 @@ public sealed partial class SimulationWorld
                 RemoveApeStructureAt(GetPosition(library));
 
         foreach (var id in _apeVillageHomes.Where(pair => pair.Value == source).Select(pair => pair.Key).ToArray())
-            _apeVillageHomes[id] = destination;
+            SetApeVillageHome(id, destination);
         foreach (var id in _apeVillageTargets.Where(pair => pair.Value == source).Select(pair => pair.Key).ToArray())
             _apeVillageTargets[id] = destination;
         foreach (var pair in _apeSettlerTargets.ToArray())
@@ -123,7 +124,7 @@ public sealed partial class SimulationWorld
                 _apeSettlerTargets.Remove(pair.Key);
                 _apeSettlerPaths.Remove(pair.Key);
                 _apeVillageTargets.Remove(pair.Key);
-                _apeVillageHomes[pair.Key] = destination;
+                SetApeVillageHome(pair.Key, destination);
             }
             else if (pair.Value.OriginVillageTile == source)
                 _apeSettlerTargets[pair.Key] = (destination, pair.Value.TargetVillageTile);
@@ -157,6 +158,8 @@ public sealed partial class SimulationWorld
         _apeVillageWood.Remove(source);
         _loneApeSailorSinceTicks.Remove(source);
         _loneApeSailorSinceTicks.Remove(destination);
+        InvalidateApeBuildingCounts();
+        _apeVillageManagementTicks.Remove(source);
         _apeVillageFood[destination] = Math.Min(food, GetApeVillageFoodCapacityByTile(destination));
         _apeVillageWood[destination] = Math.Min(wood, GetApeVillageWoodCapacityByTile(destination));
         RecruitApeCultureUnits(destination);

@@ -402,11 +402,12 @@ public static partial class WorldGenerator
     }
 
     internal static int GetNaturalSpringTargetCount(int width, int height) =>
-        4 * Math.Clamp(width * height / 2_500 + 1, 3, 12);
+        8 * Math.Clamp(width * height / 2_500 + 1, 3, 12);
 
     private static bool IsNaturalSpringCandidate(SimulationWorld world, GridPosition position) =>
         world.GetTerrain(position) is not
-            (Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows or Terrain.MegaWall) &&
+            (Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows or Terrain.Ice or Terrain.MegaWall) &&
+        world.GetElevation(position) > 0 &&
         world.GetSurfaceWater(position) is SurfaceWaterKind.None &&
         world.GetSurfaceCover(position) is not SurfaceCover.Lava;
 

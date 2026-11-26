@@ -13,7 +13,7 @@ public sealed class BarbarianHostilityTests
     public void WellFedBarbariansAttackOtherCampsButProtectTheirOwn(CritterSpecies species)
     {
         var world = new SimulationWorld(60, 30, Terrain.Beach, seed: 1);
-        // Keep feast food spending out of this faction-combat scenario.
+        // Keep unrelated natural events out of this faction-combat scenario.
         NaturalEvents.SetEnabled(world, false);
         for (var y = 0; y < world.Height; y++)
         for (var x = 0; x < world.Width; x++) world.SetBiome(new(x, y), Biome.Grassland);

@@ -162,6 +162,7 @@ public sealed class LichTests
             world.SetBiome(new(x, y), Biome.Grassland);
         var camp = new GridPosition(10, 10);
         Assert.True(world.TrySpawnBarbarianApeVillage(camp));
+        ColonistTestFood.Fund(world, new GridPosition(35, 15));
         Assert.True(world.TrySendApeColonist(new GridPosition(35, 15)));
         var lich = world.AddCritter(CritterSpecies.Lich, new(30, 20));
         var targets = Enumerable.Range(0, world.CritterCount).Select(world.GetCritter)

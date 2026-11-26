@@ -57,7 +57,9 @@ public sealed class PopulationCountsTests
         var world = CreateWorld();
         Assert.True(world.TrySpawnBarbarianApeVillage(Camp));
         var civilian = world.AddCritter(CritterSpecies.Ape, new(0, 0));
+        ColonistTestFood.Fund(world, Camp);
         Assert.True(world.TrySendApeColonist(Camp));
+        ColonistTestFood.Fund(world, Camp);
         Assert.True(world.TrySendApeColonist(Camp));
         var barbarians = world.GetBarbarianPopulationBySpecies();
         Assert.Equal(2, world.ApeColonistCount);

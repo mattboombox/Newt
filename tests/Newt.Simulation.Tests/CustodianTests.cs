@@ -117,6 +117,11 @@ public sealed class CustodianTests
             var world = new SimulationWorld(3, 1, Terrain.Plains);
             // Reserve the target tile before spawning a lich and its warriors.
             var drone = world.AddCritter(CritterSpecies.Custodian, new(1, 0));
+            if (species is CritterSpecies.Sandworm)
+            {
+                world.SetBiome(new(0, 0), Biome.Desert);
+                world.SetBiome(new(2, 0), Biome.Desert);
+            }
             Assert.True(world.TrySpawnCritter(species, new(0, 0)));
             Assert.Null(world.FindHunterPrey(1, species, 8, null));
             world.CommitEncounter(new(0, 0), new(1, 0));

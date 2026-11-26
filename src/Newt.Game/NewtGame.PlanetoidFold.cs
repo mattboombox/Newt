@@ -11,6 +11,11 @@ public sealed partial class NewtGame
     private Matrix _planetoidFoldStart;
     private Matrix _planetoidFoldEnd;
     private bool _planetoidFoldReversed;
+    private CritterSnapshot[] _planetoidFoldCritters = [];
+    private bool _planetoidFoldAtlasPending;
+    private Matrix _planetoidFoldCamera;
+    private AlphaTestEffect? _planetoidFoldCritterEffect;
+    private VertexPositionColorTexture[] _planetoidFoldCritterVertices = [];
     private BasicEffect? _planetoidFoldEffect;
     private VertexPositionColor[] _planetoidFoldVertices = [];
     private bool FoldingPlanetoid => _view3D && IsPlanetoid3D && _planetoidFoldAge < PlanetoidFoldSeconds;
@@ -19,6 +24,9 @@ public sealed partial class NewtGame
     {
         _planetoidFoldReversed = reversed;
         var (endView, endProjection) = Matrices3D();
+        _planetoidFoldCamera = Matrix.Invert(endView);
+        _planetoidFoldCritters = Enumerable.Range(0, _world.CritterCount).Select(_world.GetCritter).ToArray();
+        _planetoidFoldAtlasPending = true;
         _planetoidFoldEnd = Matrix.Multiply(endView * endProjection,
             1f / Math.Max(1, Matrix.Invert(endView).Translation.Length()));
         var size = PlanetoidFaceSize;
@@ -32,6 +40,7 @@ public sealed partial class NewtGame
 
     private void DrawPlanetoidFold()
     {
+        if (_planetoidFoldAtlasPending) PreparePlanetoidFoldCritters();
         var size = PlanetoidFaceSize;
         var time = Math.Clamp(_planetoidFoldAge / PlanetoidFoldSeconds, 0, 1);
         if (_planetoidFoldReversed) time = 1 - time;
@@ -89,6 +98,100 @@ public sealed partial class NewtGame
             pass.Apply();
             GraphicsDevice.DrawUserPrimitives(PrimitiveType.TriangleList, _planetoidFoldVertices, 0, index / 3);
         }
+        DrawPlanetoidFoldCritters(transform, progress);
         GraphicsDevice.Viewport = previousViewport;
+    }
+
+    private void PreparePlanetoidFoldCritters()
+    {
+        var pages = (_planetoidFoldCritters.Length + AtlasCapacity3D - 1) / AtlasCapacity3D;
+        while (_atlasPages3D.Count < pages)
+            _atlasPages3D.Add(new RenderTarget2D(GraphicsDevice, AtlasSize3D, AtlasSize3D));
+        _drawing3DAtlas = true;
+        try
+        {
+            for (var page = 0; page < pages; page++)
+            {
+                GraphicsDevice.SetRenderTarget(_atlasPages3D[page]);
+                GraphicsDevice.Clear(Color.Transparent);
+                _spriteBatch!.Begin(samplerState: SamplerState.PointClamp);
+                var end = Math.Min(_planetoidFoldCritters.Length, (page + 1) * AtlasCapacity3D);
+                for (var i = page * AtlasCapacity3D; i < end; i++)
+                {
+                    var slot = i % AtlasCapacity3D;
+                    DrawCritter(_planetoidFoldCritters[i], slot % AtlasColumns3D, slot / AtlasColumns3D);
+                }
+                _spriteBatch.End();
+            }
+        }
+        finally
+        {
+            _drawing3DAtlas = false;
+            GraphicsDevice.SetRenderTarget(null);
+        }
+        _planetoidFoldAtlasPending = false;
+    }
+
+    private void DrawPlanetoidFoldCritters(Matrix transform, float progress)
+    {
+        _planetoidFoldCritterEffect ??= new AlphaTestEffect(GraphicsDevice)
+            { VertexColorEnabled = true, AlphaFunction = CompareFunction.Greater, ReferenceAlpha = 100 };
+        _planetoidFoldCritterEffect.World = Matrix.Identity;
+        _planetoidFoldCritterEffect.View = Matrix.Identity;
+        _planetoidFoldCritterEffect.Projection = transform;
+        GraphicsDevice.BlendState = BlendState.AlphaBlend;
+        GraphicsDevice.DepthStencilState = DepthStencilState.Default;
+        GraphicsDevice.SamplerStates[0] = SamplerState.PointClamp;
+        var blend = PlanetoidNetFold.Smooth(Math.Clamp((progress - 0.7f) / 0.3f, 0, 1));
+        var scale = MathHelper.Lerp(1, SpriteScale3D, blend);
+        var pages = (_planetoidFoldCritters.Length + AtlasCapacity3D - 1) / AtlasCapacity3D;
+        if (_planetoidFoldCritterVertices.Length != AtlasCapacity3D * 6)
+            _planetoidFoldCritterVertices = new VertexPositionColorTexture[AtlasCapacity3D * 6];
+        for (var page = 0; page < pages; page++)
+        {
+            var index = 0;
+            var end = Math.Min(_planetoidFoldCritters.Length, (page + 1) * AtlasCapacity3D);
+            for (var i = page * AtlasCapacity3D; i < end; i++)
+            {
+                var critter = _planetoidFoldCritters[i];
+                var tile = critter.Position;
+                var height = ThreeDGeometry.ColumnHeight(WaterElevation3D(tile) ?? _world.GetElevation(tile)) + 0.04f;
+                var x = tile.X + 0.5f;
+                var y = tile.Y + 0.5f;
+                var a = Point(x - 0.5f, y - 0.5f);
+                var b = Point(x + 0.5f, y - 0.5f);
+                var c = Point(x + 0.5f, y + 0.5f);
+                var d = Point(x - 0.5f, y + 0.5f);
+                var normal = Vector3.Normalize(Vector3.Cross(d - a, b - a));
+                var lift = normal * 0.04f;
+                var center = Point(x, y) + SurfaceUp3D(x, y) * (0.5f * scale);
+                var right = _planetoidFoldCamera.Right * (scale * 0.5f);
+                var up = _planetoidFoldCamera.Up * (scale * 0.5f);
+                a = Vector3.Lerp(a + lift, center - right + up, blend);
+                b = Vector3.Lerp(b + lift, center + right + up, blend);
+                c = Vector3.Lerp(c + lift, center + right - up, blend);
+                d = Vector3.Lerp(d + lift, center - right - up, blend);
+                var slot = i % AtlasCapacity3D;
+                var uv = new Vector2(slot % AtlasColumns3D, slot / AtlasColumns3D) / AtlasColumns3D;
+                var stride = 1f / AtlasColumns3D;
+                var va = new VertexPositionColorTexture(a, Color.White, uv);
+                var vb = new VertexPositionColorTexture(b, Color.White, uv + new Vector2(stride, 0));
+                var vc = new VertexPositionColorTexture(c, Color.White, uv + new Vector2(stride));
+                var vd = new VertexPositionColorTexture(d, Color.White, uv + new Vector2(0, stride));
+                _planetoidFoldCritterVertices[index++] = va;
+                _planetoidFoldCritterVertices[index++] = vb;
+                _planetoidFoldCritterVertices[index++] = vc;
+                _planetoidFoldCritterVertices[index++] = va;
+                _planetoidFoldCritterVertices[index++] = vc;
+                _planetoidFoldCritterVertices[index++] = vd;
+                Vector3 Point(float px, float py) => Framework(PlanetoidNetFold.Position(px, py, height, _world.Width, tile, progress));
+            }
+            _planetoidFoldCritterEffect.Texture = _atlasPages3D[page];
+            foreach (var pass in _planetoidFoldCritterEffect.CurrentTechnique.Passes)
+            {
+                pass.Apply();
+                GraphicsDevice.DrawUserPrimitives(PrimitiveType.TriangleList, _planetoidFoldCritterVertices, 0, index / 3);
+            }
+        }
     }
 }

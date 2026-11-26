@@ -30,9 +30,18 @@ public sealed class CrossHabitatEvolutionTests
     {
         foreach (var species in Enum.GetValues<CritterSpecies>())
         {
-            var world = new SimulationWorld(1, 1, terrain, seed: 17);
+            var world = new SimulationWorld(3, 2, terrain, seed: 17);
             var position = new GridPosition(0, 0);
+            if (species is CritterSpecies.Sandworm)
+            {
+                foreach (var tile in new[] { position, new GridPosition(0, 1) })
+                {
+                    world.SetTerrain(tile, Terrain.Plains);
+                    world.SetBiome(tile, Biome.Desert);
+                }
+            }
             Assert.True(world.TrySpawnCritter(species, position));
+            world.SetTerrain(position, terrain);
             var original = world.GetCritter(0).Species;
             if (evolve && CritterEvolution.GetEvolvedSpeciesCount(original) > 0)
             {

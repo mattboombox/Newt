@@ -12,6 +12,7 @@ public sealed partial class SimulationWorld
         public int? LichId;
         public bool LichAttacking;
         public bool MergeOnVictory;
+        public long NextLevyTick;
         public int StartingTargetPopulation;
         public int StartingLichArmy;
         public HashSet<int> Bombers = [];
@@ -379,6 +380,11 @@ public sealed partial class SimulationWorld
                 AdvanceLichWar(war);
                 continue;
             }
+            if (!war.CivilWar && Tick >= war.NextLevyTick)
+            {
+                war.NextLevyTick = Tick + TicksPerSecond;
+                RecruitUnemployedWarApes(war);
+            }
             bool Surviving(int id) => war.CivilWar
                 ? IsSurvivingCivilWarFighter(id)
                 : IsSurvivingWarrior(id);
@@ -420,6 +426,26 @@ public sealed partial class SimulationWorld
                 RemoveApeCulture(mergeLoser);
                 MergeApeVillageInto(mergeLoser, mergeWinner);
             }
+        }
+    }
+
+    private void RecruitUnemployedWarApes(ApeWar war)
+    {
+        foreach (var (id, home) in _apeVillageHomes.Where(pair =>
+            pair.Value == war.Attacker || pair.Value == war.Defender).ToArray())
+        {
+            if (!_critterIndicesById.TryGetValue(id, out var index) ||
+                _species[index] is not CritterSpecies.Ape || !CanRecruitApe(index) ||
+                _apeWorkplaces.ContainsKey(id) || _apeSettlerTargets.ContainsKey(id)) continue;
+            var army = home == war.Attacker ? war.AttackingWarriors : war.DefendingWarriors;
+            if (army.Contains(id)) continue;
+            if (home == war.Attacker) war.AttackingParticipants?.Add(id);
+            if (!_barbarianVillageTiles.Contains(home))
+            {
+                ChangeCritterSpecies(index, CritterSpecies.ApeWarrior, preserveEnergy: true, preserveApeVillage: true);
+                war.Levies.Add(id);
+            }
+            army.Add(id);
         }
     }
 

@@ -49,6 +49,7 @@ public sealed partial class NewtGame
         public DynamicVertexBuffer? Buffer { get; set; }
         public long UploadedWeatherStep { get; set; } = -1;
         public bool HolesDirty { get; set; }
+        public long PrunedWeatherStep { get; set; } = -1;
     }
 
     private readonly List<CloudPatch3D> _clouds3D = [];
@@ -389,6 +390,7 @@ public sealed partial class NewtGame
         patch.Shades = _cloudFaceShadesScratch3D.ToArray();
         patch.ShadedAt = -1;
         patch.WeatherStep = _cloudWeatherStep3D;
+        patch.PrunedWeatherStep = _cloudWeatherStep3D;
         patch.UploadedWeatherStep = -1;
         patch.HolesDirty = false;
     }
@@ -515,6 +517,29 @@ public sealed partial class NewtGame
                 BuildCloudPatch3D(patch, height, isNexus);
                 cloudRebuildTimeMs += Stopwatch.GetElapsedTime(start).TotalMilliseconds;
             }
+            // A mesh awaiting its budgeted rebuild can still contain cells that
+            // have left the weather field. Drop those faces before either pass;
+            // recoloring them as dry clouds creates a temporary white afterimage.
+            if (!isNexus && patch.PrunedWeatherStep != _cloudWeatherStep3D)
+            {
+                var keptVertices = new List<VertexPositionColor>(patch.Vertices.Length);
+                var keptShades = new List<CloudFaceShade3D>(patch.Shades.Length);
+                foreach (var shade in patch.Shades)
+                {
+                    if (CloudKind3D(shade.X, shade.Y, patch.Face) is CloudKind.None) continue;
+                    keptShades.Add(shade with { Vertex = keptVertices.Count });
+                    for (var vertex = shade.Vertex; vertex < shade.Vertex + 6; vertex++)
+                        keptVertices.Add(patch.Vertices[vertex]);
+                }
+                if (keptVertices.Count != patch.Vertices.Length)
+                {
+                    patch.Vertices = keptVertices.ToArray();
+                    patch.Shades = keptShades.ToArray();
+                    patch.UploadedWeatherStep = -1;
+                    patch.ShadedAt = -1;
+                }
+                patch.PrunedWeatherStep = _cloudWeatherStep3D;
+            }
             // Refresh color every frame independently of the three-second geometry samples.
             if (patch.ShadedAt != elapsedSeconds)
             {
@@ -598,6 +623,7 @@ public sealed partial class NewtGame
         _cloudMeshScratch3D.Clear();
         foreach (var cell in cells)
         {
+            if (CloudKind3D(cell.X, cell.Y, -1) is CloudKind.None) continue;
             var left = Math.Max(0, cell.X * _cloudCellWidth3D + shift);
             var right = Math.Min(_world.Width, (cell.X + 1) * _cloudCellWidth3D + shift);
             if (left >= right) continue;

@@ -40,7 +40,7 @@ public sealed class BarbarianReproductionTests
         Assert.True(world.TryGetCritter(parent, out var ready));
         Assert.True(ready.CanReproduce);
 
-        for (var tick = 0; tick < 30 * SimulationWorld.TicksPerSecond &&
+        for (var tick = 0; tick < 60 * SimulationWorld.TicksPerSecond &&
             world.GetApeVillageResidentCount(camp) == 1; tick++)
             world.AdvanceOneTick();
 

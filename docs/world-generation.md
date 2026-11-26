@@ -44,9 +44,9 @@ volcano raises a compact mountain shoulder around its vent and a lower skirt of
 hills. That footprint remains after dormancy or
 extinction, allowing successive adjacent volcanoes to grow natural-looking ridges.
 
-Natural spring selection is seeded and requests six sources on a Micro world,
-fourteen on Small, and up to twenty-four on Standard and larger worlds. Fewer are used when the generated
-snow line does not contain enough suitably spaced candidates. These springs use
+Natural spring selection is seeded and requests twenty-four sources on a Micro world,
+fifty-six on Small, and up to ninety-six on Standard and larger worlds. Fewer are used when the generated
+land does not contain enough suitably spaced candidates. These springs use
 the same tile-by-tile travel animation as springs created with `F`.
 
 ## Presets
@@ -261,7 +261,7 @@ The game starts in Critter Tools with Plankton selected.
   no usable forage is available. They do not hunt Mega Toads or Wolves, but defend
   themselves with the standard 50% chance to win when either predator attacks.
   A Therapsid win deals one energy damage. Toothed Whales deal five damage,
-  Wolves and Mega Toads four, Sea Scorpions and Squid three, and Mega Spiders two.
+  Wolves and Mega Toads four, Sea Scorpions, Squid, and Mega Spiders three.
   Ordinary Apes remain one-damage combatants; Dogs remain at three.
   Monkeys hunt Snails and Crabs within four tiles when below two-thirds energy and no tile food is available,
   feed and remain on Swamp, Jungle, Forest, or Bog foliage until ready to breed,
@@ -281,7 +281,10 @@ The game starts in Critter Tools with Plankton selected.
   shared habitat, with assigned land Apes also hunting Worms when their home village has zero stored food.
   They forage from Swamp and Jungle foliage and must found or join a
   village before producing offspring. Assigned Apes stop hunting while their home
-  village has at least ten stored food; unassigned Apes continue hunting normally.
+  village is above half food capacity; unassigned Apes continue hunting normally.
+  Villages and barbarian camps above half food capacity fully feed a randomly
+  selected eligible breeding ape or dog, rechecking stores after each meal until
+  at or below half. Unaffordable partial meals are saved. Feasts are disabled.
   A founder spends its first reproduction event creating only a Village beside
   an available Grassland, Arid, or Beach district site. Rivers block placement of Villages
   and land districts, while Harbors are the sole exception. At five residents the village
@@ -309,10 +312,10 @@ The game starts in Critter Tools with Plankton selected.
   border dry land, including diagonally. Harbor construction can also connect
   diagonally to the village building network. Harbors recruit without changing total population,
   allowing one Sailor per five residents up to four at twenty residents. Sailors
-  have 28 maximum energy and replenish by hunting, without automatic village refills.
+  have 12 maximum energy and replenish by hunting and the shared village feeding rules.
   They move in all eight directions through Beach, saltwater, Rivers, and Freshwater
-  Lakes, including diagonal freshwater Mountain corridors and horizontal map wrap. They never
-  reproduce, hunt all implemented sea life except Plankton and Worms, and return their catches
+  Lakes, including diagonal freshwater Mountain corridors and horizontal map wrap. They
+  reproduce at full energy, hunt all implemented sea life except Plankton and Worms, and return their catches
   to a connected Harbor. A village may
   support one Harbor and one Lumber Camp initially, plus another of each for every 150 residents.
   Villages can build one Military District at 20 residents and another at each multiple of 50.
@@ -323,7 +326,8 @@ The game starts in Critter Tools with Plankton selected.
   converts a Warrior into a regular sick Ape, preserving its identity and village membership. Villages
   remain more than twelve tiles apart.
   Village food storage is capped at five plus ten per Farm, Rice Paddy, Orchard, or Aquaculture district.
-  Food districts inactive for more than two simulated years become ruins. When a village
+  Food districts unstaffed for more than half a simulated year become ruins;
+  staffed but inactive districts retain the two-year timeout. When a village
   loses every resident, its Village and all connected buildings become unowned ruins.
   Ruins are non-operational, can be replaced by compatible Ape construction, and decay
   completely after two simulated years if they remain undisturbed.
@@ -348,7 +352,9 @@ The game starts in Critter Tools with Plankton selected.
   habitat; Mountains, Lava, and Ring World
   walls remain impassable. Their label and lighter Ape color persist
   until they found and join a new village. Founding resets the colonist to ordinary Ape
-  starting energy and adds two companion Apes. Later growth uses normal reproduction.
+  starting energy and leaves one founder. Regular village founders immediately
+  take an available farming role, building their first food district when possible;
+  barbarian colonies keep camp roles. Later growth uses normal reproduction.
   Clicking a Village with the Colonist tool
   chooses a distant site automatically; clicking a valid non-Village tile sends one
   there from the nearest Village. Inspection shows its destination X and Y coordinates.

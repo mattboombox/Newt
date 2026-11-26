@@ -62,6 +62,7 @@ public sealed class UndeadTargetingTests
         for (var y = 0; y < world.Height; y++)
         for (var x = 0; x < world.Width; x++) world.SetBiome(new(x, y), Biome.Grassland);
         Assert.True(world.TrySpawnBarbarianApeVillage(new(10, 10)));
+        ColonistTestFood.Fund(world, new(40, 15));
         Assert.True(world.TrySendApeColonist(new(40, 15)));
         var colonist = Enumerable.Range(0, world.CritterCount).Select(world.GetCritter).Single(critter => critter.IsColonist);
         var id = world.AddCritter(hunter, new(55, 25));

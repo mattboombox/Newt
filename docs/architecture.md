@@ -272,7 +272,7 @@ offspring only need an adjacent tile in which they can survive.
 Mega Spiders evolve from Sea Scorpions into huge land predators that can also
 occupy Shallows. They hunt every other critter species with a six-tile perception
 radius, but never cannibalize. Attacks on other predators use ordinary 50/50 combat
-instead of instant predation; a Mega Spider win deals two energy damage. A target
+instead of instant predation; a Mega Spider win deals three energy damage. A target
 already caught in the owner's Web is stored without a combat roll. Their first
 reproduction event creates one passable Web on their tile or
 a neighboring valid land/Shallows tile instead of producing offspring. A
@@ -358,7 +358,7 @@ Mega Toads and Wolves can hunt Therapsids, and the Therapsid uses the same 50/50
 combat roll as every other combatant. Therapsids still do not include either
 species in their hunting diet, so they defend themselves without pursuing them.
 A Therapsid win deals one energy damage. Toothed Whales deal five, Wolves and
-Mega Toads four, Sea Scorpions and Squid three, and Mega Spiders two. Both Sea
+Mega Toads four, Sea Scorpions, Squid, and Mega Spiders three. Both Sea
 Scorpions and Squid hunt Therapsids where their habitats overlap. Ordinary Apes
 remain at one damage; Dogs remain at three.
 Toothed Whales are the marine Therapsid branch. They inhabit Deep Ocean, Ocean,
@@ -413,19 +413,26 @@ retain their adjacency restrictions for Snails and Crabs.
 Jellyfish always consume Plankton they drift into, even at full energy, rather
 than shoving it. They remain directionless drifters and always hunt on contact.
 
+Boat-using apes that die in saltwater or freshwater lakes leave a flat shipwreck
+on the tile. Barbarian boats use the pirate wreck; other boats, including traders,
+colonists, vampire colonists, royal boats, and warrior boats, use the ordinary wreck.
+Wrecks persist for the same two simulated years as ruins and do not block movement.
+
 Barbarian apes combine land and sailor habitats, allowing them to enter saltwater,
 rivers, and lakes while retaining their species, energy, and village membership.
 In water they use the pirate sprite, or pirate-chieftain sprite for chiefs; on
 land and beaches they use their barbarian sprites. All barbarian ape roles use
 the same broad hunting diet, including marine prey, while still avoiding whales
-and their own village members.
+and their own village members. Camps and ordinary villages share the same
+stored-food growth feeding and half-capacity hunting rules.
 
 Apes extend the Monkey branch and use the land habitat while hunting every species
 except Plankton and Worms outside their own civilization that enters shared terrain. As an emergency
 exception, assigned land Apes hunt Worms while their home village has no stored food. They also forage directly
 from productive Swamp and Jungle foliage, moving onto adjacent wetland food when hungry.
-Village residents hunt only while their home village stores fewer than ten food;
-at ten or more they avoid prey while roaming. Unassigned Apes continue hunting so
+Village and camp residents hunt and forage while their home stores are at or
+below half food capacity; above half they avoid wildlife while roaming.
+Rival-faction combat remains independent of this food rule. Unassigned Apes continue hunting so
 they can gather enough energy to found a village.
 Their first reproduction
 is settlement-mediated: the Ape searches within 28 tiles for a village site adjacent
@@ -490,7 +497,10 @@ boat and therefore its first Sailor; later Sailors cost two wood each.
 Food districts persist when seasons temporarily change their biome, but stop producing
 until Grassland or Arid returns for Farms, Swamp for Rice Paddies, Forest for Orchards,
 or a Shallows or Freshwater Lake site returns for Aquaculture. A food district that stays
-inactive for more than two simulated years becomes a ruin. Residential Districts beyond
+inactive for more than two simulated years becomes a ruin. An unstaffed food district
+becomes a ruin after half a simulated year instead.
+A lone eligible resident can take an existing farm immediately, even if the village
+has never had multiple residents. Residential Districts beyond
 the number needed for the current population begin an underuse timer; if still unused after
 two simulated minutes, they become ruins, replacing the former annual removal of housing
 only when excess capacity exceeded thirty.
@@ -504,13 +514,17 @@ Mountains impassable. They can push through blocking Plankton chains and displac
 into nearby valid habitat, while Mountains,
 Lava, and Mega Walls remain impassable. Colonists are labeled separately
 and use a lighter Ape color until they found and join their new village. Founding
-resets the traveler's energy to ordinary Ape starting energy and adds two companions
-on nearby habitable tiles, leaving the first auxiliary building site available.
+resets the traveler's energy to ordinary Ape starting energy and starts with only
+the founder. Regular villages immediately use lone-resident farm assignment;
+barbarian colonies retain their camp roles. No companion apes are added or require
+extra founding space. Subsequent population growth uses reproduction.
 A lone civilian in a regular village can build its first food district if a site and resources are available.
 When a village drops to one resident, an eligible survivor takes over an active food district
 immediately and can build one first if the village has the resources and a suitable site.
-The Colonist tool in Events manually sends one from a clicked Village, charging up to one
-hundred food and reducing a poorer village's food to zero. Clicking a valid non-Village
+The Colonist tool in Events manually sends one from a clicked Village, requiring and
+spending exactly 25 food. Colonists from villages and camps start with ordinary Ape
+starting energy plus 25 provisions (29 total); surplus food stays in the settlement.
+Clicking a valid non-Village
 tile instead dispatches from the nearest Village to found at that exact destination.
 Occupied destination tiles remain valid for both automatic colonies and the tool;
 the colonist can found from beside the tile without removing its occupant.
@@ -521,6 +535,13 @@ invalid or blocked destination is retried instead of replaced. Automatic colonis
 retain emergency settlement and site replacement behavior.
 Colonies from regular villages become regular villages 75% of the time and barbarian
 camps 25% of the time. Colonies from barbarian camps have a 50/50 split.
+At camp population capacity, an otherwise valid reproduction creates an overflow
+colonist using exactly 25 stored food as provisions, instead of requiring full
+50-food stores. The parent pays its normal birth energy cost only after a successful
+launch. Each launch requires its own 25 food, so surplus can fund another ready parent's
+colonist while insufficient remainders stay in storage.
+Failed destination or spawn searches leave both food and parent energy unchanged.
+The separate timed camp event uses the same 25-food requirement and cost.
 Inspection shows the destination X and Y coordinates while the Ape remains a colonist.
 Climate coastline rebuilding validates Harbors only after coastline classification finishes,
 so the temporary landform stage cannot demolish them.
@@ -528,12 +549,12 @@ so the temporary landform stage cannot demolish them.
 Harbors recruit ordinary residents into Ape Sailors at thirty-second intervals without
 changing total village population or the recruit's stable identity. With one Harbor, the village quota
 is one Sailor at five residents, two at ten, three at fifteen, and four at twenty or
-more; each additional Harbor raises the ceiling by four. Sailors have a maximum energy reserve
-of 28, twice the ordinary Ape cap of 14.
-Recruitment preserves existing energy; sailors gain energy by hunting and no longer
-refill remotely from village stores. They keep catches until their own reserve reaches
-28 and carry surplus food home. Metabolism, combat, and plague drain that finite reserve,
-so village supplies cannot automatically cancel plague damage. Ape Sailors never reproduce. If a
+more; each additional Harbor raises the ceiling by four. Sailors share the ordinary
+Ape's maximum energy of 12, starting energy of four, and reproduction cost of six.
+Recruitment preserves existing energy. Sailors gain energy by hunting and the same
+village maintenance and above-half growth feeding as other resident apes.
+They keep catches until their own reserve reaches 12 and carry surplus food home.
+Plague and combat feeding restrictions still apply. Sailors reproduce at full energy. If a
 Sailor remains the only village resident for sixty simulated seconds without taking over a food district, it becomes a same-ID Ape
 colonist with normal settler travel energy and departs for a valid distant site. Its former settlement
 becomes ruins immediately. When no destination exists, the Sailor remains and retries after another
@@ -644,6 +665,13 @@ open route that moves sideways before making forward progress. The search avoids
 occupied, combat-reserved, and impassable tiles, never retreats, and holds position
 when no short detour exists. Direct movement and adjacent combat retain priority.
 
+Assigned farmers stay on their exact farm tile rather than wandering, hunting,
+or returning only as far as an adjacent tile. Displaced farmers use their cached
+worker route to return, respecting occupied tiles and combat reservations. Once
+home they discard the route and use a constant-time movement check. Village feeding,
+food production, and reproduction continue normally; invalid assignments fall back
+to ordinary ape behavior.
+
 Events / Blood War uses the same attacker-then-defender selection. Attackers use
 normal mobilization, while defenders recruit ordinary apes, scholars, and sailors.
 Farmers and lumberjacks retain their jobs and keep producing food and wood; they
@@ -688,6 +716,13 @@ at sea). Recruited unemployed apes, existing warriors, and chiefs keep fighting.
 No stores transfer and surviving recruits recover their original roles; existing
 warriors remain warriors. A village cannot join another war during its civil war.
 
+Inter-settlement wars draft all eligible unemployed apes without an army-size cap.
+Active ordinary wars, Blood Wars, and barbarian expeditions check once per second
+for newly unemployed residents and add them as levies. Employed workers, departing
+colonists, and plague-infected apes are not newly drafted by this check. Surviving
+levies return to civilian roles at peace under the existing veteran and landing rules.
+Civil wars retain their existing team-split and recruitment rules.
+
 With natural events enabled, villages check for random wars once per simulation
 minute after an initial five-minute grace period. Eligible villages have a 1%
 outbreak roll; each variant has an equal one-in-three selection chance before
@@ -704,10 +739,17 @@ lone-sailor colonist departure and abandonment behavior.
 
 Balance rules: Vampire lairs hold four vampires; vampires deal four damage per hit
 and hunt while strictly below three-quarters of maximum energy.
-Feasts spend at most 80% of the food present when started (rounded down), with a
-fixed budget that does not grow when new food arrives. When a village's food stores
-fill, natural events give it one 10% chance to start a feast. Deliveries to already-full
-stores do not reroll. The former near-full surplus growth feeding is removed.
+Feasts are disabled, including their manual tool and natural full-storage trigger.
+Before each lifecycle pass, villages and barbarian camps with stores strictly above
+half capacity randomly choose an eligible breeding ape or dog for a complete meal
+to its species' reproduction threshold. After each meal stores are checked again;
+feeding stops at or below half, or when no complete meal is affordable. A meal may
+cross below half, but never spends more food than is stored. No partial meals are
+given. Assigned dogs participate only below their settlement's dog cap; sick,
+combat-feeding-blocked, stranded, and departing-colonist residents are excluded.
+All roles retain ordinary low-energy maintenance feeding, without the former
+barbarian growth-feeding exceptions. Hunting, foliage, birth costs, housing limits,
+birth-site checks, and barbarian overflow colonists retain their distinct roles.
 All living ape roles,
 including traders and village-less apes, have a 25% dog recruitment chance after
 a wolf kill; village dog caps still apply to assigned apes. Roads first seek an

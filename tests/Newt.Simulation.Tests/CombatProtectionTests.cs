@@ -142,7 +142,7 @@ public sealed class CombatProtectionTests
             var traderPosition = new GridPosition(1, 0);
             // Leave room for the lich's escort so it does not replace the trader.
             var trader = world.AddCritter(traderSpecies, traderPosition);
-            var attacker = world.AddCritter(attackerSpecies, attackPosition);
+            var attacker = AddCombatant(world, attackerSpecies, attackPosition);
             Assert.True(world.TryGetCritter(attacker, out var beforeAttacker));
             Assert.True(world.TryGetCritter(trader, out var beforeTrader));
             world.CommitEncounter(attackPosition, traderPosition);
@@ -249,6 +249,7 @@ public sealed class CombatProtectionTests
             Assert.True(world.TryGetCritter(attacker, out var beforeAttacker));
             Assert.True(world.TryGetCritter(trader, out var beforeTrader));
             Assert.Equal(1, world.GetCritterCombatDamage(trader));
+            var attackerDamage = world.GetCritterCombatDamage(attacker);
 
             world.CommitEncounter(attackerPosition, traderPosition);
 
@@ -263,7 +264,7 @@ public sealed class CombatProtectionTests
             else
             {
                 sawPredatorHit = true;
-                Assert.Equal(beforeTrader.Energy - 2, afterTrader.Energy);
+                Assert.Equal(beforeTrader.Energy - attackerDamage, afterTrader.Energy);
             }
         }
         Assert.True(sawRetaliation);
@@ -293,13 +294,13 @@ public sealed class CombatProtectionTests
             CritterId attackId, defenseId;
             if (attacker is CritterSpecies.Lich)
             {
-                defenseId = world.AddCritter(defender, defensePosition);
-                attackId = world.AddCritter(attacker, attackPosition);
+                defenseId = AddCombatant(world, defender, defensePosition);
+                attackId = AddCombatant(world, attacker, attackPosition);
             }
             else
             {
-                attackId = world.AddCritter(attacker, attackPosition);
-                defenseId = world.AddCritter(defender, defensePosition);
+                attackId = AddCombatant(world, attacker, attackPosition);
+                defenseId = AddCombatant(world, defender, defensePosition);
             }
             Assert.True(world.TryGetCritter(attackId, out var beforeAttacker));
             Assert.True(world.TryGetCritter(defenseId, out var beforeDefender));
@@ -362,5 +363,20 @@ public sealed class CombatProtectionTests
         var energy = (int[])typeof(SimulationWorld).GetField("_energy",
             System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(world)!;
         energy[1] = CritterNutritions.Get(defender).MaximumEnergy;
+    }
+
+    private static CritterId AddCombatant(SimulationWorld world, CritterSpecies species, GridPosition position)
+    {
+        if (species is CritterSpecies.Sandworm)
+        {
+            var tail = new GridPosition(position.X, 1);
+            Assert.False(world.IsOccupied(tail));
+            foreach (var tile in new[] { position, tail })
+            {
+                world.SetTerrain(tile, Terrain.Plains);
+                world.SetBiome(tile, Biome.Desert);
+            }
+        }
+        return world.AddCritter(species, position);
     }
 }

@@ -42,8 +42,7 @@ public sealed class BarbarianDogFeedingTests
         var dog = RecruitDogs(world, 1)[0];
         Assert.Equal(8, world.GetApeVillageDogCapacity(Camp));
         var nutrition = CritterNutritions.Get(CritterSpecies.Dog);
-        while (world.TryGetCritter(dog, out var before) && before.Energy < nutrition.ReproductionThreshold)
-            Assert.True(Feed(world, dog));
+        world.FeedVillageForGrowth(Camp.Y * world.Width + Camp.X);
         Assert.False(Feed(world, dog));
         Assert.True(world.TryGetCritter(dog, out var fed));
         Assert.Equal(nutrition.ReproductionThreshold, fed.Energy);

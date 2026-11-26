@@ -51,7 +51,7 @@ public sealed partial class SimulationWorld
                 var id = group[i];
                 var index = _critterIndicesById[id];
                 DetachApeFromVillage(id, countedAsResident: true);
-                _apeVillageHomes[id] = site;
+                SetApeVillageHome(id, site);
                 var role = i == 0 ? CritterSpecies.ApeChieftain :
                     CanLiveOn(CritterSpecies.ApeSailor, GetIndex(_positions[index])) && IsBarbarianCampCoastal(site)
                         ? CritterSpecies.ApeSailor : CritterSpecies.ApeWarrior;
@@ -68,7 +68,7 @@ public sealed partial class SimulationWorld
         {
             var id = dogs[i];
             DetachApeFromVillage(id, countedAsResident: false);
-            _apeVillageHomes[id] = camps[i % camps.Count];
+            SetApeVillageHome(id, camps[i % camps.Count]);
         }
         if (GetApeVillageSustainingPopulation(village) == 0)
         {

@@ -12,8 +12,12 @@ public sealed class BarbarianColonistTests
     [InlineData(10, 1, 50, 1)]
     [InlineData(9, 1, 50, 0)]
     [InlineData(9, 2, 50, 1)]
-    [InlineData(10, 2, 50, 1)]
-    [InlineData(10, 1, 49, 0)]
+    [InlineData(10, 2, 50, 2)]
+    [InlineData(10, 1, 49, 1)]
+    [InlineData(10, 1, 1, 0)]
+    [InlineData(10, 2, 23, 0)]
+    [InlineData(10, 1, 24, 0)]
+    [InlineData(10, 1, 25, 1)]
     [InlineData(10, 1, 0, 0)]
     public void ReproductionAtCampCapacityLaunchesOverflowAsColonists(int residents, int parents, int food, int expectedColonists)
     {
@@ -54,7 +58,7 @@ public sealed class BarbarianColonistTests
             Assert.Equal(CritterSpecies.Ape, colonist.Species);
             Assert.NotNull(colonist.ColonistDestination);
             Assert.Null(world.GetApeHomeVillage(colonist.Id));
-            Assert.Equal(CritterNutritions.Get(CritterSpecies.Ape).InitialEnergy + 50, colonist.Energy);
+            Assert.Equal(CritterNutritions.Get(CritterSpecies.Ape).InitialEnergy + 25, colonist.Energy);
         });
         var successfulBirths = Math.Min(parents, 10 - residents) + expectedColonists;
         var parentNumber = 0;
@@ -64,7 +68,45 @@ public sealed class BarbarianColonistTests
             var nutrition = CritterNutritions.Get(parent.Species);
             Assert.Equal(nutrition.ReproductionThreshold - (parentNumber++ < successfulBirths ? nutrition.ReproductionCost : 0), parent.Energy);
         }
-        Assert.Equal(food - 50 * expectedColonists, world.GetApeVillageFood(Camp));
+        Assert.Equal(food - expectedColonists * 25, world.GetApeVillageFood(Camp));
+    }
+
+    [Fact]
+    public void OverflowAfterGrowthFeedingWaitsForTwentyFiveFood()
+    {
+        var world = CreateWorld();
+        var energy = (int[])typeof(SimulationWorld).GetField("_energy", PrivateInstance)!.GetValue(world)!;
+        var parent = Residents(world).First(critter =>
+            Math.Abs(critter.Position.X - Camp.X) + Math.Abs(critter.Position.Y - Camp.Y) <= 1);
+        for (var index = 0; index < world.CritterCount; index++) energy[index] = 6;
+        energy[Index(world, parent.Id)] = 10;
+        world.StoreApeVillageFood(Camp, 26);
+        world.FeedVillageForGrowth(Camp.Y * world.Width + Camp.X);
+        var provisions = world.GetApeVillageFood(Camp);
+        Assert.InRange(provisions, 1, 25);
+        typeof(SimulationWorld).GetProperty("Tick")!.SetValue(world, 1L);
+        // Put whichever randomly fed parent was chosen next to camp for the birth-site check.
+        var ready = Residents(world).Single(critter => critter.CanReproduce);
+        typeof(SimulationWorld).GetMethod("CanApeReproduceAtCurrentPosition",
+            BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(world,
+                [ready.Id, Camp.Y * world.Width + Camp.X, true]);
+        if (Math.Abs(ready.Position.X - Camp.X) + Math.Abs(ready.Position.Y - Camp.Y) > 1)
+        {
+            // The normal reproduction stall fallback allows a stationary parent after 30 seconds.
+            typeof(SimulationWorld).GetProperty("Tick")!.SetValue(world,
+                1L + SimulationWorld.ApeReproductionStallTicks);
+        }
+        var metabolism = (long[])typeof(SimulationWorld).GetField("_nextMetabolismTicks", PrivateInstance)!.GetValue(world)!;
+        Array.Fill(metabolism, long.MaxValue);
+        typeof(SimulationWorld).GetMethod("AdvanceCritterLifecycles", PrivateInstance)!.Invoke(world, null);
+        Assert.DoesNotContain(Residents(world), critter => critter.IsColonist);
+        Assert.Equal(provisions, world.GetApeVillageFood(Camp));
+        world.StoreApeVillageFood(Camp, 25 - provisions);
+        typeof(SimulationWorld).GetMethod("AdvanceCritterLifecycles", PrivateInstance)!.Invoke(world, null);
+        var colonist = Assert.Single(Residents(world), critter => critter.IsColonist);
+        Assert.Equal(CritterNutritions.Get(CritterSpecies.Ape).InitialEnergy + 25, colonist.Energy);
+        Assert.Equal(0, world.GetApeVillageFood(Camp));
+        Assert.Equal(10, world.GetApeVillageResidentCount(Camp));
     }
 
     private static SimulationWorld CreateWorld()
@@ -82,8 +124,9 @@ public sealed class BarbarianColonistTests
     [Theory]
     [InlineData(0)]
     [InlineData(23)]
+    [InlineData(25)]
     [InlineData(50)]
-    public void NaturalCampEventRequiresFiftyFood(int food)
+    public void NaturalCampEventCostsTwentyFiveFood(int food)
     {
         var world = CreateWorld();
         world.StoreApeVillageFood(Camp, food);
@@ -92,7 +135,7 @@ public sealed class BarbarianColonistTests
         var advance = typeof(SimulationWorld).GetMethod("AdvanceApeVillages", PrivateInstance)!;
         for (var roll = 0; roll < 5000 && !Residents(world).Any(critter => critter.IsColonist); roll++)
             advance.Invoke(world, null);
-        if (food < 50)
+        if (food < 25)
         {
             Assert.DoesNotContain(Residents(world), critter => critter.IsColonist);
             Assert.Equal(food, world.GetApeVillageFood(Camp));
@@ -101,29 +144,58 @@ public sealed class BarbarianColonistTests
         var colonist = Assert.Single(Residents(world), critter => critter.IsColonist);
         Assert.Equal(CritterSpecies.Ape, colonist.Species);
         Assert.False(world.IsBarbarianApe(colonist.Id));
-        Assert.Equal(0, world.GetApeVillageFood(Camp));
+        Assert.Equal(food - 25, world.GetApeVillageFood(Camp));
         Assert.NotNull(colonist.ColonistDestination);
-        Assert.Equal(CritterNutritions.Get(CritterSpecies.Ape).InitialEnergy + 50, colonist.Energy);
+        Assert.Equal(CritterNutritions.Get(CritterSpecies.Ape).InitialEnergy + 25, colonist.Energy);
     }
 
     [Theory]
     [InlineData(0)]
     [InlineData(23)]
+    [InlineData(25)]
     [InlineData(50)]
-    public void ManualColonistCarriesOnlyFoodActuallyTaken(int food)
+    public void ManualColonistRequiresAndSpendsExactlyTwentyFiveFood(int food)
     {
         var world = CreateWorld();
         world.StoreApeVillageFood(Camp, food);
+        Assert.Equal(food >= 25, world.TrySendApeColonist(Camp));
+        if (food < 25)
+        {
+            Assert.DoesNotContain(Residents(world), critter => critter.IsColonist);
+            Assert.Equal(food, world.GetApeVillageFood(Camp));
+            return;
+        }
+        var colonist = Assert.Single(Residents(world), critter => critter.IsColonist);
+        Assert.Equal(CritterNutritions.Get(CritterSpecies.Ape).InitialEnergy + 25, colonist.Energy);
+        Assert.Equal(food - 25, world.GetApeVillageFood(Camp));
+    }
+
+    [Fact]
+    public void RegularVillageColonistCostsTwentyFiveAndKeepsSurplusFood()
+    {
+        var world = CreateWorld();
+        ((HashSet<int>)typeof(SimulationWorld).GetField("_barbarianVillageTiles", PrivateInstance)!
+            .GetValue(world)!).Clear();
+        foreach (var tile in new[] { new GridPosition(11, 10), new GridPosition(12, 10), new GridPosition(13, 10) })
+        {
+            world.RemoveCritterAt(tile);
+            Assert.True(world.TryPlaceApeBuilding(tile, ApeStructureKind.Farm));
+        }
+        world.StoreApeVillageFood(Camp, 24);
+        Assert.False(world.TrySendApeColonist(Camp));
+        Assert.Equal(24, world.GetApeVillageFood(Camp));
+        world.StoreApeVillageFood(Camp, 6);
         Assert.True(world.TrySendApeColonist(Camp));
         var colonist = Assert.Single(Residents(world), critter => critter.IsColonist);
-        Assert.Equal(CritterNutritions.Get(CritterSpecies.Ape).InitialEnergy + food, colonist.Energy);
-        Assert.Equal(0, world.GetApeVillageFood(Camp));
+        Assert.Equal(29, colonist.Energy);
+        Assert.Equal(5, world.GetApeVillageFood(Camp));
     }
 
     [Fact]
     public void OriginApesAndDogsCannotAttackColonistAndRegularWarriorsDoNotTargetIt()
     {
         var world = CreateWorld();
+        ColonistTestFood.Fund(world, Camp);
         Assert.True(world.TrySendApeColonist(Camp));
         var chief = Residents(world).Single(critter => critter.Species == CritterSpecies.ApeChieftain);
         var chiefIndex = Index(world, chief.Id);
@@ -154,6 +226,7 @@ public sealed class BarbarianColonistTests
         var destination = Enumerable.Range(50, 35).Select(x => new GridPosition(x, 10))
             .First(position => ((world.Seed ^ ((ulong)(uint)(position.Y * world.Width + position.X) *
                 2_654_435_761UL)) % 100 < (regularOrigin ? 25UL : 50UL)) == barbarian);
+        ColonistTestFood.Fund(world, destination);
         Assert.True(world.TrySendApeColonist(destination));
         var colonist = Assert.Single(Residents(world), critter => critter.IsColonist);
         var advance = typeof(SimulationWorld).GetMethod("TryAdvanceApeSettler", PrivateInstance)!;
@@ -164,6 +237,12 @@ public sealed class BarbarianColonistTests
         Assert.True(world.TryGetCritter(colonist.Id, out var founder));
         Assert.False(founder.IsColonist);
         Assert.Equal(barbarian, world.IsBarbarianApe(founder.Id));
+        Assert.Equal(1, world.GetApeVillageResidentCount(destination));
+        if (!barbarian)
+        {
+            Assert.Equal(CritterSpecies.ApeFarmer, founder.Species);
+            Assert.Equal(1, world.GetApeVillageFarmCount(destination));
+        }
     }
 
     [Theory]
@@ -173,6 +252,7 @@ public sealed class BarbarianColonistTests
     public void LowEnergyColonistSettlesImmediatelyNearOrigin(int energy, Terrain terrain, bool settles)
     {
         var world = CreateWorld();
+        ColonistTestFood.Fund(world, new(60, 10));
         Assert.True(world.TrySendApeColonist(new(60, 10)));
         var colonist = Assert.Single(Residents(world), critter => critter.IsColonist);
         // Emergency settlement is reserved for automatically dispatched colonists.
@@ -208,6 +288,7 @@ public sealed class BarbarianColonistTests
         CritterId blocker = default;
         if (!automatic && occupiedBeforeLaunch)
             blocker = world.AddCritter(CritterSpecies.Therapsid, destination);
+        ColonistTestFood.Fund(world, automatic ? Camp : destination);
         Assert.True(world.TrySendApeColonist(automatic ? Camp : destination));
         var colonist = Assert.Single(Residents(world), critter => critter.IsColonist);
         destination = colonist.ColonistDestination!.Value;
@@ -252,6 +333,7 @@ public sealed class BarbarianColonistTests
     {
         var world = CreateWorld();
         var destination = new GridPosition(60, 10);
+        ColonistTestFood.Fund(world, destination);
         Assert.True(world.TrySendApeColonist(destination));
         var colonist = Assert.Single(Residents(world), critter => critter.IsColonist);
         var index = Index(world, colonist.Id);
@@ -281,6 +363,7 @@ public sealed class BarbarianColonistTests
         Terrain terrain, CritterSpecies blockerSpecies, bool requireSwap)
     {
         var world = CreateWorld();
+        ColonistTestFood.Fund(world, new(60, 10));
         Assert.True(world.TrySendApeColonist(new(60, 10)));
         var colonist = Assert.Single(Residents(world), critter => critter.IsColonist);
         var index = Index(world, colonist.Id);

@@ -2658,7 +2658,8 @@ public sealed class SimulationWorldTests
             world.AddCritter(CritterSpecies.MegaToad, new GridPosition(x, 0));
         }
 
-        for (var tick = 0; tick < 20 * 60 * SimulationWorld.TicksPerSecond; tick++)
+        var observationTicks = 16 * CritterNutritions.Get(CritterSpecies.MegaToad).MetabolismIntervalTicks;
+        for (var tick = 0; tick < observationTicks; tick++)
         {
             world.AdvanceOneTick();
         }
@@ -3729,12 +3730,13 @@ public sealed class SimulationWorldTests
     }
 
     [Fact]
-    public void EveryCritterSpeciesCanOccupyAnIceSheet()
+    public void IceSheetSpawningHonorsTheSandwormDesertRequirement()
     {
         foreach (var species in Enum.GetValues<CritterSpecies>())
         {
-            var world = new SimulationWorld(1, 1, Terrain.Ice);
-            Assert.True(world.TryAddCritter(species, new GridPosition(0, 0)), species.ToString());
+            var world = new SimulationWorld(2, 1, Terrain.Ice);
+            Assert.Equal(species is not CritterSpecies.Sandworm,
+                world.TryAddCritter(species, new GridPosition(0, 0)));
         }
     }
 

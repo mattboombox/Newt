@@ -87,14 +87,13 @@ public sealed class PlanetoidPathfindingTests
         var previous = world.GetCritter(0).Position;
         for (var step = 0; step < 3 * size; step++)
         {
-            var distance = (int)Invoke(world, "WrappedManhattanDistance", previous, farm)!;
-            if (distance <= 1) break;
+            if (previous == farm) break;
             Invoke(world, "TryMoveApe", 0, null);
             var current = world.GetCritter(0).Position;
             Assert.True(Neighbors(world, previous, current));
             previous = current;
         }
-        Assert.InRange((int)Invoke(world, "WrappedManhattanDistance", previous, farm)!, 0, 1);
+        Assert.Equal(farm, previous);
         Assert.Equal(CritterSpecies.ApeFarmer, world.GetCritter(0).Species);
         Assert.Equal(home, world.GetApeHomeVillage(farmer));
     }

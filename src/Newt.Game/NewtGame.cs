@@ -54,7 +54,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
     private static readonly WorldTool[] EventToolOrder =
         [WorldTool.Meteor, WorldTool.Tsunami, WorldTool.WatershedShift,
             WorldTool.Evolve, WorldTool.NaturalEvents, WorldTool.Colonist,
-            WorldTool.Feast, WorldTool.War, WorldTool.BloodWar, WorldTool.CivilWar, WorldTool.Anarchy];
+            WorldTool.War, WorldTool.BloodWar, WorldTool.CivilWar, WorldTool.Anarchy];
     private static readonly WorldTool[] PlagueToolOrder =
         [WorldTool.Plague, WorldTool.ZombiePlague, WorldTool.VampirePlague, WorldTool.Blight];
     private static readonly WorldTool[] CritterToolOrder =
@@ -301,6 +301,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         SetWindowIconFromNewtSprite();
         LoadZoomSounds();
         LoadRifleSound();
+        LoadShipwreckSprites();
     }
 
     protected override void OnDeactivated(object sender, EventArgs args)
@@ -529,12 +530,12 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
     {
         if (_spriteBatch is null || _whaleFallSprite is null || _world.GetWhaleFallNutrition(position) <= 0)
             return;
-        _spriteBatch.Draw(_whaleFallSprite, new Rectangle(
-            MapOffsetX + screenX * TileSize, MapOffsetY + screenY * TileSize, TileSize, TileSize), Color.White);
+        DrawRemainsSprite(_whaleFallSprite, screenX, screenY, position, shipwreck: false);
     }
 
     private void DrawTileObjects2D(int screenX, int screenY, GridPosition position)
     {
+        DrawShipwreck(screenX, screenY, position);
         DrawVillageRoad(screenX, screenY, position);
         DrawApeStructure(screenX, screenY, position);
         DrawWolfDen(screenX, screenY, position);
@@ -1296,9 +1297,6 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
                 break;
             case WorldTool.Blight when primaryActivated:
                 _world.TryBlightFarmAt(position.Value);
-                break;
-            case WorldTool.Feast when primaryActivated:
-                _world.TryStartVillageFeast(position.Value);
                 break;
             case WorldTool.ZombiePlague when primaryActivated:
                 _world.TryInfectApeAt(position.Value, PlagueKind.Zombie);
@@ -2324,7 +2322,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
                     .. isBarbarian
                         ? new[]
                         {
-                            $"Barbarians {_world.GetApeVillageResidentCount(position) - _world.GetApeVillageSailorCount(position) - _world.GetApeVillageChieftainCount(position)}   Pirates {_world.GetApeVillageSailorCount(position)}",
+                            $"Barbarians {_world.GetApeVillageResidentCount(position) - _world.GetApeVillageChieftainCount(position)}",
                             $"Leaders {_world.GetApeVillageChieftainCount(position)}",
                         }
                         : new[]
@@ -2339,7 +2337,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
                     .. isBarbarian ? Array.Empty<string>()
                         : new[] { $"Wood {_world.GetApeVillageWood(position)} / {_world.GetApeVillageWoodCapacity(position)}" },
                     isBarbarian ? "Behavior Raiding camp" :
-                        _world.IsVillageFeasting(position) ? "Behavior Feasting" : "Behavior Settlement",
+                        "Behavior Settlement",
                 ];
             }
 
@@ -2367,6 +2365,10 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
                 ]
                 : ["BUILDING", GetApeStructureDisplayName(apeStructure)];
         }
+
+        if (_world.GetShipwreck(position) is { } wreck)
+            return ["BUILDING", wreck == ShipwreckKind.Pirate ? "Pirate Shipwreck" : "Shipwreck",
+                "Behavior Ruins", "Decay Two simulated years"];
 
         return ["BUILDING", "None"];
     }
@@ -3980,7 +3982,6 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         WorldTool.Blight => "L blight crop farm (spreads; lasts one year)",
         WorldTool.ZombiePlague => "L infect ape",
         WorldTool.VampirePlague => "L infect ape (non-contagious; vampire on death)",
-        WorldTool.Feast => "L village: feast using up to 80% of stored food",
         WorldTool.NaturalEvents => "L on; R off",
         WorldTool.Anarchy => _anarchyToolStatus,
         WorldTool.River => "L add; R remove",
@@ -4167,7 +4168,6 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         ZombiePlague,
         VampirePlague,
         Blight,
-        Feast,
         War,
         BloodWar,
         CivilWar,

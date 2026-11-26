@@ -112,7 +112,7 @@ public static class CritterNutritions
         CritterSpecies.Monkey => Monkey,
         CritterSpecies.ApeTrader or CritterSpecies.ApeTraderSailor => Ape with { MaximumEnergy = 80, CanReproduce = false },
         CritterSpecies.Ape => Ape,
-        CritterSpecies.ApeSailor => Ape with { MaximumEnergy = 2 * Ape.MaximumEnergy },
+        CritterSpecies.ApeSailor => Ape,
         CritterSpecies.ApeWarrior or CritterSpecies.ApeRoyalGuard => Ape,
         CritterSpecies.ApeBomber => Ape with { MaximumEnergy = 20, CanReproduce = false },
         CritterSpecies.ApeLudditePriest or CritterSpecies.ApeBishop => Ape with { CanReproduce = false },
