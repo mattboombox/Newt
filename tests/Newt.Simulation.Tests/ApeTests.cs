@@ -1393,10 +1393,20 @@ public sealed class ApeTests
         Assert.Equal(8, world.GetApeVillagePopulationCapacity(village));
     }
 
-    [Fact]
-    public void FiveCoastalResidentsBuildHarborThatRecruitsSailor()
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    [InlineData(true, false)]
+    public void FiveCoastalResidentsBuildHarborThatRecruitsSailor(bool lake, bool oceans)
     {
         var (world, village) = CreateVillageWithHarborSite();
+        world.HasOceans = oceans;
+        if (lake)
+        {
+            var site = GetCardinalNeighbors(world, village).Single(position =>
+                world.GetTerrain(position) is Terrain.Shallows);
+            world.SetSurfaceWater(site, SurfaceWaterKind.FreshwaterLake);
+        }
 
         for (var tick = 0;
             tick < 2 * 60 * SimulationWorld.TicksPerSecond &&
@@ -1418,8 +1428,9 @@ public sealed class ApeTests
     [InlineData(Terrain.Beach, SurfaceWaterKind.None, false)]
     [InlineData(Terrain.Plains, SurfaceWaterKind.None, false)]
     [InlineData(Terrain.Shallows, SurfaceWaterKind.River, false)]
-    [InlineData(Terrain.Shallows, SurfaceWaterKind.FreshwaterLake, false)]
-    public void HarborsRequireSaltwaterShallows(Terrain terrain, SurfaceWaterKind water, bool allowed)
+    [InlineData(Terrain.Shallows, SurfaceWaterKind.FreshwaterLake, true)]
+    [InlineData(Terrain.Plains, SurfaceWaterKind.FreshwaterLake, true)]
+    public void HarborsAllowSaltwaterShallowsAndFreshwaterLakes(Terrain terrain, SurfaceWaterKind water, bool allowed)
     {
         var world = CreateFedApeWorld(hasGrassland: true);
         AdvanceUntilVillage(world);
@@ -1434,6 +1445,7 @@ public sealed class ApeTests
             world.GetApeStructure(site));
         if (allowed)
         {
+            world.SetSurfaceWater(site, SurfaceWaterKind.None);
             world.SetTerrain(site, Terrain.Ocean);
             Assert.Null(world.GetApeStructure(site));
         }
@@ -1481,8 +1493,7 @@ public sealed class ApeTests
 
     [Theory]
     [InlineData(SurfaceWaterKind.River)]
-    [InlineData(SurfaceWaterKind.FreshwaterLake)]
-    public void VillageDoesNotBuildHarborOnFreshwater(SurfaceWaterKind water)
+    public void VillageDoesNotBuildHarborOnRiver(SurfaceWaterKind water)
     {
         var world = CreateFedApeWorld(hasGrassland: true);
         NaturalEvents.SetEnabled(world, false);

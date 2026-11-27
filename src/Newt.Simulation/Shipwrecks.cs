@@ -10,6 +10,14 @@ public sealed partial class SimulationWorld
     public ShipwreckKind? GetShipwreck(GridPosition position) =>
         _shipwrecks.TryGetValue(GetIndex(position), out var wreck) && Tick < wreck.Expires ? wreck.Kind : null;
 
+    public double GetShipwreckSinkProgress(GridPosition position, double fractionalTick = 0)
+    {
+        if (!_shipwrecks.TryGetValue(GetIndex(position), out var wreck) || Tick >= wreck.Expires) return 1;
+        var age = Tick - (wreck.Expires - ApeRuinDecayTicks) + Math.Clamp(fractionalTick, 0, 1);
+        var progress = Math.Clamp(age / (3d * TicksPerSecond), 0, 1);
+        return progress * progress * (3 - 2 * progress);
+    }
+
     private void DepositShipwreck(int index, int tile)
     {
         if (_whaleFallNutrition[tile] > 0) return;

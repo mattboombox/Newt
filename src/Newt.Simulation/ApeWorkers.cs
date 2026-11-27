@@ -20,6 +20,8 @@ public sealed partial class SimulationWorld
 
     private void DetachApeWorker(int workerId)
     {
+        _apeWorkerPathFailures.Remove(workerId);
+        _apeWorkerSearches.Remove(workerId);
         if (!_apeWorkplaces.Remove(workerId, out var tile))
             return;
         if (_apeFarmers.GetValueOrDefault(tile, -1) == workerId)

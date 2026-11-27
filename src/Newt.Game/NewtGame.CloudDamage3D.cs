@@ -7,6 +7,24 @@ public sealed partial class NewtGame
 {
     private readonly CloudPerforations _cloudPerforations3D = new();
     private readonly Dictionary<(int X, int Y, int Face), CloudPatch3D> _cloudPatchLookup3D = [];
+    private Vector3? _previousCloudTraveller3D;
+    private PlayerView _previousCloudTravellerView3D;
+
+    private void PunchCameraClouds3D(Matrix view)
+    {
+        var point = _playerView is PlayerView.ThirdPerson
+            ? PlayerGhostCenter3D() : Matrix.Invert(view).Translation;
+        const float radius = 1.5f;
+        // Sweep between frames, but never carve a long tunnel on a teleport or
+        // a switch between the player and the detached camera.
+        if (_previousCloudTraveller3D is { } previous && _previousCloudTravellerView3D == _playerView &&
+            Vector3.DistanceSquared(previous, point) <= 16 * 16)
+            PunchCloudSegment3D(previous, point, radius);
+        else
+            PunchCloudPoint3D(point, radius);
+        _previousCloudTraveller3D = point;
+        _previousCloudTravellerView3D = _playerView;
+    }
 
     private void PunchCloudSegment3D(Vector3 from, Vector3 to, float radius)
     {

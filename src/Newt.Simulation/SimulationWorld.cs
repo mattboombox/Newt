@@ -39,6 +39,8 @@ public sealed partial class SimulationWorld
     private const int ApeSettlerCheckIntervalTicks = 60 * TicksPerSecond;
     private const int ApeSettlerChancePercent = 1;
     private const int ApeSettlerMinimumDistance = 40;
+    internal const int BarbarianSettlerCooldownTicks = 60 * TicksPerSecond;
+    private readonly Dictionary<int, long> _barbarianNextSettlerTicks = [];
     internal const int LoneApeSailorColonistDelayTicks = 60 * TicksPerSecond;
     internal const int ApeReproductionStallTicks = 30 * TicksPerSecond;
     private const int ApeVillageBasePopulationCapacity = 5;
@@ -1187,6 +1189,8 @@ public sealed partial class SimulationWorld
         }
         InvalidateTransportNetwork();
         _apeResidentialUnderusedSinceTicks.Remove(tileIndex);
+        _apeSettlementScanOffsets.Remove(tileIndex);
+        _barbarianNextSettlerTicks.Remove(tileIndex);
         RemoveApeFarmStaff(tileIndex);
         RemoveApeLumberStaff(tileIndex);
         _apeRuinDecayTicks.Remove(tileIndex);
@@ -2305,12 +2309,7 @@ public sealed partial class SimulationWorld
 
     private bool IsFarEnoughFromApeVillages(int candidateTile)
     {
-        var candidate = new GridPosition(candidateTile % Width, candidateTile / Width);
-        return !_apeStructures.Any(pair =>
-            pair.Value is ApeStructureKind.Village &&
-            WrappedManhattanDistance(
-                candidate,
-                new GridPosition(pair.Key % Width, pair.Key / Width)) <= ApeVillageMinimumDistance);
+        return IsFarEnoughFromCachedVillages(candidateTile);
     }
 
     private bool HasBlockingApeStructure(int tileIndex) =>
@@ -2381,8 +2380,9 @@ public sealed partial class SimulationWorld
             _surfaceWater[tileIndex] is not SurfaceWaterKind.River);
 
     private bool IsApeHarborTile(int tileIndex) =>
-        _terrain[tileIndex] is Terrain.Shallows &&
-        _surfaceWater[tileIndex] is SurfaceWaterKind.None;
+        _surfaceWater[tileIndex] is SurfaceWaterKind.FreshwaterLake ||
+        (_terrain[tileIndex] is Terrain.Shallows &&
+            _surfaceWater[tileIndex] is SurfaceWaterKind.None);
 
     private bool IsApeFoodDistrictActive(int tileIndex, ApeStructureKind kind) =>
         IsApeFoodDistrictStructurallyValid(tileIndex, kind) && kind switch
@@ -2873,6 +2873,8 @@ public sealed partial class SimulationWorld
         bool allowInsufficientFood = false,
         int requestedTargetVillageTile = -1, bool keepDestination = false)
     {
+        if (_barbarianVillageTiles.Contains(villageTile) &&
+            Tick < _barbarianNextSettlerTicks.GetValueOrDefault(villageTile)) return false;
         var foodCost = ApeSettlerFoodCost;
         if (!allowInsufficientFood && food < foodCost)
         {
@@ -2897,31 +2899,42 @@ public sealed partial class SimulationWorld
         if (keepDestination)
             _apeFixedSettlerDestinations.Add(settler.Value);
         _apeVillageFood[villageTile] = food - provisions;
+        if (_barbarianVillageTiles.Contains(villageTile))
+            _barbarianNextSettlerTicks[villageTile] = Tick + BarbarianSettlerCooldownTicks;
         return true;
     }
 
     private int FindDistantApeVillageSite(int originVillageTile)
     {
+        if (_apeSiteBudgetTick != Tick) { _apeSiteBudgetTick = Tick; _apeSiteBudgetUsed = 0; }
         var origin = GetPosition(originVillageTile);
         var minimumDistance = Math.Min(
             ApeSettlerMinimumDistance,
             Math.Max(ApeVillageMinimumDistance + 1, (Width + Height) / 4));
-        var selectedTile = -1;
-        var candidates = 0;
-        for (var tileIndex = 0; tileIndex < _terrain.Length; tileIndex++)
+        // Random probes usually find a site immediately. A bounded rolling scan
+        // guarantees sparse sites are eventually visited without a whole-map stall.
+        for (var attempt = 0; attempt < Math.Min(ApeSettlementRandomProbes, _terrain.Length) && _apeSiteBudgetUsed < ApeSettlementSiteBudgetPerTick; attempt++)
         {
-            if (WrappedManhattanDistance(GetPosition(tileIndex), origin) < minimumDistance ||
-                !TryGetApeVillageAuxiliarySite(-1, tileIndex, out _, out _, allowOccupiedCenter: true))
-            {
-                continue;
-            }
-
-            if (NextInt(++candidates) == 0)
-            {
-                selectedTile = tileIndex;
-            }
+            var tile = NextInt(_terrain.Length);
+            if (Suitable(tile)) return tile;
         }
-        return selectedTile;
+        var cursor = _apeSettlementScanOffsets.GetValueOrDefault(originVillageTile);
+        for (var scanned = 0; scanned < Math.Min(ApeSettlementScanBudget, _terrain.Length) && _apeSiteBudgetUsed < ApeSettlementSiteBudgetPerTick; scanned++)
+        {
+            var tile = cursor;
+            cursor = (cursor + 1) % _terrain.Length;
+            _apeSettlementScanOffsets[originVillageTile] = cursor;
+            if (Suitable(tile)) return tile;
+        }
+        return -1;
+
+        bool Suitable(int tile)
+        {
+            ApeSettlementSiteProbes++;
+            _apeSiteBudgetUsed++;
+            return WrappedManhattanDistance(GetPosition(tile), origin) >= minimumDistance &&
+                TryGetApeVillageAuxiliarySite(-1, tile, out _, out _, allowOccupiedCenter: true);
+        }
     }
 
     private int FindApeSettlerSpawnTile(int villageTile)
@@ -3218,6 +3231,8 @@ public sealed partial class SimulationWorld
         {
             return false;
         }
+        if (_barbarianVillageTiles.Contains(villageTile) &&
+            Tick < _barbarianNextSettlerTicks.GetValueOrDefault(villageTile)) return false;
 
         var targetVillageTile = FindDistantApeVillageSite(villageTile);
         if (targetVillageTile < 0)
@@ -3231,6 +3246,8 @@ public sealed partial class SimulationWorld
         ChangeCritterSpecies(sailorIndex, CritterSpecies.Ape, preserveEnergy: false);
         _energy[sailorIndex] = CritterNutritions.Get(CritterSpecies.Ape).InitialEnergy;
         _apeSettlerTargets[sailorId] = (villageTile, targetVillageTile);
+        if (_barbarianVillageTiles.Contains(villageTile))
+            _barbarianNextSettlerTicks[villageTile] = Tick + BarbarianSettlerCooldownTicks;
         _loneApeSailorSinceTicks.Remove(villageTile);
         return true;
     }
@@ -4667,9 +4684,8 @@ public sealed partial class SimulationWorld
 
         var currentTile = GetIndex(_positions[apeIndex]);
         var fixedDestination = _apeFixedSettlerDestinations.Contains(apeId);
-        var emergencySettlement = !fixedDestination &&
-            _energy[apeIndex] * 10 < CritterNutritions.Get(CritterSpecies.Ape).MaximumEnergy &&
-            HasApeColonistFoundingSite(apeIndex, currentTile, requireVillageSpacing: false);
+        var emergencySettlement = _energy[apeIndex] <= 6 &&
+            IsApeSettlerDestinationValid(apeIndex, currentTile, requireVillageSpacing: false);
         var targetVillageTile = emergencySettlement ? currentTile : settler.TargetVillageTile;
         if (!emergencySettlement && !IsApeSettlerDestinationValid(apeIndex, targetVillageTile))
         {
@@ -4681,17 +4697,12 @@ public sealed partial class SimulationWorld
             targetVillageTile = FindDistantApeVillageSite(settler.OriginVillageTile);
             if (targetVillageTile < 0)
             {
-                _apeFixedSettlerDestinations.Remove(apeId);
-                _apeSettlerTargets.Remove(apeId);
-                _apeSettlerPaths.Remove(apeId);
-                return false;
+                return true; // A bounded site search can continue on the next turn.
             }
             _apeSettlerTargets[apeId] = (settler.OriginVillageTile, targetVillageTile);
         }
 
-        if (GetIndex(_positions[apeIndex]) == targetVillageTile ||
-            (_occupants[targetVillageTile] >= 0 &&
-                GetApeSettlerPathEstimate(currentTile, targetVillageTile) == 1))
+        if (currentTile == targetVillageTile || ArePathNeighbors(currentTile, targetVillageTile))
         {
             if (!emergencySettlement &&
                 !HasApeColonistFoundingSite(apeIndex, targetVillageTile))
@@ -4701,10 +4712,7 @@ public sealed partial class SimulationWorld
                 targetVillageTile = FindDistantApeVillageSite(settler.OriginVillageTile);
                 if (targetVillageTile < 0)
                 {
-                    _apeFixedSettlerDestinations.Remove(apeId);
-                    _apeSettlerTargets.Remove(apeId);
-                    _apeSettlerPaths.Remove(apeId);
-                    return false;
+                    return true;
                 }
                 _apeSettlerTargets[apeId] = (settler.OriginVillageTile, targetVillageTile);
                 return true;
@@ -4719,6 +4727,8 @@ public sealed partial class SimulationWorld
             _apeSettlerTargets.Remove(apeId);
             _apeSettlerPaths.Remove(apeId);
             var apeNutrition = CritterNutritions.Get(CritterSpecies.Ape);
+            _apeWorkerSearches.Remove(apeId);
+            _apeWorkerPathFailures.Remove(apeId);
             _energy[apeIndex] = apeNutrition.InitialEnergy;
             _nextMetabolismTicks[apeIndex] = GetFirstMetabolismTick(apeNutrition, _critterIds[apeIndex]);
             if (TryFoundBarbarianCamp(targetVillageTile, _barbarianVillageTiles.Contains(settler.OriginVillageTile) ? 50 : 25))
@@ -4825,14 +4835,20 @@ public sealed partial class SimulationWorld
     {
         var apeId = _critterIds[apeIndex].Value;
         var currentTile = GetIndex(_positions[apeIndex]);
+        if (_apeWorkerPathFailures.TryGetValue(apeId, out var failure) && failure.Origin == currentTile &&
+            failure.Target == targetTile && failure.Species == _species[apeIndex] &&
+            failure.Revision == _transportRevision && Tick < failure.Retry) return null;
         if (!_apeWorkerPaths.TryGetValue(apeId, out var route) || route.TargetTile != targetTile ||
             route.Tiles.Count == 0 || !ArePathNeighbors(currentTile, route.Tiles.Peek()) ||
             !CanLiveOn(_species[apeIndex], route.Tiles.Peek()))
         {
-            var path = FindApeSettlerPath(apeIndex, currentTile, targetTile, pathSpecies: _species[apeIndex]);
+            var path = FindBudgetedApeWorkerPath(apeIndex, currentTile, targetTile, reservedPrey, out var searchPending);
+            if (searchPending) return null;
             if (path is null || path.Count == 0)
             {
                 _apeWorkerPaths.Remove(apeId);
+                _apeWorkerPathFailures[apeId] = (currentTile, targetTile, _species[apeIndex], _transportRevision,
+                Tick + 10 * TicksPerSecond);
                 return null;
             }
             route = (targetTile, path);
@@ -4845,9 +4861,12 @@ public sealed partial class SimulationWorld
         if (_occupants[nextTile] >= 0 && !TryShoveMovementBlocker(apeIndex, nextTile, reservedPrey))
         {
             _apeWorkerPaths.Remove(apeId);
+            _apeWorkerPathFailures[apeId] = (currentTile, targetTile, _species[apeIndex], _transportRevision,
+                Tick + TicksPerSecond);
             return null;
         }
         route.Tiles.Dequeue();
+        _apeWorkerPathFailures.Remove(apeId);
         MoveCritter(apeIndex, nextTile, GetPosition(nextTile));
         return null;
     }
@@ -4869,23 +4888,25 @@ public sealed partial class SimulationWorld
     {
         var apeId = _critterIds[apeIndex].Value;
         var currentTile = GetIndex(_positions[apeIndex]);
+        if (_apeWorkerPathFailures.TryGetValue(apeId, out var failed) && failed.Origin == currentTile &&
+            failed.Target == targetVillageTile && failed.Species == _species[apeIndex] &&
+            failed.Revision == _transportRevision && Tick < failed.Retry) return;
         if (!_apeSettlerPaths.TryGetValue(apeId, out var route) ||
             route.TargetVillageTile != targetVillageTile || route.Tiles.Count == 0 ||
             !ArePathNeighbors(currentTile, route.Tiles.Peek()) ||
             !IsApeSettlerTransitTile(apeIndex, route.Tiles.Peek()))
         {
-            // An occupied center can be founded from a neighboring tile.
-            var path = _occupants[targetVillageTile] < 0
-                ? FindApeSettlerPath(apeIndex, currentTile, targetVillageTile)
-                : RoadNeighbors(targetVillageTile)
-                    .Where(tile => IsApeSettlerTransitTile(apeIndex, tile))
-                    .Select(tile => FindApeSettlerPath(apeIndex, currentTile, tile))
-                    .Where(candidate => candidate is not null)
-                    .OrderBy(candidate => candidate!.Count)
-                    .FirstOrDefault();
+            // Found from a neighboring tile whether the center is occupied or
+            // empty. Transient occupants must not restart a long search.
+            var path = FindBudgetedApeWorkerPath(apeIndex, currentTile, targetVillageTile, null, out var searchPending,
+                settler: true, stopAdjacent: true);
+            if (searchPending) return;
             if (path is null || path.Count == 0)
             {
                 _apeSettlerPaths.Remove(apeId);
+                if (TrySidestepApeSettler(apeIndex, targetVillageTile)) return;
+                _apeWorkerPathFailures[apeId] = (currentTile, targetVillageTile, _species[apeIndex], _transportRevision,
+                    Tick + 10 * TicksPerSecond);
                 return;
             }
             route = (targetVillageTile, path);
@@ -4898,9 +4919,13 @@ public sealed partial class SimulationWorld
             !TrySwapPastMovementBlocker(apeIndex, destinationIndex, null))
         {
             _apeSettlerPaths.Remove(apeId);
+            if (TrySidestepApeSettler(apeIndex, targetVillageTile)) return;
+            _apeWorkerPathFailures[apeId] = (currentTile, targetVillageTile, _species[apeIndex], _transportRevision,
+                Tick + TicksPerSecond);
             return;
         }
         route.Tiles.Dequeue();
+        _apeWorkerPathFailures.Remove(apeId);
         if (GetIndex(_positions[apeIndex]) != destinationIndex)
             MoveCritter(apeIndex, destinationIndex, GetPosition(destinationIndex));
     }
@@ -4941,6 +4966,7 @@ public sealed partial class SimulationWorld
                 reachedTile = node.Tile;
                 break;
             }
+            ApePathExpandedTiles++;
 
             var position = GetPosition(node.Tile);
             foreach (var direction in MovementDirections)
@@ -6151,6 +6177,11 @@ public sealed partial class SimulationWorld
             home == colony.OriginVillageTile &&
             (IsLivingApe(_species[predatorIndex]) || _species[predatorIndex] is CritterSpecies.Dog))
             return false;
+        if (_apeSettlerTargets.TryGetValue(_critterIds[preyIndex].Value, out var foreignColony) &&
+            IsBarbarianApe(predatorIndex) &&
+            (!_apeVillageHomes.TryGetValue(_critterIds[predatorIndex].Value, out var raiderHome) ||
+                raiderHome != foreignColony.OriginVillageTile))
+            return true;
         // Vampire diet takes precedence over inherited village/faction context.
         if (_species[predatorIndex] is CritterSpecies.Vampire)
             return IsLivingApe(_species[preyIndex]);

@@ -6,6 +6,16 @@ namespace Newt.Simulation.Tests;
 public sealed class ThreeDGeometryTests
 {
     [Fact]
+    public void ShipwreckDescendsFromRenderedWaterHeightToRenderedBed()
+    {
+        var bed = ThreeDGeometry.ColumnHeight(-0.5f);
+        var surface = ThreeDGeometry.ColumnHeight(0f);
+        Assert.Equal(surface + 0.012f, ThreeDGeometry.ShipwreckHeight(bed, 0f, 0), 5);
+        Assert.Equal((surface + bed) / 2 + 0.012f, ThreeDGeometry.ShipwreckHeight(bed, 0f, 0.5f), 5);
+        Assert.Equal(bed + 0.012f, ThreeDGeometry.ShipwreckHeight(bed, 0f, 1), 5);
+    }
+
+    [Fact]
     public void CritterOffsetsVaryAndKeepEntireFootprintsInsideTiles()
     {
         var offsets = Enumerable.Range(1, 10000)

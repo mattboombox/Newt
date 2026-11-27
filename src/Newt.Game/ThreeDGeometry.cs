@@ -9,6 +9,12 @@ internal static class ThreeDGeometry
     internal const float PlayerFallAcceleration = 40f;
     internal const float PlayerTerminalFallSpeed = 24f;
 
+    internal static float ShipwreckHeight(float bedHeight, float? waterElevation, float sinkProgress)
+    {
+        var surfaceHeight = waterElevation is { } water ? Math.Max(bedHeight, ColumnHeight(water)) : bedHeight;
+        return surfaceHeight + (bedHeight - surfaceHeight) * Math.Clamp(sinkProgress, 0, 1) + 0.012f;
+    }
+
     internal static (float Distance, float Velocity) AdvancePlayerFall(float velocity, float seconds)
     {
         velocity = Math.Clamp(velocity, 0, PlayerTerminalFallSpeed);

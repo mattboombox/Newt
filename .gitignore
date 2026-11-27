@@ -7,3 +7,7 @@
 
 # Downloaded planetary source grids and conversion metadata
 /TestResults/PlanetaryRelief/
+
+# Local diagnostic tools and CPU captures
+/tools/.diagnostics/
+/TestResults/LagInvestigation/

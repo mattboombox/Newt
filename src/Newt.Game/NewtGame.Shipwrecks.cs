@@ -8,6 +8,9 @@ public sealed partial class NewtGame
 {
     private Texture2D? _shipwreckSprite, _pirateShipwreckSprite;
 
+    private float ShipwreckSinkProgress(GridPosition tile) =>
+        (float)_world.GetShipwreckSinkProgress(tile, _accumulator.TotalSeconds / SimulationStep.TotalSeconds);
+
     private void LoadShipwreckSprites()
     {
         _shipwreckSprite = Load("ship-wreck.png");
@@ -33,6 +36,8 @@ public sealed partial class NewtGame
     {
         var center = new Vector2(MapOffsetX + (screenX + 0.5f) * TileSize,
             MapOffsetY + (screenY + 0.5f) * TileSize);
+        if (shipwreck && !_view3D)
+            center.Y -= (1 - ShipwreckSinkProgress(tile)) * TileSize * 0.35f;
         var rotation = RemainsOrientation.QuarterTurns(_world.Seed, tile, shipwreck) * MathHelper.PiOver2;
         _spriteBatch!.Draw(sprite, center, null, Color.White, rotation,
             new Vector2(sprite.Width, sprite.Height) * 0.5f,

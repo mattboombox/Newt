@@ -86,6 +86,7 @@ public sealed partial class NewtGame
         _weatherSourceCells3D.Clear();
         ReleaseCloudPatches3D();
         _cloudPerforations3D.Clear();
+        _previousCloudTraveller3D = null;
         _cloudNoiseSamples3D.Clear();
         _cloudMoistureSamples3D.Clear();
         _cloudBankSizes3D.Clear();
@@ -408,6 +409,7 @@ public sealed partial class NewtGame
         Matrix view, Matrix projection)
     {
         _cloudColorTime3D = elapsedSeconds;
+        PunchCameraClouds3D(view);
         InvalidatePuncturedCloudPatches3D();
         _precipitationEmitters3D.Clear();
         var isNexus = _world.Body is WorldBody.Nexus;

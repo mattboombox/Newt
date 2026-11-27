@@ -8,6 +8,23 @@ public sealed class ShipwreckTests
     private const BindingFlags Private = BindingFlags.Instance | BindingFlags.NonPublic;
     private static readonly GridPosition Tile = new(3, 3);
 
+    [Fact]
+    public void WreckSinksSmoothlyFromSurfaceToBedAndNewWreckRestartsAnimation()
+    {
+        var world = new SimulationWorld(10, 10, Terrain.Ocean);
+        world.AddCritter(CritterSpecies.ApeSailor, Tile);
+        world.RemoveCritterAt(Tile);
+        Assert.Equal(0, world.GetShipwreckSinkProgress(Tile));
+        Assert.True(world.GetShipwreckSinkProgress(Tile, 0.5) > 0);
+        typeof(SimulationWorld).GetProperty("Tick")!.SetValue(world, 3L * SimulationWorld.TicksPerSecond / 2);
+        Assert.Equal(0.5, world.GetShipwreckSinkProgress(Tile), 2);
+        typeof(SimulationWorld).GetProperty("Tick")!.SetValue(world, 3L * SimulationWorld.TicksPerSecond);
+        Assert.Equal(1, world.GetShipwreckSinkProgress(Tile));
+        world.AddCritter(CritterSpecies.ApeSailor, Tile);
+        world.RemoveCritterAt(Tile);
+        Assert.Equal(0, world.GetShipwreckSinkProgress(Tile));
+    }
+
     [Theory]
     [InlineData(CritterSpecies.BaleenWhale)]
     [InlineData(CritterSpecies.ToothedWhale)]

@@ -2256,16 +2256,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             return followedCritter;
         }
 
-        for (var index = 0; index < _world.CritterCount; index++)
-        {
-            var critter = _world.GetCritter(index);
-            if (critter.Position == position)
-            {
-                return critter;
-            }
-        }
-
-        return null;
+        return _world.TryGetCritterAt(position, out var critter) ? critter : null;
     }
 
     private void DrawCritterInspection(int x, int y, GridPosition? position)

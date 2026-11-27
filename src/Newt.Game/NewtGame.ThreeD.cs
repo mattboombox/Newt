@@ -1057,7 +1057,10 @@ public sealed partial class NewtGame
                 if (whaleFall)
                     _cutouts3D.Add((new Vector3(x + 0.5f, height + 0.012f, y + 0.5f), tile, WhaleFallCutout3D, true));
                 if (shipwreck)
-                    _cutouts3D.Add((new Vector3(x + 0.5f, height + 0.012f, y + 0.5f), tile, ShipwreckCutout3D, true));
+                {
+                    var wreckHeight = ThreeDGeometry.ShipwreckHeight(height, waterElevation, ShipwreckSinkProgress(tile));
+                    _cutouts3D.Add((new Vector3(x + 0.5f, wreckHeight, y + 0.5f), tile, ShipwreckCutout3D, true));
+                }
                 if (hasWaterSurfaceArt)
                     _cutouts3D.Add((new Vector3(x + 0.5f, top + 0.012f, y + 0.5f), tile, WaterSurfaceArtCutout3D, true));
                 if (hasSandworm)
