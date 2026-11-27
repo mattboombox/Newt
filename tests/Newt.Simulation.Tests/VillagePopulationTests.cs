@@ -4,6 +4,21 @@ namespace Newt.Simulation.Tests;
 
 public sealed class VillagePopulationTests
 {
+    [Fact]
+    public void VillageAndNecropolisAgesUseTheirStructureFoundingTimes()
+    {
+        var world = new SimulationWorld(80, 40, Terrain.Plains) { ApeVillageMergingEnabled = false };
+        SetGrassland(world);
+        var tick = typeof(SimulationWorld).GetProperty(nameof(world.Tick))!;
+        tick.SetValue(world, 100L);
+        Assert.True(world.TrySpawnTestApeVillage(new(10, 10)));
+        tick.SetValue(world, 150L);
+        Assert.True(world.TryPlaceNecropolis(new(35, 15)));
+        tick.SetValue(world, 200L);
+        Assert.True(world.TrySpawnTestApeVillage(new(60, 10)));
+        Assert.Equal(new long[] { 100, 150, 200 }, world.GetVillagePopulations()
+            .OrderBy(row => row.FoundedTick).Select(row => row.FoundedTick));
+    }
     private static void SetGrassland(SimulationWorld world)
     {
         NaturalEvents.SetEnabled(world, false);

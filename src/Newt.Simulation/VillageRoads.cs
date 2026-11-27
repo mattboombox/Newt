@@ -89,6 +89,9 @@ public sealed partial class SimulationWorld
     private int RoadTerrainCostMultiplier(int tile) =>
         GetRoadConstructionCost(_terrain[tile], _biomes[tile]);
 
+    private int RoadBridgeCost(int tile) => tile < 0 ? 0 :
+        _surfaceWater[tile] is SurfaceWaterKind.FreshwaterLake ? 150 : 200;
+
     // Tenths of the grassland/plains cost. Vegetation, climate and earthworks
     // accumulate, so a forested hill costs more than either obstacle alone.
     internal static int GetRoadConstructionCost(Terrain terrain, Biome biome) =>
@@ -283,9 +286,10 @@ public sealed partial class SimulationWorld
                 var destination = GetPosition(next);
                 var cost = costs[current] +
                     stepCost * RoadTerrainCostMultiplier(next) +
-                    // Each bridge tile costs only 1.25 ordinary grassland steps.
-                    // Charge for its length, without any map-size-dependent penalty.
-                    (bridge >= 0 ? 125 * (secondBridge >= 0 ? 2 : 1) : 0);
+                    // Rivers are cheapest; lake spans cost less than shallows.
+                    // Charge each water tile separately, including mixed spans.
+                    (_surfaceWater[next] is SurfaceWaterKind.River ? 50 : 0) +
+                    RoadBridgeCost(bridge) + RoadBridgeCost(secondBridge);
                 if (costs.TryGetValue(next, out var known) && known <= cost)
                     continue;
                 costs[next] = cost;

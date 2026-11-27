@@ -5,6 +5,15 @@ public sealed partial class SimulationWorld
     private readonly Dictionary<int, int> _apeLumberjacks = [];
     private readonly Dictionary<int, long> _apeLumberjackRecruitmentTicks = [];
 
+    private void TryRecoverMissingApeLumberCamp(int village, int population)
+    {
+        if (population < 2 || _apeVillageWood.GetValueOrDefault(village) >= ApeFoodDistrictWoodCost ||
+            HasApeStructure(village, ApeStructureKind.LumberCamp)) return;
+        // A missing wood supply must not require a food surplus or five residents
+        // to restart. Normal terrain, free-space, and connection rules still apply.
+        TryBuildApeStructure(village, ApeStructureKind.LumberCamp);
+    }
+
     private bool HasApeLumberjack(int campTile) =>
         _apeLumberjacks.TryGetValue(campTile, out var id) &&
         _critterIndicesById.TryGetValue(id, out var index) &&

@@ -7,6 +7,34 @@ public sealed partial class NewtGame
 {
     private const int MeteorSmokePuffCount = 48;
 
+    private static Vector3 MeteorPosition3D(RifleShot shot, float progress) =>
+        Vector3.Lerp(shot.Origin, shot.Target, progress) + shot.ArcOffset * (4 * progress * (1 - progress));
+    private static Vector2 MeteorPosition2D(RifleShot shot, float progress) =>
+        Vector2.Lerp(shot.MapOrigin, shot.MapTarget, progress) + shot.MapArcOffset * (4 * progress * (1 - progress));
+
+    private void LaunchMeteorFragment(Newt.Simulation.GridPosition source, Newt.Simulation.GridPosition tile, int radius, float magnitude)
+    {
+        var origin = ProjectileTarget3D(source);
+        var target = ProjectileTarget3D(tile);
+        var startMap = MapLocation2D(source);
+        var endMap = MapLocation2D(tile);
+        var mapOrigin = new Vector2(startMap.X + 0.5f, startMap.Y + 0.5f);
+        var mapTarget = new Vector2(endMap.X + 0.5f, endMap.Y + 0.5f);
+        if (WrapsMapX) mapTarget.X += MathF.Round((mapOrigin.X - mapTarget.X) / MapWidth2D) * MapWidth2D;
+        var (_, up, _) = SurfaceFrame3D(source.X + 0.5f, source.Y + 0.5f);
+        var distance = Vector3.Distance(origin, target);
+        var flight = Math.Clamp(0.45f + Vector2.Distance(mapOrigin, mapTarget) / 35f, 0.5f, 2.5f);
+        var mapDelta = mapTarget - mapOrigin;
+        var bend = mapDelta.LengthSquared() > 0 ? Vector2.Normalize(new(-mapDelta.Y, mapDelta.X)) : Vector2.UnitY;
+        _rifleShots.Add(new(tile, _view3D, origin, target, mapOrigin, mapTarget,
+            new(distance, travelSeconds: flight))
+        {
+            MeteorMagnitude = magnitude, FragmentRadius = radius,
+            ArcOffset = up * Math.Max(2, distance * 0.4f),
+            MapArcOffset = bend * Math.Max(1, mapDelta.Length() * 0.22f)
+        });
+    }
+
     private void LaunchMeteor(Newt.Simulation.GridPosition tile, float magnitude)
     {
         if (_paused) return;
@@ -43,10 +71,10 @@ public sealed partial class NewtGame
     {
         var (east, up, south) = SurfaceFrame3D(shot.ImpactTile.X + 0.5f, shot.ImpactTile.Y + 0.5f);
         var viewProjection = view * projection;
-        for (var puff = 0; puff <= MeteorSmokePuffCount; puff++)
+        for (var puff = 0; puff <= MeteorSmokePuffCount; puff += shot.FragmentRadius is null ? 1 : 3)
         {
             if (!MeteorSmokePuff(shot, puff, out var fraction, out var age, out var size, out var opacity)) continue;
-            var center = Vector3.Lerp(shot.Origin, shot.Target, fraction) +
+            var center = MeteorPosition3D(shot, fraction) +
                 up * (age * 0.22f) + (east * MathF.Sin(puff * 2.4f) + south * MathF.Cos(puff * 1.7f)) * (age * 0.16f);
             var clip = Vector4.Transform(new Vector4(center, 1), viewProjection);
             if (clip.W <= 0 || clip.Z < 0 || clip.Z > clip.W) continue;
@@ -69,10 +97,10 @@ public sealed partial class NewtGame
 
     private void DrawMeteorSmoke2D(RifleShot shot)
     {
-        for (var puff = 0; puff <= MeteorSmokePuffCount; puff++)
+        for (var puff = 0; puff <= MeteorSmokePuffCount; puff += shot.FragmentRadius is null ? 1 : 3)
         {
             if (!MeteorSmokePuff(shot, puff, out var fraction, out var age, out var size, out var opacity)) continue;
-            var center = Vector2.Lerp(shot.MapOrigin, shot.MapTarget, fraction) +
+            var center = MeteorPosition2D(shot, fraction) +
                 new Vector2(MathF.Sin(puff * 2.4f), -1) * (age * 0.22f);
             var pixel = new Vector2(MapOffsetX + (center.X - _cameraX) * TileSize,
                 MapOffsetY + (center.Y - _cameraY) * TileSize);

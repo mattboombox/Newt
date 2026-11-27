@@ -4,6 +4,62 @@ namespace Newt.Simulation.Tests;
 
 public sealed class ImpactTests
 {
+    private static void FinishWaves(SimulationWorld world)
+    {
+        for (var tick = 0; tick < 2000 && (world.ActiveImpactWaveCount > 0 || world.ImpactFragments.Count > 0); tick++)
+            Impacts.Advance(world);
+        Assert.Equal(0, world.ActiveImpactWaveCount);
+        Assert.Empty(world.ImpactFragments);
+    }
+
+    [Fact]
+    public void MeteorTerrainWaitsUntilItsOwnShockFrontArrives()
+    {
+        var world = CreateLandWorld();
+        var center = new GridPosition(30, 30);
+        var target = new GridPosition(32, 30);
+        var before = world.GetElevation(target);
+        var impact = Impacts.CreateMeteorImpact(world, center, 0f);
+        Assert.Equal(0, impact.FragmentCount);
+        Assert.True(world.GetElevation(center) < 0.2f);
+        Assert.Equal(before, world.GetElevation(target));
+        var wave = Assert.Single(world.ImpactWaves);
+        var scheduled = Assert.Single(wave.TerrainChanges, change => change.Position == target);
+        while (wave.CurrentRadius + wave.Speed < scheduled.Distance)
+        {
+            Impacts.Advance(world);
+            Assert.Equal(before, world.GetElevation(target));
+            Assert.Equal(SurfaceCover.None, world.GetSurfaceCover(target));
+        }
+        Impacts.Advance(world);
+        Assert.NotEqual(before, world.GetElevation(target));
+        Assert.Equal(SurfaceCover.Stone, world.GetSurfaceCover(target));
+        var changed = world.GetElevation(target);
+        FinishWaves(world);
+        Assert.Equal(changed, world.GetElevation(target));
+    }
+
+    [Fact]
+    public void SplashFragmentsWaitForLandingAndCreateProportionateNonRecursiveWaves()
+    {
+        var world = CreateLandWorld();
+        var flights = new List<(GridPosition Target, int Radius, float Magnitude)>();
+        world.ImpactFragmentLauncher = (_, target, radius, magnitude) => flights.Add((target, radius, magnitude));
+        var impact = Impacts.CreateMeteorImpact(world, new(30, 30), 0.7f);
+        Assert.NotEmpty(flights);
+        Assert.Single(world.ImpactWaves);
+        var fragment = flights[0];
+        Assert.InRange(fragment.Radius, 1, impact.CraterRadius - 1);
+        var before = world.GetElevation(fragment.Target);
+        Assert.Equal(0.2f, before);
+        var secondary = Impacts.CreateFragmentImpact(world, fragment.Target, fragment.Radius, fragment.Magnitude);
+        Assert.Equal(fragment.Radius * 3, secondary.ShockRadius);
+        Assert.Equal(0, secondary.FragmentCount);
+        Assert.Equal(2, world.ActiveImpactWaveCount);
+        Assert.True(world.GetElevation(fragment.Target) < before);
+        Assert.Equal(impact.FragmentCount, flights.Count); // Child impacts do not fragment again.
+    }
+
     [Fact]
     public void MeteorCratersCrossEveryPlanetoidFaceEdgeWithoutHittingDistantAtlasNeighbors()
     {
@@ -28,6 +84,7 @@ public sealed class ImpactTests
             var direction = directions[edge];
             var neighbor = PlanetoidLayout.Offset(center, direction.X, direction.Y, size);
             Impacts.CreateMeteorImpact(world, center, 0f);
+            FinishWaves(world);
             Assert.True(world.GetElevation(neighbor) < 0.3f, $"Crater did not cross face {face}, edge {edge}.");
             Assert.Equal(SurfaceCover.Stone, world.GetSurfaceCover(neighbor));
             var originDirection = world.GetPlanetoidTileDirection(center);
@@ -96,6 +153,7 @@ public sealed class ImpactTests
         var center = new GridPosition(30, 30);
         var result = Impacts.CreateMeteorImpact(world, center, 0.5f);
         var rim = new GridPosition(center.X + result.CraterRadius, center.Y);
+        FinishWaves(world);
 
         Assert.True(world.GetElevation(center) < 0.2f);
         Assert.True(world.GetElevation(rim) > 0.2f);
@@ -121,6 +179,7 @@ public sealed class ImpactTests
         var center = new GridPosition(30, 30);
         var result = Impacts.CreateMeteorImpact(world, center, 0.8f);
         var floor = new GridPosition(center.X + Math.Max(1, result.CraterRadius / 2), center.Y);
+        FinishWaves(world);
 
         Assert.True(world.GetElevation(center) > world.GetElevation(floor));
     }

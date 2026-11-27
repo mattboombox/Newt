@@ -5,6 +5,21 @@ namespace Newt.Simulation.Tests;
 
 public sealed class PopulationCountsTests
 {
+    [Theory]
+    [InlineData(false, false, 2, 1, -3)]
+    [InlineData(false, true, -3, 1, 2)]
+    [InlineData(true, false, 2, -3, 1)]
+    [InlineData(true, true, 1, -3, 2)]
+    public void VillageSortOrdersWholeSettlementsByAgeOrPopulation(bool population, bool reverse, int first, int second, int third)
+    {
+        VillagePopulationSnapshot Row(int id, long founded, int count) =>
+            new(id, new(0, 0), false, null, 0, new Dictionary<CritterSpecies, int> { [CritterSpecies.Ape] = count },
+                id < 0 ? new CritterId(-id) : null) { FoundedTick = founded };
+        var rows = new[] { Row(1, 20, 2), Row(2, 10, 9), Row(-3, 30, 4) };
+        var sorted = PopulationCounts.SortVillages(rows,
+            population ? PopulationCounts.VillageSort.Population : PopulationCounts.VillageSort.Age, reverse);
+        Assert.Equal(new[] { first, second, third }, sorted.Select(row => row.Id));
+    }
     [Fact]
     public void LandAndSailorTradersShareCountsAndCameraSelection()
     {

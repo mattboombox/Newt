@@ -9,6 +9,7 @@ public sealed partial class SimulationWorld
         public int[] Distances = distances;
         public bool BloodWar = bloodWar;
         public bool CivilWar;
+        public bool WolfDen;
         public int? LichId;
         public bool LichAttacking;
         public bool MergeOnVictory;
@@ -71,6 +72,9 @@ public sealed partial class SimulationWorld
                             _critterIndicesById.TryGetValue(home.Key, out var index) && IsLivingApe(_species[index]))
                     : Eligible(pair.Key, minimum)))
             .Select(pair => pair.Key)
+            .Concat(_wolfDenCharges.Keys.Where(den =>
+                Tick >= _villageWarCooldowns.GetValueOrDefault(den) &&
+                BuildWarDistances([den], VillageWolfDenWarRadius)[village] >= 0))
             .Concat(Enumerable.Range(0, _count).Where(index => _species[index] is CritterSpecies.Lich &&
                 !_lichWars.ContainsKey(_critterIds[index].Value) &&
                 Tick >= _villageWarCooldowns.GetValueOrDefault(-_critterIds[index].Value))
@@ -112,6 +116,7 @@ public sealed partial class SimulationWorld
             !TryGetApeWar(index, out var war) || !TryGetApeWarSide(id, out var attacking))
             return null;
         var kind = war.CivilWar ? "C" : war.BloodWar ? "B" : "W";
+        if (war.WolfDen) return $"W Attacking wolf den at {GetPosition(war.Defender)}";
         var village = war.Defender;
         if (war.LichId is { } lich)
         {
@@ -134,7 +139,7 @@ public sealed partial class SimulationWorld
         .OrderBy(war => war.Id).Select(war =>
         {
             var attacker = $"Village #{GetApeVillageId(GetPosition(war.Attacker))}";
-            var defender = war.LichId is { } lich ? $"Lich #{lich}" :
+            var defender = war.WolfDen ? "Wolf Den" : war.LichId is { } lich ? $"Lich #{lich}" :
                 $"Village #{GetApeVillageId(GetPosition(war.Defender))}";
             GridPosition? attackerPosition = GetPosition(war.Attacker);
             GridPosition? defenderPosition = war.LichId is { } leader
@@ -165,6 +170,9 @@ public sealed partial class SimulationWorld
             ? IsSurvivingCivilWarFighter(fighter) : IsSurvivingWarrior(fighter);
         var attackers = new ApeWarArmyStatus(war.AttackingWarriors.Count(Surviving),
             war.AttackingWarriors.Count, war.AttackingWarriors.Count / 10, Culture(war.Attacker, true));
+        if (war.WolfDen)
+            return new(attackers, new ApeWarArmyStatus(GetWolfDenAssociatedWolfCount(GetPosition(war.Defender)),
+                war.StartingTargetPopulation, 0, null, PopulationTarget: true));
         var defenders = war.BloodWar
             ? new ApeWarArmyStatus(GetBloodWarTargets(war).Count(), war.StartingTargetPopulation, 0,
                 Culture(war.Defender, false), PopulationTarget: true)
@@ -224,6 +232,8 @@ public sealed partial class SimulationWorld
     {
         if (!Contains(attackerBuilding) || !Contains(defenderBuilding))
             return false;
+        if (_wolfDenCharges.ContainsKey(GetIndex(defenderBuilding)))
+            return TryStartWolfDenWar(attackerBuilding, defenderBuilding);
         var attackingLich = GetLichAt(attackerBuilding);
         var defendingLich = GetLichAt(defenderBuilding);
         if (attackingLich >= 0 || defendingLich >= 0)
@@ -356,6 +366,7 @@ public sealed partial class SimulationWorld
     }
 
     private bool AreWarEnemies(int first, int second) =>
+        AreWolfDenWarEnemies(first, second) || AreWolfDenWarEnemies(second, first) ||
         AreLichWarEnemies(first, second) ||
         TryGetApeWar(first, out var war) &&
         _apeVillageHomes.TryGetValue(_critterIds[first].Value, out var home) &&
@@ -366,7 +377,7 @@ public sealed partial class SimulationWorld
                 war.DefendingWarriors.Contains(_critterIds[first].Value) && war.AttackingWarriors.Contains(_critterIds[second].Value))
             : other == (home == war.Attacker ? war.Defender : war.Attacker));
 
-    private bool CanTargetWarApe(int first, int second) => AreLichWarEnemies(first, second) || (AreWarEnemies(first, second) &&
+    private bool CanTargetWarApe(int first, int second) => AreWolfDenWarEnemies(first, second) || AreLichWarEnemies(first, second) || (AreWarEnemies(first, second) &&
         (IsBarbarianWarFighter(second) || _species[second] is CritterSpecies.ApeWarrior or CritterSpecies.ApeRoyalGuard or CritterSpecies.ApeBomber or CritterSpecies.ApeChieftain or CritterSpecies.ApeKing or CritterSpecies.ApeQueen ||
             TryGetApeWar(first, out var war) && war.BloodWar &&
             _apeVillageHomes[_critterIds[first].Value] == war.Attacker));
@@ -375,6 +386,22 @@ public sealed partial class SimulationWorld
     {
         foreach (var war in _apeWars.Values.Distinct().ToArray())
         {
+            if (war.WolfDen)
+            {
+                if (!IsRoadVillage(war.Attacker) || !_wolfDenCharges.ContainsKey(war.Defender) ||
+                    war.AttackingWarriors.Count(IsSurvivingWarrior) * 10 <= war.AttackingWarriors.Count)
+                    EndApeWar(war);
+                else
+                {
+                    if (Tick >= war.NextLevyTick)
+                    {
+                        war.NextLevyTick = Tick + TicksPerSecond;
+                        RecruitUnemployedWarApes(war);
+                    }
+                    if (Tick % TicksPerSecond == 0) war.Distances = BuildWarDistances(war.Defender);
+                }
+                continue;
+            }
             if (war.LichId is not null)
             {
                 AdvanceLichWar(war);
@@ -454,6 +481,12 @@ public sealed partial class SimulationWorld
     {
         if (!Contains(villageBuilding))
             return false;
+        var denWar = _apeWars.Values.FirstOrDefault(war => war.WolfDen && war.Defender == GetIndex(villageBuilding));
+        if (denWar is not null)
+        {
+            EndApeWar(denWar);
+            return true;
+        }
         if (GetLichAt(villageBuilding) is var lich && lich >= 0 && _lichWars.TryGetValue(lich, out var lichWar))
         {
             EndApeWar(lichWar);
@@ -550,6 +583,12 @@ public sealed partial class SimulationWorld
         if (war.LichId is not null)
             return TryMoveLichWarMember(index, war, reserved);
         var current = GetIndex(_positions[index]);
+        if (war.WolfDen && current == war.Defender)
+        {
+            RemoveWolfDenAt(GetPosition(war.Defender));
+            EndApeWar(war);
+            return null;
+        }
         var neighbors = RoadNeighbors(current).ToArray();
         foreach (var tile in neighbors)
             if (_occupants[tile] is var enemy && enemy >= 0 && CanTargetWarApe(index, enemy) &&

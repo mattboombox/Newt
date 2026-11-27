@@ -64,13 +64,14 @@ public sealed partial class SimulationWorld
         }
         _plagueImmunityRemainders[id] = immuneRemainder;
         if (kind is PlagueKind.Zombie && lichOrigin is { } lich)
-            _lichArmy[id] = lich;
+            SetLichArmyOwner(id, lich);
         else
-            _lichArmy.Remove(id);
+            RemoveLichArmyOwner(id);
         return true;
     }
 
     private bool TrySpreadCritterPlague(int source, GridPosition position, PlagueKind kind, int immuneRemainder) =>
+        _species[source] is not CritterSpecies.UndeadWarrior &&
         TryInfectCritterAt(position, kind, immuneRemainder,
             _species[source] is CritterSpecies.Lich ? _critterIds[source].Value :
                 _lichArmy.TryGetValue(_critterIds[source].Value, out var lich) ? lich : null);
@@ -225,9 +226,11 @@ public sealed partial class SimulationWorld
 
     private bool TryReanimateApe(int index)
     {
-        if (_species[index] is CritterSpecies.UndeadApe && _lichArmy.ContainsKey(_critterIds[index].Value))
+        if (_species[index] is CritterSpecies.UndeadApe && _lichArmy.TryGetValue(_critterIds[index].Value, out var lich))
         {
+            if (GetLichUndeadWarriorCount(new CritterId(lich)) >= LichUndeadWarriorLimit) return false;
             ChangeCritterSpecies(index, CritterSpecies.UndeadWarrior, preserveEnergy: false);
+            RegisterNecropolisWarrior(index);
             return true;
         }
         if (!IsLivingApe(_species[index]) || GetPlague(index) is not (PlagueKind.Zombie or PlagueKind.Vampire))
@@ -236,7 +239,7 @@ public sealed partial class SimulationWorld
         }
         var risen = GetPlague(index) is PlagueKind.Vampire ? CritterSpecies.Vampire : CritterSpecies.UndeadApe;
         if (risen is CritterSpecies.Vampire)
-            _lichArmy.Remove(_critterIds[index].Value);
+            RemoveLichArmyOwner(_critterIds[index].Value);
         ChangeCritterSpecies(index, risen, preserveEnergy: false);
         _reproductionTruces.Remove(_critterIds[index].Value);
         return true;

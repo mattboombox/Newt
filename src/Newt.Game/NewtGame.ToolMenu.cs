@@ -223,6 +223,11 @@ public sealed partial class NewtGame
             DrawWolfDenSprite(x, y, size, 1);
             return;
         }
+        if (tool == WorldTool.Necropolis)
+        {
+            DrawNecropolisSprite(x, y, size);
+            return;
+        }
         if (tool == WorldTool.Teleporter)
         {
             DrawTeleporterSprite(x, y, size);

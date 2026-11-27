@@ -13,6 +13,9 @@ public sealed partial class NewtGame
         public GuidedMissileFlight? Missile { get; init; }
         public bool FollowCursor { get; init; }
         public float? MeteorMagnitude { get; init; }
+        public int? FragmentRadius { get; init; }
+        public Vector3 ArcOffset { get; init; }
+        public Vector2 MapArcOffset { get; init; }
         public Color? BeamColor { get; init; }
         public GridPosition ImpactTile { get; set; } = Tile;
     }
@@ -227,16 +230,18 @@ public sealed partial class NewtGame
             }
             else
             {
-                var previousHead = Vector3.Lerp(shot.Origin, shot.Target, shot.Timing.Progress);
+                var previousHead = MeteorPosition3D(shot, shot.Timing.Progress);
                 if (shot.Timing.Advance(seconds))
                 {
-                    if (shot.MeteorMagnitude is { } magnitude)
+                    if (shot.FragmentRadius is { } radius)
+                        Impacts.CreateFragmentImpact(_world, shot.ImpactTile, radius, shot.MeteorMagnitude ?? 0);
+                    else if (shot.MeteorMagnitude is { } magnitude)
                         Impacts.CreateToolMeteorImpact(_world, shot.ImpactTile, magnitude);
                     else Impacts.CreateRifleImpact(_world, shot.ImpactTile);
                 }
                 if (shot.ThreeD && shot.Missile is null && shot.Timing.Progress > 0)
                 {
-                    var head = Vector3.Lerp(shot.Origin, shot.Target, shot.Timing.Progress);
+                    var head = MeteorPosition3D(shot, shot.Timing.Progress);
                     if (head != previousHead) PunchCloudSegment3D(previousHead, head,
                         shot.MeteorMagnitude is { } magnitude ? 1.2f + magnitude * 0.5f : 0.45f);
                 }
@@ -283,7 +288,7 @@ public sealed partial class NewtGame
                 DrawMeteorSmoke3D(shot, view, projection, camera);
             var color = new Color(shot.BeamColor ?? new Color(155, 155, 155), (int)(220 * shot.Timing.Opacity));
             _rifleLineVertices[0] = new(shot.Origin, color);
-            var head = shot.Missile is { } missile ? Framework(missile.Position) : Vector3.Lerp(shot.Origin, shot.Target, shot.Timing.Progress);
+            var head = shot.Missile is { } missile ? Framework(missile.Position) : MeteorPosition3D(shot, shot.Timing.Progress);
             _rifleLineVertices[1] = new(head, color);
             foreach (var pass in _projectileEffect3D.CurrentTechnique.Passes)
             {
@@ -341,7 +346,7 @@ public sealed partial class NewtGame
             var from = new Vector2(MapOffsetX + (shot.MapOrigin.X - _cameraX) * TileSize,
                 MapOffsetY + (shot.MapOrigin.Y - _cameraY) * TileSize);
             var head = shot.Missile is { } missile ? new Vector2(missile.Position.X, missile.Position.Y)
-                : Vector2.Lerp(shot.MapOrigin, shot.MapTarget, shot.Timing.Progress);
+                : MeteorPosition2D(shot, shot.Timing.Progress);
             var to = new Vector2(MapOffsetX + (head.X - _cameraX) * TileSize,
                 MapOffsetY + (head.Y - _cameraY) * TileSize);
             if (shot.Missile is { } trail)

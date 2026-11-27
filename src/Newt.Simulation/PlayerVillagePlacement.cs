@@ -27,7 +27,7 @@ public sealed partial class SimulationWorld
                 _ => ApeStructureKind.Farm,
             };
         if (_occupants[tile] >= 0 || HasBlockingApeStructure(tile) ||
-            _teleporters.Contains(tile) || _wolfDenCharges.ContainsKey(tile) ||
+            _teleporters.Contains(tile) || _wolfDenCharges.ContainsKey(tile) || _necropolisOwners.ContainsKey(tile) ||
             _megaSpiderWebFood.ContainsKey(tile) || !IsValidApeAuxiliaryTile(tile, kind))
             return false;
 

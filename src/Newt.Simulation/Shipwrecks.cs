@@ -12,6 +12,7 @@ public sealed partial class SimulationWorld
 
     private void DepositShipwreck(int index, int tile)
     {
+        if (_whaleFallNutrition[tile] > 0) return;
         if (_surfaceWater[tile] is SurfaceWaterKind.River) return;
         if (_surfaceWater[tile] is not SurfaceWaterKind.FreshwaterLake &&
             _terrain[tile] is not (Terrain.DeepOcean or Terrain.Ocean or Terrain.Shallows)) return;

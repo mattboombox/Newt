@@ -3,10 +3,46 @@ namespace Newt.Simulation;
 public sealed partial class SimulationWorld
 {
     private readonly Dictionary<int, int> _lichArmy = [];
+    public const int LichUndeadWarriorLimit = 25;
+    private readonly Dictionary<int, HashSet<int>> _lichWarriors = [];
+
+    public int GetLichUndeadWarriorCount(CritterId lich) =>
+        _lichWarriors.TryGetValue(lich.Value, out var warriors) ? warriors.Count : 0;
+
+    private void SetLichArmyOwner(int id, int lich)
+    {
+        RemoveLichArmyOwner(id);
+        _lichArmy[id] = lich;
+        if (_critterIndicesById.TryGetValue(id, out var index)) TrackLichWarrior(index);
+    }
+
+    private void UntrackLichWarrior(int id)
+    {
+        if (_lichArmy.TryGetValue(id, out var lich) && _lichWarriors.TryGetValue(lich, out var warriors))
+        {
+            warriors.Remove(id);
+            if (warriors.Count == 0) _lichWarriors.Remove(lich);
+        }
+    }
+
+    private void RemoveLichArmyOwner(int id)
+    {
+        UntrackLichWarrior(id);
+        _lichArmy.Remove(id);
+    }
+
+    private void TrackLichWarrior(int index)
+    {
+        var id = _critterIds[index].Value;
+        if (_species[index] is not CritterSpecies.UndeadWarrior || !_lichArmy.TryGetValue(id, out var lich)) return;
+        if (!_lichWarriors.TryGetValue(lich, out var warriors)) _lichWarriors[lich] = warriors = [];
+        warriors.Add(id);
+    }
     internal const int LichEscortSize = 20;
     private void SpawnLichWarriors(CritterId lich, GridPosition origin)
     {
-        var remaining = 4;
+        var remaining = Math.Min(4, LichUndeadWarriorLimit - GetLichUndeadWarriorCount(lich));
+        if (remaining <= 0) return;
         // Prefer free space; only replace living Apes when the nearby tiles are full.
         foreach (var replaceApes in new[] { false, true })
         for (var radius = 1; radius <= 3; radius++)
@@ -32,17 +68,18 @@ public sealed partial class SimulationWorld
             }
             else
                 continue;
-            _lichArmy[warrior.Value] = lich.Value;
+            SetLichArmyOwner(warrior.Value, lich.Value);
             if (--remaining == 0)
                 return;
         }
     }
     private void CollapseLichArmy(int lich)
     {
+        RemoveLichNecropolis(lich);
         var army = _lichArmy.Where(pair => pair.Value == lich).Select(pair => pair.Key).ToArray();
         foreach (var id in army)
         {
-            _lichArmy.Remove(id);
+            RemoveLichArmyOwner(id);
             if (_critterIndicesById.TryGetValue(id, out var index) && _species[index] is CritterSpecies.UndeadWarrior)
                 RemoveCritter(new CritterId(id));
         }
@@ -76,8 +113,9 @@ public sealed partial class SimulationWorld
             return false;
         var lichId = _critterIds[killer].Value;
         var victimId = _critterIds[victim].Value;
+        RecordLichApeKill(killer, victim);
         ChangeCritterSpecies(victim, CritterSpecies.UndeadApe, preserveEnergy: false);
-        _lichArmy[victimId] = lichId;
+        SetLichArmyOwner(victimId, lichId);
         _plagueImmunityRemainders[victimId] = GetOrCreatePlagueImmunityRemainder(lichId);
         _reproductionTruces.Remove(victimId);
         RestoreUndeadKillEnergy(killer);
@@ -86,6 +124,8 @@ public sealed partial class SimulationWorld
     }
 
     internal CritterId[] GetLichEscort(CritterId lich) =>
+        _lichCampaigns.TryGetValue(lich.Value, out var campaign) && campaign.Tile >= 0
+            ? campaign.Escorts.Order().Select(id => new CritterId(id)).ToArray() :
         _critterIndicesById.TryGetValue(lich.Value, out var leader) && _species[leader] is CritterSpecies.Lich
             ? _lichArmy.Where(pair => pair.Value == lich.Value &&
                 _critterIndicesById.TryGetValue(pair.Key, out var index) && _species[index] is CritterSpecies.UndeadWarrior)

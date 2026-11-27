@@ -825,6 +825,7 @@ public sealed partial class NewtGame
                     {
                         DrawApeStructure(sx, sy, item.Tile);
                         DrawWolfDen(sx, sy, item.Tile);
+                        DrawNecropolis(sx, sy, item.Tile);
                         DrawMegaSpiderWeb(sx, sy, item.Tile);
                         DrawTeleporter(sx, sy, item.Tile);
                         DrawCustodianFabricator(sx, sy, item.Tile);
@@ -917,7 +918,7 @@ public sealed partial class NewtGame
                     // Centered building art has padding below the visible base in its atlas cell.
                     // Anchor that base, rather than the quad's bottom edge, to the tile.
                     var visibleHeight = _world.IsCustodianFabricator(item.Tile) ||
-                        _world.GetWolfDenCharges(item.Tile) is not null ? 1f
+                        _world.GetWolfDenCharges(item.Tile) is not null || _world.HasNecropolis(item.Tile) ? 1f
                         : structure is not null || _world.HasVampireLair(item.Tile) || _world.HasTeleporter(item.Tile)
                             ? 0.75f : 0f;
                     if (visibleHeight > 0f)
@@ -1017,6 +1018,7 @@ public sealed partial class NewtGame
                 var shipwreck = _world.GetShipwreck(tile) is not null;
                 var hasGroundArt = river || roads != RiverConnection.None || hasImpactWave;
                 var hasStructure = _world.GetApeStructure(tile) is not null || _world.HasVampireLair(tile) ||
+                    _world.HasNecropolis(tile) ||
                     _world.GetWolfDenCharges(tile) is not null || _world.GetMegaSpiderWebFood(tile) is not null ||
                     _world.HasTeleporter(tile) || _world.IsCustodianFabricator(tile) ||
                     _world.GetVolcanoState(tile) is { } state && state != VolcanoState.Extinct;
@@ -1317,6 +1319,8 @@ public sealed partial class NewtGame
         _rifleDepthOnlyBlend3D?.Dispose();
         ReleaseTerrainChunks3D();
         _whaleFallSprite?.Dispose();
+        _apeSailorFarmerSprite?.Dispose();
+        _apeSailorFarmerFlashSprite?.Dispose();
         _jellyfishGlowSprite?.Dispose();
         foreach (var page in _atlasPages3D) page.Dispose();
         _terrainEffect3D?.Dispose();

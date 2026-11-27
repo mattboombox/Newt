@@ -221,7 +221,8 @@ internal static class ThreeDGeometry
 
     internal static float RoadHeight(float bedHeight, float? waterElevation, bool shallowsBridge) =>
         shallowsBridge && waterElevation is { } water
-            ? Math.Max(bedHeight + 0.01f, ColumnHeight(water) + 0.015f)
+            // Ice sheets sit 0.035 above the water; keep decks above the sheet.
+            ? Math.Max(bedHeight + 0.01f, ColumnHeight(water) + 0.045f)
             : bedHeight + 0.01f;
 
     internal static float RoadSideBottom(float targetHeight, float adjacentHeight,
@@ -362,7 +363,7 @@ internal static class ThreeDGeometry
         !surfaceSailor && !StandsOnIce(habitat) && (bridge || ice && clearance < 1f);
 
     internal static bool IsSurfaceSailor(CritterSpecies species, bool colonist, bool pirate, bool veteran) =>
-        colonist || pirate || veteran || species is CritterSpecies.Custodian or CritterSpecies.ApeSailor or
+        colonist || pirate || veteran || species is CritterSpecies.Custodian or CritterSpecies.ApeFarmer or CritterSpecies.ApeSailor or
             CritterSpecies.ApeTraderSailor or CritterSpecies.ApeWarrior or CritterSpecies.ApeChieftain or
             CritterSpecies.ApeBomber or CritterSpecies.ApeKing or CritterSpecies.ApeQueen or CritterSpecies.ApeRoyalGuard;
 

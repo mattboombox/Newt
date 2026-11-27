@@ -59,7 +59,7 @@ public sealed partial class SimulationWorld
         _energy[_critterIndicesById[id.Value]] = ApeSettlerInitialEnergy;
         _vampireColonists[id.Value] = new(origin, huntingVillage, village, target);
         _apeSettlerPaths[id.Value] = (target, path!);
-        status = "Vampire colonist launched!";
+        status = "Vampire settler launched!";
         return true;
     }
 
@@ -86,7 +86,7 @@ public sealed partial class SimulationWorld
         WrappedManhattanDistance(GetPosition(tile), GetPosition(village)) is >= 2 and <= VampireColonyVillageRadius &&
         (_occupants[tile] < 0 || _occupants[tile] == index) &&
         CanLiveOn(CritterSpecies.Vampire, tile) && _surfaceWater[tile] is SurfaceWaterKind.None &&
-        !_apeStructures.ContainsKey(tile) && !_wolfDenCharges.ContainsKey(tile) &&
+        !_apeStructures.ContainsKey(tile) && !_wolfDenCharges.ContainsKey(tile) && !_necropolisOwners.ContainsKey(tile) &&
         !_megaSpiderWebFood.ContainsKey(tile) && !_teleporters.Contains(tile) &&
         _vampireLairs.All(lair => WrappedManhattanDistance(GetPosition(tile), GetPosition(lair)) >= 8);
 

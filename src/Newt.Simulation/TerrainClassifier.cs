@@ -3,6 +3,16 @@ namespace Newt.Simulation;
 /// <summary>Derives physical terrain from elevation and the climate fields.</summary>
 public static class TerrainClassifier
 {
+    internal static void RefreshImpactLandform(SimulationWorld world, GridPosition position)
+    {
+        var wet = world.HasOceans && world.GetElevation(position) < world.SeaLevel &&
+            (world.GetTerrain(position) is Terrain.Ocean or Terrain.DeepOcean or Terrain.Shallows or Terrain.Ice ||
+                new GridPosition[] { new(0, -1), new(1, 0), new(0, 1), new(-1, 0) }
+                    .Select(direction => world.OffsetTile(position, direction)).Where(world.Contains)
+                    .Any(tile => world.GetTerrain(tile) is Terrain.Ocean or Terrain.DeepOcean or Terrain.Shallows or Terrain.Ice));
+        world.SetTerrain(position, wet ? ClassifyOcean(world.SeaLevel - world.GetElevation(position), world.GetTemperature(position))
+            : ClassifyDryLand(world.GetElevation(position)));
+    }
     public const float MountainElevationThreshold = 0.58f;
     internal const float DeepOceanDepthThreshold = 0.20f;
 

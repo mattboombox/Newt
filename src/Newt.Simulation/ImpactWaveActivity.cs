@@ -23,4 +23,14 @@ internal sealed class ImpactWaveActivity(
 
     internal int NextPlanetoidTile { get; set; }
     internal HashSet<GridPosition>? LimitedTiles { get; set; }
+    internal List<ImpactTerrainChange> TerrainChanges { get; } = [];
+    internal int NextTerrainChange;
+}
+
+internal readonly record struct ImpactTerrainChange(float Distance, GridPosition Position,
+    float ElevationChange, bool ClearEntities, int StoneSeconds);
+
+internal sealed record ImpactFragmentActivity(GridPosition Target, int Radius, float Magnitude)
+{
+    internal int RemainingTicks = SimulationWorld.TicksPerSecond;
 }

@@ -580,8 +580,10 @@ public sealed class ThreeDGeometryTests
     public void ShallowsBridgeDeckSitsAboveWaterRegardlessOfBedDepth(float bedElevation)
     {
         var bed = ThreeDGeometry.ColumnHeight(bedElevation);
-        Assert.Equal(ThreeDGeometry.ColumnHeight(0) + 0.015f,
+        Assert.Equal(ThreeDGeometry.ColumnHeight(0) + 0.045f,
             ThreeDGeometry.RoadHeight(bed, 0, shallowsBridge: true));
+        Assert.True(ThreeDGeometry.RoadHeight(bed, 0, shallowsBridge: true) >
+            ThreeDGeometry.ColumnHeight(0) + 0.035f); // Ice sheet top.
         Assert.Equal(bed + 0.01f, ThreeDGeometry.RoadHeight(bed, 0, shallowsBridge: false));
         Assert.Equal(bed + 0.01f, ThreeDGeometry.RoadHeight(bed, null, shallowsBridge: true));
     }
@@ -707,6 +709,7 @@ public sealed class ThreeDGeometryTests
     [InlineData(CritterSpecies.ApeBomber, false, false, false, true)]
     [InlineData(CritterSpecies.Vampire, true, false, false, true)]
     [InlineData(CritterSpecies.ApeFarmer, true, false, false, true)]
+    [InlineData(CritterSpecies.ApeFarmer, false, false, false, true)]
     [InlineData(CritterSpecies.Ape, false, true, false, true)]
     [InlineData(CritterSpecies.Ape, false, false, true, true)]
     [InlineData(CritterSpecies.Fish, false, false, false, false)]

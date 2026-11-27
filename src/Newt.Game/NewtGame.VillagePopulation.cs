@@ -14,6 +14,9 @@ public sealed partial class NewtGame
     private int _villagePopulationScroll;
     private int _villagePopulationMaximumScroll;
     private const int VillagePopulationRowHeight = 24;
+    private PopulationCounts.VillageSort _villagePopulationSort;
+    private bool _villagePopulationSortReverse;
+    private Rectangle _villageAgeSortBounds, _villageCountSortBounds;
 
     private void RecordVillagePopulationSamples()
     {
@@ -40,8 +43,17 @@ public sealed partial class NewtGame
 
     private void HandleVillagePopulationClick(MouseState mouse)
     {
+        if (_villageAgeSortBounds.Contains(mouse.Position) || _villageCountSortBounds.Contains(mouse.Position))
+        {
+            var sort = _villageAgeSortBounds.Contains(mouse.Position)
+                ? PopulationCounts.VillageSort.Age : PopulationCounts.VillageSort.Population;
+            _villagePopulationSortReverse = sort == _villagePopulationSort && !_villagePopulationSortReverse;
+            _villagePopulationSort = sort;
+            _villagePopulationScroll = 0;
+            return;
+        }
         foreach (var link in _villagePopulationLinks)
-            if (link.Bounds.Contains(mouse.Position) && _world.GetApeVillageId(link.Position) == link.VillageId)
+            if (link.Bounds.Contains(mouse.Position) && _world.GetPopulationSettlementId(link.Position) == link.VillageId)
             {
                 var target = link.Species is { } species
                     ? PopulationCounts.FindCritter(_world, species, village: link.Position, previous: _lastPopulationTarget) : null;
@@ -73,7 +85,7 @@ public sealed partial class NewtGame
     private void DrawVillagePopulationWindow()
     {
         _villagePopulationLinks.Clear();
-        var villages = _world.GetVillagePopulations();
+        var villages = PopulationCounts.SortVillages(_world.GetVillagePopulations(), _villagePopulationSort, _villagePopulationSortReverse);
         var rows = new List<(VillagePopulationSnapshot Village, CritterSpecies? Species, int Count)>();
         foreach (var village in villages)
         {
@@ -96,7 +108,7 @@ public sealed partial class NewtGame
             (_controlsWindowOpen && _controlsUiBounds.Contains(mouse.Position)) || IsPointerOverWarCharts(mouse) ||
             (_toolMenuOpen && (ToolCategoryMenuBounds.Contains(mouse.Position) || ToolChoiceMenuBounds.Contains(mouse.Position)));
         var hoveredTile = overOverlay ? null : ScreenToWorld(mouse.X, mouse.Y);
-        var hoveredVillageId = hoveredTile is { } tile ? _world.GetApeVillageId(tile) : null;
+        var hoveredVillageId = hoveredTile is { } tile ? _world.GetPopulationSettlementId(tile) : null;
         if (hoveredVillageId is { } villageId)
         {
             var heading = rows.FindIndex(row => row.Species is null && row.Village.Id == villageId);
@@ -109,8 +121,15 @@ public sealed partial class NewtGame
         var textColor = new Color(220, 225, 228);
         var titleColor = new Color(126, 190, 213);
         _spriteBatch.DrawString(_hudFont!, "POPULATION BY VILLAGE", new Vector2(bounds.X + padding, bounds.Y + 11), titleColor);
-        _spriteBatch.DrawString(_hudFont!, $"{villages.Count} settlements   {villages.Sum(village => village.ApeCount):N0} resident apes",
+        _spriteBatch.DrawString(_hudFont!, $"{villages.Count} settlements   {villages.Sum(village => village.ApeCount):N0} residents",
             new Vector2(bounds.X + padding, bounds.Y + 31), textColor);
+        var sortWidth = Math.Max(1, (bounds.Width - padding * 2 - 8) / 2);
+        _villageAgeSortBounds = new Rectangle(bounds.X + padding, bounds.Y + 51, sortWidth, 22);
+        _villageCountSortBounds = new Rectangle(_villageAgeSortBounds.Right + 8, bounds.Y + 51, sortWidth, 22);
+        DrawSortButton(_villageAgeSortBounds, PopulationCounts.VillageSort.Age,
+            _villagePopulationSort == PopulationCounts.VillageSort.Age && _villagePopulationSortReverse ? "Age: newest first" : "Age: oldest first");
+        DrawSortButton(_villageCountSortBounds, PopulationCounts.VillageSort.Population,
+            _villagePopulationSort == PopulationCounts.VillageSort.Population && _villagePopulationSortReverse ? "Population: smallest first" : "Population: largest first");
         if (rows.Count == 0)
             _spriteBatch.DrawString(_hudFont!, "No villages exist.", new Vector2(bounds.X + padding, bounds.Y + headerHeight), textColor);
         for (var i = 0; i < visibleRows && i + _villagePopulationScroll < rows.Count; i++)
@@ -130,9 +149,11 @@ public sealed partial class NewtGame
             {
                 var hovered = linkBounds.Contains(mouse.Position) || row.Village.Id == hoveredVillageId;
                 _spriteBatch.Draw(_pixel!, linkBounds, hovered ? new Color(65, 105, 126) : new Color(48, 83, 102));
-                DrawBuildingMenuIcon(row.Village.Barbarian ? WorldTool.BarbarianApeVillage : WorldTool.ApeVillage,
+                DrawBuildingMenuIcon(row.Village.IsNecropolis ? WorldTool.Necropolis :
+                    row.Village.Barbarian ? WorldTool.BarbarianApeVillage : WorldTool.ApeVillage,
                     new Rectangle(x + 3, y + 3, 18, 18));
-                label = $"{(row.Village.Barbarian ? "Barbarian Camp" : "Village")} #{row.Village.Id}  {row.Village.Position}  {row.Village.Culture}";
+                label = row.Village.Lich is { } lich ? $"Necropolis (Lich #{lich.Value})  {row.Village.Position}" :
+                    $"{(row.Village.Barbarian ? "Barbarian Camp" : "Village")} #{row.Village.Id}  {row.Village.Position}  {row.Village.Culture}";
             }
             else
             {
@@ -151,7 +172,7 @@ public sealed partial class NewtGame
                 DrawCritterIcon(species, new Rectangle(x + 15, y + 3, 18, 18), icon);
                 color = GetCritterColor(species);
             }
-            var count = header ? $"{row.Count:N0}/{row.Village.Capacity:N0}" : row.Count.ToString("N0");
+            var count = header && !row.Village.IsNecropolis ? $"{row.Count:N0}/{row.Village.Capacity:N0}" : row.Count.ToString("N0");
             var countWidth = _hudFont!.MeasureString(count).X;
             var countX = graph.X - countWidth - 12;
             var labelX = x + (header ? 27 : 40);
@@ -166,5 +187,14 @@ public sealed partial class NewtGame
                 ? $"Wheel to scroll ({_villagePopulationScroll + 1}-{Math.Min(rows.Count, _villagePopulationScroll + visibleRows)} / {rows.Count})"
                 : "",
             new Vector2(bounds.X + padding, bounds.Bottom - 23), new Color(175, 184, 190));
+
+        void DrawSortButton(Rectangle button, PopulationCounts.VillageSort sort, string label)
+        {
+            var active = _villagePopulationSort == sort;
+            _spriteBatch.Draw(_pixel!, button, active ? new Color(65, 105, 126) : new Color(40, 56, 68));
+            var scale = Math.Min(1f, Math.Max(1, button.Width - 12) / Math.Max(1f, _hudFont!.MeasureString(label).X));
+            _spriteBatch.DrawString(_hudFont!, label, new Vector2(button.X + 6, button.Y + 3),
+                active ? Color.White : textColor, 0, Vector2.Zero, scale, SpriteEffects.None, 0);
+        }
     }
 }

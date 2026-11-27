@@ -29,7 +29,7 @@ public sealed partial class SimulationWorld
         if (_vampireHomes.TryGetValue(id, out var home))
             return home;
         var tile = GetIndex(_positions[index]);
-        if (_apeStructures.ContainsKey(tile) || _wolfDenCharges.ContainsKey(tile) ||
+        if (_apeStructures.ContainsKey(tile) || _wolfDenCharges.ContainsKey(tile) || _necropolisOwners.ContainsKey(tile) ||
             _vampireLairs.Contains(tile) || _surfaceWater[tile] is not SurfaceWaterKind.None ||
             _terrain[tile] is Terrain.Shallows)
             return -1;
@@ -45,6 +45,7 @@ public sealed partial class SimulationWorld
         var hitDamage = GetCombatDamage(attacker);
         var damage = Math.Min(_energy[victim], hitDamage);
         _energy[victim] -= damage;
+        if (damage > 0) TryDeclareNecropolisRetaliationWar(attacker, victim);
         // Traders lose provisions when hit; the robber gains the energy actually taken.
         // Combine this with vampire feeding so vampires do not collect twice.
         if (_species[attacker] is not (CritterSpecies.ApeBomber or CritterSpecies.Custodian) &&

@@ -1,4 +1,5 @@
 using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
 using Newt.Simulation;
 
 namespace Newt.Game;
@@ -31,7 +32,13 @@ public sealed partial class NewtGame
         var x = bounds.X;
         var y = bounds.Y;
         var size = Math.Min(bounds.Width, bounds.Height);
-        if (_world.IsCustodianFabricator(position))
+        if (_world.GetWhaleFallNutrition(position) > 0)
+            DrawRemainsInspectionIcon(_whaleFallSprite, bounds);
+        else if (_world.GetShipwreck(position) is { } wreck)
+            DrawRemainsInspectionIcon(wreck is ShipwreckKind.Pirate ? _pirateShipwreckSprite : _shipwreckSprite, bounds);
+        else if (_world.HasNecropolis(position))
+            DrawNecropolisSprite(x, y, size);
+        else if (_world.IsCustodianFabricator(position))
         {
             var edge = Math.Max(1, size / 4);
             _spriteBatch!.Draw(_pixel!, bounds, new Color(65, 82, 94));
@@ -66,5 +73,15 @@ public sealed partial class NewtGame
         else if (_world.GetApeStructure(position) is { } structure)
             DrawApeStructureSprite(structure, x, y, size, _world.IsBarbarianVillage(position),
                 _world.GetBiome(position) == Biome.Arid);
+    }
+
+    private void DrawRemainsInspectionIcon(Texture2D? sprite, Rectangle bounds)
+    {
+        if (sprite is null || _spriteBatch is null) return;
+        var scale = Math.Min((float)bounds.Width / sprite.Width, (float)bounds.Height / sprite.Height);
+        var width = Math.Max(1, (int)(sprite.Width * scale));
+        var height = Math.Max(1, (int)(sprite.Height * scale));
+        _spriteBatch.Draw(sprite, new Rectangle(bounds.X + (bounds.Width - width) / 2,
+            bounds.Y + (bounds.Height - height) / 2, width, height), Color.White);
     }
 }

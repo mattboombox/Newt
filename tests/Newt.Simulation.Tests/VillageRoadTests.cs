@@ -5,6 +5,43 @@ namespace Newt.Simulation.Tests;
 public sealed class VillageRoadTests
 {
     [Theory]
+    [InlineData(9, 11)]
+    [InlineData(11, 9)]
+    public void RoadsPreferLakeBridgeOverEquallyDistantShallowsBridge(int lakeY, int shallowsY)
+    {
+        var world = CreateWorld();
+        for (var y = 0; y < world.Height; y++)
+        {
+            world.SetTerrain(new(20, y), Terrain.Ocean);
+            world.SetTerrain(new(60, y), Terrain.Ocean);
+        }
+        var lake = new GridPosition(20, lakeY);
+        var shallows = new GridPosition(20, shallowsY);
+        world.SetTerrain(lake, Terrain.Plains);
+        world.SetSurfaceWater(lake, SurfaceWaterKind.FreshwaterLake);
+        world.SetTerrain(shallows, Terrain.Shallows);
+
+        Assert.True(world.TryConnectVillageRoad(First, Second, out _));
+        Assert.True(world.HasRoadBridge(lake));
+        Assert.False(world.HasRoadBridge(shallows));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ShortLandDetourAvoidsShallowsButStillCrossesRiver(bool river)
+    {
+        var world = CreateWorld();
+        var crossing = new GridPosition(20, 10);
+        if (river) world.SetSurfaceWater(crossing, SurfaceWaterKind.River);
+        else world.SetTerrain(crossing, Terrain.Shallows);
+
+        Assert.True(world.TryConnectVillageRoad(First, Second, out _));
+        Assert.Equal(river, world.GetRoadConnections(crossing) != RiverConnection.None);
+        if (!river) Assert.DoesNotContain(Positions(world), world.HasRoadBridge);
+    }
+
+    [Theory]
     [InlineData(CritterSpecies.Ape, true)]
     [InlineData(CritterSpecies.ApeWarrior, true)]
     [InlineData(CritterSpecies.ApeSailor, true)]
@@ -364,7 +401,8 @@ public sealed class VillageRoadTests
         var bridge = new GridPosition(20, 10);
         world.SetTerrain(bridge, Terrain.Plains);
         world.SetSurfaceWater(bridge, SurfaceWaterKind.River);
-        world.SetSurfaceWater(new GridPosition(25, 10), SurfaceWaterKind.FreshwaterLake);
+        for (var y = 0; y < world.Height; y++)
+            world.SetSurfaceWater(new GridPosition(25, y), SurfaceWaterKind.FreshwaterLake);
         Assert.True(world.TryPlaceVillageRoad(First));
         Assert.Equal(RiverConnection.East | RiverConnection.West, world.GetRoadConnections(bridge));
         Assert.True(world.HasRoadBridge(new GridPosition(25, 10)));
@@ -440,6 +478,9 @@ public sealed class VillageRoadTests
         Assert.True(world.TrySpawnTestApeVillage(first));
         Assert.True(world.TrySpawnTestApeVillage(second));
         world.Body = WorldBody.Planetoid;
+        // Isolate the banks so this tests the rotated span rather than a land detour.
+        foreach (var tile in Positions(world).Where(tile => tile != first && tile != second))
+            world.SetTerrain(tile, Terrain.Ocean);
         world.SetTerrain(firstWater, Terrain.Shallows);
         world.SetTerrain(secondWater, Terrain.Shallows);
 

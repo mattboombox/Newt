@@ -5,6 +5,16 @@ namespace Newt.Game;
 /// <summary>Population-panel totals, shared by live rows and history samples.</summary>
 internal static class PopulationCounts
 {
+    internal enum VillageSort { Age, Population }
+
+    internal static IReadOnlyList<VillagePopulationSnapshot> SortVillages(
+        IEnumerable<VillagePopulationSnapshot> villages, VillageSort sort, bool reverse)
+    {
+        var ordered = sort == VillageSort.Population
+            ? reverse ? villages.OrderBy(village => village.ApeCount) : villages.OrderByDescending(village => village.ApeCount)
+            : reverse ? villages.OrderByDescending(village => village.FoundedTick) : villages.OrderBy(village => village.FoundedTick);
+        return ordered.ThenBy(village => village.IsNecropolis).ThenBy(village => Math.Abs(village.Id)).ToArray();
+    }
     internal enum Selection { Species, CondensedApes, Barbarians, BarbarianChiefs, SickApes, Colonists }
 
     private static CritterSpecies ChartSpecies(CritterSpecies species) =>
@@ -40,7 +50,9 @@ internal static class PopulationCounts
             var critter = world.GetCritter(index);
             if (village is { } home)
             {
-                if (world.GetApeHomeVillage(critter.Id) != home) continue;
+                var populationHome = critter.Species is CritterSpecies.Lich or CritterSpecies.UndeadApe or CritterSpecies.UndeadWarrior
+                    ? world.GetNecropolisPopulationHome(critter.Id) : world.GetApeHomeVillage(critter.Id);
+                if (populationHome != home) continue;
                 if (VillageRowSpecies(critter.Species, world.IsBarbarianApe(critter.Id)) == species)
                     Sample(critter, ref match, ref previousMatch, ref matchCount);
                 else if (IsCondensedApe(critter.Species))

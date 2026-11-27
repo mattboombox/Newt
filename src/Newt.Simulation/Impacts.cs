@@ -34,12 +34,16 @@ public static class Impacts
         GridPosition center,
         float magnitude) => CreateMeteorImpact(world, center, magnitude, 2f);
 
+    public static MeteorImpactResult CreateFragmentImpact(SimulationWorld world, GridPosition center,
+        int radius, float magnitude) => CreateMeteorImpact(world, center, magnitude, 1f, fragmentRadius: Math.Max(1, radius));
+
     private static MeteorImpactResult CreateMeteorImpact(
         SimulationWorld world,
         GridPosition center,
         float magnitude,
         float maximumMagnitude,
-        bool rifleSized = false)
+        bool rifleSized = false,
+        int? fragmentRadius = null)
     {
         ArgumentNullException.ThrowIfNull(world);
         if (!world.Contains(center))
@@ -58,17 +62,22 @@ public static class Impacts
         var craterRadius = 2 + (int)MathF.Round(minimumDimension * 0.18f * MathF.Pow(magnitude, 1.7f));
         craterRadius = (int)MathF.Round(craterRadius * sizeMultiplier);
         if (rifleSized) craterRadius = 1;
+        if (fragmentRadius is { } secondaryRadius) craterRadius = secondaryRadius;
         var shockRadius = rifleSized ? 1 : craterRadius * 3;
-        ApplyCrater(world, center, craterRadius, magnitude, rifleSized);
+        var wave = new ImpactWaveActivity(center, shockRadius,
+            (0.65f + magnitude * 1.35f) * (rifleSized ? 0.16f : 1), magnitude);
+        ApplyCrater(world, center, craterRadius, magnitude, rifleSized, rifleSized ? null : wave);
+        wave.TerrainChanges.Sort((first, second) => first.Distance.CompareTo(second.Distance));
+        ApplyTerrainChanges(world, wave, 0);
 
-        var fragmentCount = (int)MathF.Round(magnitude * 10f);
-        if (magnitude >= 0.2f)
+        var fragmentCount = fragmentRadius is null ? (int)MathF.Round(magnitude * 10f) : 0;
+        if (fragmentRadius is null && magnitude >= 0.2f)
         {
             fragmentCount += world.NextInt(3);
         }
         AddFragments(world, center, craterRadius, shockRadius, magnitude, fragmentCount);
 
-        if (magnitude >= 0.12f)
+        if (fragmentRadius is null && magnitude >= 0.12f)
         {
             var meltFlows = Math.Clamp(1 + (int)MathF.Floor(magnitude * 4), 1, 5);
             // Extended tool impacts spread melt across a larger basin as well as farther outward.
@@ -80,13 +89,11 @@ public static class Impacts
                 Math.Max(3, (int)MathF.Round(craterRadius * (0.45f + magnitude * 0.35f))));
         }
 
-        TerrainClassifier.RebuildLandforms(world);
-        Hydrology.RebuildFreshwater(world);
-        var wave = new ImpactWaveActivity(
-            center,
-            shockRadius,
-            (0.65f + magnitude * 1.35f) * (rifleSized ? 0.16f : 1),
-            magnitude);
+        if (rifleSized)
+        {
+            TerrainClassifier.RebuildLandforms(world);
+            Hydrology.RebuildFreshwater(world);
+        }
         if (rifleSized)
         {
             wave.LimitedTiles = [];
@@ -103,6 +110,14 @@ public static class Impacts
 
     internal static void Advance(SimulationWorld world)
     {
+        for (var index = world.ImpactFragments.Count - 1; index >= 0; index--)
+        {
+            var fragment = world.ImpactFragments[index];
+            if (--fragment.RemainingTicks > 0) continue;
+            world.ImpactFragments.RemoveAt(index);
+            CreateFragmentImpact(world, fragment.Target, fragment.Radius, fragment.Magnitude);
+        }
+        var terrainFinished = false;
         for (var index = world.ImpactWaves.Count - 1; index >= 0; index--)
         {
             var wave = world.ImpactWaves[index];
@@ -114,12 +129,35 @@ public static class Impacts
             }
             else
             {
+                ApplyTerrainChanges(world, wave, wave.CurrentRadius);
                 ApplyShockAnnulus(world, wave, previousRadius, wave.CurrentRadius);
             }
             if (wave.CurrentRadius >= wave.MaximumRadius)
             {
+                terrainFinished |= wave.TerrainChanges.Count > 0;
                 world.ImpactWaves.RemoveAt(index);
             }
+        }
+        if (terrainFinished)
+        {
+            // Reconcile global drainage/coast connectivity once a wave finishes,
+            // rather than rebuilding the entire world for every advancing ring.
+            TerrainClassifier.RebuildLandforms(world);
+            Hydrology.RebuildFreshwater(world);
+        }
+    }
+
+    private static void ApplyTerrainChanges(SimulationWorld world, ImpactWaveActivity wave, float radius)
+    {
+        while (wave.NextTerrainChange < wave.TerrainChanges.Count &&
+            wave.TerrainChanges[wave.NextTerrainChange].Distance <= radius)
+        {
+            var change = wave.TerrainChanges[wave.NextTerrainChange++];
+            world.SetElevation(change.Position, world.GetElevation(change.Position) + change.ElevationChange);
+            if (change.ClearEntities) ClearImpactEntities(world, change.Position);
+            if (change.StoneSeconds > 0) world.SetSurfaceCover(change.Position, SurfaceCover.Stone,
+                world.Tick + change.StoneSeconds * SimulationWorld.TicksPerSecond);
+            TerrainClassifier.RefreshImpactLandform(world, change.Position);
         }
     }
 
@@ -147,7 +185,8 @@ public static class Impacts
         GridPosition center,
         int radius,
         float magnitude,
-        bool rifleSized = false)
+        bool rifleSized = false,
+        ImpactWaveActivity? wave = null)
     {
         var reach = rifleSized ? 1 : Math.Max(radius + 1, (int)MathF.Ceiling(radius * 2.3f));
         var depth = 0.10f + magnitude * 0.55f;
@@ -156,6 +195,7 @@ public static class Impacts
         var planetary = world.Body is WorldBody.Planetoid && !rifleSized;
         var originDirection = planetary ? world.GetPlanetoidTileDirection(center) : default;
         var unitsPerRadian = planetary ? PlanetoidWaveUnitsPerRadian(world) : 0;
+        var visited = new HashSet<GridPosition>();
         // Atlas neighbors need not be physical neighbors. Visit each spherical
         // tile once and measure the crater along the surface across face seams.
         for (var offsetY = planetary ? -center.Y : -reach;
@@ -172,11 +212,13 @@ public static class Impacts
             {
                 var x = Mod(center.X + offsetX, world.Width);
                 var position = rifleSized ? world.OffsetTile(center, new(offsetX, offsetY)) : new GridPosition(x, y);
-                if (!world.Contains(position)) continue;
+                if (!world.Contains(position) || !visited.Add(position)) continue;
                 var distance = planetary
                     ? position == center ? 0 : MathF.Acos(Math.Clamp(System.Numerics.Vector3.Dot(
                         originDirection, world.GetPlanetoidTileDirection(position)), -1f, 1f)) * unitsPerRadian
-                    : MathF.Sqrt(offsetX * offsetX + offsetY * offsetY);
+                    : rifleSized ? MathF.Sqrt(offsetX * offsetX + offsetY * offsetY)
+                    : MathF.Sqrt(MathF.Pow(Math.Min(Math.Abs(position.X - center.X),
+                        world.Width - Math.Abs(position.X - center.X)), 2) + MathF.Pow(position.Y - center.Y, 2));
                 var irregularity = 0.92f + HashUnit(world.Seed ^ 0xD6E8FEB86659FD93UL, position.X, position.Y) * 0.16f;
                 var normalized = distance / (radius * irregularity);
                 if (normalized > 2.3f)
@@ -223,6 +265,15 @@ public static class Impacts
                         MathF.Pow(Math.Max(1, normalized), 3);
                 }
 
+                var stone = normalized <= 1.50f ||
+                    HashUnit(world.Seed ^ 0xE7037ED1A0B428DBUL, x, y) < 0.62f / MathF.Max(1, normalized);
+                if (wave is not null)
+                {
+                    wave.TerrainChanges.Add(new(DistortedDistance(world, center, position), position,
+                        elevationChange, normalized <= 1.12f,
+                        stone ? 18 + (int)MathF.Round(magnitude * 42 + normalized * 5) : 0));
+                    continue;
+                }
                 world.SetElevation(position, world.GetElevation(position) + elevationChange);
                 if (normalized <= 1.12f)
                 {
@@ -285,7 +336,10 @@ public static class Impacts
                 0.04f + magnitude * (0.08f + world.NextUnitFloat() * 0.12f),
                 0.04f,
                 0.28f);
-            ApplyCrater(world, fragmentCenter, fragmentRadius, fragmentMagnitude);
+            if (world.ImpactFragmentLauncher is { } launch)
+                launch(center, fragmentCenter, fragmentRadius, fragmentMagnitude);
+            else
+                world.ImpactFragments.Add(new(fragmentCenter, fragmentRadius, fragmentMagnitude));
         }
     }
 
@@ -341,6 +395,7 @@ public static class Impacts
             world.SetElevation(position, world.GetElevation(position) - erosion);
             RemoveCrittersHitByImpact(world, position);
             world.RemoveWolfDenAt(position);
+            world.RemoveNecropolisAt(position);
             world.RemoveMegaSpiderWebAt(position);
             world.RemoveTeleporterAt(position);
             changed = true;
@@ -417,6 +472,7 @@ public static class Impacts
     {
         RemoveCrittersHitByImpact(world, position);
         world.RemoveWolfDenAt(position);
+        world.RemoveNecropolisAt(position);
         world.RemoveMegaSpiderWebAt(position);
         world.RemoveTeleporterAt(position);
         Volcanism.RemoveVolcanoAt(world, position);

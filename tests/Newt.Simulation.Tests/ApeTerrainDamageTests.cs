@@ -27,7 +27,7 @@ public sealed class ApeTerrainDamageTests
         foreach (var species in Enum.GetValues<CritterSpecies>().Where(species => species.ToString().StartsWith("Ape")))
         foreach (var terrain in new[] { Terrain.Mountain, Terrain.Ocean, Terrain.DeepOcean, Terrain.Plains, Terrain.Shallows })
         {
-            var sailor = species is CritterSpecies.ApeSailor or CritterSpecies.ApeTraderSailor or
+            var sailor = species is CritterSpecies.ApeFarmer or CritterSpecies.ApeSailor or CritterSpecies.ApeTraderSailor or
                 CritterSpecies.ApeWarrior or CritterSpecies.ApeRoyalGuard or CritterSpecies.ApeBomber;
             var damage = terrain is Terrain.Mountain || !sailor && terrain is (Terrain.Ocean or Terrain.DeepOcean);
             yield return [species, terrain, damage];

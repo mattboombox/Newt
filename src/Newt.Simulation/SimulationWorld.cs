@@ -286,6 +286,8 @@ public sealed partial class SimulationWorld
 
     /// <summary>Optional presentation hook; the launcher applies the impact when the meteor arrives.</summary>
     public Action<GridPosition, float>? NaturalMeteorLauncher { get; set; }
+    public Action<GridPosition, GridPosition, int, float>? ImpactFragmentLauncher { get; set; }
+    internal List<ImpactFragmentActivity> ImpactFragments { get; } = [];
 
     public bool NaturalSpringsEnabled { get; internal set; } = true;
 
@@ -534,8 +536,11 @@ public sealed partial class SimulationWorld
     public int GetWhaleFallNutrition(GridPosition position) =>
         _whaleFallNutrition[GetIndex(position)];
 
-    private void DepositWhaleFall(int tile) =>
+    private void DepositWhaleFall(int tile)
+    {
+        _shipwrecks.Remove(tile);
         _whaleFallNutrition[tile] = (byte)Math.Min(byte.MaxValue, _whaleFallNutrition[tile] + 10);
+    }
 
     internal bool TryAssignApeToVillage(CritterId apeId, GridPosition villagePosition)
     {
@@ -581,6 +586,7 @@ public sealed partial class SimulationWorld
     }
 
     private bool CanPlaceTeleporter(GridPosition position, int tileIndex) =>
+        !_necropolisOwners.ContainsKey(tileIndex) &&
         !_teleporters.Contains(tileIndex) && _occupants[tileIndex] < 0 &&
         _terrain[tileIndex] is not Terrain.MegaWall &&
         _surfaceCovers[tileIndex] is SurfaceCover.None &&
@@ -604,7 +610,7 @@ public sealed partial class SimulationWorld
             return false;
         }
         var tileIndex = GetIndex(position);
-        if (_wolfDenCharges.ContainsKey(tileIndex) || _megaSpiderWebFood.ContainsKey(tileIndex) ||
+        if (_necropolisOwners.ContainsKey(tileIndex) || _wolfDenCharges.ContainsKey(tileIndex) || _megaSpiderWebFood.ContainsKey(tileIndex) ||
             _teleporters.Contains(tileIndex) ||
             _apeStructures.ContainsKey(tileIndex) ||
             _terrain[tileIndex] is Terrain.Shallows ||
@@ -788,6 +794,7 @@ public sealed partial class SimulationWorld
         _surfaceCoverUntilTicks[index] = 0;
         _activeSurfaceCovers.Remove(position);
         RemoveWolfDenAt(position);
+        RemoveNecropolisAt(position);
         RemoveMegaSpiderWebAt(position);
         RemoveTeleporterAt(position);
         RemoveApeStructureAt(position);
@@ -1193,6 +1200,7 @@ public sealed partial class SimulationWorld
             _apeFoodDistrictInactiveSinceTicks.Remove(tileIndex);
             if (hasVillage)
             {
+                ScheduleApeBuildingReplacement(villageTile, structure);
                 if (GetApeCultureDefinition(villageTile)?.Building == structure)
                     RemoveApeCulture(villageTile);
                 ClampApeVillageFood(villageTile);
@@ -1207,6 +1215,7 @@ public sealed partial class SimulationWorld
         if (_apeWars.TryGetValue(tileIndex, out var destroyedVillageWar))
             EndApeWar(destroyedVillageWar);
         RemoveApeCulture(tileIndex);
+        foreach (var kind in RecoverableApeBuildings) _apeBuildingRebuilds.Remove((tileIndex, kind));
         var displacedApes = _apeVillageHomes.Where(pair => pair.Value == tileIndex).Select(pair => pair.Key)
             .Concat(_traderJourneys.Where(pair => _apeAuxiliaryVillages.GetValueOrDefault(pair.Value.Market, -1) == tileIndex)
                 .Select(pair => pair.Key)).Distinct().ToArray();
@@ -1349,7 +1358,8 @@ public sealed partial class SimulationWorld
     private CritterId AddCritterUnchecked(
         CritterSpecies species,
         GridPosition position,
-        int tileIndex)
+        int tileIndex,
+        bool spawnLichArmy = true)
     {
 
         var index = _count++;
@@ -1369,7 +1379,7 @@ public sealed partial class SimulationWorld
         _speciesCounts[(int)species]++;
         if (species is CritterSpecies.Custodian)
             _custodianCreatedTicks[id.Value] = Tick;
-        if (species is CritterSpecies.Lich)
+        if (species is CritterSpecies.Lich && spawnLichArmy)
             SpawnLichWarriors(id, position);
         return id;
     }
@@ -1573,6 +1583,7 @@ public sealed partial class SimulationWorld
         AdvanceCustodianFabricator();
         AdvanceApeVillages();
         AdvanceVampireColonies();
+        AdvanceNecropolises();
         if (Tick % TicksPerSecond == 1)
             AdvanceApeTraders();
             AdvanceApeWars();
@@ -1633,6 +1644,8 @@ public sealed partial class SimulationWorld
                 ? TryMoveStranded(index)
                 : _returningWarSailors.ContainsKey(_critterIds[index].Value) && !TryGetApeWar(index, out _)
                     ? TryReturnWarSailor(index, reservedPrey)
+                : TryMoveNecropolisMember(index, reservedPrey, out var necropolisPrey)
+                    ? necropolisPrey
                 : TryGetLichWar(index, out var lichWar) &&
                     (_species[index] is CritterSpecies.Lich or CritterSpecies.UndeadApe or CritterSpecies.UndeadWarrior or
                         CritterSpecies.ApeWarrior or CritterSpecies.ApeBomber or CritterSpecies.ApeChieftain or CritterSpecies.ApeKing or CritterSpecies.ApeQueen or CritterSpecies.Dog || IsBarbarianApe(index))
@@ -2241,7 +2254,7 @@ public sealed partial class SimulationWorld
         auxiliaryTile = -1;
         auxiliaryKind = default;
         if (villageTile < 0 || villageTile >= _terrain.Length ||
-            HasBlockingApeStructure(villageTile) || _wolfDenCharges.ContainsKey(villageTile) ||
+            HasBlockingApeStructure(villageTile) || _wolfDenCharges.ContainsKey(villageTile) || _necropolisOwners.ContainsKey(villageTile) ||
             _megaSpiderWebFood.ContainsKey(villageTile) ||
             _teleporters.Contains(villageTile) ||
             (!allowOccupiedCenter && _occupants[villageTile] >= 0 && _occupants[villageTile] != apeIndex) ||
@@ -2275,7 +2288,7 @@ public sealed partial class SimulationWorld
                 var candidateTile = GetIndex(candidate);
                 if (_occupants[candidateTile] >= 0 || HasBlockingApeStructure(candidateTile) ||
                     _teleporters.Contains(candidateTile) ||
-                    _wolfDenCharges.ContainsKey(candidateTile) ||
+                    _wolfDenCharges.ContainsKey(candidateTile) || _necropolisOwners.ContainsKey(candidateTile) ||
                     _megaSpiderWebFood.ContainsKey(candidateTile) ||
                     !IsValidApeAuxiliaryTile(candidateTile, desiredKind))
                 {
@@ -2306,6 +2319,9 @@ public sealed partial class SimulationWorld
 
     private void SetApeStructure(int tileIndex, ApeStructureKind structure)
     {
+        if (structure is ApeStructureKind.Village &&
+            (!_apeStructures.TryGetValue(tileIndex, out var previous) || previous is not ApeStructureKind.Village))
+            _apeVillageFoundedTicks[tileIndex] = Tick;
         InvalidateApeBuildingCounts();
         InvalidateTransportNetwork();
         _apeVillageMergeCheckNeeded = true;
@@ -2358,6 +2374,7 @@ public sealed partial class SimulationWorld
         _surfaceWater[tileIndex] is SurfaceWaterKind.FreshwaterLake;
 
     private bool CanBuildApeStructureOn(int tileIndex, ApeStructureKind kind) =>
+        !_necropolisOwners.ContainsKey(tileIndex) &&
         !_vampireLairs.Contains(tileIndex) &&
         (kind is not ApeStructureKind.Village || _terrain[tileIndex] is not Terrain.Shallows) &&
         (kind is ApeStructureKind.NavalDistrict ||
@@ -2518,6 +2535,9 @@ public sealed partial class SimulationWorld
 
             if (!IsVillageManagementDue(villageTile, population)) continue;
 
+            TryRecoverMissingApeLumberCamp(villageTile, population);
+            AdvanceApeBuildingReplacements(villageTile);
+
             if (population > 1)
                 _apeVillagesWithMultipleResidents.Add(villageTile);
             else if (population == 1 && (_apeVillagesWithMultipleResidents.Contains(villageTile) ||
@@ -2536,6 +2556,11 @@ public sealed partial class SimulationWorld
                 RecruitApeCultureUnits(villageTile);
 
             CheckVillageRoadPopulation(villageTile, population);
+            if (GetApeStructureCount(villageTile, ApeStructureKind.MilitaryDistrict) <
+                GetApeMilitaryDistrictLimitForPopulation(population))
+            {
+                TryPurchaseApeStructure(villageTile, ApeStructureKind.MilitaryDistrict);
+            }
             TryBuildEmergencyApeFarm(villageTile);
 
             if (population >= ApeLibraryPopulationThreshold &&
@@ -2575,12 +2600,6 @@ public sealed partial class SimulationWorld
                 GetApeStructureCount(villageTile, ApeStructureKind.NavalDistrict) < infrastructureLimit)
             {
                 TryPurchaseApeStructure(villageTile, ApeStructureKind.NavalDistrict);
-            }
-
-            if (GetApeStructureCount(villageTile, ApeStructureKind.MilitaryDistrict) <
-                GetApeMilitaryDistrictLimitForPopulation(population))
-            {
-                TryPurchaseApeStructure(villageTile, ApeStructureKind.MilitaryDistrict);
             }
 
             RemoveLongInactiveApeFoodDistricts(villageTile);
@@ -2931,6 +2950,15 @@ public sealed partial class SimulationWorld
 
     private bool TryBuildNextApeVillageExpansion(int villageTile)
     {
+        if (_apeVillageWood.GetValueOrDefault(villageTile) < ApeFoodDistrictWoodCost) return false;
+        if (IsSavingForApeBuildingReplacement(villageTile)) return false;
+        // Cheap repeatable expansion must not consume every wood delivery before
+        // an eligible military district can accumulate its six-wood budget.
+        // Do not hold up expansion when there is no legal military site.
+        if (GetApeStructureCount(villageTile, ApeStructureKind.MilitaryDistrict) <
+                GetApeMilitaryDistrictLimitForPopulation(GetApeVillageResidentCountByTile(villageTile)) &&
+            GetApeConstructionCandidates(villageTile, ApeStructureKind.MilitaryDistrict).Count > 0)
+            return false;
         foreach (var kind in GetApeVillageExpansionCandidates(villageTile))
         {
             if (TryPurchaseApeStructure(villageTile, kind))
@@ -3031,10 +3059,12 @@ public sealed partial class SimulationWorld
 
     internal bool TryBuildApeStructure(int villageTile, ApeStructureKind kind)
     {
+        var replacing = _apeBuildingRebuilds.TryGetValue((villageTile, kind), out var pending);
+        if (replacing && Tick < pending.Due) return false;
         if ((kind is ApeStructureKind.Market && !CanBuildApeMarket(GetPosition(villageTile))) ||
             !IsApeBuildingTechnologyUnlocked(villageTile, kind) ||
             (kind is ApeStructureKind.Library &&
-                (GetApeVillageResidentCountByTile(villageTile) < ApeLibraryPopulationThreshold ||
+                (!replacing && GetApeVillageResidentCountByTile(villageTile) < ApeLibraryPopulationThreshold ||
                     HasApeStructure(villageTile, kind))))
         {
             return false;
@@ -3087,6 +3117,22 @@ public sealed partial class SimulationWorld
 
     private int FindApeConstructionSite(int villageTile, ApeStructureKind kind)
     {
+        var candidates = GetApeConstructionCandidates(villageTile, kind);
+        if (candidates.Count == 0) return -1;
+        var villagePosition = GetPosition(villageTile);
+        var nearbyCandidates = candidates
+            .Where(tile => WrappedManhattanDistance(GetPosition(tile), villagePosition) <= ApeVillageClusterRadius)
+            .OrderBy(tile => tile)
+            .ToArray();
+        var selectedCandidates = nearbyCandidates.Length > 0 &&
+            NextInt(100) < ApeVillageClusterChancePercent
+            ? nearbyCandidates
+            : candidates.OrderBy(tile => tile).ToArray();
+        return selectedCandidates[NextInt(selectedCandidates.Length)];
+    }
+
+    private HashSet<int> GetApeConstructionCandidates(int villageTile, ApeStructureKind kind)
+    {
         var candidates = new HashSet<int>();
         foreach (var structureTile in EnumerateConnectedApeStructureTiles(villageTile).ToArray())
         {
@@ -3113,21 +3159,7 @@ public sealed partial class SimulationWorld
             }
         }
 
-        if (candidates.Count == 0)
-        {
-            return -1;
-        }
-
-        var villagePosition = GetPosition(villageTile);
-        var nearbyCandidates = candidates
-            .Where(tile => WrappedManhattanDistance(GetPosition(tile), villagePosition) <= ApeVillageClusterRadius)
-            .OrderBy(tile => tile)
-            .ToArray();
-        var selectedCandidates = nearbyCandidates.Length > 0 &&
-            NextInt(100) < ApeVillageClusterChancePercent
-            ? nearbyCandidates
-            : candidates.OrderBy(tile => tile).ToArray();
-        return selectedCandidates[NextInt(selectedCandidates.Length)];
+        return candidates;
     }
 
     private void RemoveLongInactiveApeFoodDistricts(int villageTile)
@@ -3735,6 +3767,10 @@ public sealed partial class SimulationWorld
             IsLivingApe(targetSpecies) &&
             (!IsLivingApe(currentSpecies) || targetSpecies is not CritterSpecies.Ape && !CanRecruitApe(critterIndex)))
             return;
+        if (targetSpecies is CritterSpecies.UndeadWarrior && currentSpecies is not CritterSpecies.UndeadWarrior &&
+            _lichArmy.TryGetValue(_critterIds[critterIndex].Value, out var lichOwner) &&
+            GetLichUndeadWarriorCount(new CritterId(lichOwner)) >= LichUndeadWarriorLimit) return;
+        UntrackLichWarrior(_critterIds[critterIndex].Value);
         _speciesCounts[(int)currentSpecies]--;
         _speciesCounts[(int)targetSpecies]++;
         if (PlanktonRecoveryEnabled && currentSpecies is CritterSpecies.Plankton &&
@@ -3744,6 +3780,7 @@ public sealed partial class SimulationWorld
             _nextPlanktonRecoveryTick = Tick + PlanktonRecoveryIntervalTicks;
         }
         _species[critterIndex] = targetSpecies;
+        TrackLichWarrior(critterIndex);
         RefreshApePopulationMember(_critterIds[critterIndex].Value);
         var critterId = _critterIds[critterIndex].Value;
         _chieftainAttackTargets.Remove(critterId);
@@ -5877,6 +5914,7 @@ public sealed partial class SimulationWorld
                 {
                     if (TryLichConversion(defenderIndex, attackerIndex))
                         return;
+                    RecordLichApeKill(defenderIndex, attackerIndex);
                     if (_species[defenderIndex] is CritterSpecies.UndeadWarrior && IsLichPrey(attackerSpecies))
                         RestoreUndeadKillEnergy(defenderIndex);
                     if (TryReanimateApe(attackerIndex))
@@ -5930,8 +5968,10 @@ public sealed partial class SimulationWorld
         }
         if (_species[predatorIndex] is CritterSpecies.UndeadWarrior && IsLichPrey(preySpecies))
             RestoreUndeadKillEnergy(predatorIndex);
-        if (TryLichConversion(predatorIndex, preyIndex) ||
-            predatorSpecies is not CritterSpecies.Custodian && TryReanimateApe(preyIndex))
+        if (TryLichConversion(predatorIndex, preyIndex))
+            return;
+        RecordLichApeKill(predatorIndex, preyIndex);
+        if (predatorSpecies is not CritterSpecies.Custodian && TryReanimateApe(preyIndex))
         {
             // The risen body still occupies its tile; it cannot also become a meal.
             _preyTargets[predatorIndex] = -1;
@@ -6114,6 +6154,7 @@ public sealed partial class SimulationWorld
         // Vampire diet takes precedence over inherited village/faction context.
         if (_species[predatorIndex] is CritterSpecies.Vampire)
             return IsLivingApe(_species[preyIndex]);
+        if (AreWolfDenWarEnemies(preyIndex, predatorIndex)) return true;
         if (AreWarEnemies(predatorIndex, preyIndex))
             return _species[predatorIndex] is (CritterSpecies.ApeWarrior or CritterSpecies.ApeRoyalGuard or CritterSpecies.ApeBomber or CritterSpecies.ApeChieftain or CritterSpecies.ApeKing or CritterSpecies.ApeQueen) &&
                 CanTargetWarApe(predatorIndex, preyIndex);
@@ -6826,6 +6867,7 @@ public sealed partial class SimulationWorld
         int destinationIndex,
         IReadOnlySet<GridPosition>? reservedPrey = null)
     {
+        if (CanPreferApeSwap(moverIndex, destinationIndex, reservedPrey)) return true;
         var blockerIndex = _occupants[destinationIndex];
         return blockerIndex >= 0 && !IsCaughtInMegaSpiderWeb(blockerIndex) &&
             (CanShovePlankton(moverIndex, destinationIndex, reservedPrey) ||
@@ -6838,6 +6880,8 @@ public sealed partial class SimulationWorld
         int destinationIndex,
         IReadOnlySet<GridPosition>? reservedPrey = null)
     {
+        if (CanPreferApeSwap(moverIndex, destinationIndex, reservedPrey))
+            return TrySwapPastMovementBlocker(moverIndex, destinationIndex, reservedPrey);
         var blockerIndex = _occupants[destinationIndex];
         return blockerIndex >= 0 && !IsCaughtInMegaSpiderWeb(blockerIndex) &&
             (TryShovePlankton(moverIndex, destinationIndex, reservedPrey) ||
@@ -7473,7 +7517,8 @@ public sealed partial class SimulationWorld
         _surfacePaths.Remove(removedId.Value);
         _warriorPatrolTargets.Remove(removedId.Value);
         _custodianCreatedTicks.Remove(removedId.Value);
-        _lichArmy.Remove(removedId.Value);
+        DetachNecropolisWarrior(removedId.Value);
+        RemoveLichArmyOwner(removedId.Value);
         _traderJourneys.Remove(removedId.Value);
         DetachVampireFromLair(removedId.Value);
         _chieftainAttackTargets.Remove(removedId.Value);
@@ -7602,6 +7647,8 @@ public sealed partial class SimulationWorld
                 ? IsTraderWater(tileIndex)
             : species is CritterSpecies.ApeSailor
                 ? IsApeSailorTile(tileIndex)
+            : species is CritterSpecies.ApeFarmer
+                ? CanLiveOn(CritterSpecies.Ape, tileIndex) || CanLiveOn(CritterSpecies.ApeSailor, tileIndex)
             : species is CritterSpecies.Worm
                 ? IsTrilobiteTile(tileIndex)
             : species is CritterSpecies.Newt or CritterSpecies.Snail

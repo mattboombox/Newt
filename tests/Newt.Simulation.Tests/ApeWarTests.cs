@@ -5,6 +5,110 @@ namespace Newt.Simulation.Tests;
 
 public sealed class ApeWarTests
 {
+    [Fact]
+    public void NaturalWarSelectionIncludesNearbyWolfDens()
+    {
+        var world = CreateWorld();
+        NaturalEvents.SetEnabled(world, true);
+        var den = new GridPosition(First.X + 8, First.Y + 3);
+        Assert.True(world.TryPlaceWolfDen(den));
+        var home = First.Y * world.Width + First.X;
+        var homes = (Dictionary<int, int>)typeof(SimulationWorld).GetField("_apeVillageHomes",
+            BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(world)!;
+        for (var i = 0; i < 50; i++)
+        {
+            var id = world.AddCritter(CritterSpecies.ApeWarrior, new(1 + i % 40, 22 + i / 40));
+            homes[id.Value] = home;
+        }
+        typeof(SimulationWorld).GetProperty(nameof(SimulationWorld.Tick))!
+            .SetValue(world, (long)SimulationWorld.VillageWarCooldownTicks);
+        var started = false;
+        for (var i = 0; i < 5000 && !started; i++) started = world.TryStartVillageWar(home);
+        Assert.True(started);
+        Assert.Equal("Wolf Den", Assert.Single(world.GetActiveApeWars()).Defender);
+        Assert.True(world.TryStopApeWar(den));
+        Assert.Empty(world.GetActiveApeWars());
+    }
+
+    [Fact]
+    public void DenWarsFightAssociatedWolvesAndEndWhenDenIsRemoved()
+    {
+        var world = CreateWorld();
+        var den = new GridPosition(First.X + 8, First.Y + 3);
+        Assert.True(world.TryPlaceWolfDen(den));
+        var wolf = world.AddCritter(CritterSpecies.Wolf, new(den.X + 1, den.Y));
+        var homes = (Dictionary<int, int>)typeof(SimulationWorld).GetField("_wolfDenHomes",
+            BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(world)!;
+        homes[wolf.Value] = den.Y * world.Width + den.X;
+        Assert.Equal(den, world.GetWarToolParticipant(den));
+        Assert.True(world.TryStartApeWar(First, den));
+        Assert.False(world.TryStartApeWar(Second, den));
+        var soldier = Residents(world, First).First(c => c.Species == CritterSpecies.ApeWarrior);
+        int Index(CritterId id) => Enumerable.Range(0, world.CritterCount).Single(i => world.GetCritter(i).Id == id);
+        var canEat = typeof(SimulationWorld).GetMethod("CanEatInCurrentContext", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        var enemies = typeof(SimulationWorld).GetMethod("AreWarEnemies", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        Assert.True((bool)enemies.Invoke(world, [Index(soldier.Id), Index(wolf)])!);
+        Assert.True((bool)enemies.Invoke(world, [Index(wolf), Index(soldier.Id)])!);
+        Assert.True((bool)canEat.Invoke(world, [Index(soldier.Id), Index(wolf)])!);
+        Assert.True((bool)canEat.Invoke(world, [Index(wolf), Index(soldier.Id)])!);
+        Assert.Equal(1, Assert.Single(world.GetActiveApeWars()).Armies.Defending.Fighters);
+        Assert.True(world.RemoveWolfDenAt(den));
+        world.AdvanceApeWars();
+        Assert.Empty(world.GetActiveApeWars());
+    }
+
+    [Fact]
+    public void NearbyDenAcrossImpassableTerrainCannotBeTargeted()
+    {
+        var world = CreateWorld();
+        var den = new GridPosition(First.X + 8, First.Y + 3);
+        Assert.True(world.TryPlaceWolfDen(den));
+        for (var dy = -1; dy <= 1; dy++)
+        for (var dx = -1; dx <= 1; dx++)
+            if (dx != 0 || dy != 0) world.SetTerrain(new(den.X + dx, den.Y + dy), Terrain.MegaWall);
+        Assert.False(world.TryStartApeWar(First, den));
+    }
+
+    [Theory]
+    [InlineData(8, true)]
+    [InlineData(16, true)]
+    [InlineData(17, false)]
+    public void VillageCanOnlyDeclareWarOnNearbyWolfDens(int distance, bool starts)
+    {
+        var world = CreateWorld();
+        var den = new GridPosition(First.X + distance, First.Y + 3);
+        Assert.True(world.TryPlaceWolfDen(den));
+        Assert.Equal(starts, world.TryStartApeWar(First, den));
+        Assert.Equal(starts, world.IsApeVillageAtWar(First));
+        if (!starts) return;
+        Assert.Equal("Wolf Den", Assert.Single(world.GetActiveApeWars()).Defender);
+        Assert.True(world.TryStopApeWar(First));
+        Assert.NotNull(world.GetWolfDenCharges(den));
+        Assert.Empty(world.GetActiveApeWars());
+    }
+
+    [Fact]
+    public void WolfDenExpeditionDestroysDenAndRestoresRecruits()
+    {
+        var world = CreateWorld();
+        var den = new GridPosition(First.X + 8, First.Y + 3);
+        Assert.True(world.TryPlaceWolfDen(den));
+        var recruit = Residents(world, First).First(c => c.Species == CritterSpecies.Ape).Id;
+        Assert.True(world.TryStartApeWar(First, den));
+        Assert.True(world.TryGetCritter(recruit, out var soldier));
+        Assert.Equal(CritterSpecies.ApeWarrior, soldier.Species);
+        world.RemoveCritterAt(den);
+        var index = Enumerable.Range(0, world.CritterCount).Single(i => world.GetCritter(i).Id == recruit);
+        typeof(SimulationWorld).GetMethod("MoveCritter", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(world, [index, den.Y * world.Width + den.X, den, false]);
+        typeof(SimulationWorld).GetMethod("TryMoveWarApe", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(world, [index, null]);
+        Assert.Null(world.GetWolfDenCharges(den));
+        Assert.Empty(world.GetActiveApeWars());
+        Assert.True(world.TryGetCritter(recruit, out var civilian));
+        Assert.Equal(CritterSpecies.Ape, civilian.Species);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

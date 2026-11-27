@@ -44,6 +44,15 @@ Stone, and Lava. Events contains Meteor, Tsunami, and NaturalEvents. `R` cycles
 between categories.
 
 Natural terrain events are deterministic and occur rarely in simulation time.
+Meteor excavation, rim uplift, stone ejecta, and crater clearing are applied per
+tile when that impact's shock front arrives. Each tile is queued once, using the
+same wrapped/spherical distance as the visible wave. Local terrain updates follow
+the front; global coastline and drainage reconciliation runs when waves finish.
+Large impacts launch smaller ejecta meteors from the impact center with curved
+smoke trails in both views. Their craters begin on landing and each produces its
+own shockwave scaled to its crater radius. Secondary meteors do not fragment again.
+Rifle strikes and immediate missile neighborhoods retain their existing timing.
+
 They attempt a random meteor impact, volcano, watershed shift, or tsunami roughly
 every 6 to 16 simulated minutes. Tsunamis only start when the randomly selected
 tile is ocean (including sea ice); land selections are skipped. The NaturalEvents

@@ -65,7 +65,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             WorldTool.Gazelle, WorldTool.Wolf, WorldTool.Dog, WorldTool.Crab, WorldTool.ToothedWhale,
             WorldTool.BaleenWhale, WorldTool.Lich];
     private static readonly WorldTool[] BuildingToolOrder =
-        [WorldTool.WolfDen, WorldTool.Teleporter, WorldTool.ApeVillage, WorldTool.BarbarianApeVillage,
+        [WorldTool.WolfDen, WorldTool.Necropolis, WorldTool.Teleporter, WorldTool.ApeVillage, WorldTool.BarbarianApeVillage,
             WorldTool.Farm, WorldTool.LumberCamp, WorldTool.Harbor, WorldTool.ResidentialDistrict,
             WorldTool.MilitaryDistrict, WorldTool.Library, WorldTool.Market, WorldTool.Road];
     private static readonly WorldTool[] OtherToolOrder =
@@ -156,6 +156,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
     private Texture2D? _apeSailorWarriorSprite, _apeSailorWarriorFlashSprite;
     private Texture2D? _apeSailorWarriorVeteranSprite, _apeSailorWarriorVeteranFlashSprite;
     private Texture2D? _apeSailorChiefSprite, _apeSailorChiefFlashSprite;
+    private Texture2D? _apeSailorFarmerSprite, _apeSailorFarmerFlashSprite;
     private Texture2D? _apeGreenWarriorSprite, _apeGreenWarriorFlashSprite;
     private Texture2D? _apeBomberSailorSprite, _apeBomberSailorFlashSprite;
     private Texture2D? _apeGreenSailorWarriorSprite, _apeGreenSailorWarriorFlashSprite;
@@ -244,6 +245,9 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         _pixel = new Texture2D(GraphicsDevice, 1, 1);
         _pixel.SetData([Color.White]);
         _hudFont = Content.Load<SpriteFont>("HudFont");
+        // The atlas contains printable ASCII. Fall back instead of crashing on
+        // an unsupported character in HUD text.
+        _hudFont.DefaultCharacter = '?';
         LoadCritterSprite(CritterSpecies.Plankton, "plankton.png");
         LoadCritterSprite(CritterSpecies.Jellyfish, "jellyfish.png");
         LoadCritterSprite(CritterSpecies.Worm, "worm.png");
@@ -539,6 +543,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         DrawVillageRoad(screenX, screenY, position);
         DrawApeStructure(screenX, screenY, position);
         DrawWolfDen(screenX, screenY, position);
+        DrawNecropolis(screenX, screenY, position);
         DrawMegaSpiderWeb(screenX, screenY, position);
         DrawTeleporter(screenX, screenY, position);
         DrawCustodianFabricator(screenX, screenY, position);
@@ -697,6 +702,11 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         {
             _apeSailorChiefSprite = sailorChief;
             _apeSailorChiefFlashSprite = sailorChiefFlash;
+        }
+        if (TryLoadCritterSprite("ape-sailor-farmer.png", out var sailorFarmer, out var sailorFarmerFlash))
+        {
+            _apeSailorFarmerSprite = sailorFarmer;
+            _apeSailorFarmerFlashSprite = sailorFarmerFlash;
         }
         if (TryLoadCritterSprite("ape-warrior-veteran.png", out var veteran, out var veteranFlash))
         {
@@ -900,6 +910,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             flashSprite = _barbarianDogFlashSprite;
         }
         else if (critter.Species is CritterSpecies.Ape or CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack or CritterSpecies.ApeSailor &&
+            !(critter.Species is CritterSpecies.ApeFarmer && inWater && _apeSailorFarmerSprite is not null) &&
             critter.Plague is PlagueKind.Plague or PlagueKind.Zombie or PlagueKind.Vampire &&
             _sickApeSprite is not null)
         {
@@ -919,6 +930,11 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             flashSprite = colonistInWater
                 ? _apeColonistSailorFlashSprite
                 : _apeColonistFlashSprite;
+        }
+        else if (critter.Species is CritterSpecies.ApeFarmer && inWater && _apeSailorFarmerSprite is not null)
+        {
+            sprite = _apeSailorFarmerSprite;
+            flashSprite = _apeSailorFarmerFlashSprite;
         }
         else if (_apeRoyalSprites.TryGetValue((critter.Species, inWater, critter.IsVeteranWarrior), out var royalSprites) ||
             _apeRoyalSprites.TryGetValue((critter.Species, inWater, false), out royalSprites))
@@ -1434,6 +1450,12 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             case WorldTool.WolfDen:
                 _world.RemoveWolfDenAt(position.Value);
                 break;
+            case WorldTool.Necropolis when primaryActivated:
+                _world.TryPlaceNecropolis(position.Value);
+                break;
+            case WorldTool.Necropolis:
+                _world.RemoveNecropolisAt(position.Value);
+                break;
             case WorldTool.Teleporter when primaryActivated:
                 _world.TryPlaceTeleporter(position.Value);
                 break;
@@ -1457,7 +1479,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
                     _world.TrySendVampireColonist(position.Value, out _colonistToolStatus);
                 else
                     _colonistToolStatus = _world.TrySendApeColonist(position.Value)
-                        ? "Ape colonist launched!"
+                        ? "Ape settler launched!"
                         : "Cannot launch: check village, spawn space and destination";
                 break;
             case WorldTool.MonarchyCulture when primaryActivated:
@@ -1493,7 +1515,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
                         _warAttacker = warVillage;
                         _warAttackerLich = _world.TryGetCritterAt(warVillage, out var selected) &&
                             selected.Species is CritterSpecies.Lich ? selected.Id : null;
-                        _warToolStatus = "L select village, camp or lich opponent / at war: stop / R cancel";
+                        _warToolStatus = "L select village, camp, lich or nearby wolf den / at war: stop / R cancel";
                     }
                     else if (_world.TryStartApeWar(
                         _warAttackerLich is { } selectedLich
@@ -1852,7 +1874,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         if (_populationWindowMode == 2 && chiefs > 0)
             populations.Add(("Ape Barbarian Chief", CritterSpecies.ApeChieftain, chiefs, new Color(210, 75, 55), _barbarianChiefHistory, _apeBarbarianChiefSprite));
         if (_populationWindowMode == 2 && _world.ApeColonistCount > 0)
-            populations.Add(("Ape Colonist", CritterSpecies.Ape, _world.ApeColonistCount,
+            populations.Add(("Ape Settler", CritterSpecies.Ape, _world.ApeColonistCount,
                 GetCritterColor(CritterSpecies.Ape), _apeColonistHistory, _apeColonistSprite));
         if (_populationWindowMode == 2 && _world.SickApeCount > 0)
         {
@@ -1919,7 +1941,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
                 "Ape Barbarian" => PopulationCounts.Selection.Barbarians,
                 "Ape Barbarian Chief" => PopulationCounts.Selection.BarbarianChiefs,
                 "Sick Apes" => PopulationCounts.Selection.SickApes,
-                "Ape Colonist" => PopulationCounts.Selection.Colonists,
+                "Ape Settler" => PopulationCounts.Selection.Colonists,
                 _ => PopulationCounts.Selection.Species,
             };
             var linkBounds = new Rectangle(x, y, columnWidth, rowHeight);
@@ -2255,7 +2277,8 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             return;
         }
         var lines = GetCritterInspectionLines(inspected, _inspectedCritterId == inspected.Id);
-        DrawCritterIcon(inspected.Species, new Rectangle(x, y + 17, 16, 16));
+        DrawCritterIcon(inspected.Species, new Rectangle(x, y + 17, 16, 16),
+            inspected.Species is CritterSpecies.Dog && _world.IsBarbarianApe(inspected.Id) ? _barbarianDogSprite : null);
         DrawHudLines(x, y, lines[0]);
         for (var i = 1; i < lines.Length; i++)
             _spriteBatch!.DrawString(_hudFont!, lines[i], new Vector2(x + (i == 1 ? 22 : 0), y + i * 17), new Color(220, 225, 228));
@@ -2269,6 +2292,18 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
 
     private string[] GetBuildingInspectionLines(GridPosition position)
     {
+        if (_world.GetWhaleFallNutrition(position) is > 0 and var nutrition)
+            return ["BUILDING", "Whale Fall", $"Stored nutrition {nutrition}", "Behavior Feeds scavengers"];
+        if (_world.GetShipwreck(position) is { } wreck)
+            return ["BUILDING", wreck is ShipwreckKind.Pirate ? "Pirate Shipwreck" : "Shipwreck",
+                "Behavior Ruins", "Decay Two simulated years"];
+        if (_world.GetNecropolis(position) is { } necropolis)
+            return ["BUILDING", $"Necropolis - Lich #{necropolis.Lich.Value}",
+                $"Ape kills {necropolis.ApeKills}   Stored kills {necropolis.StoredKills}",
+                $"Undead warriors {_world.GetLichUndeadWarriorCount(necropolis.Lich)}/{SimulationWorld.LichUndeadWarriorLimit}",
+                $"Guards {necropolis.Guards}/4   Escorts {necropolis.Escorts}/4",
+                necropolis.Retreating ? "Behavior Lich retreating / recovering" :
+                    necropolis.AtWar ? "Behavior At war" : "Behavior Guarding and gathering kills"];
         if (_world.IsCustodianFabricator(position))
             return ["BUILDING", "Custodian Fabricator",
                 $"Active drones {_world.GetCritterCount(CritterSpecies.Custodian)} / {_world.CustodianCapacity}",
@@ -2366,10 +2401,6 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
                 : ["BUILDING", GetApeStructureDisplayName(apeStructure)];
         }
 
-        if (_world.GetShipwreck(position) is { } wreck)
-            return ["BUILDING", wreck == ShipwreckKind.Pirate ? "Pirate Shipwreck" : "Shipwreck",
-                "Behavior Ruins", "Decay Two simulated years"];
-
         return ["BUILDING", "None"];
     }
 
@@ -2413,6 +2444,14 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
             ? $"Energy {critter.Energy} / {critter.MaximumEnergy}   Damage {_world.GetCritterCombatDamage(critter.Id)}"
             : $"Energy None   Damage {_world.GetCritterCombatDamage(critter.Id)}",
         $"Behavior {GetCritterBehavior(critter)}",
+        .. critter.Species is CritterSpecies.Lich
+            ? new[] { $"Army ape kills {_world.GetLichApeKills(critter.Id)}" +
+                (_world.GetLichNecropolis(critter.Id) is null ? $" / {SimulationWorld.NecropolisFoundingKills} to found necropolis" : "") }
+            : Array.Empty<string>(),
+        .. _world.GetLichNecropolis(critter.Id) is { } necropolis
+            ? new[] { $"Necropolis {necropolis.Position}   Stored kills {necropolis.StoredKills}",
+                $"Guards {necropolis.Guards}/4   Escorts {necropolis.Escorts}/4" + (necropolis.Retreating ? "   Retreating" : "") }
+            : Array.Empty<string>(),
         .. _world.TryGetSandwormSegment(critter.Position, out var segment) && segment.Worm == critter.Id
             ? new[] { $"Length {segment.Length} segments" }
             : Array.Empty<string>(),
@@ -2446,7 +2485,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
     ];
 
     private string GetCritterDisplayName(CritterSnapshot critter) =>
-        critter.IsColonist ? (critter.Species is CritterSpecies.Vampire ? "Vampire Colonist" : "Colonist Ape") :
+        critter.IsColonist ? (critter.Species is CritterSpecies.Vampire ? "Vampire Settler" : "Ape Settler") :
         _world.IsBarbarianApe(critter.Id) ? critter.Species switch
         {
             CritterSpecies.Dog => "Barbarian Dog",
@@ -2458,7 +2497,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
 
     private static string GetPlagueDescription(CritterSnapshot critter) =>
         critter.Species is CritterSpecies.Vampire ? "Vampire: immune to ape plagues, feeds through damage" :
-        critter.Species is CritterSpecies.Lich ? "Raises killed apes; leads 20 warriors; army collapses on lich death" :
+        critter.Species is CritterSpecies.Lich ? "Raises killed apes; founds necropolis at 100 army ape kills; army collapses on lich death" :
         critter.Species is CritterSpecies.UndeadWarrior ? "Undead: gains energy on ape kills; no metabolism" :
         critter.Species is CritterSpecies.UndeadApe ? "Undead: contagious; lich-raised lineages rise as warriors" :
         critter.IsPlagueImmune ? "Immune to ape plagues" :
@@ -2511,6 +2550,9 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
 
     private string GetCritterBehavior(CritterSnapshot critter)
     {
+        if (_world.GetLichNecropolis(critter.Id) is { Retreating: true }) return "Retreating to necropolis for healing";
+        if (_world.GetLichNecropolis(critter.Id) is { AtWar: false } home)
+            return critter.Position == home.Position ? "Resting on necropolis" : "Returning to necropolis";
         if (_world.GetApeWarBehavior(critter.Id) is { } warBehavior)
             return warBehavior;
         if (critter.Species is CritterSpecies.Vampire && !critter.IsColonist)
@@ -2649,6 +2691,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         _world = WorldGenerator.Generate(new WorldGenerationOptions(_preset, _seed, MapType: _mapType, Shape: _mapShape));
         _planetoidFoldAge = PlanetoidFoldSeconds;
         _world.NaturalMeteorLauncher = LaunchMeteor;
+        _world.ImpactFragmentLauncher = LaunchMeteorFragment;
         _warCharts.Clear();
         _activeWars = [];
         _warChartScroll = 0;
@@ -3307,6 +3350,38 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
                 size,
                 size),
             color);
+    }
+
+    private void DrawNecropolis(int screenX, int screenY, GridPosition position)
+    {
+        if (_spriteBatch is null || _pixel is null || !_world.HasNecropolis(position)) return;
+        var originX = MapOffsetX + screenX * TileSize;
+        var originY = MapOffsetY + screenY * TileSize;
+        DrawNecropolisSprite(originX, originY, TileSize);
+    }
+
+    private void DrawNecropolisSprite(int originX, int originY, int size)
+    {
+        if (_spriteBatch is null || _pixel is null) return;
+        void Block(int x, int y, int width, int height, Color color) =>
+            _spriteBatch.Draw(_pixel, new Rectangle(originX + x * size / 16, originY + y * size / 16,
+                Math.Max(1, width * size / 16), Math.Max(1, height * size / 16)), color);
+        var stone = new Color(77, 57, 96);
+        var shadow = new Color(33, 27, 44);
+        var bone = new Color(190, 196, 174);
+        var glow = new Color(125, 222, 160);
+        Block(1, 12, 14, 3, shadow);
+        Block(2, 7, 12, 6, stone);
+        Block(1, 3, 4, 10, stone);
+        Block(11, 3, 4, 10, stone);
+        Block(2, 1, 2, 3, bone);
+        Block(12, 1, 2, 3, bone);
+        Block(5, 5, 6, 3, shadow);
+        Block(6, 4, 4, 2, bone);
+        Block(6, 10, 4, 4, shadow);
+        Block(7, 10, 2, 3, glow);
+        Block(2, 5, 2, 2, glow);
+        Block(12, 5, 2, 2, glow);
     }
 
     private void DrawWolfDen(int screenX, int screenY, GridPosition position)
@@ -4014,6 +4089,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         WorldTool.ToothedWhale => "L spawn: ocean",
         WorldTool.BaleenWhale => "L spawn: ocean",
         WorldTool.WolfDen => "L place; R remove",
+        WorldTool.Necropolis => "L spawn necropolis, lich + 4 guards; R remove building",
         WorldTool.Teleporter => "L place; R remove",
         WorldTool.Stone => "L place; R clear",
         WorldTool.Lava => "L add; R clear",
@@ -4051,6 +4127,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         WorldTool.BloodWar => "Blood War",
         WorldTool.CivilWar => "Civil War",
         WorldTool.Anarchy => "Anarchy",
+        WorldTool.Colonist => "Settler",
         WorldTool.ApeVillage => "Ape Village",
         WorldTool.LumberCamp => "Lumber Camp",
         WorldTool.ResidentialDistrict => "Residential District",
@@ -4143,6 +4220,7 @@ public sealed partial class NewtGame : Microsoft.Xna.Framework.Game
         ToothedWhale,
         BaleenWhale,
         WolfDen,
+        Necropolis,
         Teleporter,
         Stone,
         Lava,

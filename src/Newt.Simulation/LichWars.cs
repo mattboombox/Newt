@@ -6,6 +6,21 @@ public sealed partial class SimulationWorld
 
     private const int LichAttackWarDeclarationChancePercent = 25;
 
+    private bool TryDeclareNecropolisRetaliationWar(int attacker, int victim)
+    {
+        if (!LifeEnabled || _species[victim] is not CritterSpecies.Lich ||
+            !(IsLivingApe(_species[attacker]) || _species[attacker] is CritterSpecies.Dog or
+                CritterSpecies.ApeTrader or CritterSpecies.ApeTraderSailor)) return false;
+        var lich = _critterIds[victim].Value;
+        if (!_lichCampaigns.TryGetValue(lich, out var home) || home.Tile < 0 || home.Retreating ||
+            GetIndex(_positions[victim]) != home.Tile ||
+            _energy[victim] * 3 < CritterNutritions.Get(CritterSpecies.Lich).MaximumEnergy ||
+            !_apeVillageHomes.TryGetValue(_critterIds[attacker].Value, out var village) ||
+            !IsWarVillage(village) || _apeWars.ContainsKey(village) || _lichWars.ContainsKey(lich) ||
+            NextInt(100) >= LichAttackWarDeclarationChancePercent) return false;
+        return TryStartLichWar(lich, GetPosition(village), lichAttacking: true);
+    }
+
     private bool TryDeclareWarOnAttackingLich(int attacker, int victim)
     {
         // Run only on an actual attack; reject ineligible participants with
@@ -22,12 +37,14 @@ public sealed partial class SimulationWorld
         return TryStartLichWar(_critterIds[attacker].Value, GetPosition(village), lichAttacking: false);
     }
 
-    private int GetLichAt(GridPosition position) => Contains(position) &&
-        _occupants[GetIndex(position)] is var index && index >= 0 && _species[index] is CritterSpecies.Lich
-            ? _critterIds[index].Value : -1;
+    private int GetLichAt(GridPosition position) => !Contains(position) ? -1 :
+        _necropolisOwners.TryGetValue(GetIndex(position), out var owner) ? owner :
+            _occupants[GetIndex(position)] is var index && index >= 0 && _species[index] is CritterSpecies.Lich
+                ? _critterIds[index].Value : -1;
 
     public GridPosition? GetWarToolParticipant(GridPosition position) =>
-        GetLichAt(position) >= 0 ? position : GetApeStructureVillage(position);
+        GetLichAt(position) >= 0 || Contains(position) && _wolfDenCharges.ContainsKey(GetIndex(position))
+            ? position : GetApeStructureVillage(position);
 
     private bool IsLichArmyMember(int index, int lich) =>
         (_critterIds[index].Value == lich && _species[index] is CritterSpecies.Lich) ||
@@ -90,6 +107,7 @@ public sealed partial class SimulationWorld
             _critterIndicesById.TryGetValue(pair.Key, out var index) && _species[index] is CritterSpecies.ApeWarrior or CritterSpecies.ApeRoyalGuard)
             .Select(pair => pair.Key));
         _apeWars[village] = _lichWars[lich] = war;
+        MobilizeNecropolis(lich);
         RecruitApeCultureBombers(war, village);
         war.StartingTargetPopulation = LichWarVillage(war).Count();
         war.StartingLichArmy = LichWarArmy(war).Count();

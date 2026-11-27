@@ -71,7 +71,7 @@ public sealed partial class SimulationWorld
         var occupant = _occupants[tileIndex];
         if (!IsValidMegaSpiderWebTile(tileIndex) ||
             _megaSpiderWebFood.ContainsKey(tileIndex) ||
-            _wolfDenCharges.ContainsKey(tileIndex) ||
+            _wolfDenCharges.ContainsKey(tileIndex) || _necropolisOwners.ContainsKey(tileIndex) ||
             _teleporters.Contains(tileIndex) ||
             _apeStructures.ContainsKey(tileIndex) ||
             (occupant >= 0 && occupant != spiderIndex))

@@ -9,6 +9,29 @@ public sealed class ShipwreckTests
     private static readonly GridPosition Tile = new(3, 3);
 
     [Theory]
+    [InlineData(CritterSpecies.BaleenWhale)]
+    [InlineData(CritterSpecies.ToothedWhale)]
+    public void WhaleFallReplacesWreckAndPreventsLaterWrecks(CritterSpecies whale)
+    {
+        var world = new SimulationWorld(10, 10, Terrain.Ocean);
+        world.AddCritter(CritterSpecies.ApeSailor, Tile);
+        world.RemoveCritterAt(Tile);
+        Assert.Equal(ShipwreckKind.Ship, world.GetShipwreck(Tile));
+        world.AddCritter(whale, Tile);
+        world.RemoveCritterAt(Tile);
+        Assert.Null(world.GetShipwreck(Tile));
+        Assert.Equal(10, world.GetWhaleFallNutrition(Tile));
+        world.AddCritter(CritterSpecies.ApeSailor, Tile);
+        world.RemoveCritterAt(Tile);
+        Assert.Null(world.GetShipwreck(Tile));
+        Assert.Equal(10, world.GetWhaleFallNutrition(Tile));
+        world.AddCritter(whale, Tile);
+        world.RemoveCritterAt(Tile);
+        Assert.Equal(20, world.GetWhaleFallNutrition(Tile));
+        Assert.Null(world.GetShipwreck(Tile));
+    }
+
+    [Theory]
     [InlineData(CritterSpecies.ApeSailor)]
     [InlineData(CritterSpecies.ApeTraderSailor)]
     [InlineData(CritterSpecies.ApeWarrior)]

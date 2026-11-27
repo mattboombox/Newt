@@ -24,7 +24,22 @@ public sealed partial class SimulationWorld
             Tick + GetCritterMovementIntervalTicks(index) * penalty);
     }
 
-    // When there is no free sidestep, the blocker can use the tile the mover vacates.
+    // Prefer a safe exchange with a civilian from the same village over a sidestep.
+    // The checks are local; no vacancy search or worker path rebuild is needed here.
+    private bool CanPreferApeSwap(int mover, int destination, IReadOnlySet<GridPosition>? reserved)
+    {
+        var blocker = _occupants[destination];
+        return blocker >= 0 &&
+            _species[blocker] is (CritterSpecies.Ape or CritterSpecies.ApeFarmer or CritterSpecies.ApeLumberjack or
+                CritterSpecies.ApeScholar or CritterSpecies.ApeSailor or CritterSpecies.ApeLudditePriest or CritterSpecies.ApeBishop) &&
+            _apeVillageHomes.TryGetValue(_critterIds[mover].Value, out var home) &&
+            _apeVillageHomes.TryGetValue(_critterIds[blocker].Value, out var otherHome) && home == otherHome &&
+            !AreWarEnemies(mover, blocker) && !AreRivalApeFactions(mover, blocker) &&
+            CanCritterRemainOnTile(blocker, GetIndex(_positions[mover])) &&
+            CanSwapPastMovementBlocker(mover, destination, reserved);
+    }
+
+    // Otherwise, when there is no free sidestep, use the existing fallback exchange.
     // Traders passing other traders use their route-aware exchange instead.
     private bool TrySwapPastMovementBlocker(int mover, int destination,
         IReadOnlySet<GridPosition>? reserved)
@@ -54,7 +69,8 @@ public sealed partial class SimulationWorld
         var blocker = _occupants[destination];
         var origin = fromTile ?? GetIndex(_positions[mover]);
         if ((!_apeSettlerTargets.ContainsKey(_critterIds[mover].Value) &&
-                _species[mover] is not (CritterSpecies.ApeWarrior or CritterSpecies.ApeRoyalGuard or CritterSpecies.ApeBomber or CritterSpecies.ApeTrader or CritterSpecies.ApeTraderSailor)) ||
+                _species[mover] is not (CritterSpecies.ApeWarrior or CritterSpecies.ApeRoyalGuard or CritterSpecies.ApeBomber or
+                    CritterSpecies.ApeChieftain or CritterSpecies.ApeKing or CritterSpecies.ApeQueen or CritterSpecies.ApeTrader or CritterSpecies.ApeTraderSailor)) ||
             blocker < 0 || blocker == mover ||
             (fromTile is null && !ArePathNeighbors(origin, destination)) ||
             _species[blocker] is CritterSpecies.ApeTrader or CritterSpecies.ApeTraderSailor ||

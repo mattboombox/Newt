@@ -161,6 +161,7 @@ public sealed class SandwormTests
     {
         var (world, head, tail, worm) = CreateHazardWorld();
         Impacts.CreateMeteorImpact(world, new GridPosition(tail.X + 2, tail.Y), 0f);
+        for (var tick = 0; tick < 20 && world.TryGetCritter(worm, out _); tick++) Impacts.Advance(world);
         AssertSandwormRemains(world, head, tail, worm);
     }
 

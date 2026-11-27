@@ -5,6 +5,26 @@ namespace Newt.Simulation.Tests;
 public sealed class PlagueImmunityTests
 {
     [Theory]
+    [InlineData(CritterSpecies.Lich, true)]
+    [InlineData(CritterSpecies.UndeadApe, true)]
+    [InlineData(CritterSpecies.UndeadWarrior, false)]
+    public void LichWarriorsCannotTransmitPlagueButLichesAndUndeadApesStillCan(CritterSpecies species, bool contagious)
+    {
+        const System.Reflection.BindingFlags flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+        var world = new SimulationWorld(30, 10, Terrain.Plains);
+        var lich = world.AddCritter(CritterSpecies.Lich, new(5, 5));
+        var source = species is CritterSpecies.Lich ? lich : world.AddCritter(species, new(15, 5));
+        if (source != lich)
+            typeof(SimulationWorld).GetMethod("SetLichArmyOwner", flags)!.Invoke(world, [source.Value, lich.Value]);
+        var target = new GridPosition(20, 5);
+        var ape = world.AddCritter(CritterSpecies.Ape, target);
+        var index = Enumerable.Range(0, world.CritterCount).Single(i => world.GetCritter(i).Id == source);
+        var spread = typeof(SimulationWorld).GetMethod("TrySpreadCritterPlague", flags)!;
+        Assert.Equal(contagious, (bool)spread.Invoke(world, [index, target, PlagueKind.Zombie, 1 - ape.Value % 2])!);
+        Assert.True(world.TryGetCritter(ape, out var victim));
+        Assert.Equal(contagious ? PlagueKind.Zombie : PlagueKind.None, victim.Plague);
+    }
+    [Theory]
     [InlineData(0)]
     [InlineData(1)]
     public void LichBorneZombiePlagueProtectsHalfEvenAfterRepeatedExposure(int remainder)

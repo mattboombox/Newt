@@ -1,8 +1,9 @@
 namespace Newt.Game;
 
-internal sealed class RifleShotTiming(float distance, bool shockwave = false, bool instant = false, float fadeSeconds = 1.6f)
+internal sealed class RifleShotTiming(float distance, bool shockwave = false, bool instant = false, float fadeSeconds = 1.6f,
+    float? travelSeconds = null)
 {
-    internal float TravelSeconds { get; } = instant ? 0 : Math.Clamp(distance / 600f, 0.06f, 0.3f);
+    internal float TravelSeconds { get; } = instant ? 0 : travelSeconds ?? Math.Clamp(distance / 600f, 0.06f, 0.3f);
     internal float Age { get; private set; }
     internal bool Impacted { get; private set; }
     internal float Progress => TravelSeconds <= 0 ? 1 : Math.Clamp(Age / TravelSeconds, 0, 1);

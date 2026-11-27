@@ -49,7 +49,7 @@ cost. This prevents a hunger timer, starvation timer, and meal counter from
 drifting into contradictory states. Reproduction spends only surplus energy;
 if no adjacent habitat is open, the parent retains that energy for a later tick.
 
-The Events category includes Colonist, Plague, and Zombie Plague tools. Left-click a living
+The Events category includes Settler, Plague, and Zombie Plague tools. Left-click a living
 Ape to seed an outbreak. Each new outbreak of Plague, Zombie Plague, or Vampire
 Plague randomly chooses a remainder of zero or one; apes with matching
 `ID % 2` resist that outbreak (about half). Lich-borne zombie plague uses the same
@@ -74,7 +74,8 @@ Zombie-infected apes that die from energy loss or predation rise on their curren
 tile with the same ID as Undead Apes. Reanimation detaches village membership and
 carried food, resets energy to six, and does not also feed the killer. Destructive
 terrain tools and disasters remove the body completely and do not reanimate it.
-Undead spread zombie plague, including during contact with living apes in combat,
+Undead Warriors never transmit plague, even when owned by a lich.
+Undead Apes spread zombie plague, including during contact with living apes in combat,
 and hunt only living Apes and Ape Sailors within six Manhattan tiles, even when
 full. They use land habitat, act every three seconds, and retain ordinary ape
 metabolism, but never reproduce, found villages, or collect village food. Immune
@@ -487,7 +488,11 @@ plan without rewriting village advancement.
 Villages store food up to a base pantry of five plus ten for each Farm, Rice Paddy,
 Orchard, or Aquaculture district. Every newly founded village begins with twenty wood and can store at most thirty. A Lumber Camp may
 be built for three food and no wood on a connected Jungle, Forest, Taiga, Swamp, Grassland, or Arid tile,
-including biome-compatible Beaches. It produces one wood every ten, fourteen, eighteen,
+including biome-compatible Beaches. If a normal village has at least two residents,
+no Lumber Camp, and less than two wood, it can rebuild one emergency camp without
+the food cost or normal five-resident threshold. Normal construction-site rules
+and lumberjack recruitment still apply; existing camps prevent extra free camps.
+It produces one wood every ten, fourteen, eighteen,
 twenty-four, thirty-six, or thirty-six seconds respectively, making Grassland and Arid camps the
 equally lowest-yield options.
 The first
@@ -521,7 +526,7 @@ extra founding space. Subsequent population growth uses reproduction.
 A lone civilian in a regular village can build its first food district if a site and resources are available.
 When a village drops to one resident, an eligible survivor takes over an active food district
 immediately and can build one first if the village has the resources and a suitable site.
-The Colonist tool in Events manually sends one from a clicked Village, requiring and
+The Settler tool in Events manually sends one from a clicked Village, requiring and
 spending exactly 25 food. Colonists from villages and camps start with ordinary Ape
 starting energy plus 25 provisions (29 total); surplus food stays in the settlement.
 Clicking a valid non-Village
@@ -564,6 +569,18 @@ return their catches through a connected Harbor. Each Harbor supports up to four
 a village can support one Harbor and one Lumber Camp initially, then one additional building
 of each kind per 150 residents.
 
+A village saves wood for an eligible Military District before routine food/housing
+expansion. Destroyed Markets and Libraries queue a replacement after one simulation
+minute. Destroying a Temple or Castle strips the village of its culture and demotes
+its cultural roles. Cultural buildings do not automatically rebuild; the village
+must acquire a culture anew through the normal culture event or player tools.
+Replacement libraries do not require the village to reach 200
+residents again. Markets and libraries use normal resource and site rules, retry
+when blocked, and reserve their budget before routine expansion once due. Recovery
+never creates a second copy and is discarded when its village is destroyed.
+A village attempts military construction before other optional purchases.
+Emergency food construction remains available, and saving does not block expansion
+when there is no legal military construction site.
 A village can build its first Military District at 20 residents, then another at 50 and every
 50 residents after that. Like a Harbor, it converts
 ordinary residents at thirty-second intervals without changing population or stable identity,
@@ -656,7 +673,12 @@ defeat is a draw. Non-veteran levies become ordinary Apes again; standing warrio
 remain warriors, subject to veteran priority in military capacity. Movement uses a shared terrain-distance field, refreshed every
 30 simulation seconds, with local enemy searches rather than per-soldier global
 pathfinding.
-Warriors can shove civilian apes (including workers, scholars, sailors and traders),
+Eligible military apes, chiefs, traders, and colonists prefer exchanging tiles with
+non-trader civilians from their own village when both can safely occupy the
+exchanged tiles. This local check avoids searching for a shove destination and
+keeps civilians near their work. Combat enemies, reserved tiles, and trapped apes
+cannot use this preferred exchange; traders retain their special passing rules.
+Warriors can otherwise shove civilian apes (including workers, scholars, sailors and traders),
 but not other warriors or chiefs. If no sidestep is free, they can exchange tiles
 with a non-trader blocker when terrain and combat reservations allow it. Enemies
 remain combat targets rather than being pushed through. When allies still block
@@ -666,7 +688,10 @@ occupied, combat-reserved, and impassable tiles, never retreats, and holds posit
 when no short detour exists. Direct movement and adjacent combat retain priority.
 
 Assigned farmers stay on their exact farm tile rather than wandering, hunting,
-or returning only as far as an adjacent tile. Displaced farmers use their cached
+and can travel through ocean, deep ocean, and freshwater lakes without water
+exposure damage. On water they use the sailor-farmer sprite and float at the
+surface in 3D; on land and ice they retain the ordinary farmer sprite.
+They do not return only as far as an adjacent tile. Displaced farmers use their cached
 worker route to return, respecting occupied tiles and combat reservations. Once
 home they discard the route and use a constant-time movement check. Village feeding,
 food production, and reproduction continue normally; invalid assignments fall back
@@ -716,6 +741,65 @@ at sea). Recruited unemployed apes, existing warriors, and chiefs keep fighting.
 No stores transfer and surviving recruits recover their original roles; existing
 warriors remain warriors. A village cannot join another war during its civil war.
 
+Villages can also launch expeditions against wolf dens reachable within 16 travel
+steps of their center, through natural war selection or the war tool. They recruit
+unemployed apes and send their standing military, fight wolves associated with the
+target den, and destroy the den when a soldier reaches it. Distant or unreachable
+dens cannot be targeted. Losing the attacking army or removing the den ends the
+expedition; surviving recruits return to their ordinary roles, as in other wars.
+
+Liches and their associated undead share an ape-kill tally. The player can place a Necropolis with
+Building Tools / Necropolis: an empty land tile with room for four adjacent guards
+spawns the structure, one lich on it, and exactly four guards with no escorts.
+Manual placement starts at zero kills and reserve and bypasses the founding milestone.
+Failed placement creates nothing and never replaces existing critters.
+At 100 defeated living apes (including raised victims), a lich naturally founds one Necropolis on nearby reachable
+land. The founding hundred is a milestone; the spendable reserve starts at zero.
+The first four undead warriors garrison posts around it and the next four escort
+the lich, including during wars. Existing warriors fill these roles first; any
+missing founding guards are supplied without charge. Thereafter, one stored kill
+buys one warrior. Each lich has a maximum of 25 living undead warriors, including
+guards, escorts, initial troops, recruits, and reanimated warriors. Undead apes
+remain unlimited; when one dies at the warrior cap, it dies normally instead of
+rising as a warrior. Losses free capacity immediately, and capped recruitment
+preserves unspent kills. Peacetime recruitment fills guard and escort vacancies, then saves
+the reserve. Converted undead warriors can also fill vacancies.
+
+At peace, a lich with a Necropolis returns to its exact tile and stays there,
+and its four escorts take distinct diagonal corner tiles around the structure.
+They hold those posts while the lich is centered and resume following when it leaves;
+the four garrison guards retain their cardinal posts where terrain permits.
+Necropolises appear in the village population chart with their own icon and
+separate rows for the lich, owned undead apes, and owned undead warriors. Counts
+follow explicit army ownership regardless of location; infected living apes,
+unaffiliated undead, and other liches' armies are excluded. Matching zombie-plague
+immunity patterns never merge armies. Existing infections retain their original
+origin when exposed to another zombie outbreak, descendants inherit that origin,
+and orphaned undead are not reassigned when their lich dies. Chart histories use
+separate necropolis IDs, and clicking a species row selects only its owned members.
+The guards, escorts, and other undead continue acting around it. War movement takes
+over while at war. Below one-third energy, the lich retreats even during war. On reaching its
+Necropolis or an adjacent tile, it ends a war it initiated with the usual cooldown, even if
+it cannot yet afford healing. If the lich is defending, the attacking village's
+war continues through its retreat and healing. It spends ten stored kills to heal completely;
+without enough kills it waits there. Healing takes priority over recruitment.
+With natural events enabled, Necropolises use the village one-percent minute war
+check after the five-minute grace period, respect war cooldowns, and target only
+reachable normal ape villages within 32 travel steps. Entering a war spends the
+available reserve on warriors up to the cap. A lich hit on its Necropolis has a
+25% chance per damaging hit to declare war on the attacker's village, even with
+natural events disabled, provided neither side is already at war and the lich
+is not retreating or below one-third energy. Unaffiliated attackers do not trigger
+a declaration. Recruitment spends the
+available reserve on warriors up to the cap, retaining any unspent kills. Blocked
+spawn attempts keep their kills and retry as space opens. Guards stay home,
+escorts protect the lich, and other undead join the attack. Local spawning is
+bounded to eight travel steps; role maintenance runs once per second rather than
+performing population searches on every movement. The structure is visible in
+both views and exposes its kills, reserve, guards, escorts, and status for inspection.
+Lich death removes its Necropolis as well as collapsing its existing army;
+terrain destruction and impacts can also destroy the structure.
+
 Inter-settlement wars draft all eligible unemployed apes without an army-size cap.
 Active ordinary wars, Blood Wars, and barbarian expeditions check once per second
 for newly unemployed residents and add them as levies. Employed workers, departing
@@ -752,6 +836,10 @@ barbarian growth-feeding exceptions. Hunting, foliage, birth costs, housing limi
 birth-site checks, and barbarian overflow colonists retain their distinct roles.
 All living ape roles,
 including traders and village-less apes, have a 25% dog recruitment chance after
-a wolf kill; village dog caps still apply to assigned apes. Roads first seek an
-entirely land route, then permit expensive straight bridges across one Shallows
-tile between land banks. Shallows bridges use the same gray color as river bridges.
+a wolf kill; village dog caps still apply to assigned apes. Roads weigh land routes
+against straight bridges across up to two Shallows or Freshwater Lake tiles between
+land banks. Each lake bridge tile costs 1.5 ordinary grassland steps and each
+shallows bridge tile costs two; river crossings add only half a step to the terrain cost. Short land detours therefore
+avoid unnecessary water bridges while river crossings remain affordable.
+Shallows bridges use the same gray color as river bridges, and their decks sit
+above ice sheets in both views.
